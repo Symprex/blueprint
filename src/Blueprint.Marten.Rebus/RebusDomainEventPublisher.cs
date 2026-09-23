@@ -11,7 +11,7 @@ namespace Blueprint.Marten.Rebus;
 /// When the generated pipeline wraps execution in a <c>RebusTransactionScope</c>
 /// (via the <c>RebusTransactionModule</c>), messages published through this publisher
 /// are captured by the ambient transaction and only sent after the scope completes
-/// successfully. Combined with Marten's <see cref="OutboxPublishingSessionListener"/>,
+/// successfully. Combined with Marten's <see cref="DomainEventDispatchingSessionListener"/>,
 /// this provides exactly-once delivery: domain events are published inside the same
 /// database transaction as the document changes.
 /// </para>

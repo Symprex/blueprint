@@ -25,9 +25,14 @@ public static class MartenServiceCollectionExtensions
     /// </para>
     /// <para>
     /// The <see cref="DomainEventDispatchingSessionListener"/> is added as a
-    /// Marten session listener that dispatches <see cref="IDomainEvent"/> instances
+    /// Marten session listener that dispatches and publishes <see cref="IDomainEvent"/> instances
     /// from entities implementing <see cref="IHaveDomainEvents"/> before
     /// <c>SaveChangesAsync</c>.
+    /// </para>
+    /// <para>
+    /// The listener is added through <c>ConfigureMarten</c>, which only a store configured by <c>AddMarten()</c>
+    /// applies. A consumer that builds <see cref="StoreOptions"/> itself must call
+    /// <see cref="AddBlueprintSessionListeners"/> on them as well.
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection to configure.</param>
@@ -36,13 +41,39 @@ public static class MartenServiceCollectionExtensions
     {
         services.AddScoped<Persistence.IUnitOfWork, MartenUnitOfWork>();
 
-        services.ConfigureMarten(options =>
-        {
-            options.Listeners.Add(new DomainEventDispatchingSessionListener());
-            options.Listeners.Add(new OutboxPublishingSessionListener());
-        });
+        services.ConfigureMarten(static options => options.AddBlueprintSessionListeners());
 
         return services;
+    }
+
+    /// <summary>
+    /// Adds the session listener that dispatches and publishes the domain events of entities implementing
+    /// <see cref="IHaveDomainEvents"/> to <paramref name="options"/>, unless it is already there.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is how a consumer that builds its own <see cref="StoreOptions"/> — registering them as a singleton, or
+    /// subclassing them, rather than configuring the store through <c>AddMarten()</c> — gets the listener that
+    /// <see cref="AddBlueprintMarten"/> and <see cref="AddBlueprintMartenWithTenancy"/> would otherwise attach, since the
+    /// <c>ConfigureMarten</c> callback those register is never applied to options Marten did not build.
+    /// </para>
+    /// <para>
+    /// It is idempotent, so a consumer may call it and also go through <c>AddMarten()</c> with
+    /// <see cref="AddBlueprintMarten"/> without an event being dispatched or published twice.
+    /// </para>
+    /// </remarks>
+    /// <param name="options">The store options to add the listener to.</param>
+    /// <returns>The same <paramref name="options"/>, for chaining.</returns>
+    public static StoreOptions AddBlueprintSessionListeners(this StoreOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (!options.Listeners.Any(static listener => listener is DomainEventDispatchingSessionListener))
+        {
+            options.Listeners.Add(new DomainEventDispatchingSessionListener());
+        }
+
+        return options;
     }
 
     /// <summary>
@@ -82,11 +113,7 @@ public static class MartenServiceCollectionExtensions
 
         services.AddScoped<Persistence.IUnitOfWork, MartenUnitOfWork>();
 
-        services.ConfigureMarten(options =>
-        {
-            options.Listeners.Add(new DomainEventDispatchingSessionListener());
-            options.Listeners.Add(new OutboxPublishingSessionListener());
-        });
+        services.ConfigureMarten(static options => options.AddBlueprintSessionListeners());
 
         return services;
     }

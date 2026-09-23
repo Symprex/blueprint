@@ -17,8 +17,8 @@ This document covers Blueprint's integration packages for Marten, Rebus, Hangfir
 | `IHaveDomainEvents` | interface | Aggregate root exposes `IReadOnlyList<IDomainEvent> DomainEvents` |
 | `IDomainEventHandler<T>` | interface | In-process handler run before commit |
 | `IDomainEventPublisher` | interface | Publishes events to message bus (Rebus) after commit |
-| `DomainEventDispatchingSessionListener` | Marten listener | Dispatches domain events during `SaveChangesAsync` |
-| `OutboxPublishingSessionListener` | Marten listener | Publishes outbox messages via `IDomainEventPublisher` |
+| `DomainEventDispatchingSessionListener` | Marten listener | During `SaveChangesAsync`, dispatches each domain event to its in-process handlers, publishes it via `IDomainEventPublisher` when one is registered, then clears it |
+| `OutboxPublishingSessionListener` | Marten listener | Publish-only alternative, for events that should reach the bus but no in-process handler; not registered by `AddBlueprintMarten()` |
 | `MartenScopeAccessor` | `AsyncLocal<IDocumentSession>` | Ambient scoping for singleton listeners |
 
 ### Registration
@@ -33,10 +33,14 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 services.AddMarten(options =>
 {
     options.Connection(connectionString);
-    options.Listeners.Add(new DomainEventDispatchingSessionListener());
-    options.Listeners.Add(new OutboxPublishingSessionListener());
+    options.AddBlueprintSessionListeners();
 });
 ```
+
+`AddBlueprintMarten()` adds the same listener through `ConfigureMarten`, which only a store configured by
+`AddMarten()` applies. A consumer that builds `StoreOptions` itself (registering them as a singleton, or
+subclassing them) must call `options.AddBlueprintSessionListeners()` on them. It is idempotent, so doing both
+does not dispatch or publish an event twice.
 
 ### S365 Migration Mapping
 

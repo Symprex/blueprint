@@ -20,9 +20,11 @@ namespace Blueprint.Marten;
 /// database transaction, providing exactly-once delivery guarantees.
 /// </para>
 /// <para>
-/// This listener runs <b>after</b> <see cref="DomainEventDispatchingSessionListener"/> in the
-/// <c>BeforeSaveChangesAsync</c> chain, so in-memory handlers have already processed the events
-/// before they are published to the bus.
+/// This listener publishes without dispatching to in-process handlers and without clearing, and is not registered by
+/// <c>AddBlueprintMarten()</c>: <see cref="DomainEventDispatchingSessionListener"/>, which is, dispatches and publishes
+/// each event before clearing it. Use this one only where events should reach the bus but no in-process handler.
+/// Registered after the dispatching listener it finds nothing left to publish, so the two together do not publish an
+/// event twice.
 /// </para>
 /// </remarks>
 public sealed class OutboxPublishingSessionListener : DocumentSessionListenerBase
