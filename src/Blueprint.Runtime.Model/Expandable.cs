@@ -32,4 +32,15 @@ public class Expandable<T>
     /// registered resource expander populates it.
     /// </summary>
     public T? Value { get; set; }
+
+    /// <summary>
+    /// Gets or sets the reason expansion was attempted but failed, for example <c>authentication_error</c> when the
+    /// upstream system an expander calls rejects its credentials. <see cref="Value"/> is <see langword="null"/>
+    /// whenever this is set, and clients read it to tell "could not be expanded" apart from "not expanded".
+    /// </summary>
+    /// <remarks>
+    /// Serialised as <c>expandError</c>, and written as <see langword="null"/> when unset rather than omitted, which is
+    /// the shape Signature365's legacy <c>Expandable&lt;T&gt;</c> had on the wire and in its OpenAPI document.
+    /// </remarks>
+    public string? ExpandError { get; set; }
 }

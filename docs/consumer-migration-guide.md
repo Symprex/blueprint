@@ -1093,6 +1093,11 @@ Supported query formats: `?expand=Department`, `?expand=Department,Manager` (com
 `?expand=Department&expand=Manager` (repeated keys), and `?expand[]=Department&expand[]=Manager`
 (array syntax).
 
+An expander that cannot expand because the upstream system failed (for example an authentication
+error calling Microsoft Graph) leaves `Value` null and sets `Expandable<T>.ExpandError` to a reason
+such as `"authentication_error"`. It is serialised as `expandError` and written as `null` when unset,
+the same wire shape as Signature365's legacy `Expandable<T>`.
+
 ## Source-generation optimization notes
 
 ### What is already compile-time optimised
