@@ -1279,6 +1279,61 @@ public class ReferenceAppOpenApiTests
             "Nullable<Instant> should be marked nullable in the schema");
     }
 
+    [Fact]
+    public async Task When_resource_is_the_target_of_non_self_links_then_its_schema_renders_x_links_in_the_legacy_shape()
+    {
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var templateSchema = doc.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("TemplateApiResource");
+
+        AssertTemplateResourceLinks(templateSchema);
+    }
+
+    [Fact]
+    public async Task When_schema_name_formatter_is_configured_then_x_links_render_on_the_formatted_schema_key()
+    {
+        // Strips the "ApiResource" suffix, as Signature365's legacy specs name TemplateApiResource-style schemas.
+        var (json, _) = await InvokeOpenApiEndpointAsync(static info => info.SchemaNameFormatter = static name =>
+            name.EndsWith("ApiResource", StringComparison.Ordinal) ? name[..^"ApiResource".Length] : name);
+        using var doc = JsonDocument.Parse(json);
+
+        var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+        schemas.TryGetProperty("TemplateApiResource", out _).Should().BeFalse("the formatter renames the schema key");
+
+        AssertTemplateResourceLinks(schemas.GetProperty("Template"));
+    }
+
+    /// <summary>
+    /// Asserts <c>TemplateApiResource</c>'s <c>x-links</c> against the shape legacy Blueprint emitted, as committed in
+    /// Signature365's Portal spec: an <c>x-links</c> array on the schema component itself, each entry exactly
+    /// <c>rel</c>, <c>operationId</c> (the linked operation's descriptor name) and <c>method</c> (upper case), and no
+    /// entry for the <c>self</c> link. The expected entries come from the sample's <c>[Link]</c> declarations.
+    /// </summary>
+    private static void AssertTemplateResourceLinks(JsonElement templateSchema)
+    {
+        templateSchema.TryGetProperty("x-links", out var links).Should().BeTrue(
+            "TemplateApiResource is the target of three non-self [Link] declarations");
+
+        links.EnumerateArray()
+            .Select(static link => string.Join(",", link.EnumerateObject().Select(static property => property.Name)))
+            .Should()
+            .AllBe("rel,operationId,method", "each legacy x-links entry carries exactly these keys, in this order");
+
+        links.EnumerateArray()
+            .Select(static link => (
+                Rel: link.GetProperty("rel").GetString(),
+                OperationId: link.GetProperty("operationId").GetString(),
+                Method: link.GetProperty("method").GetString()))
+            .Should()
+            .BeEquivalentTo(
+            [
+                ("archive", "ArchiveTemplate", "DELETE"),
+                ("clone", "CloneTemplate", "POST"),
+                ("set-notification-priority", "SetTemplateNotificationPriority", "PUT"),
+            ]);
+    }
+
     /// <summary>
     /// Resolves a request body's <c>$ref</c> schema pointer to the actual component schema element.
     /// After the request-body-to-$ref refactor, request body schemas live in <c>components/schemas</c>
