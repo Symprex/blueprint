@@ -224,6 +224,12 @@ public class HttpOperationResultExecutor
     /// </summary>
     private async Task<bool> TryExecuteSlowPathAsync(HttpContext httpContext, ApiOperationContext operationContext, OperationResult result, BlueprintHttpOptions httpOptions)
     {
+        if (TryGetBodilessStatusCode(result, out var bodilessStatusCode))
+        {
+            httpContext.Response.StatusCode = bodilessStatusCode;
+            return true;
+        }
+
         switch (result)
         {
             case ValidationFailedResult validationFailedResult when DescriptorSupportsFailureResult(operationContext.Descriptor, validationFailedResult):
@@ -317,6 +323,33 @@ public class HttpOperationResultExecutor
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Finds whether <paramref name="result"/> is one whose status is decided at run time — by a resource event's change
+    /// type, or by a plain text result's own status — and that status is one a response must carry no body with.
+    /// </summary>
+    /// <remarks>
+    /// Kestrel refuses a body, and even a <c>Content-Length</c>, on a 204, 205 or 304 response, failing the request with a
+    /// 500, and a client could not read one anyway. Legacy Blueprint wrote none: its result executor wrote a body only for
+    /// content an operation returned, and set no status that forbids one. So such a result is written as its status alone,
+    /// with no <c>Content-Type</c>, <c>Content-Length</c> or <c>Location</c>.
+    /// </remarks>
+    /// <param name="result">The result being translated.</param>
+    /// <param name="statusCode">The status to write when the result is written without a body.</param>
+    /// <returns><see langword="true"/> when the result must be written as its status alone.</returns>
+    private static bool TryGetBodilessStatusCode(OperationResult result, out int statusCode)
+    {
+        statusCode = result switch
+        {
+            IDeferredResourceEventResult deferredEvent => MapChangeTypeToStatusCode(deferredEvent.ChangeType),
+            ResourceEventResult resourceEventResult => MapChangeTypeToStatusCode(resourceEventResult.ChangeType),
+            ResourceEvent resourceEvent => MapResourceEventChangeTypeToStatusCode(resourceEvent.ChangeType),
+            PlainTextResult plainTextResult => (int)plainTextResult.StatusCode,
+            _ => 0,
+        };
+
+        return statusCode is StatusCodes.Status204NoContent or StatusCodes.Status205ResetContent or StatusCodes.Status304NotModified;
     }
 
     /// <summary>

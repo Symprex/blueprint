@@ -1243,6 +1243,8 @@ public class HttpEndToEndIntegrationTests
         });
 
         response.StatusCode.Should().Be(StatusCodes.Status204NoContent);
+        response.Body.Should().BeEmpty();
+        response.ContentType.Should().BeNull();
     }
 
     [Fact]

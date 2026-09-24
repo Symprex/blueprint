@@ -152,11 +152,11 @@ The important architectural rule is that runtime code consumes generated knowled
 | `AcceptedResult<T>` | 202 | JSON | Async accepted |
 | `NotFoundResult<T>` | 404 | JSON | Missing resource |
 | `ConflictResult<T>` | 409 | JSON | State conflict |
-| `ResourceEventResult<T>` | 200/201/204 | JSON envelope | Status from ChangeType; Created adds Location header |
+| `ResourceEventResult<T>` | 200/201/204 | JSON envelope, none on 204 | Status from ChangeType; Created adds Location header |
 | `KeyOnlyResourceEventResult` | 200/201/204 | None | Status from ChangeType |
 | `NoResultOperationResult` | 200 | None | Default void success |
 | `HttpNoContentResult` | 204 | None | Explicit no-content |
-| `PlainTextResult` | 200 | text/plain | Plain-text body (e.g. health checks) |
+| `PlainTextResult` | 200 (configurable) | text/plain, none on 204/205/304 | Plain-text body (e.g. health checks) |
 | `RedirectResult` | 302 (configurable) | None | Location header redirect |
 | `FileStreamResult` | 200 | Stream | Binary download; Content-Disposition when FileName set |
 | `ValidationFailedResult` | 422 | ProblemDetails | Validation errors |
