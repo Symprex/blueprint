@@ -318,7 +318,11 @@ depth — is a component of its own that the property references (wrapped in `on
 `description`, where it has either), as legacy made it. The graph is followed through the app's serializer context,
 so a type that context has no metadata for (for example one used only in a request body the context does not
 declare) is still an inline `object`; a type written by a converter, such as a strongly typed id, is not a
-component.
+component. A request-body property whose type is an operation's own type needs no metadata: it references that
+operation's request body, the one schema legacy made for the type (VCard's `PreviewVCardFieldsQuery.Body` references
+`UpdateVCardFieldsCommand`). For any other undescribed type in a request body, `MapBlueprintApi` logs a warning
+(category `Blueprint.OpenApi`) naming the operation, the property and the type to declare on the context. The warning
+is also listed on `PreRenderedOpenApiDocument.Warnings`.
 
 A type written by a converter is documented as legacy documented it, whatever the naming. One whose type converter
 converts it to string, such as Signature365's `ApiId`, is `{"type": "string"}` as a property, a parameter or a request

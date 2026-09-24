@@ -56,4 +56,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.LegacyEventWidgetApiResource))]
 [JsonSerializable(typeof(Http.TypedIdWidgetApiResource))]
 [JsonSerializable(typeof(Http.RequiredShapeApiResource))]
+[JsonSerializable(typeof(Http.ConverterWrittenBodyId))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

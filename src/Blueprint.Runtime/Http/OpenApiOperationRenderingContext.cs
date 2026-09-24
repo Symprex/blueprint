@@ -46,11 +46,16 @@ public sealed record OpenApiOperationRenderingContext(
         ArgumentNullException.ThrowIfNull(responseObjects);
 
         var schemaProjection = responseObjects.SchemaComponents.SchemaProjection;
+        var requestBodyNamesByType = GetRequestBodyNamesByOperationType(responseObjects.Operations, requestBodyNaming, schemaProjection.Naming);
+        var warnings = new List<string>();
         var operations = responseObjects.Operations
-            .Select(operation => CreateOperation(operation, schemaProjection, requestBodyNaming, queryParameterNaming))
+            .Select(operation => CreateOperation(operation, schemaProjection, requestBodyNaming, queryParameterNaming, requestBodyNamesByType, warnings))
             .ToImmutableArray();
 
-        return new OpenApiOperationRenderingContext(responseObjects, operations);
+        return new OpenApiOperationRenderingContext(responseObjects, operations)
+        {
+            Warnings = [.. warnings],
+        };
     }
 
     /// <summary>
@@ -149,7 +154,9 @@ public sealed record OpenApiOperationRenderingContext(
         OpenApiResponseObjectOperationContext operation,
         OpenApiSchemaProjectionContext schemaProjection,
         OpenApiRequestBodyNaming requestBodyNaming,
-        OpenApiParameterNaming queryParameterNaming)
+        OpenApiParameterNaming queryParameterNaming,
+        FrozenDictionary<Type, string> requestBodyNamesByType,
+        List<string> warnings)
     {
         var httpMethods = operation.Operation.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var httpMethodMetadata)
             ? httpMethodMetadata.HttpMethods
@@ -169,7 +176,8 @@ public sealed record OpenApiOperationRenderingContext(
             : ImmutableDictionary<string, string>.Empty;
 
         var naming = schemaProjection.Naming;
-        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation, naming, schemaProjection.SchemaNamesByType, queryParameterNaming, schemaProjection.RequiredProperties);
+        var bodyTypes = new RequestBodyTypeResolver(schemaProjection, requestBodyNamesByType, warnings);
+        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation, naming, schemaProjection.SchemaNamesByType, queryParameterNaming, schemaProjection.RequiredProperties, bodyTypes);
 
         if (requestBody is not null && requestBodyNaming == OpenApiRequestBodyNaming.OperationType)
         {
@@ -233,7 +241,8 @@ public sealed record OpenApiOperationRenderingContext(
             OpenApiSchemaNaming naming,
             FrozenDictionary<Type, string> schemaNamesByType,
             OpenApiParameterNaming queryParameterNaming,
-            OpenApiRequiredProperties requiredProperties)
+            OpenApiRequiredProperties requiredProperties,
+            RequestBodyTypeResolver bodyTypes)
     {
         if (!descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData))
         {
@@ -431,8 +440,19 @@ public sealed record OpenApiOperationRenderingContext(
                         DefaultValue = defaultValueAttr?.Value,
                         ExampleValue = exampleValueAttr?.Value,
                         IsWriteOnly = isWriteOnly,
-                        SchemaRef = schemaType == "object" ? FindSchemaName(clrProperty?.PropertyType, schemaNamesByType) : null,
+                        SchemaRef = schemaType == "object" ? bodyTypes.FindSchemaName(descriptor, entry.PropertyName, clrProperty?.PropertyType) : null,
                     });
+
+                    if (bodyItemsType == "object" && bodyItemsSchemaRef is null)
+                    {
+                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, GetCollectionElementType(clrProperty?.PropertyType, dictionaryValues: false));
+                    }
+
+                    if (bodyAdditionalType == "object" && bodyAdditionalSchemaRef is null)
+                    {
+                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, GetCollectionElementType(clrProperty?.PropertyType, dictionaryValues: true));
+                    }
+
                     break;
             }
         }
@@ -656,6 +676,61 @@ public sealed record OpenApiOperationRenderingContext(
         }
 
         return (null, null, null, null, null, null);
+    }
+
+    /// <summary>
+    /// Gets what the operations' request bodies could not describe as legacy Blueprint did, each named for the consumer to
+    /// act on: a property whose type the app's serializer context does not describe.
+    /// </summary>
+    internal ImmutableArray<string> Warnings { get; init; } = [];
+
+    /// <summary>
+    /// Maps the CLR type of each operation that has a request body to the name of that body's schema component, as
+    /// <see cref="OpenApiDocumentRenderingContext"/> will name it: the operation's type under
+    /// <see cref="OpenApiRequestBodyNaming.OperationType"/>, otherwise its name.
+    /// </summary>
+    private static FrozenDictionary<Type, string> GetRequestBodyNamesByOperationType(
+        ImmutableArray<OpenApiResponseObjectOperationContext> operations,
+        OpenApiRequestBodyNaming requestBodyNaming,
+        OpenApiSchemaNaming naming)
+    {
+        var names = new Dictionary<Type, string>();
+
+        foreach (var operation in operations)
+        {
+            var descriptor = operation.Operation;
+
+            if (descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownership)
+                && ownership.Entries.Any(static entry => entry.Source == PropertyBindingSource.Body))
+            {
+                var name = requestBodyNaming == OpenApiRequestBodyNaming.OperationType
+                    ? OpenApiSchemaNames.Format(descriptor.OperationType, naming)
+                    : descriptor.Name;
+
+                names.TryAdd(descriptor.OperationType, name);
+            }
+        }
+
+        return names.ToFrozenDictionary();
+    }
+
+    /// <summary>
+    /// Returns the type of a collection's items, or of a dictionary's values when <paramref name="dictionaryValues"/> is set.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
+    private static Type? GetCollectionElementType(Type? type, bool dictionaryValues)
+    {
+        if (type is null)
+        {
+            return null;
+        }
+
+        var genericInterface = dictionaryValues ? typeof(IDictionary<,>) : typeof(IEnumerable<>);
+        var implemented = type.GetInterfaces()
+            .Append(type)
+            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == genericInterface);
+
+        return implemented?.GetGenericArguments()[dictionaryValues ? 1 : 0];
     }
 
     /// <summary>
@@ -899,6 +974,103 @@ public sealed record OpenApiOperationRenderingContext(
         }
 
         return names;
+    }
+
+    /// <summary>
+    /// Finds the schema component a request-body property of an object type references, as legacy Blueprint referenced
+    /// one, and records a warning for a type the document cannot describe.
+    /// </summary>
+    /// <remarks>
+    /// Legacy generated a schema for any type by reflection. The document describes a type from the app's serializer
+    /// context instead, so it can reference a component for one the context describes. It can also reference an
+    /// operation's type, which the context need not describe: legacy's schema for it was that operation's request body,
+    /// the one schema it made for the type. For any other type it records a warning naming the type, which the consumer
+    /// can resolve by declaring the type on the context, rather than leave the property an unexplained object.
+    /// </remarks>
+    private sealed class RequestBodyTypeResolver(
+        OpenApiSchemaProjectionContext schemaProjection,
+        FrozenDictionary<Type, string> requestBodyNamesByType,
+        List<string> warnings)
+    {
+        /// <summary>Returns the component a property of <paramref name="type"/> references, if it has one.</summary>
+        /// <param name="descriptor">The operation whose request body has the property.</param>
+        /// <param name="propertyName">The property's CLR name.</param>
+        /// <param name="type">The property's type.</param>
+        /// <returns>The component's name, or <see langword="null"/> when the property stays an inline object.</returns>
+        public string? FindSchemaName(ApiOperationDescriptor descriptor, string propertyName, Type? type)
+        {
+            if (type is null)
+            {
+                return null;
+            }
+
+            var underlying = Nullable.GetUnderlyingType(type) ?? type;
+
+            if (OpenApiOperationRenderingContext.FindSchemaName(underlying, schemaProjection.SchemaNamesByType) is { } schemaName)
+            {
+                return schemaName;
+            }
+
+            if (requestBodyNamesByType.TryGetValue(underlying, out var requestBodyName))
+            {
+                return requestBodyName;
+            }
+
+            this.WarnIfUndescribed(descriptor, propertyName, underlying);
+
+            return null;
+        }
+
+        /// <summary>Records a warning when the serializer context does not describe <paramref name="type"/>.</summary>
+        /// <param name="descriptor">The operation whose request body has the property.</param>
+        /// <param name="propertyName">The property's CLR name.</param>
+        /// <param name="type">The type the property is, or holds.</param>
+        [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
+        public void WarnIfUndescribed(ApiOperationDescriptor descriptor, string propertyName, Type? type)
+        {
+            if (type is null
+                || schemaProjection.Document.App.AppOwnedSerializerContext is not System.Text.Json.Serialization.JsonSerializerContext serializerContext)
+            {
+                return;
+            }
+
+            var underlying = Nullable.GetUnderlyingType(type) ?? type;
+
+            // An open value is an object with no properties by nature, and a dictionary's values are checked on their own.
+            if (underlying == typeof(object)
+                || underlying == typeof(System.Text.Json.JsonElement)
+                || typeof(System.Text.Json.Nodes.JsonNode).IsAssignableFrom(underlying)
+                || underlying.GetInterfaces().Append(underlying).Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>)))
+            {
+                return;
+            }
+
+            if (TryGetTypeInfo(serializerContext, underlying) is not null)
+            {
+                return;
+            }
+
+            var contextName = serializerContext.GetType().Name;
+            warnings.Add(
+                $"{descriptor.Name}.{propertyName}: the serializer context {contextName} does not describe {underlying.FullName}, so the "
+                + $"OpenAPI document shows it as an object with no properties. Declare [JsonSerializable(typeof({underlying.FullName}))] "
+                + $"on {contextName} for the document to describe it as a component.");
+        }
+
+        private static System.Text.Json.Serialization.Metadata.JsonTypeInfo? TryGetTypeInfo(
+            System.Text.Json.Serialization.JsonSerializerContext serializerContext,
+            Type type)
+        {
+            try
+            {
+                return serializerContext.GetTypeInfo(type);
+            }
+            catch (NotSupportedException)
+            {
+                // A type whose converter the source generator cannot configure is not described either.
+                return null;
+            }
+        }
     }
 }
 

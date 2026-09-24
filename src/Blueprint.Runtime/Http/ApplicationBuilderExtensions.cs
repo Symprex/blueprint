@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Blueprint;
 using Blueprint.Http;
 using Blueprint.Model;
@@ -92,6 +92,16 @@ public static class EndpointRouteBuilderExtensions
 
         // Register the pre-rendered document in DI so development utilities (e.g. OutputOpenApi) can retrieve it
         endpoints.ServiceProvider.GetService<PreRenderedOpenApiDocumentHolder>()?.Set(openApiDocument);
+
+        // What the document could not describe is named once, when the API is mapped, for the consumer to act on.
+        if (openApiDocument.Warnings.Count > 0
+            && endpoints.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.OpenApi") is { } openApiLogger)
+        {
+            foreach (var warning in openApiDocument.Warnings)
+            {
+                openApiLogger.LogWarning("{OpenApiWarning}", warning);
+            }
+        }
 
         var openApiBuilder = endpoints.Map(
             RoutePatternFactory.Parse(basePath.TrimEnd('/') + "/.blueprint/openapi.json"),

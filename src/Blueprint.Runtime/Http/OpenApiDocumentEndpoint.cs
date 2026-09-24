@@ -50,8 +50,8 @@ internal static class OpenApiDocumentEndpoint
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var json = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions, basePath);
-        var document = new PreRenderedOpenApiDocument(json);
+        var (json, warnings) = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions, basePath);
+        var document = new PreRenderedOpenApiDocument(json) { Warnings = warnings };
 
         // Compute a stable ETag from the document content so clients can use If-None-Match
         // to avoid redundant downloads of the static spec.
@@ -85,7 +85,7 @@ internal static class OpenApiDocumentEndpoint
         return (handler, document);
     }
 
-    private static string RenderDocument(
+    private static (string Json, IReadOnlyList<string> Warnings) RenderDocument(
         BlueprintApp app,
         OpenApiInfoOptions? infoOptions,
         OpenApiSchemaProcessorOptions? schemaProcessorOptions,
@@ -125,6 +125,6 @@ internal static class OpenApiDocumentEndpoint
         var pathItemContext = OpenApiPathItemRenderingContext.Create(operationContext);
         var documentContext = OpenApiDocumentRenderingContext.Create(pathItemContext);
 
-        return OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions, httpOptions, basePath).Json;
+        return (OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions, httpOptions, basePath).Json, operationContext.Warnings);
     }
 }
