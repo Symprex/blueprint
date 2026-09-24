@@ -367,23 +367,44 @@ public class RebusTransactionModuleTests
     }
 
     [Fact]
-    public void When_command_saves_a_unit_of_work_then_the_scope_is_enlisted_straight_after_it_opens()
+    public void When_command_saves_a_unit_of_work_then_the_scope_is_enlisted_after_tenant_resolution_authorisation_and_validation_and_before_the_handler()
     {
-        // The consumer's outbox must be enlisted before the handler sends anything, and only where a unit of work save
-        // follows, which also needs an IUnitOfWork registered at runtime.
+        // Legacy enlisted the outbox from Execution-stage middleware added before the handler
+        // (legacy BlueprintRebusPipelineExtensions.cs:41-42, at priority -1 by PipelineBuilder.cs:26-31, ahead of the
+        // handler's priority 0 at :19), so after SetTenant (legacy AzureAdOauthReturnCommandExecutorPipeline.cs:61-66),
+        // authorisation (:68-89) and validation (:91-114), and straight before the handler (:119-121, then :123-129).
+        // An enlistment resolving a tenant-scoped session any earlier would get an untenanted one.
         var lines = GeneratePipelineLines(
             """
+            [Blueprint.Model.Attributes.RootLink("/orders")]
             public partial class PlaceOrderCommand : ICommand<string>
             {
+                [System.ComponentModel.DataAnnotations.Required]
+                public string Reference { get; set; }
+
                 public static Task<string> HandleAsync(PlaceOrderCommand operation) => Task.FromResult("ordered");
             }
             """,
             includeBlueprintRebus: true);
 
-        var scopeLine = lines.FindIndex(static l => l.Contains("using var rebusTransactionScope", StringComparison.Ordinal));
-        scopeLine.Should().BeGreaterThan(-1);
+        var scopeLine = lines.FindIndex(static l => l.StartsWith("using var rebusTransactionScope", StringComparison.Ordinal));
+        var tenantLine = lines.FindIndex(static l => l.StartsWith("ResolveTenant(", StringComparison.Ordinal));
+        var authenticationLine = lines.FindIndex(static l => l.Contains("CheckHttpAuthenticated(", StringComparison.Ordinal));
+        var authorisationLine = lines.FindIndex(static l => l.Contains("RunPreFilteredAuthorisersAsync(", StringComparison.Ordinal));
+        var lastValidationLine = lines.FindLastIndex(static l => l.Contains("CreateValidationFailure(", StringComparison.Ordinal));
+        var enlistLine = lines.FindIndex(static l => l.Contains("RebusTransactionEnlistment.EnlistAsync(", StringComparison.Ordinal));
+        var handlerLine = lines.FindIndex(static l => l.Contains("PlaceOrderCommand.HandleAsync(operation)", StringComparison.Ordinal));
 
-        lines.Skip(scopeLine + 1).SkipWhile(string.IsNullOrWhiteSpace).Take(3).Should().Equal(
+        new[] { scopeLine, tenantLine, authenticationLine, authorisationLine, lastValidationLine, enlistLine, handlerLine }
+            .Should().OnlyContain(static index => index >= 0, "every step the ordering is about must be in the pipeline");
+
+        enlistLine.Should().BeGreaterThan(tenantLine, "the enlistment must see the resolved tenant");
+        enlistLine.Should().BeGreaterThan(authenticationLine, "legacy enlisted only an authenticated operation");
+        enlistLine.Should().BeGreaterThan(authorisationLine, "legacy enlisted only an authorised operation");
+        enlistLine.Should().BeGreaterThan(lastValidationLine, "legacy enlisted only a valid operation");
+        enlistLine.Should().BeLessThan(handlerLine, "the outbox must be enlisted before the handler sends anything");
+
+        lines.Skip(enlistLine - 2).Take(3).Should().Equal(
             "if (rebusTransactionScope != null && this.HasUnitOfWork)",
             "{",
             "await global::Blueprint.Rebus.RebusTransactionEnlistment.EnlistAsync(rebusTransactionScope.TransactionContext, context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");

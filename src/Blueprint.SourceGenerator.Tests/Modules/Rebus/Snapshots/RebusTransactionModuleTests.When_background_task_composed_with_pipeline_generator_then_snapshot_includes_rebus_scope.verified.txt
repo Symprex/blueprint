@@ -64,11 +64,6 @@ namespace Blueprint.Generated
 
             using var rebusTransactionScope = this._hasRebus ? new global::Rebus.Transport.RebusTransactionScope() : null;
 
-            if (rebusTransactionScope != null && this.HasUnitOfWork)
-            {
-                await global::Blueprint.Rebus.RebusTransactionEnlistment.EnlistAsync(rebusTransactionScope.TransactionContext, context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
-            }
-
             // Tenant resolution (compile-time, no reflection, cached services)
             if (this.TenantResolver != null && this.TenantAccessor != null)
             {
@@ -79,6 +74,11 @@ namespace Blueprint.Generated
             if (applicablePopulators.Length > 0)
             {
                 await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
+            }
+
+            if (rebusTransactionScope != null && this.HasUnitOfWork)
+            {
+                await global::Blueprint.Rebus.RebusTransactionEnlistment.EnlistAsync(rebusTransactionScope.TransactionContext, context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
             }
             await global::TestNamespace.SendReminderTask.HandleAsync(operation).ConfigureAwait(false);
             var handlerResult = (Blueprint.OperationResult)Blueprint.Runtime.Exec.NoResultOperationResult.Instance;
