@@ -234,6 +234,12 @@ public class MyHandler
 5. For POST/PUT/PATCH: operation serialized as JSON body
 6. Response: 2xx → deserialize, 422 → `ValidationException`, other → `BlueprintApiException`
 
+For a `Results<T1, T2>` response type the client reads the member the host wrote, trying them in order: a
+`StatusCodeResult` (e.g. `StatusCodeResult.Accepted`) when the status is its own and there is no body, a
+`PlainTextResult` when the body is not JSON, and any other non-`OperationResult` type when it is JSON. A 204 that no
+member claims returns the default, as for any other response type; any other response that is none of them throws
+`InvalidOperationException`. Wrappers such as `OkResult<T>` are not read back.
+
 `BlueprintApiException` is an `ApiException` with the problem the failure describes, as legacy S365's client threw,
 so a caller matches it by `Type`/`Title`/`HttpStatus` and a pipeline that lets it escape answers with the same problem:
 

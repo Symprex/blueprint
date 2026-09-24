@@ -1020,6 +1020,27 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
 
+        // A Results<T1, T2>: the host wrote one member, so read the response as that member, not as the union.
+        if (typeof(TResponse).IsGenericType && typeof(TResponse).GetGenericTypeDefinition() == typeof(Results<,>))
+        {
+            var union = await this.ReadUnionMemberAsync(typeof(TResponse), response, cancellationToken).ConfigureAwait(false);
+
+            if (union is not null)
+            {
+                return (TResponse)union;
+            }
+
+            // A 204 no member claims keeps the default every other response type gets for it.
+            if (response.StatusCode == HttpStatusCode.NoContent)
+            {
+                return default;
+            }
+
+            throw new InvalidOperationException(
+                $"The response ({(int)response.StatusCode}, {response.Content.Headers.ContentType?.MediaType ?? "no content"}) " +
+                $"matches none of the results {typeof(TResponse)} declares.");
+        }
+
         if (response.StatusCode == HttpStatusCode.NoContent)
         {
             return default;
@@ -1051,6 +1072,62 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         // JSON deserialization
         return await response.Content.ReadFromJsonAsync<TResponse>(this._jsonOptions, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads a successful response as the member of the <see cref="Results{T1, T2}"/> the host wrote, trying the members
+    /// in declaration order: a <see cref="StatusCodeResult"/> when the status is its own and there is no body, a
+    /// <see cref="PlainTextResult"/> when the body is not JSON, and any other type, other than an operation result the
+    /// client cannot read back, when it is.
+    /// </summary>
+    /// <param name="unionType">The closed <see cref="Results{T1, T2}"/> type.</param>
+    /// <param name="response">The response.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The union holding the member read, or <see langword="null"/> when the response is none of them.</returns>
+    private async Task<object?> ReadUnionMemberAsync(Type unionType, HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var mediaType = response.Content.Headers.ContentType?.MediaType;
+        var isJson = mediaType is not null
+                     && (mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase)
+                         || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase));
+
+        foreach (var memberType in unionType.GetGenericArguments())
+        {
+            object? member = null;
+
+            if (typeof(StatusCodeResult).IsAssignableFrom(memberType))
+            {
+                if (mediaType is null
+                    && memberType.GetField(nameof(StatusCodeResult.Accepted.Instance), BindingFlags.Public | BindingFlags.Static)?.GetValue(null) is StatusCodeResult singleton
+                    && singleton.StatusCode == (int)response.StatusCode)
+                {
+                    member = singleton;
+                }
+            }
+            else if (memberType == typeof(PlainTextResult))
+            {
+                if (mediaType is not null && !isJson)
+                {
+                    var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+                    member = new PlainTextResult(text, response.StatusCode) { ContentType = mediaType };
+                }
+            }
+            else if (isJson && !typeof(OperationResult).IsAssignableFrom(memberType))
+            {
+                member = await response.Content.ReadFromJsonAsync(memberType, this._jsonOptions, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (member is not null)
+            {
+                // The union's constructor is private: its implicit conversion from the member is how a value is made.
+                var conversion = unionType.GetMethod("op_Implicit", BindingFlags.Public | BindingFlags.Static, [memberType])!;
+
+                return conversion.Invoke(null, [member])!;
+            }
+        }
+
+        return null;
     }
 
     private async Task EnsureSuccessOrThrowAsync(
