@@ -23,7 +23,9 @@ public enum OpenApiSchemaNaming
     /// </summary>
     /// <remarks>
     /// <see cref="OpenApiInfoOptions.SchemaNameFormatter"/> is applied to these names — for request bodies keyed by type
-    /// and ResourceEvent envelopes as well — so a consumer can reproduce the rest of its legacy naming there.
+    /// and ResourceEvent envelopes as well — so a consumer can reproduce the rest of its legacy naming there. Each
+    /// parameter's schema is titled with the name of the type a <see cref="Nullable{T}"/> wraps, formatted the same way,
+    /// as legacy titled its root parameter schemas.
     /// </remarks>
     Legacy = 1,
 }

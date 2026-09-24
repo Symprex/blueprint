@@ -294,6 +294,13 @@ public sealed record OpenApiOperationRenderingContext(
             var exampleValueAttr = clrProperty?.GetCustomAttribute<Blueprint.Model.Attributes.OpenApiExampleAttribute>();
             var isWriteOnly = clrProperty?.GetCustomAttribute<Blueprint.Model.Attributes.OpenApiWriteOnlyAttribute>() is not null;
 
+            // Legacy gave each parameter a root schema, which NJsonSchema titled with its schema name generator: the name
+            // under legacy naming of the type a Nullable<T> wraps, which the writer passes through the schema name formatter
+            // as legacy's BlueprintSchemaNameGenerator did.
+            var schemaTitle = naming == OpenApiSchemaNaming.Legacy && clrProperty is not null
+                ? OpenApiSchemaNames.Format(Nullable.GetUnderlyingType(clrProperty.PropertyType) ?? clrProperty.PropertyType, naming)
+                : null;
+
             // Resolve array element schema for collection-typed query/header/cookie parameters
             string? paramItemsType = null;
             string? paramItemsFormat = null;
@@ -328,6 +335,7 @@ public sealed record OpenApiOperationRenderingContext(
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
                         ExampleValue = exampleValueAttr?.Value,
+                        SchemaTitle = schemaTitle,
                         AllowReserved = catchAllNames.Contains(bindingName),
                     });
                     break;
@@ -353,6 +361,7 @@ public sealed record OpenApiOperationRenderingContext(
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
                         ExampleValue = exampleValueAttr?.Value,
+                        SchemaTitle = schemaTitle,
                         ItemsType = paramItemsType,
                         ItemsFormat = paramItemsFormat,
                     });
@@ -379,6 +388,7 @@ public sealed record OpenApiOperationRenderingContext(
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
                         ExampleValue = exampleValueAttr?.Value,
+                        SchemaTitle = schemaTitle,
                     });
                     break;
 
@@ -403,6 +413,7 @@ public sealed record OpenApiOperationRenderingContext(
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
                         ExampleValue = exampleValueAttr?.Value,
+                        SchemaTitle = schemaTitle,
                     });
                     break;
 

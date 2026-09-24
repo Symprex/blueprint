@@ -288,6 +288,9 @@ configureOpenApi: options =>
   `ResourceEventOfPartnerCompany`.
 - `[OpenApiSchemaName("ImportRun")]` (`Blueprint.Model.Attributes`) gives a type a name of its own, as legacy's
   `[JsonSchema("ImportRun")]` did.
+- Under it every parameter's schema is titled, as legacy's root parameter schemas were, with the legacy name of the type
+  a `Nullable<T>` wraps, passed through the formatter: an `ApiId` route parameter is `"ApiId"`, an `int?` query
+  parameter `"Integer"`, a `string[]` one `"String[]"`.
 - `options.QueryParameterNaming = OpenApiParameterNaming.PropertyName` names query parameters by their CLR properties
   (`Page`), as legacy did, instead of the camel-case name the framework's client sends (`page`). Generators that use a
   parameter's name as a method argument or query key need it; the host binds a query parameter whatever its case.

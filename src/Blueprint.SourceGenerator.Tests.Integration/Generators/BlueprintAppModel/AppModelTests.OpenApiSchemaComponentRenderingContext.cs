@@ -62,6 +62,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "MultiExpandableTestEmployee",
             "NodaTimeEchoResponse",
             "PagedApiResourceOfLegacyShapeTenant",
+            "ParameterTitlesApiResource",
             "ProblemDetails",
             "RequiredShapeApiResource",
             "RequiredShapeChild",

@@ -62,6 +62,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "MultiExpandableTestEmployee",
             "NodaTimeEchoResponse",
             "PagedApiResourceOfLegacyShapeTenant",
+            "ParameterTitlesApiResource",
             "ProblemDetails",
             "RequiredShapeApiResource",
             "RequiredShapeChild",

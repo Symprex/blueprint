@@ -261,7 +261,11 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteString("openapi", string.IsNullOrWhiteSpace(infoOptions.OpenApiVersion) ? DefaultOpenApiVersion : infoOptions.OpenApiVersion);
         WriteInfo(writer, infoOptions);
         WriteServers(writer, ResolveServers(infoOptions.Servers, httpOptions, basePath));
-        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, ComponentKeyOf);
+
+        // A parameter's title is a schema name, passed through the consumer's formatter as legacy's schema name generator
+        // passed it, but not a component key: no counter, no sanitising.
+        var parameterTitleFormatter = infoOptions.SchemaNaming == OpenApiSchemaNaming.Legacy ? infoOptions.SchemaNameFormatter : null;
+        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, ComponentKeyOf, parameterTitleFormatter);
         WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, ComponentKeyOf, DescribeComponentSources(document));
         WriteDocumentTags(writer, document.Paths);
 
@@ -398,33 +402,33 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter)
+    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
     {
         writer.WritePropertyName("paths");
         writer.WriteStartObject();
 
         foreach (var pathItem in paths)
         {
-            WritePathItem(writer, pathItem, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter);
+            WritePathItem(writer, pathItem, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter)
+    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
     {
         writer.WritePropertyName(pathItem.UrlFormat);
         writer.WriteStartObject();
 
         foreach (var methodSlot in pathItem.Methods)
         {
-            WriteMethodSlot(writer, methodSlot, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter);
+            WriteMethodSlot(writer, methodSlot, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter)
+    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
     {
         writer.WritePropertyName(methodSlot.HttpMethod.ToLowerInvariant());
         writer.WriteStartObject();
@@ -446,7 +450,7 @@ public sealed record OpenApiOutputRenderingContext(
             }
 
             WriteTags(writer, primaryOperation.Tags);
-            WriteParameters(writer, primaryOperation.Parameters);
+            WriteParameters(writer, primaryOperation.Parameters, parameterTitleFormatter);
             WriteRequestBody(writer, primaryOperation.OperationName, primaryOperation.RequestBody, schemaNameFormatter);
             WriteResponses(writer, primaryOperation.Responses, schemaNameFormatter);
 
@@ -495,7 +499,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteParameters(Utf8JsonWriter writer, ImmutableArray<OpenApiParameterModel> parameters)
+    private static void WriteParameters(Utf8JsonWriter writer, ImmutableArray<OpenApiParameterModel> parameters, Func<string, string>? titleFormatter)
     {
         if (parameters.IsEmpty)
         {
@@ -541,6 +545,12 @@ public sealed record OpenApiOutputRenderingContext(
 
             writer.WritePropertyName("schema");
             writer.WriteStartObject();
+
+            if (parameter.SchemaTitle is { } title)
+            {
+                writer.WriteString("title", titleFormatter is null ? title : titleFormatter(title));
+            }
+
             writer.WriteString("type", parameter.SchemaType);
 
             if (parameter.SchemaFormat is not null)

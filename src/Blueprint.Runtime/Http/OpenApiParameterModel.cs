@@ -72,6 +72,12 @@ public sealed record OpenApiParameterModel(
 
     /// <summary>Gets the OpenAPI format of array element items when the items have a standard format mapping.</summary>
     public string? ItemsFormat { get; init; }
+
+    /// <summary>
+    /// Gets the title of the parameter's schema before the schema name formatter is applied, or <see langword="null"/> for
+    /// none: under <see cref="OpenApiSchemaNaming.Legacy"/>, the legacy name of the parameter's type, as legacy titled it.
+    /// </summary>
+    public string? SchemaTitle { get; init; }
 }
 
 /// <summary>
