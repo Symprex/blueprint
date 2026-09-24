@@ -246,8 +246,8 @@ so a caller matches it by `Type`/`Title`/`HttpStatus` and a pipeline that lets i
 
 | Failure | Title / Type / HttpStatus / Detail |
 |---|---|
-| Problem details response, 4xx | carried through, with `Extensions` |
-| Problem details response, 5xx | carried through, but `Detail` is "The remote server returned an internal error response"; the original is the `InnerException`'s message |
+| Problem details response, 4xx | carried through, with `Extensions` (all but `instance`, which legacy never carried) |
+| Problem details response, 5xx | carried through, but `Detail` is "The remote server returned an internal error response"; the original is the `InnerException`'s message. `Extensions` are carried without `instance` or the `stackTrace` a host exposing exception details writes, so a gateway does not pass a development upstream's trace on |
 | 404 whose body is not JSON | "The remote server responded Not Found" / `not_found` / 404 / "Response from {path} was 404" (the path, never the host) |
 | Other body that is not JSON | "The remote server did not produce a valid JSON response" / `invalid_json` / the response status / the parser's message |
 | Server unreachable | "The remote server did not respond" / `service_unavailable` / 500 / same as title; the `HttpRequestException` (which names the host) is the `InnerException` |

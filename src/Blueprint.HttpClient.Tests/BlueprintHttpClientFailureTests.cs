@@ -129,6 +129,49 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
             .WhoseValue.Should().BeOfType<JsonElement>().Which.GetInt32().Should().Be(7);
     }
 
+    [Theory]
+    [InlineData("stackTrace")]
+    [InlineData("StackTrace")]
+    public async Task When_a_server_error_response_has_problem_extensions_then_carries_them_but_not_its_stack_trace_or_instance(string stackTraceKey)
+    {
+        // A host exposing exception details writes a 5xx's stack trace as the stackTrace extension
+        // (HttpOperationResultExecutor.cs:862-865), and a gateway writes every extension of an ApiException it lets escape
+        // (:853-860), so a development upstream behind a production gateway would leak it. Legacy's upstream wrote the trace
+        // as the detail (legacy UnhandledExceptionOperationResultExecutor.cs:66), which legacy's client replaced on a 5xx
+        // (legacy BlueprintHttpClient.cs:145-153) while carrying every extension (:158-164); legacy read instance into a
+        // member of its own (legacy ProblemDetailsJsonConverter.cs:59-62), which it never passed on (:158-172). Legacy's
+        // extensions were keyed case-insensitively (legacy ProblemDetailsJsonConverter.cs:79), so a trace under another
+        // casing is the same member.
+        var client = this.CreateClient(
+            HttpStatusCode.InternalServerError,
+            $$"""{"type":"upstream_error","title":"Upstream service failed","status":500,"detail":"Boom","instance":"https://{{InternalHost}}/templates/t-1","{{stackTraceKey}}":"System.InvalidOperationException: Boom\n   at Templates.Handler() in /src/Handler.cs:line 12","traceId":"0af7651916cd43dd8448eb211c80319c","retryAfter":30}""",
+            "application/problem+json");
+
+        var act = () => client.SendAsync<JsonElement>(new GetTemplateQuery { Id = "t-1" });
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Extensions.Keys.Should().BeEquivalentTo("traceId", "retryAfter");
+        exception.Extensions["traceId"].Should().BeOfType<JsonElement>().Which.GetString().Should().Be("0af7651916cd43dd8448eb211c80319c");
+        exception.Extensions["retryAfter"].Should().BeOfType<JsonElement>().Which.GetInt32().Should().Be(30);
+    }
+
+    [Fact]
+    public async Task When_a_client_error_response_has_problem_extensions_then_carries_all_but_its_instance()
+    {
+        // Legacy carried every extension of a 4xx problem (legacy BlueprintHttpClient.cs:167-172) — the host writes no
+        // trace for one (HttpOperationResultExecutor.cs:862) — but read instance into a member of its own (legacy
+        // ProblemDetailsJsonConverter.cs:59-62), which it never passed on.
+        var client = this.CreateClient(
+            HttpStatusCode.Conflict,
+            """{"type":"template_conflict","title":"Template version conflict","status":409,"detail":"Template 't-1' was changed by someone else.","instance":"/templates/t-1","currentVersion":7,"stackTrace":"supplied by the handler"}""",
+            "application/problem+json");
+
+        var act = () => client.SendAsync(new ArchiveTemplateCommand { Id = "t-1" });
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Extensions.Keys.Should().BeEquivalentTo("currentVersion", "stackTrace");
+    }
+
     [Fact]
     public async Task When_an_error_response_is_json_null_then_throws_response_empty()
     {

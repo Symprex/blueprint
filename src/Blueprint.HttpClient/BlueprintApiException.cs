@@ -15,9 +15,10 @@ namespace Blueprint.HttpClient;
 /// an exception thrown in-process, and a Blueprint pipeline that lets it escape answers with that same problem.
 /// </para>
 /// <para>
-/// What the remote end said about its own internals is kept out of <see cref="ApiException.Detail"/>, and so out of any
-/// response written from this exception: the detail of a 5xx response, and the message of a connection failure (which
-/// names the host), go to <see cref="Exception.InnerException"/> instead.
+/// What the remote end said about its own internals is kept out of <see cref="ApiException.Detail"/> and
+/// <see cref="ApiException.Extensions"/>, and so out of any response written from this exception: the detail of a 5xx
+/// response, and the message of a connection failure (which names the host), go to <see cref="Exception.InnerException"/>
+/// instead, and a 5xx response's <c>stackTrace</c> extension is dropped. A problem's <c>instance</c> is never carried.
 /// </para>
 /// <para>
 /// The <see cref="StatusCode"/> and <see cref="ResponseBody"/> properties carry the raw response details for diagnostics.

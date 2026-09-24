@@ -26,6 +26,11 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     private const string UpstreamServerErrorDetail = "The remote server returned an internal error response";
 
     /// <summary>
+    /// The problem extension a Blueprint host exposing exception details writes a 5xx's stack trace as.
+    /// </summary>
+    private const string StackTraceExtensionName = "stackTrace";
+
+    /// <summary>
     /// Caches <see cref="PropertyInfo"/> arrays per operation type to avoid repeated
     /// <see cref="Type.GetProperties(BindingFlags)"/> allocations on each request.
     /// </summary>
@@ -910,8 +915,9 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <remarks>
     /// <para>
     /// Problem details are carried through, except that a 5xx response's detail is replaced, and kept to the inner
-    /// exception, because it describes the remote end's internals. A body that is not JSON maps to <c>not_found</c> for a
-    /// 404 (naming the path, never the host) and to <c>invalid_json</c> otherwise.
+    /// exception, and its <c>stackTrace</c> extension (in any casing) dropped, because they describe the remote end's
+    /// internals; and <c>instance</c> is never carried, as legacy's client carried it at no status. A body that is not JSON
+    /// maps to <c>not_found</c> for a 404 (naming the path, never the host) and to <c>invalid_json</c> otherwise.
     /// </para>
     /// <para>
     /// A problem without a status takes the response's; legacy's took none.
@@ -973,7 +979,11 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             }
         }
 
-        var extensions = problem.Extensions?.ToDictionary(static e => e.Key, static e => (object)e.Value);
+        // A host exposing exception details writes a 5xx's stack trace as an extension, which a gateway would write back
+        // out with every other one; legacy's host wrote it as the detail, replaced above.
+        var extensions = problem.Extensions?
+            .Where(e => status < 500 || !string.Equals(e.Key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(static e => e.Key, static e => (object)e.Value);
 
         return new BlueprintApiException(
             new BlueprintApiException.ApiProblem(problem.Title, problem.Type, detail, problem.Status ?? status, extensions),
@@ -1190,6 +1200,13 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         public string? Detail { get; set; }
 
         public int? Status { get; set; }
+
+        /// <summary>
+        /// Gets or sets the reference to this occurrence, read so that it is not taken for an extension, and never passed
+        /// on: legacy's converter read it into a member of its own, which its client never carried.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("instance")]
+        public string? Instance { get; set; }
 
         [System.Text.Json.Serialization.JsonExtensionData]
         public Dictionary<string, JsonElement>? Extensions { get; set; }
