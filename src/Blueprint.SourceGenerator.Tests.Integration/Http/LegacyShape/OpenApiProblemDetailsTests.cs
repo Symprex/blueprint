@@ -54,6 +54,24 @@ public class OpenApiProblemDetailsTests
         Schema(document, "ProblemDetails").GetProperty("properties").GetProperty(member).GetProperty("nullable").GetBoolean().Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("ProblemDetails")]
+    [InlineData("ValidationProblemDetails")]
+    public void A_problems_extensions_are_documented_as_legacy_documented_them(string component)
+    {
+        using var document = Render();
+        var schema = Schema(document, component);
+        var extensions = schema.GetProperty("properties").GetProperty("extensions");
+
+        // Legacy's, from Signature365's committed Partners document: a nullable open object, which is not required, and
+        // a problem open to members of any value beside it.
+        extensions.GetProperty("type").GetString().Should().Be("object");
+        extensions.GetProperty("nullable").GetBoolean().Should().BeTrue();
+        extensions.GetProperty("additionalProperties").EnumerateObject().Should().BeEmpty();
+        schema.GetProperty("required").EnumerateArray().Select(static r => r.GetString()).Should().NotContain("extensions");
+        schema.GetProperty("additionalProperties").GetProperty("nullable").GetBoolean().Should().BeTrue();
+    }
+
     private static JsonElement Schema(JsonDocument document, string component)
     {
         return document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty(component);

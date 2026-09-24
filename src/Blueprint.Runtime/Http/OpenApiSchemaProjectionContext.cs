@@ -345,7 +345,9 @@ public sealed record OpenApiSchemaProjectionContext(
         // The host sets the status of every problem it writes, so a problem's status is required and never null, whatever
         // the CLR type's int? says; a validation problem's errors may be null, and are not required whatever the rule for
         // required properties. Legacy Blueprint documented both so.
-        if (typeof(Microsoft.AspNetCore.Mvc.ProblemDetails).IsAssignableFrom(bodyType))
+        var isProblem = typeof(Microsoft.AspNetCore.Mvc.ProblemDetails).IsAssignableFrom(bodyType);
+
+        if (isProblem)
         {
             properties =
             [
@@ -356,7 +358,33 @@ public sealed record OpenApiSchemaProjectionContext(
                     _ => property,
                 }),
             ];
+
+            // Legacy described a problem through Newtonsoft.Json, which knows nothing of System.Text.Json's
+            // [JsonExtensionData], so it documented the bucket of extension members as a property of its own: a nullable
+            // open object, which the host never writes, writing the members themselves beside the others. It documented
+            // the problem as open to further members of any value, or null, too (AdditionalPropertiesAreNullable).
+            if (!properties.Any(static property => !property.IsExtensionData && property.Name == "extensions"))
+            {
+                properties =
+                [
+                    .. properties.Append(new OpenApiSchemaPropertyModel(
+                            "extensions",
+                            OpenApiSchemaKind.Object,
+                            IsRequired: false,
+                            IsExtensionData: false,
+                            IsNullable: true,
+                            Format: null,
+                            EnumValues: [],
+                            EnumSchemaName: null,
+                            Description: null)
+                        {
+                            AllowsAdditionalProperties = true,
+                        })
+                        .OrderBy(static property => property.Name, StringComparer.Ordinal),
+                ];
+            }
         }
+
         var propertyNames = properties
             .Select(static property => property.Name)
             .ToImmutableArray();
@@ -379,7 +407,10 @@ public sealed record OpenApiSchemaProjectionContext(
             properties,
             schemaDescription,
             schemaTitle,
-            conditionals);
+            conditionals)
+        {
+            AdditionalPropertiesAreNullable = isProblem,
+        };
     }
 
     /// <summary>
@@ -1436,7 +1467,14 @@ public sealed record OpenApiSchemaModel(
     ImmutableArray<OpenApiSchemaPropertyModel> Properties,
     string? Description = null,
     string? Title = null,
-    ImmutableArray<OpenApiConditionalRequirement> Conditionals = default);
+    ImmutableArray<OpenApiConditionalRequirement> Conditionals = default)
+{
+    /// <summary>
+    /// Gets a value indicating whether the schema's extension data members may be null, which the schema documents with
+    /// <c>additionalProperties: {"nullable": true}</c>.
+    /// </summary>
+    public bool AdditionalPropertiesAreNullable { get; init; }
+}
 
 /// <summary>
 /// Captures one JSON-visible property projected from serializer metadata for a covered schema.
@@ -1506,7 +1544,14 @@ public sealed record OpenApiSchemaPropertyModel(
     object? ExampleValue = null,
     bool IsReadOnly = false,
     bool IsWriteOnly = false,
-    string? SchemaName = null);
+    string? SchemaName = null)
+{
+    /// <summary>
+    /// Gets a value indicating whether the property is an object open to members of any value, written with
+    /// <c>additionalProperties: {}</c>.
+    /// </summary>
+    public bool AllowsAdditionalProperties { get; init; }
+}
 
 /// <summary>
 /// Describes the broad schema shape currently projected from serializer metadata.

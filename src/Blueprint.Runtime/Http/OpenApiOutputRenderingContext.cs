@@ -1591,6 +1591,13 @@ public sealed record OpenApiOutputRenderingContext(
             {
                 writer.WriteBoolean("additionalProperties", false);
             }
+            else if (component.AdditionalPropertiesAreNullable)
+            {
+                writer.WritePropertyName("additionalProperties");
+                writer.WriteStartObject();
+                writer.WriteBoolean("nullable", true);
+                writer.WriteEndObject();
+            }
         }
 
         if (!component.Links.IsDefaultOrEmpty)

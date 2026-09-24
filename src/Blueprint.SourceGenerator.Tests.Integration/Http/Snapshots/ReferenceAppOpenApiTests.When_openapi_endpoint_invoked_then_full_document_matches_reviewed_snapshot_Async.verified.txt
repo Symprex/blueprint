@@ -2963,6 +2963,11 @@
             "type": "string",
             "nullable": true
           },
+          "extensions": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {}
+          },
           "instance": {
             "type": "string",
             "nullable": true
@@ -2979,6 +2984,9 @@
             "type": "string",
             "nullable": true
           }
+        },
+        "additionalProperties": {
+          "nullable": true
         }
       },
       "ResourceEventChangeType": {
@@ -3403,6 +3411,11 @@
               }
             }
           },
+          "extensions": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {}
+          },
           "instance": {
             "type": "string",
             "nullable": true
@@ -3419,6 +3432,9 @@
             "type": "string",
             "nullable": true
           }
+        },
+        "additionalProperties": {
+          "nullable": true
         }
       },
       "Link": {

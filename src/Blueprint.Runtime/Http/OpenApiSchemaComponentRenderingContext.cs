@@ -54,7 +54,10 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             schema.Description,
             schema.Title,
             HasExtensionData: hasExtensionData,
-            Conditionals: schema.Conditionals);
+            Conditionals: schema.Conditionals)
+        {
+            AdditionalPropertiesAreNullable = schema.AdditionalPropertiesAreNullable,
+        };
     }
 
     private static OpenApiSchemaComponentPropertyModel CreateProperty(OpenApiSchemaPropertyModel property)
@@ -100,7 +103,8 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.ExampleValue,
             property.IsReadOnly,
             property.IsWriteOnly,
-            SchemaRef: property.SchemaName);
+            SchemaRef: property.SchemaName,
+            AllowsAdditionalProperties: property.AllowsAdditionalProperties);
     }
 
     private static string? MapType(OpenApiSchemaKind kind)
@@ -155,7 +159,14 @@ public sealed record OpenApiSchemaComponentModel(
     ImmutableArray<OpenApiSchemaLinkExtension> Links = default,
     bool HasExtensionData = false,
     ImmutableArray<string> ComponentEnumValues = default,
-    ImmutableArray<OpenApiConditionalRequirement> Conditionals = default);
+    ImmutableArray<OpenApiConditionalRequirement> Conditionals = default)
+{
+    /// <summary>
+    /// Gets a value indicating whether the component's extension data members may be null, which it documents with
+    /// <c>additionalProperties: {"nullable": true}</c>.
+    /// </summary>
+    public bool AdditionalPropertiesAreNullable { get; init; }
+}
 
 /// <summary>
 /// Represents one entry in the <c>x-links</c> vendor extension array for an OpenAPI schema component.
