@@ -1156,11 +1156,21 @@ public static class PipelineHelpers
     /// activity events, and swallows sink exceptions. When the sink is <c>null</c> or the result
     /// is not a resource-event type, the method returns immediately with no overhead.
     /// </summary>
+    /// <remarks>
+    /// A legacy <see cref="ResourceEvent"/> is also handed to the <see cref="IResourceEventAuditRepository"/> resolved from
+    /// the operation's own services, when one is registered and the operation's type does not carry
+    /// <see cref="DoNotAuditAttribute"/>, as legacy Blueprint's <c>ResourceEventHandler</c> handed it
+    /// (<c>ResourceEventHandler.cs:72-77</c> at Signature365 <c>8b40ecc961</c>): stamped, with its href, and after its data
+    /// has been expanded. The repository is called beside the sink, not through it, so registering either never displaces
+    /// the other. Like the sink, it is best-effort: a repository that throws is recorded as a
+    /// <c>blueprint.resource_event_audit.failed</c> activity event rather than failing an operation whose changes are
+    /// already saved.
+    /// </remarks>
     /// <param name="auditSink">The resource-event audit sink, or <c>null</c> if none is registered.</param>
     /// <param name="context">The operation context for the current pipeline execution.</param>
     /// <param name="handlerResult">The handler result — only processed if it is a resource-event result type.</param>
     /// <param name="operationTypeName">The operation type name for activity event tags.</param>
-    /// <returns>A task that completes when the audit sink has finished (or been skipped).</returns>
+    /// <returns>A task that completes when the audit sink and repository have finished (or been skipped).</returns>
     public static Task ExecuteResourceEventAuditSinkAsync(
         IResourceEventAuditSink? auditSink,
         ApiOperationContext context,
@@ -1172,9 +1182,97 @@ public static class PipelineHelpers
         StampResourceEvent(context, handlerResult);
         PopulateResourceEventHref(context, handlerResult);
 
+        if (TryGetResourceEventAuditRepository(context, handlerResult, operationTypeName, out var repository, out var resourceEvent))
+        {
+            return ExecuteResourceEventAuditRepositoryCoreAsync(auditSink, repository, resourceEvent, context, operationTypeName);
+        }
+
         return auditSink != null
             ? ExecuteResourceEventAuditSinkCoreAsync(auditSink, context, handlerResult, operationTypeName)
             : Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Finds the <see cref="IResourceEventAuditRepository"/> a legacy <see cref="ResourceEvent"/> is to be handed to: the
+    /// one registered in the operation's own services, unless the operation's type carries
+    /// <see cref="DoNotAuditAttribute"/>, which legacy looked for on the type alone, not its base types
+    /// (<c>GetAttributes&lt;DoNotAuditAttribute&gt;(false)</c>, <c>ResourceEventHandler.cs:72</c>).
+    /// </summary>
+    /// <remarks>
+    /// A repository that cannot be resolved, because its construction throws, is recorded as a failed resource-event audit
+    /// as one whose <see cref="IResourceEventAuditRepository.AddAsync"/> throws is, and the event is not audited.
+    /// </remarks>
+    /// <param name="context">The operation context, whose services the repository is resolved from.</param>
+    /// <param name="handlerResult">The handler result, audited only when it is a legacy <see cref="ResourceEvent"/>.</param>
+    /// <param name="operationTypeName">The operation type name for the failure's activity event tags.</param>
+    /// <param name="repository">The repository, when the event is to be audited.</param>
+    /// <param name="resourceEvent">The event, when it is to be audited.</param>
+    /// <returns><see langword="true"/> when the event is to be handed to the repository.</returns>
+    private static bool TryGetResourceEventAuditRepository(
+        ApiOperationContext context,
+        OperationResult handlerResult,
+        string operationTypeName,
+        [NotNullWhen(true)] out IResourceEventAuditRepository? repository,
+        [NotNullWhen(true)] out ResourceEvent? resourceEvent)
+    {
+        repository = null;
+        resourceEvent = handlerResult as ResourceEvent;
+
+        if (resourceEvent is null || context.Operation.GetType().IsDefined(typeof(DoNotAuditAttribute), inherit: false))
+        {
+            return false;
+        }
+
+        try
+        {
+            // Scoped, as AddResourceEventAuditRepository registers it: resolved per operation, never cached with the
+            // pipeline.
+            repository = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IResourceEventAuditRepository>(context.ServiceProvider);
+        }
+        catch (Exception resourceEventAuditException)
+        {
+            RecordAuditFailureEvent(
+                context.Activity,
+                "blueprint.resource_event_audit.failed",
+                operationTypeName,
+                resourceEventAuditException,
+                resourceEvent.EventId,
+                resourceEvent.Data is IHaveResourceKey resourceKey ? resourceKey.ResourceKey ?? string.Empty : string.Empty);
+        }
+
+        return repository is not null;
+    }
+
+    /// <summary>
+    /// Records a legacy <see cref="ResourceEvent"/> with the sink, when one is registered, and then hands it to the
+    /// repository, recording a repository that throws as a failed resource-event audit rather than rethrowing.
+    /// </summary>
+    private static async Task ExecuteResourceEventAuditRepositoryCoreAsync(
+        IResourceEventAuditSink? auditSink,
+        IResourceEventAuditRepository repository,
+        ResourceEvent resourceEvent,
+        ApiOperationContext context,
+        string operationTypeName)
+    {
+        if (auditSink != null)
+        {
+            await ExecuteResourceEventAuditSinkCoreAsync(auditSink, context, resourceEvent, operationTypeName).ConfigureAwait(false);
+        }
+
+        try
+        {
+            await repository.AddAsync(resourceEvent).ConfigureAwait(false);
+        }
+        catch (Exception resourceEventAuditException)
+        {
+            RecordAuditFailureEvent(
+                context.Activity,
+                "blueprint.resource_event_audit.failed",
+                operationTypeName,
+                resourceEventAuditException,
+                resourceEvent.EventId,
+                resourceEvent.Data is IHaveResourceKey resourceKey ? resourceKey.ResourceKey ?? string.Empty : string.Empty);
+        }
     }
 
     /// <summary>

@@ -394,9 +394,17 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
-    /// Registers a resource event audit repository that persists before/after state snapshots
-    /// for resource mutation operations.
+    /// Registers a resource event audit repository, which is handed every legacy <see cref="Blueprint.Http.ResourceEvent"/>
+    /// an operation raises unless the operation's type carries <see cref="Blueprint.Auditing.DoNotAuditAttribute"/>, as
+    /// legacy Blueprint's <c>ResourceEventHandler</c> handed it.
     /// </summary>
+    /// <remarks>
+    /// The repository is registered scoped and resolved from each operation's own services. The generated pipeline calls
+    /// <see cref="Blueprint.Http.IResourceEventAuditRepository.AddAsync"/> last of its post-execution steps, once the event
+    /// is stamped with its correlation id and operation, has its href and has its data expanded. It is called beside any
+    /// <see cref="Blueprint.Auditing.IResourceEventAuditSink"/>, not in place of one, and best-effort: a repository that
+    /// throws does not fail the operation.
+    /// </remarks>
     /// <typeparam name="T">The <see cref="Blueprint.Http.IResourceEventAuditRepository"/> implementation type.</typeparam>
     /// <returns>This builder for chaining.</returns>
     public BlueprintServiceBuilder AddResourceEventAuditRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()

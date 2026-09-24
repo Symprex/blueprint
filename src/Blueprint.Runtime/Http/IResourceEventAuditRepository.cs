@@ -7,9 +7,10 @@ namespace Blueprint.Http;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The typical flow is: before mutation, <see cref="GetCurrentDataAsync"/> is called to capture the
-/// current state. After the handler executes successfully, <see cref="AddAsync"/> persists the
-/// resource event which carries both the operation metadata and the before/after snapshots.
+/// The generated pipeline calls <see cref="AddAsync"/> for every legacy <see cref="ResourceEvent"/> an operation raises,
+/// unless the operation's type carries <c>[DoNotAudit]</c>, once the event is stamped, has its href and has its data
+/// expanded, as legacy Blueprint's <c>ResourceEventHandler</c> did. It does not call <see cref="GetCurrentDataAsync"/>,
+/// which legacy called for an updated event to fill its changed values.
 /// </para>
 /// <para>
 /// Implementations should persist independently of the ambient unit-of-work scope to ensure
