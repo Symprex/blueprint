@@ -1,4 +1,6 @@
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
+using Blueprint.Runtime.Exec;
 using Blueprint.Tasks;
 using JetBrains.Annotations;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +20,10 @@ namespace Blueprint.Hangfire;
 /// deserializes the task, reconstructs the <see cref="BackgroundTaskEnvelope"/> with headers,
 /// restores ambient context via <see cref="IBackgroundTaskContextProvider"/>, then dispatches
 /// the task through <see cref="BlueprintAppExecutor.ExecuteWithNewScopeAsync"/>.
+/// </para>
+/// <para>
+/// A task whose pipeline ends in an unhandled exception fails the job by rethrowing that exception, so Hangfire records
+/// the failure and applies its retry policy. Any other non-successful result is logged and completes the job.
 /// </para>
 /// </remarks>
 [PublicAPI]
@@ -84,6 +90,15 @@ public sealed class HangfireBackgroundTaskExecutor
                 "Background task {TaskType} completed with non-successful result: {ResultType}",
                 taskType.Name,
                 result.GetType().Name);
+        }
+
+        // Hangfire sees only whether this method returned or threw, and records, retries and eventually fails a job
+        // only when it throws. The pipeline turns a handler's exception into a result rather than letting it escape,
+        // so it is rethrown here, with its original stack. Any other non-successful result — a validation failure,
+        // say — completes the job, as legacy Blueprint's task executor did: no retry can change its outcome.
+        if (result is UnhandledExceptionResult { Exception: { } exception })
+        {
+            ExceptionDispatchInfo.Throw(exception);
         }
     }
 }
