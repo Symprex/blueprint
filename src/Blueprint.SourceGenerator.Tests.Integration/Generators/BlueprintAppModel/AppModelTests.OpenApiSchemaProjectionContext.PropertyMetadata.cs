@@ -36,10 +36,13 @@ public class AppModelOpenApiSchemaProjectionContextPropertyMetadataTests
         enabledProperty.IsRequired.Should().BeFalse();
         enabledProperty.IsExtensionData.Should().BeFalse();
 
+        // The [JsonExtensionData] bucket is documented as a property of its own, as legacy documented it, and the schema
+        // records that it is open to further members.
         var extensionsProperty = schema.Properties.Single(static property => property.Name == "Extensions");
         extensionsProperty.Kind.Should().Be(OpenApiSchemaKind.Object);
         extensionsProperty.IsRequired.Should().BeFalse();
-        extensionsProperty.IsExtensionData.Should().BeTrue();
+        extensionsProperty.IsExtensionData.Should().BeFalse();
+        schema.HasExtensionData.Should().BeTrue();
 
         var idProperty = schema.Properties.Single(static property => property.Name == "Id");
         idProperty.Kind.Should().Be(OpenApiSchemaKind.String);

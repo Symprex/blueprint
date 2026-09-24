@@ -61,4 +61,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.HrefWidgetSecretPartialApiResource))]
 [JsonSerializable(typeof(Http.HrefUnlinkedApiResource))]
 [JsonSerializable(typeof(Http.DictionaryShapeApiResource))]
+[JsonSerializable(typeof(Http.ExtensionShapeApiResource))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

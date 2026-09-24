@@ -1586,16 +1586,22 @@ public sealed record OpenApiOutputRenderingContext(
             // NJsonSchema's convention. This prevents consumers (including TypeScript generators)
             // from allowing arbitrary extra properties on typed schema objects.
             // Exception: types with [JsonExtensionData] properties (e.g. ProblemDetails) accept
-            // arbitrary additional members per their contract, so additionalProperties stays open.
+            // arbitrary additional members per their contract, so additionalProperties is open to any value, or null
+            // too, as legacy documented it.
             if (!component.HasExtensionData)
             {
                 writer.WriteBoolean("additionalProperties", false);
             }
-            else if (component.AdditionalPropertiesAreNullable)
+            else
             {
                 writer.WritePropertyName("additionalProperties");
                 writer.WriteStartObject();
-                writer.WriteBoolean("nullable", true);
+
+                if (component.AdditionalPropertiesAreNullable)
+                {
+                    writer.WriteBoolean("nullable", true);
+                }
+
                 writer.WriteEndObject();
             }
         }

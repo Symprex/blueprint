@@ -385,6 +385,24 @@ public sealed record OpenApiSchemaProjectionContext(
             }
         }
 
+        // Any other type with a [JsonExtensionData] bucket legacy described the same way, by rule rather than by what
+        // Signature365 recorded for a problem: its Newtonsoft.Json contract kept the bucket as a dictionary property like
+        // any other, and NJsonSchema, which recognises the attribute by name, documented the type as open to further
+        // members of the bucket's value, nullable when the value's annotation was (AdditionalPropertiesAreNullable).
+        var additionalPropertiesAreNullable = isProblem;
+        var hasExtensionData = false;
+
+        if (!isProblem && typeInfo.Kind == JsonTypeInfoKind.Object
+            && typeInfo.Properties.FirstOrDefault(static property => property.IsExtensionData) is { } extensionData)
+        {
+            properties = [.. properties.Select(static property => property.IsExtensionData ? property with { IsExtensionData = false } : property)];
+            hasExtensionData = true;
+
+            var bucketValueType = OpenApiDictionaryValues.GetValueType(extensionData.PropertyType);
+            additionalPropertiesAreNullable = bucketValueType is not null
+                && OpenApiDictionaryValues.AreValuesNullable(extensionData.AttributeProvider as PropertyInfo, bucketValueType, nullabilityContext);
+        }
+
         var propertyNames = properties
             .Select(static property => property.Name)
             .ToImmutableArray();
@@ -409,7 +427,8 @@ public sealed record OpenApiSchemaProjectionContext(
             schemaTitle,
             conditionals)
         {
-            AdditionalPropertiesAreNullable = isProblem,
+            AdditionalPropertiesAreNullable = additionalPropertiesAreNullable,
+            HasExtensionData = hasExtensionData,
         };
     }
 
@@ -1473,6 +1492,13 @@ public sealed record OpenApiSchemaModel(
     /// <c>additionalProperties: {"nullable": true}</c>.
     /// </summary>
     public bool AdditionalPropertiesAreNullable { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the type has a <c>[JsonExtensionData]</c> bucket that is documented as a property of
+    /// its own, as legacy documented it, so that no property is marked <see cref="OpenApiSchemaPropertyModel.IsExtensionData"/>
+    /// while the schema is still open to further members.
+    /// </summary>
+    public bool HasExtensionData { get; init; }
 }
 
 /// <summary>

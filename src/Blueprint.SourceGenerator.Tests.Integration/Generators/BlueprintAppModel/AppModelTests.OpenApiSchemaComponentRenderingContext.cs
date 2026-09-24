@@ -38,6 +38,11 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "ExpandableOfDepartment",
             "ExpandableOfLocation",
             "ExpandableTestEmployee",
+            "ExtensionBucketJsonElement",
+            "ExtensionBucketNonNullDictionary",
+            "ExtensionBucketNonNullValues",
+            "ExtensionBucketNullableValues",
+            "ExtensionShapeApiResource",
             "Guid",
             "HrefUnlinkedApiResource",
             "HrefWidgetApiResource",
@@ -107,7 +112,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         component.Type.Should().Be("object");
         component.RequiredPropertyNames.Should().Equal("Id");
         component.HasExtensionData.Should().BeTrue("because SchemaPropertyMetadataResponse has a [JsonExtensionData] property");
-        component.Properties.Select(static property => property.Name).Should().Equal("Child", "Count", "Enabled", "Id", "Metadata", "Tags");
+        component.Properties.Select(static property => property.Name).Should().Equal("Child", "Count", "Enabled", "Extensions", "Id", "Metadata", "Tags");
 
         var childProperty = component.Properties.Single(static property => property.Name == "Child");
         childProperty.Type.Should().Be("object");
@@ -120,6 +125,11 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         var enabledProperty = component.Properties.Single(static property => property.Name == "Enabled");
         enabledProperty.Type.Should().Be("boolean");
         enabledProperty.IsExtensionData.Should().BeFalse();
+
+        // The [JsonExtensionData] bucket is documented as a property of its own, as legacy documented it.
+        var extensionsProperty = component.Properties.Single(static property => property.Name == "Extensions");
+        extensionsProperty.Type.Should().Be("object");
+        extensionsProperty.IsExtensionData.Should().BeFalse();
 
         var idProperty = component.Properties.Single(static property => property.Name == "Id");
         idProperty.Type.Should().Be("string");

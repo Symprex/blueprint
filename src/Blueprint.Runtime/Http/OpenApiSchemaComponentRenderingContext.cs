@@ -33,9 +33,10 @@ public sealed record OpenApiSchemaComponentRenderingContext(
     private static OpenApiSchemaComponentModel CreateComponent(OpenApiSchemaModel schema)
     {
         // Extension data properties ([JsonExtensionData]) represent the catch-all bucket for
-        // arbitrary extra JSON members. They should not appear as named properties in the schema.
+        // arbitrary extra JSON members. One still marked as such does not appear as a named property in the schema; one the
+        // projection documented as a property of its own, as legacy did, no longer is, and the schema says so instead.
         // When present, the schema should NOT emit additionalProperties: false.
-        var hasExtensionData = schema.Properties.Any(static property => property.IsExtensionData);
+        var hasExtensionData = schema.HasExtensionData || schema.Properties.Any(static property => property.IsExtensionData);
 
         var requiredPropertyNames = schema.Properties
             .Where(static property => property.IsRequired && !property.IsExtensionData)

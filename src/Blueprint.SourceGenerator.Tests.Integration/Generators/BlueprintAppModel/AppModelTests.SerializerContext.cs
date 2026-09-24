@@ -56,7 +56,8 @@ public class AppModelSerializerContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.HrefWidgetApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.HrefWidgetSecretPartialApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.HrefUnlinkedApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.DictionaryShapeApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.DictionaryShapeApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.ExtensionShapeApiResource");
     }
 
     [Fact]
@@ -109,6 +110,7 @@ public class AppModelSerializerContextTests
             typeof(Http.HrefWidgetApiResource),
             typeof(Http.HrefWidgetSecretPartialApiResource),
             typeof(Http.HrefUnlinkedApiResource),
-            typeof(Http.DictionaryShapeApiResource));
+            typeof(Http.DictionaryShapeApiResource),
+            typeof(Http.ExtensionShapeApiResource));
     }
 }
