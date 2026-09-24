@@ -65,4 +65,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.ParameterTitlesApiResource))]
 [JsonSerializable(typeof(Http.XmlDocShape))]
 [JsonSerializable(typeof(Http.NativeEventGadget))]
+[JsonSerializable(typeof(Http.MinLengthShapeApiResource))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

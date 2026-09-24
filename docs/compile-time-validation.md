@@ -307,7 +307,7 @@ Validation attributes also project constraints into the OpenAPI specification at
 
 | Attribute | OpenAPI constraint |
 | --- | --- |
-| `RequiredAttribute` | `required: true` |
+| `RequiredAttribute` | `required: true`; and on a request body's or schema component's string property that is not an enum, `minLength: 1` unless `AllowEmptyStrings` is set or a `StringLength`/`MinLength` gives the minimum, as legacy Blueprint's NJsonSchema documented it (never on a parameter) |
 | `MaxLengthAttribute` | `maxLength` |
 | `MinLengthAttribute` | `minLength` |
 | `StringLengthAttribute` | `minLength` + `maxLength` |

@@ -664,7 +664,10 @@ public sealed record OpenApiSchemaProjectionContext(
             enumValues,
             enumSchemaName,
             description,
-            GetMinLength(validationAttributes),
+            OpenApiValidationConstraints.GetDocumentedMinLength(
+                GetMinLength(validationAttributes),
+                OpenApiValidationConstraints.IsRequiredNonEmptyString(validationAttributes),
+                isNonEnumString: propertyKind == OpenApiSchemaKind.String && enumValues.IsDefaultOrEmpty && enumSchemaName is null),
             GetMaxLength(validationAttributes),
             GetPattern(validationAttributes),
             minimum.Value,

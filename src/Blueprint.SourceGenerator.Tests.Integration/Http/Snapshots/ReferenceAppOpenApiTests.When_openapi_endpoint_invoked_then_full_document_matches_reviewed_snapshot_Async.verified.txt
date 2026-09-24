@@ -2552,6 +2552,7 @@
             "type": "string",
             "nullable": true,
             "description": "The current password.",
+            "minLength": 1,
             "writeOnly": true
           },
           "newPassword": {
@@ -2566,6 +2567,7 @@
             "type": "string",
             "nullable": true,
             "description": "Re-enter the new password for confirmation.",
+            "minLength": 1,
             "writeOnly": true
           }
         },
@@ -2583,6 +2585,7 @@
             "type": "string",
             "nullable": true,
             "description": "The display name for the new cloned template.",
+            "minLength": 1,
             "maxLength": 200
           }
         },
@@ -2600,6 +2603,7 @@
             "type": "string",
             "nullable": true,
             "description": "The display name for the template.",
+            "minLength": 1,
             "maxLength": 200,
             "example": "Welcome Email"
           },
@@ -3373,6 +3377,7 @@
             "type": "string",
             "nullable": true,
             "description": "The new display name for the template.",
+            "minLength": 1,
             "maxLength": 200
           },
           "htmlSource": {

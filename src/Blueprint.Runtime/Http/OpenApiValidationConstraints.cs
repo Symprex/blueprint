@@ -28,6 +28,13 @@ internal sealed record OpenApiValidationConstraints(
     public static OpenApiValidationConstraints None { get; } = new(false, null, null, null, null, null, false, false, null);
 
     /// <summary>
+    /// Gets a value indicating whether the property rejects an empty string for its <see cref="RequiredAttribute"/>, with
+    /// no <see cref="StringLengthAttribute"/> whose minimum legacy documented instead. See
+    /// <see cref="GetDocumentedMinLength"/>, which is its only reader.
+    /// </summary>
+    public bool RequiresNonEmptyString { get; init; }
+
+    /// <summary>
     /// Returns <see langword="true"/> when at least one constraint value is non-default
     /// (excluding <see cref="IsRequired"/>, which is tracked separately by the parameter model).
     /// </summary>
@@ -98,7 +105,68 @@ internal sealed record OpenApiValidationConstraints(
             maximum.Value,
             minimum.IsExclusive,
             maximum.IsExclusive,
-            format);
+            format)
+        {
+            RequiresNonEmptyString = IsRequiredNonEmptyString(attributes),
+        };
+    }
+
+    /// <summary>
+    /// Returns whether a property's validation attributes make it reject an empty string for its
+    /// <see cref="RequiredAttribute"/> (one that does not set <see cref="RequiredAttribute.AllowEmptyStrings"/>), with no
+    /// <see cref="StringLengthAttribute"/> on it.
+    /// </summary>
+    /// <remarks>
+    /// The <see cref="StringLengthAttribute"/> exception is legacy's: its NJsonSchema replaced the <c>[Required]</c> string's
+    /// minimum length with the attribute's own minimum, so a string bounded only above had a minimum of 0, which constrains
+    /// nothing and which this document leaves out, as it does for such a string that is not <c>[Required]</c>.
+    /// </remarks>
+    /// <param name="validationAttributes">The property's validation attributes.</param>
+    /// <returns><see langword="true"/> when a non-enum string property is documented with a minimum length of 1.</returns>
+    internal static bool IsRequiredNonEmptyString(IEnumerable<ValidationAttribute> validationAttributes)
+    {
+        var isRequired = false;
+
+        foreach (var attribute in validationAttributes)
+        {
+            switch (attribute)
+            {
+                case StringLengthAttribute:
+                    return false;
+                case RequiredAttribute { AllowEmptyStrings: false }:
+                    isRequired = true;
+                    break;
+            }
+        }
+
+        return isRequired;
+    }
+
+    /// <summary>
+    /// Gets the <c>minLength</c> a request body's or schema component's property is documented with: its declared minimum
+    /// length, or else 1 for a string, not an enum, that <see cref="IsRequiredNonEmptyString"/>, as legacy Blueprint's
+    /// NJsonSchema documented it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// NJsonSchema (11.1, which legacy used) gives a <see cref="RequiredAttribute"/> property <c>minLength: 1</c> when its
+    /// JSON type is <c>string</c> and it is not an enum, unless <see cref="RequiredAttribute.AllowEmptyStrings"/> is set;
+    /// a <see cref="StringLengthAttribute"/> or <see cref="MinLengthAttribute"/> replaces it with its own minimum. That
+    /// includes a GUID, a date and a URI, which are strings in the document too. A <c>[Required]</c> string rejects an empty
+    /// value whichever rule marks properties required, so the minimum cannot reject what the server accepts.
+    /// </para>
+    /// <para>
+    /// Not for a parameter: legacy described parameters without NJsonSchema's property rules, and no legacy parameter,
+    /// <c>[Required]</c> query strings among them, carries a <c>minLength</c> it was not declared with.
+    /// </para>
+    /// </remarks>
+    /// <param name="declaredMinLength">The minimum length the property's validation attributes declare, if any.</param>
+    /// <param name="requiresNonEmptyString">Whether the property <see cref="IsRequiredNonEmptyString"/>.</param>
+    /// <param name="isNonEnumString">Whether the property is documented as a string that is not an enum.</param>
+    /// <returns>The minimum length to document, or <see langword="null"/> for none.</returns>
+    internal static int? GetDocumentedMinLength(int? declaredMinLength, bool requiresNonEmptyString, bool isNonEnumString)
+    {
+        return declaredMinLength ?? (requiresNonEmptyString && isNonEnumString ? 1 : null);
     }
 
     /// <summary>

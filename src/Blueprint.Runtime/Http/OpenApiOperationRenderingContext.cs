@@ -438,7 +438,10 @@ public sealed record OpenApiOperationRenderingContext(
                     {
                         Description = description,
                         IsRequired = isRequired,
-                        MinLength = constraints.MinLength,
+                        MinLength = OpenApiValidationConstraints.GetDocumentedMinLength(
+                            constraints.MinLength,
+                            constraints.RequiresNonEmptyString,
+                            isNonEnumString: schemaType == "string" && enumValues.IsDefaultOrEmpty && enumSchemaRef is null),
                         MaxLength = constraints.MaxLength,
                         Pattern = constraints.Pattern,
                         Minimum = constraints.Minimum,

@@ -55,7 +55,8 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.ExtensionShapeApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.ParameterTitlesApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.XmlDocShape",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.NativeEventGadget");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.NativeEventGadget",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.MinLengthShapeApiResource");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))
