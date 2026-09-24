@@ -137,6 +137,16 @@ plain handler's save, where no generated pipeline has set it.
 
 Blueprint.Rebus does **not** extract tenant context from message headers. S365 services that propagate tenant ID via Rebus headers should implement a custom `IBackgroundTaskContextProvider` or extract headers in a pipeline contribution.
 
+For a plain `IHandleMessages<T>` handler, Blueprint resolves no tenant at all. `BlueprintApiActivator` calls the
+`IRebusTransactionEnlistment`s, and resolves the handlers and their scoped dependencies, in a scope where no tenant has
+been set, so a tenant-scoped service resolved there (Signature365's Marten session, for example) gets its untenanted
+fallback. An enlistment must therefore not depend on a tenant. Legacy Blueprint ran a received message the same way:
+its message pipelines set the tenant only for an authenticated identity (for example
+`FieldDefinitionDeletedEventExecutorPipeline.cs:51-56` at Signature365 `8b40ecc961`), and its activator built the
+operation's context with no identity (`Symprex.Signature365.BlueprintRebus/BlueprintApiActivator.cs:90-100`). So the
+session that its `UseMartenAsOutboxMiddleware` and the handler shared was the untenanted `IdentitySession()`
+(`Symprex.Signature365.Common/Data/Marten/MartenRegistry.cs:87-96`).
+
 ---
 
 ## Blueprint.Tasks.Hangfire
