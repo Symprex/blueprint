@@ -13,6 +13,11 @@ namespace Blueprint.SourceGenerator.Modules;
 /// This module generates:
 /// <list type="bullet">
 /// <item><description>A <c>using var rebusScope = new RebusTransactionScope();</c> in the Setup stage</description></item>
+/// <item><description>
+/// Straight after it, in a pipeline that saves a unit of work and when Blueprint.Rebus is referenced, a call to
+/// <c>Blueprint.Rebus.RebusTransactionEnlistment.EnlistAsync</c> with the scope's transaction, guarded by an
+/// <c>IUnitOfWork</c> being registered, so the consumer's outbox is enlisted before the handler sends anything
+/// </description></item>
 /// <item><description>An <c>await rebusScope.CompleteAsync();</c> in the PostExecution stage after handler success</description></item>
 /// </list>
 /// </para>
@@ -37,6 +42,7 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
 {
     private const string RebusTransactionScopeType = "Rebus.Transport.RebusTransactionScope";
     private const string NoRebusTransactionAttributeName = "NoRebusTransactionAttribute";
+    private const string RebusTransactionEnlistmentType = "Blueprint.Rebus.RebusTransactionEnlistment";
 
     /// <inheritdoc />
     public string ModuleId => nameof(RebusTransactionModule);
@@ -95,17 +101,36 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
 
         context.RequireAsync();
 
+        // Enlist the consumer's outbox only where a unit of work save follows, and only when Blueprint.Rebus (which
+        // defines the seam) is referenced: a consumer of Rebus alone must still compile.
+        var enlist = UnitOfWorkModule.SavesUnitOfWork(context.Operation.TypeSymbol)
+                     && context.FindTypeByMetadataName(RebusTransactionEnlistmentType) is not null;
+
         // Setup: create the transaction scope (using ensures dispose on method exit)
-        context.AddRenderStep(PipelineStage.Setup, RenderTransactionScopeStart);
+        context.AddRenderStep(PipelineStage.Setup, renderContext => RenderTransactionScopeStart(renderContext, enlist));
 
         // PostExecution: complete the transaction on success
         context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, RenderTransactionScopeComplete);
     }
 
-    private static void RenderTransactionScopeStart(PipelineRenderContext context)
+    private static void RenderTransactionScopeStart(PipelineRenderContext context, bool enlist)
     {
         context.WriteBlankLine();
         context.WriteStatement($"using var rebusTransactionScope = this._hasRebus ? new global::{RebusTransactionScopeType}() : null;");
+
+        if (!enlist)
+        {
+            return;
+        }
+
+        // Straight after the scope opens, so before the handler sends anything; and only with an IUnitOfWork registered,
+        // so only where the save that writes an enlisted outbox will actually run.
+        context.WriteBlankLine();
+        context.WriteStatement("if (rebusTransactionScope != null && this.HasUnitOfWork)");
+        context.WriteStatement("{");
+        context.WriteStatement(
+            $"    await global::{RebusTransactionEnlistmentType}.EnlistAsync(rebusTransactionScope.TransactionContext, context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+        context.WriteStatement("}");
     }
 
     private static void RenderTransactionScopeComplete(PipelineRenderContext context)

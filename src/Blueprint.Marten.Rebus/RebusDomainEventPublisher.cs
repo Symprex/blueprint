@@ -8,12 +8,18 @@ namespace Blueprint.Marten.Rebus;
 /// </summary>
 /// <remarks>
 /// <para>
-/// When the generated pipeline wraps execution in a <c>RebusTransactionScope</c>
-/// (via the <c>RebusTransactionModule</c>), messages published through this publisher
-/// are captured by the ambient transaction and only sent after the scope completes
-/// successfully. Combined with Marten's <see cref="DomainEventDispatchingSessionListener"/>,
-/// this provides exactly-once delivery: domain events are published inside the same
-/// database transaction as the document changes.
+/// <see cref="DomainEventDispatchingSessionListener"/> publishes through this during <c>SaveChangesAsync</c>, inside the
+/// ambient Rebus transaction: the <c>RebusTransactionScope</c> a generated pipeline opens (via the
+/// <c>RebusTransactionModule</c>), or the transaction of the received message a plain handler runs in. Rebus holds the
+/// messages until that transaction commits, after the save, so an event is never sent for a save that failed.
+/// </para>
+/// <para>
+/// It is not atomic with a save that succeeded, and so not exactly-once: the documents are committed first and the
+/// events sent afterwards. If sending fails after the commit, the documents stay and the events are not sent. The
+/// delivery of a received message is then retried, re-running its handler; nothing retries an HTTP request. Delivery
+/// that is atomic with the save needs an outbox: an <c>IRebusTransactionEnlistment</c> that has the transaction's messages
+/// written into the session, by a listener added with
+/// <see cref="MartenServiceCollectionExtensions.AddBlueprintOutboxListener"/>, and sent from there.
 /// </para>
 /// </remarks>
 public sealed class RebusDomainEventPublisher : IDomainEventPublisher

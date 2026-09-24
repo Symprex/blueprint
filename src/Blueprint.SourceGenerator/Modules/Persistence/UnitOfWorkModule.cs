@@ -60,14 +60,7 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             return;
         }
 
-        // Only participate for commands and background tasks — queries should not trigger persistence saves
-        if (!isCommand && !isBackgroundTask)
-        {
-            return;
-        }
-
-        // Respect explicit opt-out via [DoNotSaveChanges]
-        if (HasDoNotSaveChangesAttribute(operationType))
+        if (!SavesUnitOfWork(operationType))
         {
             return;
         }
@@ -78,6 +71,22 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
 
         context.RequireAsync();
         context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, RenderSaveChanges);
+    }
+
+    /// <summary>
+    /// Whether the pipeline generated for <paramref name="operationType"/> saves the unit of work: a command or background
+    /// task without <c>[DoNotSaveChanges]</c>. Queries never trigger a persistence save.
+    /// </summary>
+    /// <remarks>
+    /// The one definition of that condition, shared with modules that must know whether a save will follow — the Rebus
+    /// transaction enlists its outbox only where one does.
+    /// </remarks>
+    /// <param name="operationType">The operation type.</param>
+    /// <returns><see langword="true"/> when the generated pipeline contains the unit of work save.</returns>
+    internal static bool SavesUnitOfWork(INamedTypeSymbol operationType)
+    {
+        return (IsCommand(operationType) || IsBackgroundTask(operationType))
+               && !HasDoNotSaveChangesAttribute(operationType);
     }
 
     private static void RenderSaveChanges(PipelineRenderContext context)

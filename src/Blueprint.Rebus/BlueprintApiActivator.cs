@@ -84,12 +84,27 @@ public sealed class BlueprintApiActivator : IContainerAdapter
                 (sp: this._serviceProvider, desc));
         }
 
-        // Not a Blueprint operation — resolve IHandleMessages<T> from a fresh DI scope per message. Rebus calls Handle
-        // only after this method has returned, so the scope cannot end here: the transaction context owns it, and it
-        // ends when Rebus disposes that context, after the handlers and the callbacks for the outcome have run.
+        return this.GetPlainHandlersAsync<TMessage>(transactionContext);
+    }
+
+    /// <summary>
+    /// Resolves the plain <see cref="IHandleMessages{TMessage}"/> for a message that is not a Blueprint operation, from a
+    /// fresh DI scope owned by the message's transaction.
+    /// </summary>
+    /// <remarks>
+    /// The order in which this registers with the transaction is what an outbox depends on: the scope's disposal first,
+    /// so nothing that follows can leak it; then the unit of work save as the first commit callback; then the consumer's
+    /// <see cref="IRebusTransactionEnlistment"/>s, so any commit callback they add runs after the save; and all of it
+    /// before a handler runs, so before a handler first sends.
+    /// </remarks>
+    private async Task<IEnumerable<IHandleMessages<TMessage>>> GetPlainHandlersAsync<TMessage>(ITransactionContext transactionContext)
+    {
+        // Rebus calls Handle only after this method has returned, so the scope cannot end here: the transaction context
+        // owns it, and it ends when Rebus disposes that context, after the handlers and the callbacks for the outcome have
+        // run.
         var scope = this._serviceProvider.CreateAsyncScope();
 
-        // Registered before resolving, so a handler that fails to construct cannot leak what was already resolved.
+        // Registered before resolving, so a handler or enlistment that fails cannot leak what was already resolved.
         transactionContext.OnDisposed(_ => DisposeHandlerScope(scope));
 
         // Registered before any handler runs, so it precedes the commit callback the transport registers when a handler
@@ -97,9 +112,21 @@ public sealed class BlueprintApiActivator : IContainerAdapter
         var cancellationToken = MessageContext.Current?.IncomingStepContext.Load<CancellationToken>() ?? CancellationToken.None;
         transactionContext.OnCommit(_ => SaveHandlerUnitOfWorkAsync(scope.ServiceProvider, cancellationToken));
 
-        var handlers = scope.ServiceProvider.GetServices<IHandleMessages<TMessage>>().ToList();
+        // Only when a unit of work will be saved in this transaction: an outbox enlisted where nothing is saved would
+        // never be written.
+        if (IsUnitOfWorkRegistered(scope.ServiceProvider))
+        {
+            await RebusTransactionEnlistment.EnlistAsync(transactionContext, scope.ServiceProvider, cancellationToken).ConfigureAwait(false);
+        }
 
-        return Task.FromResult<IEnumerable<IHandleMessages<TMessage>>>(handlers);
+        return scope.ServiceProvider.GetServices<IHandleMessages<TMessage>>().ToList();
+    }
+
+    private static bool IsUnitOfWorkRegistered(IServiceProvider services)
+    {
+        return services.GetService<IServiceProviderIsService>() is { } isService
+            ? isService.IsService(typeof(Persistence.IUnitOfWork))
+            : services.GetService<Persistence.IUnitOfWork>() is not null;
     }
 
     /// <inheritdoc/>

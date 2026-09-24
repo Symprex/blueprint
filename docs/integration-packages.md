@@ -48,7 +48,7 @@ does not dispatch or publish an event twice.
 |---|---|
 | `SaveMartenChangesMiddleware` | `UnitOfWorkModule` → `IUnitOfWork.SaveChangesAsync()` |
 | `StartRebusTransactionMiddleware` | `MessageOutboxModule` → `IMessageOutbox.CommitAsync()` |
-| `UseMartenAsOutboxMiddleware` | `OutboxPublishingSessionListener` on Marten session |
+| `UseMartenAsOutboxMiddleware` | Consumer-supplied: an `IRebusTransactionEnlistment` plus a drain listener added with `options.AddBlueprintOutboxListener(...)` (see [Transactional outbox](#transactional-outbox)) |
 | Marten `IDocumentSession` injection | Same — injected via DI, scoped per request |
 
 ### Multi-Tenancy Gap
@@ -103,12 +103,34 @@ services.AddRebus((configure, sp) =>
 
 ### Transaction Scope
 
-Rebus messages are automatically wrapped in a `RebusTransactionScope`. When combined with Marten outbox, the flow is:
+Rebus messages are automatically wrapped in a `RebusTransactionScope`. The flow is:
 
 1. Message received → new DI scope
 2. `RebusTransactionScope` started (unless `[NoRebusTransaction]`)
-3. Pipeline executes: validate → auth → handler → save (UoW) → commit outbox
-4. Transaction committed atomically
+3. Pipeline executes: validate → auth → handler → save (UoW) → complete the scope
+4. The Rebus transaction commits, sending the messages published during the handler and the save
+
+The save commits before the messages are sent, so the two are not atomic: if sending fails after the save, the
+data stays and the messages are not sent (a received message is redelivered; nothing retries an HTTP request).
+Atomic delivery needs a transactional outbox, which Blueprint leaves to the consumer.
+
+### Transactional outbox
+
+Blueprint provides the two seams an outbox needs, and nothing else:
+
+- **`IRebusTransactionEnlistment`** (`Blueprint.Rebus`), registered in DI, is called with the Rebus transaction a unit
+  of work will be saved inside, before any handler runs in it: by a generated command or background-task pipeline that
+  saves a unit of work, straight after it opens its scope, and by `BlueprintApiActivator` for a plain
+  `IHandleMessages<T>`, whose unit of work it saves from the transaction's first commit callback. Neither enlists when
+  no `IUnitOfWork` is registered.
+- **`options.AddBlueprintOutboxListener(listener)`** (`Blueprint.Marten`) adds the consumer's drain listener, which
+  writes the transaction's messages into the session during `SaveChangesAsync`, after
+  `DomainEventDispatchingSessionListener`, whose published domain events it must see. Adding it to
+  `options.Listeners` directly, before `AddBlueprintMarten()`'s `ConfigureMarten` callback runs, puts it first and it
+  drains nothing.
+
+`MartenUnitOfWork` makes its own scope `MartenScopeAccessor.Current` for the save, so the listeners also run for a
+plain handler's save, where no generated pipeline has set it.
 
 ### Multi-Tenancy Gap
 

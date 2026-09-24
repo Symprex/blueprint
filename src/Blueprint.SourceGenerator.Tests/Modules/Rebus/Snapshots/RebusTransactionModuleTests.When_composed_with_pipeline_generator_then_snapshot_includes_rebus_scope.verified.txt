@@ -64,6 +64,11 @@ namespace Blueprint.Generated
 
             using var rebusTransactionScope = this._hasRebus ? new global::Rebus.Transport.RebusTransactionScope() : null;
 
+            if (rebusTransactionScope != null && this.HasUnitOfWork)
+            {
+                await global::Blueprint.Rebus.RebusTransactionEnlistment.EnlistAsync(rebusTransactionScope.TransactionContext, context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            }
+
             // Tenant resolution (compile-time, no reflection, cached services)
             if (this.TenantResolver != null && this.TenantAccessor != null)
             {
