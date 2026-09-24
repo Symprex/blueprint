@@ -202,7 +202,7 @@ Reserved direction:
 
 Current messaging IDs in active use:
 
-- `BPM001`: `[DoNotPublishMessages]` applied to a non-command operation where it has no effect (warning — only `ICommand` operations trigger the `MessageOutboxModule`).
+- `BPM001`: `[DoNotPublishMessages]` applied to an operation that is neither a command nor a background task, where it has no effect (warning — only `ICommand` and `IBackgroundTask` operations trigger the `MessageOutboxModule`).
 
 ### Auditing diagnostics
 

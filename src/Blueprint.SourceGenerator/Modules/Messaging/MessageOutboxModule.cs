@@ -6,9 +6,9 @@ namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
 /// Contributes a PostExecution render step that calls <c>IMessageOutbox.CommitAsync</c> after
-/// successful command handler execution. Only participates for operations implementing
-/// <c>ICommand</c> (not queries or background tasks), and skips gracefully at runtime if no
-/// <c>IMessageOutbox</c> is registered in DI.
+/// successful handler execution. Participates for operations implementing <c>ICommand</c> or
+/// <c>Blueprint.Tasks.IBackgroundTask</c> (not queries), as legacy gave both its outbox, and skips
+/// gracefully at runtime if no <c>IMessageOutbox</c> is registered in DI.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -47,9 +47,11 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
     public void ContributeToPipeline(PipelineContributorContext context)
     {
         var operationType = context.Operation.TypeSymbol;
-        var isCommand = IsCommand(operationType);
 
-        if (!isCommand && HasDoNotPublishMessagesAttribute(operationType))
+        // Commands and background tasks both commit the outbox, as legacy gave both its outbox middleware.
+        var participates = IsCommand(operationType) || IsBackgroundTask(operationType);
+
+        if (!participates && HasDoNotPublishMessagesAttribute(operationType))
         {
             context.AddDiagnostic(
                 new DiagnosticInfo(
@@ -60,7 +62,7 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
             return;
         }
 
-        if (!isCommand)
+        if (!participates)
         {
             return;
         }
@@ -92,6 +94,13 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
         return operationType.AllInterfaces.Any(static candidate =>
             candidate.Name is "ICommand"
             && candidate.IsInNamespace("Blueprint", "Model"));
+    }
+
+    private static bool IsBackgroundTask(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name is "IBackgroundTask"
+            && candidate.IsInNamespace("Blueprint", "Tasks"));
     }
 
     private static bool HasDoNotPublishMessagesAttribute(INamedTypeSymbol operationType)

@@ -84,11 +84,13 @@ public class MessageOutboxModuleTests
     }
 
     [Fact]
-    public void When_background_task_then_pipeline_has_no_message_outbox_contribution()
+    public void When_background_task_then_pipeline_has_post_execution_contribution()
     {
+        // Legacy gave background tasks the same outbox as commands. (This fixture used to import only Blueprint.Model,
+        // where IBackgroundTask does not live, so it proved nothing about tasks.)
         var compilation = CreateCompilation(
             """
-            using Blueprint.Model;
+            using Blueprint.Tasks;
             using System.Threading.Tasks;
 
             namespace TestNamespace;
@@ -112,8 +114,8 @@ public class MessageOutboxModuleTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
-        result.Value!.Contributions.Should().NotContain(
-            static c => c.ContributorId == nameof(MessageOutboxModule));
+        result.Value!.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.PostExecution, nameof(MessageOutboxModule)));
     }
 
     [Fact]
@@ -185,12 +187,12 @@ public class MessageOutboxModuleTests
     }
 
     [Fact]
-    public void When_background_task_has_DoNotPublishMessages_then_reports_BPM001_diagnostic()
+    public void When_background_task_has_DoNotPublishMessages_then_it_opts_out_without_a_diagnostic()
     {
         var compilation = CreateCompilation(
             """
-            using Blueprint.Model;
             using Blueprint.Messaging;
+            using Blueprint.Tasks;
             using System.Threading.Tasks;
 
             namespace TestNamespace;
@@ -213,8 +215,9 @@ public class MessageOutboxModuleTests
         ]);
         var result = config.BuildPipelinePlan("TestNamespace.ProcessOrderTask", compilation);
 
-        result.Diagnostics.Should().ContainSingle()
-            .Which.Descriptor.Id.Should().Be("BPM001");
+        result.Diagnostics.Should().BeEmpty("the attribute now has an effect on a background task");
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.ContributorId == nameof(MessageOutboxModule));
     }
 
     // ── Pipeline snapshot test ────────────────────────────────────────

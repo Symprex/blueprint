@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class SendReminderTaskExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["MartenScopeModule", "RebusTransactionModule", "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["MartenScopeModule", "RebusTransactionModule", "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
         readonly bool _hasRebus;
 
         internal SendReminderTaskExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
@@ -82,6 +82,11 @@ namespace Blueprint.Generated
             if (this.HasUnitOfWork)
             {
                 await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            }
+
+            if (this.HasMessageOutbox)
+            {
+                await CommitMessageOutboxAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
             }
 
             if (this.AuditSink != null)
