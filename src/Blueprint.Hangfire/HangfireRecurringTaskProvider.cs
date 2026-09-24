@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Blueprint.Tasks;
 using Hangfire;
+using Hangfire.States;
 using JetBrains.Annotations;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 #pragma warning disable CS4014 // Hangfire expression trees — not awaited by our code
 
@@ -31,6 +33,7 @@ public sealed class HangfireRecurringTaskProvider : IRecurringTaskProvider
 
     private readonly IRecurringJobManager _recurringJobManager;
     private readonly ILogger<HangfireRecurringTaskProvider> _logger;
+    private readonly string _defaultQueue;
 
     /// <summary>
     /// Initialises the provider with the Hangfire recurring job manager.
@@ -40,9 +43,28 @@ public sealed class HangfireRecurringTaskProvider : IRecurringTaskProvider
     public HangfireRecurringTaskProvider(
         IRecurringJobManager recurringJobManager,
         ILogger<HangfireRecurringTaskProvider> logger)
+        : this(recurringJobManager, Options.Create(new BlueprintTaskOptions()), logger)
     {
+    }
+
+    /// <summary>
+    /// Initialises the provider with the Hangfire recurring job manager and the app's task options, whose
+    /// <see cref="BlueprintTaskOptions.DefaultQueue"/> receives every schedule that names no queue of its own.
+    /// </summary>
+    /// <param name="recurringJobManager">Hangfire's recurring job manager.</param>
+    /// <param name="taskOptions">The app's background task options.</param>
+    /// <param name="logger">Logger for registration diagnostics.</param>
+    public HangfireRecurringTaskProvider(
+        IRecurringJobManager recurringJobManager,
+        IOptions<BlueprintTaskOptions> taskOptions,
+        ILogger<HangfireRecurringTaskProvider> logger)
+    {
+        ArgumentNullException.ThrowIfNull(recurringJobManager);
+        ArgumentNullException.ThrowIfNull(taskOptions);
+
         this._recurringJobManager = recurringJobManager;
         this._logger = logger;
+        this._defaultQueue = taskOptions.Value.DefaultQueue ?? EnqueuedState.DefaultQueue;
     }
 
     /// <inheritdoc />
@@ -66,7 +88,7 @@ public sealed class HangfireRecurringTaskProvider : IRecurringTaskProvider
                     schedule.BackgroundTask.GetType()),
             });
 
-            var queue = schedule.Queue ?? envelope.GetQueueName() ?? "default";
+            var queue = schedule.Queue ?? envelope.GetQueueName() ?? this._defaultQueue;
 
             this._recurringJobManager.AddOrUpdate<HangfireBackgroundTaskExecutor>(
                 jobId,
