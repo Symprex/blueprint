@@ -153,7 +153,7 @@ namespace Blueprint.Generated
     internal sealed partial class UpdateWidgetCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceEventAuditModule", "PipelineReturnModule"];
 
         internal UpdateWidgetCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "UpdateWidgetCommand", pipelineServices)
@@ -240,13 +240,13 @@ namespace Blueprint.Generated
                     await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "UpdateWidgetCommand").ConfigureAwait(false);
                 }
 
-                await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, "UpdateWidgetCommand").ConfigureAwait(false);
-
                 if (this.HasBackgroundTaskScheduler)
                 {
                     await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
                 }
             }
+
+            await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, "UpdateWidgetCommand").ConfigureAwait(false);
 
             return handlerResult;
         }

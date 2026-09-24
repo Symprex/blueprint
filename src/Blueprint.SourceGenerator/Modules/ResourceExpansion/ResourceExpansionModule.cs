@@ -38,7 +38,13 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
     public string ContributorId => nameof(ResourceExpansionModule);
 
     /// <inheritdoc />
-    public int Order => 950;
+    /// <remarks>
+    /// After <see cref="BackgroundTaskFlushModule"/> (1000) and before <see cref="ResourceEventAuditModule"/> (1020), as
+    /// legacy's <c>ResourceExpandMiddleware</c> ran after its background task runner and before its resource event handler
+    /// (Signature365 <c>8b40ecc961</c>, <c>AzureAdOauthReturnCommandExecutorPipeline.cs:139-149</c>). So a resource event is
+    /// audited with its data expanded.
+    /// </remarks>
+    public int Order => 1010;
 
     /// <inheritdoc />
     public bool IsUnique => true;

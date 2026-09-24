@@ -1,3 +1,4 @@
+using Blueprint.Auditing;
 using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -78,13 +79,34 @@ public class ResourceEventExpansionIntegrationTests
             .Which.Should().BeSameAs(resourceEvent.Data, "the call is the query's, whose response is its own resource");
     }
 
+    [Fact]
+    public async Task When_resource_event_data_is_expanded_then_the_resource_event_audit_sink_is_given_it_expanded()
+    {
+        // Legacy expanded an event before auditing it. In its generated pipeline ResourceExpandMiddleware
+        // (Signature365 8b40ecc961, Portal/.../AzureAdOauthReturnCommandExecutorPipeline.cs:142-144) ran before
+        // ResourceEventHandlerMiddlewareBuilder (:146-149), whose ResourceEventHandler.HandleAsync handed that same event
+        // to IResourceEventAuditRepository.AddAsync (Blueprint.Http/Middleware/ResourceEventHandler.cs:72-77).
+        // Signature365's repository serialises the event's data as it receives it (EventStore.Contract/Messages/
+        // EventMapper.cs:30), so what it is given must already be expanded. The sink copies the value out when it is
+        // called, because the pipeline goes on to mutate the same event object.
+        var sink = new SnapshottingResourceEventAuditSink();
+        var (context, pipeline, _) = Create<UpdateAlwaysExpandEmployeeCommand>(new DefaultHttpContext(), sink);
+
+        await pipeline.ExecuteAsync(context);
+
+        sink.DepartmentNamesWhenRecorded.Should().Equal(
+            ["Engineering"],
+            "the event is audited once, and after its [AlwaysExpand] data has been expanded");
+    }
+
     private static (ApiOperationContext Context, IOperationExecutorPipeline Pipeline, TestDepartmentExpander Expander) Create<TOperation>(
-        HttpContext httpContext)
+        HttpContext httpContext,
+        IResourceEventAuditSink? resourceEventAuditSink = null)
         where TOperation : IOperation
     {
         var app = new IntegrationTestBlueprintApp();
         var expander = new TestDepartmentExpander();
-        var serviceProvider = new ExpansionServiceProvider(expander);
+        var serviceProvider = new ExpansionServiceProvider(expander, resourceEventAuditSink);
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         serviceProvider.Executor = executor;
 
@@ -104,7 +126,7 @@ public class ResourceEventExpansionIntegrationTests
         return httpContext;
     }
 
-    private sealed class ExpansionServiceProvider(IResourceExpander expander) : IServiceProvider
+    private sealed class ExpansionServiceProvider(IResourceExpander expander, IResourceEventAuditSink? resourceEventAuditSink) : IServiceProvider
     {
         public BlueprintAppExecutor? Executor { get; set; }
 
@@ -115,7 +137,31 @@ public class ResourceEventExpansionIntegrationTests
                 return new[] { expander };
             }
 
+            if (serviceType == typeof(IResourceEventAuditSink))
+            {
+                return resourceEventAuditSink;
+            }
+
             return serviceType == typeof(BlueprintAppExecutor) ? this.Executor : null;
+        }
+    }
+
+    /// <summary>
+    /// Records, for each event it is given, the name of the department its data holds at that moment: a copy, not the
+    /// event, which the pipeline may still change after the sink has returned.
+    /// </summary>
+    private sealed class SnapshottingResourceEventAuditSink : IResourceEventAuditSink
+    {
+        public List<string> DepartmentNamesWhenRecorded { get; } = [];
+
+        public Task RecordAsync(string eventId, string resourceId, OperationResult handlerResult, ApiOperationContext context, CancellationToken cancellationToken)
+        {
+            if (handlerResult is ResourceEvent<AlwaysExpandTestEmployee> resourceEvent)
+            {
+                this.DepartmentNamesWhenRecorded.Add(resourceEvent.Data?.Department.Value?.Name ?? "(not expanded)");
+            }
+
+            return Task.CompletedTask;
         }
     }
 }

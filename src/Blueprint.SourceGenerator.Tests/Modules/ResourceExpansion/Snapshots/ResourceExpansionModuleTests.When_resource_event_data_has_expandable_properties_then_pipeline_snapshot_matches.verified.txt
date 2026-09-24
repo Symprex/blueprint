@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class UpdateAddOnCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "ResourceEventSelfQueryModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "ResourceExpansionModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "ResourceEventSelfQueryModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceExpansionModule", "ResourceEventAuditModule", "PipelineReturnModule"];
 
         internal UpdateAddOnCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "UpdateAddOnCommand", pipelineServices)
@@ -91,8 +91,6 @@ namespace Blueprint.Generated
                     await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "UpdateAddOnCommand").ConfigureAwait(false);
                 }
 
-                await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, "UpdateAddOnCommand").ConfigureAwait(false);
-
                 if (this.HasBackgroundTaskScheduler)
                 {
                     await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
@@ -104,6 +102,8 @@ namespace Blueprint.Generated
                 await global::Blueprint.Runtime.Expansion.ResourceExpansionRuntime.TryExpandAsync(context, handlerResult, expansionContent_73410AEC?.Data?.Group, "Data.Group", typeof(global::TestNamespace.GroupResource), false).ConfigureAwait(false);
                 await global::Blueprint.Runtime.Expansion.ResourceExpansionRuntime.ExpandAsync(context, handlerResult, expansionContent_73410AEC?.Data?.AlwaysGroup, typeof(global::TestNamespace.GroupResource), false).ConfigureAwait(false);
             }
+
+            await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, "UpdateAddOnCommand").ConfigureAwait(false);
 
             return handlerResult;
         }

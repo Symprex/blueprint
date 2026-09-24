@@ -886,7 +886,7 @@ Resource events are already partially source-generated via `ResourceEventFamilyS
 - `@ResourceEventReason(ChangeType, reason)` marks nested event records
 - Source gen emits stable `EventId` constants and implicit conversion operators
 - `ResourceEventMetadataModule` (Order=56) extracts compile-time metadata for OpenAPI/discrimination
-- `ResourceEventAuditModule` (Order=960) injects post-execution auditing
+- `ResourceEventAuditModule` (Order=1020, after `ResourceExpansionModule` at 1010) injects post-execution auditing
 - `ResourceEventSelfQueryModule` (Order=-5) resolves `SelfQuery` before link generation
 
 ### S365 resource event usage

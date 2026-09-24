@@ -5,16 +5,25 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
-/// Contributes a PostExecution render step that records a resource-event audit entry via
-/// <c>IResourceEventAuditSink</c> after successful handler execution returns a
-/// <c>ResourceEventResult</c> or <c>KeyOnlyResourceEventResult</c>.
+/// Contributes a PostExecution render step that stamps a legacy resource event, makes its href, and records a
+/// resource-event audit entry via <c>IResourceEventAuditSink</c> when handler execution returns a
+/// <c>ResourceEventResult</c>, <c>KeyOnlyResourceEventResult</c> or <c>ResourceEvent</c>.
 /// </summary>
 /// <remarks>
 /// <para>
 /// This module only activates for operations whose declared result contract includes a
-/// resource-event result type. It runs at Order=960, placing it after general auditing
-/// (Order=950) and after <see cref="UnitOfWorkModule"/> (Order=900), but before
-/// <see cref="BackgroundTaskFlushModule"/> (Order=1000).
+/// resource-event result type. It runs at Order=1020, last of the PostExecution steps: after
+/// <see cref="UnitOfWorkModule"/> (900), general auditing (950), <see cref="BackgroundTaskFlushModule"/> (1000) and
+/// <see cref="ResourceExpansionModule"/> (1010). That is where legacy's <c>ResourceEventHandlerMiddlewareBuilder</c> ran:
+/// after its save, background task runner and <c>ResourceExpandMiddleware</c> (Signature365 <c>8b40ecc961</c>,
+/// <c>AzureAdOauthReturnCommandExecutorPipeline.cs:136-149</c>), so the event it stamped and audited
+/// (<c>Blueprint.Http/Middleware/ResourceEventHandler.cs:38-39</c>, <c>:54-65</c>, <c>:72-77</c>) already had its data
+/// expanded.
+/// </para>
+/// <para>
+/// Its step is not success-guarded, so that it is emitted after the expansion step, which is not either: the generator
+/// renders every success-guarded step together, where the first of them falls. Guarding it would change nothing, as
+/// every result it acts on is a successful one.
 /// </para>
 /// <para>
 /// Resource-event auditing is best-effort: sink failures are caught and emitted as
@@ -38,7 +47,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
     public string ContributorId => nameof(ResourceEventAuditModule);
 
     /// <inheritdoc />
-    public int Order => 960;
+    public int Order => 1020;
 
     /// <inheritdoc />
     public bool IsUnique => true;
@@ -62,7 +71,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
             requiredBy: PipelineStage.PostExecution);
 
         context.RequireAsync();
-        context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, ctx => RenderResourceEventAudit(ctx, operationTypeName));
+        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderResourceEventAudit(ctx, operationTypeName));
     }
 
     private static void RenderResourceEventAudit(PipelineRenderContext context, string operationTypeName)
