@@ -77,7 +77,26 @@ public sealed class LegacyResourceEventHandlingTests
         logger.Entries.Should().NotContain(static e => e.Level >= LogLevel.Warning);
     }
 
-    private static async Task ExecuteAsync(object operation, RecordingLogger logger)
+    [Theory]
+    [InlineData(typeof(ReportHrefWidgetChangedCommand))]
+    [InlineData(typeof(ReportHrefWidgetDeletedCommand))]
+    [InlineData(typeof(ReportHrefUnlinkedChangedCommand))]
+    [InlineData(typeof(Generators.Pipelines.SelfQueryDeleteCommand))]
+    [InlineData(typeof(ReportHrefWidgetCorrelatedCommand))]
+    public async Task Every_event_is_stamped_with_the_request_correlation_id_and_its_operation(Type operationType)
+    {
+        // Legacy's ResourceEventHandler set both on every event, whatever its change type and whether or not it had data,
+        // a self query or a self link; Signature365's audit stores both (ResourceEventCreatedEvent, ApiEvent).
+        using var activity = new System.Diagnostics.Activity("resource-event-stamping").Start();
+        var operation = Activator.CreateInstance(operationType)!;
+
+        var resourceEvent = await ExecuteAsync(operation, new RecordingLogger(), activity);
+
+        resourceEvent.CorrelationId.Should().Be(activity.Id);
+        resourceEvent.Operation.Should().BeSameAs(operation);
+    }
+
+    private static async Task<ResourceEvent> ExecuteAsync(object operation, RecordingLogger logger, System.Diagnostics.Activity? activity = null)
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new LoggingServiceProvider(logger);
@@ -85,11 +104,15 @@ public sealed class LegacyResourceEventHandlingTests
         serviceProvider.Executor = executor;
 
         var descriptor = app.FindOperation(operation.GetType())!;
-        var context = new ApiOperationContext(serviceProvider, app, descriptor, CancellationToken.None) { Operation = operation };
+        var context = new ApiOperationContext(serviceProvider, app, descriptor, CancellationToken.None)
+        {
+            Operation = operation,
+            Activity = activity,
+        };
 
         var result = await executor.GetPipeline(operation.GetType()).ExecuteAsync(context);
 
-        result.Should().BeAssignableTo<ResourceEvent>("the pipeline raised: {0}", (result as UnhandledExceptionResult)?.Exception.ToString());
+        return result.Should().BeAssignableTo<ResourceEvent>("the pipeline raised: {0}", (result as UnhandledExceptionResult)?.Exception.ToString()).Subject;
     }
 
     /// <summary>The named member of <paramref name="element"/>, whatever the serializer's property casing.</summary>
@@ -146,5 +169,23 @@ public partial class ReportHrefUnlinkedChangedCommand : ICommand<ResourceUpdated
     public static ResourceUpdated<HrefUnlinkedApiResource> Handle(ReportHrefUnlinkedChangedCommand command)
     {
         return new ResourceUpdated<HrefUnlinkedApiResource>(new HrefUnlinkedApiResource());
+    }
+}
+
+/// <summary>Reports the deletion of a widget from outside a request, with a legacy deleted event carrying the widget.</summary>
+public partial class ReportHrefWidgetDeletedCommand : ICommand<ResourceDeleted<HrefWidgetApiResource>>
+{
+    public static ResourceDeleted<HrefWidgetApiResource> Handle(ReportHrefWidgetDeletedCommand command)
+    {
+        return new ResourceDeleted<HrefWidgetApiResource>(new HrefWidgetApiResource { Id = "widget-9" });
+    }
+}
+
+/// <summary>Reports a change to a widget with an event its handler gave a correlation id of its own, which legacy replaced.</summary>
+public partial class ReportHrefWidgetCorrelatedCommand : ICommand<ResourceUpdated<HrefWidgetApiResource>>
+{
+    public static ResourceUpdated<HrefWidgetApiResource> Handle(ReportHrefWidgetCorrelatedCommand command)
+    {
+        return new ResourceUpdated<HrefWidgetApiResource>(new HrefWidgetApiResource { Id = "widget-10" }) { CorrelationId = "set-by-handler" };
     }
 }

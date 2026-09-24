@@ -1167,8 +1167,9 @@ public static class PipelineHelpers
         OperationResult handlerResult,
         string operationTypeName)
     {
-        // Always populate ResourceEvent.Href from the resource type's self link, even when no audit sink is registered.
-        // This runs after the self query has been resolved, so Data is filled wherever it can be.
+        // Always stamp a legacy ResourceEvent and populate its Href from the resource type's self link, even when no audit
+        // sink is registered. This runs after the self query has been resolved, so Data is filled wherever it can be.
+        StampResourceEvent(context, handlerResult);
         PopulateResourceEventHref(context, handlerResult);
 
         return auditSink != null
@@ -1187,6 +1188,20 @@ public static class PipelineHelpers
     /// link on the data can be hidden by link authorisation or relative, and the operation's URL is a different resource's
     /// (a collection's, for a create). Signature365 stores the href with every audited event.
     /// </remarks>
+    /// <summary>
+    /// Stamps a legacy <see cref="ResourceEvent"/> with the request's correlation id and the operation that raised it, as
+    /// legacy Blueprint's <c>ResourceEventHandler</c> stamped every event: whatever its change type, and whether or not it
+    /// has data, a self query or a self link. Signature365's audit stores both.
+    /// </summary>
+    private static void StampResourceEvent(ApiOperationContext context, OperationResult handlerResult)
+    {
+        if (handlerResult is ResourceEvent resourceEvent)
+        {
+            resourceEvent.CorrelationId = context.Activity?.Id;
+            resourceEvent.Operation = context.Operation;
+        }
+    }
+
     private static void PopulateResourceEventHref(ApiOperationContext context, OperationResult handlerResult)
     {
         if (handlerResult is not ResourceEvent resourceEvent)
@@ -1390,12 +1405,9 @@ public static class PipelineHelpers
         {
             // Legacy's ResourceEventHandler did not load a deleted resource ("cannot, obviously, get for a deleted
             // record"): its self query may fail or find nothing. The event keeps no data, and its href is made from the
-            // self query. It is stamped as a loaded one is.
+            // self query. It is stamped with every other event, after resolution (StampResourceEvent).
             if (resourceEvent.ChangeType == ResourceEventChangeType.Deleted)
             {
-                resourceEvent.CorrelationId ??= context.Activity?.Id;
-                resourceEvent.Operation ??= context.Operation;
-
                 return Task.CompletedTask;
             }
 
