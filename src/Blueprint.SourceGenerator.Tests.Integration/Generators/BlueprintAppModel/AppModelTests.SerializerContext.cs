@@ -37,7 +37,8 @@ public class AppModelSerializerContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.MultiExpandableTestEmployee",
             "Blueprint.SourceGenerator.Tests.Integration.Http.NodaTimeEchoResponse",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.SelfQueryTestApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.SampleWidgetApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.SampleWidgetApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.UnexposedFixtureApiResource");
     }
 
     [Fact]
@@ -71,6 +72,7 @@ public class AppModelSerializerContextTests
             typeof(MultiExpandableTestEmployee),
             typeof(NodaTimeEchoResponse),
             typeof(SelfQueryTestApiResource),
-            typeof(SampleWidgetApiResource));
+            typeof(SampleWidgetApiResource),
+            typeof(UnexposedFixtureApiResource));
     }
 }

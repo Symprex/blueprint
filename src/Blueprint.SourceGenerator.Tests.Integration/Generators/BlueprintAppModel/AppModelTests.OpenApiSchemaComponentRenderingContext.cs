@@ -31,6 +31,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "NodaTimeEchoResponse",
             "ProblemDetails",
             "SampleWidgetApiResource",
+            "UnexposedFixtureApiResource",
             "ValidationProblemDetails",
             "string");
 

@@ -180,6 +180,13 @@ public sealed record OpenApiDocumentRenderingContext(
                 continue;
             }
 
+            // The document leaves an unexposed operation out, so a link naming its operationId would dangle — and the
+            // runtime never adds such a link to a resource's $links either.
+            if (!link.OperationDescriptor.IsExposed)
+            {
+                continue;
+            }
+
             var resourceFullName = link.ResourceType.FullName ?? link.ResourceType.Name;
             var resourceName = fullNameToShortName.GetValueOrDefault(resourceFullName, resourceFullName);
 

@@ -42,4 +42,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Blueprint.SourceGenerator.Tests.Integration.Http.NodaTimeEchoResponse))]
 [JsonSerializable(typeof(SelfQueryTestApiResource))]
 [JsonSerializable(typeof(SampleWidgetApiResource))]
+[JsonSerializable(typeof(UnexposedFixtureApiResource))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

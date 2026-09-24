@@ -31,6 +31,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "NodaTimeEchoResponse",
             "ProblemDetails",
             "SampleWidgetApiResource",
+            "UnexposedFixtureApiResource",
             "ValidationProblemDetails",
             "string");
 

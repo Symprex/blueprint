@@ -12,7 +12,10 @@ namespace Blueprint.Runtime.Http;
 /// <param name="App">The constructed Blueprint app that owns the serializer declaration and registered operations.</param>
 /// <param name="DeclaredSerializerContextType">The app-owned serializer context type when the app declares one.</param>
 /// <param name="DeclaredSerializerContextBodyTypeNames">The distinct body payload CLR type names declared by the app-owned serializer context.</param>
-/// <param name="Operations">The HTTP-exposed operations prepared for OpenAPI document building.</param>
+/// <param name="Operations">
+/// The HTTP-exposed operations prepared for OpenAPI document building: those on the HTTP host whose
+/// <see cref="ApiOperationDescriptor.IsExposed"/> is <see langword="true"/>.
+/// </param>
 public sealed record OpenApiDocumentBuilderContext(
     BlueprintApp App,
     Type? DeclaredSerializerContextType,
@@ -33,7 +36,12 @@ public sealed record OpenApiDocumentBuilderContext(
 
         var declaredBodyTypeNames = app.AppOwnedSerializerContextBodyTypeNames;
         var declaredBodyTypeNameSet = declaredBodyTypeNames.ToFrozenSet(StringComparer.Ordinal);
+
+        // An operation that is not exposed — [UnexposedOperation], or a Rebus message handled through the pipeline — is
+        // still routed, but is not part of the published API, so it is left out of the document as legacy Blueprint left
+        // it out.
         var operations = app.GetOperationsForHost(HttpHostName)
+            .Where(static operation => operation.IsExposed)
             .OrderBy(static operation => operation.Name, StringComparer.Ordinal)
             .Select(operation => CreateOperationContext(operation, declaredBodyTypeNameSet))
             .ToImmutableArray();
