@@ -132,6 +132,14 @@ public sealed class OpenApiInfoOptions
     /// Blueprint's NJsonSchema generator gave.
     /// </summary>
     public OpenApiSchemaNaming SchemaNaming { get; set; }
+
+    /// <summary>
+    /// Gets or sets how the schema component of an operation's request body is keyed. Defaults to
+    /// <see cref="OpenApiRequestBodyNaming.OperationName"/>; <see cref="OpenApiRequestBodyNaming.OperationType"/> keys
+    /// it by the operation's CLR type, as legacy Blueprint did. The key is passed to
+    /// <see cref="SchemaNameFormatter"/> like any other.
+    /// </summary>
+    public OpenApiRequestBodyNaming RequestBodyNaming { get; set; }
 }
 
 /// <summary>

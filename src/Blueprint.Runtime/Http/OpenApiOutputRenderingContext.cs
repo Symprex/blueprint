@@ -612,9 +612,9 @@ public sealed record OpenApiOutputRenderingContext(
 
         if (!requestBody.Properties.IsEmpty)
         {
-            // Emit a $ref to the corresponding component schema keyed by the operation name.
+            // Emit a $ref to the corresponding component schema, keyed by the body's schema name or else the operation name.
             // The request body schema component is assembled in OpenApiDocumentRenderingContext.
-            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(operationName, schemaNameFormatter)}");
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(requestBody.SchemaName ?? operationName, schemaNameFormatter)}");
         }
         else
         {

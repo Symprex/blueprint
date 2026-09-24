@@ -101,7 +101,9 @@ internal static class OpenApiDocumentEndpoint
         var responseObjectContext = OpenApiResponseObjectRenderingContext.Create(
             responseSchemaProjectionContext,
             infoOptions?.UsePlainJsonForErrorResponses ?? false);
-        var operationContext = OpenApiOperationRenderingContext.Create(responseObjectContext);
+        var operationContext = OpenApiOperationRenderingContext.Create(
+            responseObjectContext,
+            infoOptions?.RequestBodyNaming ?? OpenApiRequestBodyNaming.OperationName);
 
         // Apply per-operation processors before path-item grouping so consumers can strip
         // auto-populated parameters, override summaries, etc.

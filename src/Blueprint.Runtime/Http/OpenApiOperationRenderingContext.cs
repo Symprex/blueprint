@@ -25,11 +25,25 @@ public sealed record OpenApiOperationRenderingContext(
     /// <returns>The rendered OpenAPI operation context.</returns>
     public static OpenApiOperationRenderingContext Create(OpenApiResponseObjectRenderingContext responseObjects)
     {
+        return Create(responseObjects, OpenApiRequestBodyNaming.OperationName);
+    }
+
+    /// <summary>
+    /// Creates deterministic OpenAPI-style operation models from the supplied response-object rendering context, keying
+    /// each request body as <paramref name="requestBodyNaming"/> says.
+    /// </summary>
+    /// <param name="responseObjects">The response-object rendering context to compose with operation identity and URLs.</param>
+    /// <param name="requestBodyNaming">How request body schema components are keyed.</param>
+    /// <returns>The rendered OpenAPI operation context.</returns>
+    internal static OpenApiOperationRenderingContext Create(
+        OpenApiResponseObjectRenderingContext responseObjects,
+        OpenApiRequestBodyNaming requestBodyNaming)
+    {
         ArgumentNullException.ThrowIfNull(responseObjects);
 
         var naming = responseObjects.SchemaComponents.SchemaProjection.Naming;
         var operations = responseObjects.Operations
-            .Select(operation => CreateOperation(operation, naming))
+            .Select(operation => CreateOperation(operation, naming, requestBodyNaming))
             .ToImmutableArray();
 
         return new OpenApiOperationRenderingContext(responseObjects, operations);
@@ -127,7 +141,10 @@ public sealed record OpenApiOperationRenderingContext(
         return this with { Operations = normalized };
     }
 
-    private static OpenApiOperationModel CreateOperation(OpenApiResponseObjectOperationContext operation, OpenApiSchemaNaming naming)
+    private static OpenApiOperationModel CreateOperation(
+        OpenApiResponseObjectOperationContext operation,
+        OpenApiSchemaNaming naming,
+        OpenApiRequestBodyNaming requestBodyNaming)
     {
         var httpMethods = operation.Operation.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var httpMethodMetadata)
             ? httpMethodMetadata.HttpMethods
@@ -147,6 +164,11 @@ public sealed record OpenApiOperationRenderingContext(
             : ImmutableDictionary<string, string>.Empty;
 
         var (parameters, requestBody) = ProjectInputMetadata(operation.Operation, naming);
+
+        if (requestBody is not null && requestBodyNaming == OpenApiRequestBodyNaming.OperationType)
+        {
+            requestBody = requestBody with { SchemaName = OpenApiSchemaNames.Format(operation.Operation.OperationType, naming) };
+        }
 
         // Extract [Description] from the operation type for the operation-level summary.
         // Fall back to compile-time XML documentation when no [Description] attribute is present.

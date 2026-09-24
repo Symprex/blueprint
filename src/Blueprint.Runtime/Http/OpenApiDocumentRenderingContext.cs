@@ -141,7 +141,7 @@ public sealed record OpenApiDocumentRenderingContext(
                 }
 
                 builder.Add(new OpenApiSchemaComponentModel(
-                    primaryOperation.OperationName,
+                    requestBody.SchemaName ?? primaryOperation.OperationName,
                     "object",
                     requiredNames.ToImmutable(),
                     properties.ToImmutable(),

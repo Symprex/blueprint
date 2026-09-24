@@ -288,6 +288,9 @@ configureOpenApi: options =>
   `ResourceEventOfPartnerCompany`.
 - `[OpenApiSchemaName("ImportRun")]` (`Blueprint.Model.Attributes`) gives a type a name of its own, as legacy's
   `[JsonSchema("ImportRun")]` did.
+- `options.RequestBodyNaming = OpenApiRequestBodyNaming.OperationType` keys each request body by the operation's CLR
+  type (`CreatePartnerCompanyCommand`), as legacy did, instead of the operation's name (`CreatePartnerCompany`).
+  Generators that tell a command from a query by a `Command` suffix on the body's name need it.
 - Two components that end up with one key fail the render with an `InvalidOperationException` naming both, rather
   than producing a document in which one silently replaces the other.
 

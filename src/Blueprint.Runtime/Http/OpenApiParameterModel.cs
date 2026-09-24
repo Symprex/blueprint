@@ -91,6 +91,12 @@ public sealed record OpenApiRequestBodyModel(
     /// Empty when no body property carries a conditional validator.
     /// </summary>
     public ImmutableArray<OpenApiConditionalRequirement> Conditionals { get; init; } = [];
+
+    /// <summary>
+    /// Gets the name of the schema component the body is rendered as and referenced by, or <see langword="null"/> to key
+    /// it by the operation's name.
+    /// </summary>
+    public string? SchemaName { get; init; }
 }
 
 /// <summary>

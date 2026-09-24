@@ -112,6 +112,42 @@ public class OpenApiLegacyDocumentTests
             .Which.Message.Should().Contain("LegacyShapeTenantApiResource").And.Contain("LegacyShapeGatewayRunApiResource");
     }
 
+    [Fact]
+    public void Keying_request_bodies_by_operation_type_names_them_after_the_command_as_legacy_did()
+    {
+        using var document = Render(static options =>
+        {
+            options.SchemaNaming = OpenApiSchemaNaming.Legacy;
+            options.RequestBodyNaming = OpenApiRequestBodyNaming.OperationType;
+            options.SchemaNameFormatter = static name => name.Replace("ApiResource", string.Empty, StringComparison.Ordinal).Replace("PagedOf", "Paged", StringComparison.Ordinal);
+        });
+
+        RequestBodySchemaRef(document, "/legacy-shape/partners/{PartnerId}/tenants", "post")
+            .Should().Be("#/components/schemas/CreateLegacyShapeTenantCommand");
+
+        var components = ComponentNames(document);
+        components.Should().Contain("CreateLegacyShapeTenantCommand").And.NotContain("CreateLegacyShapeTenant");
+
+        var body = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("CreateLegacyShapeTenantCommand");
+        body.GetProperty("properties").EnumerateObject().Select(static p => p.Name).Should().Contain(["companyName", "address", "tier"]);
+    }
+
+    [Fact]
+    public void Request_bodies_are_keyed_by_operation_name_by_default()
+    {
+        using var document = Render(static options => options.SchemaNaming = OpenApiSchemaNaming.Legacy);
+
+        RequestBodySchemaRef(document, "/legacy-shape/partners/{PartnerId}/tenants", "post")
+            .Should().Be("#/components/schemas/CreateLegacyShapeTenant");
+    }
+
+    private static string? RequestBodySchemaRef(JsonDocument document, string path, string method)
+    {
+        return document.RootElement.GetProperty("paths").GetProperty(path).GetProperty(method)
+            .GetProperty("requestBody").GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema").GetProperty("$ref").GetString();
+    }
+
     private static List<string> AllRefs(JsonElement element)
     {
         var refs = new List<string>();
