@@ -150,6 +150,8 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
         }
 
         return $$"""
+                 #nullable enable
+
                  namespace {{namespaceName}}
                  {
                      /// <remarks>
@@ -157,6 +159,8 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
                      /// </remarks>
                      public partial class {{classNameWithGenerics}}
                      {
+                         /// <inheritdoc />
+                         [global::System.Text.Json.Serialization.JsonPropertyName("$object")]
                          public override string Object => "{{objectType}}";
                      }
                  }

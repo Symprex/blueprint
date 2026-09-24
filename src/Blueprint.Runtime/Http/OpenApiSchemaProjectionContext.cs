@@ -267,7 +267,7 @@ public sealed record OpenApiSchemaProjectionContext(
     {
         return typeInfo?.Kind switch
         {
-            JsonTypeInfoKind.Object => typeInfo.Properties.Where(static property => !property.IsExtensionData).Select(static property => property.PropertyType),
+            JsonTypeInfoKind.Object => typeInfo.Properties.Where(static property => !property.IsExtensionData && IsSerialised(property)).Select(static property => property.PropertyType),
             JsonTypeInfoKind.Enumerable or JsonTypeInfoKind.Dictionary when typeInfo.ElementType is { } elementType => [elementType],
             _ => [],
         };
@@ -335,8 +335,11 @@ public sealed record OpenApiSchemaProjectionContext(
         // Create once per schema rather than per-property to avoid repeated allocations.
         var nullabilityContext = new NullabilityInfoContext();
 
+        // A property the serializer neither writes nor reads, such as a [JsonIgnore]d one the metadata keeps without a
+        // getter or setter (ApiResource.ResourceKey), is not part of the schema.
         var properties = typeInfo.Kind == JsonTypeInfoKind.Object
             ? typeInfo.Properties
+                .Where(IsSerialised)
                 .Select(property => CreateProperty(property, bodyType, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, naming, requiredProperties, schemaNamesByType))
                 .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
@@ -531,7 +534,7 @@ public sealed record OpenApiSchemaProjectionContext(
     {
         var jsonNamesByClrName = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var jsonProperty in typeInfo.Properties)
+        foreach (var jsonProperty in typeInfo.Properties.Where(IsSerialised))
         {
             // Extension data is the catch-all bucket rather than a named member, so CreateComponent drops it from
             // the schema's properties. A conditional naming it would name something no instance declares.
@@ -552,6 +555,15 @@ public sealed record OpenApiSchemaProjectionContext(
         }
 
         return jsonNamesByClrName;
+    }
+
+    /// <summary>
+    /// Returns whether the serializer writes or reads <paramref name="property"/>. System.Text.Json's generated metadata
+    /// keeps an always-ignored property, which it can do neither with, without a getter or a setter.
+    /// </summary>
+    private static bool IsSerialised(JsonPropertyInfo property)
+    {
+        return property.Get is not null || property.Set is not null;
     }
 
     private static OpenApiSchemaPropertyModel CreateProperty(

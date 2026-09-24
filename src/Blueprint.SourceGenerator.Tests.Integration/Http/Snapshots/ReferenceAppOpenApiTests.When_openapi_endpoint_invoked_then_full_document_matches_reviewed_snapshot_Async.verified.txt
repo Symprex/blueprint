@@ -2436,15 +2436,6 @@
               "type": "string"
             },
             "readOnly": true
-          },
-          "Object": {
-            "type": "string",
-            "readOnly": true
-          },
-          "ResourceKey": {
-            "type": "string",
-            "description": "Gets the stable key used when link generation needs to identify this resource instance in URLs.",
-            "readOnly": true
           }
         },
         "additionalProperties": false
@@ -2875,15 +2866,6 @@
           "Id": {
             "type": "string",
             "description": "The unique identifier of the owner."
-          },
-          "Object": {
-            "type": "string",
-            "readOnly": true
-          },
-          "ResourceKey": {
-            "type": "string",
-            "description": "Gets the stable key used when link generation needs to identify this resource instance in URLs.",
-            "readOnly": true
           }
         },
         "additionalProperties": false
@@ -2920,11 +2902,6 @@
             "type": "integer",
             "format": "int32",
             "description": "The size of the page requested.",
-            "readOnly": true
-          },
-          "ResourceKey": {
-            "type": "string",
-            "description": "Gets the stable key used when link generation needs to identify this resource instance in URLs.",
             "readOnly": true
           },
           "Total": {
@@ -3169,10 +3146,6 @@
             "type": "string",
             "description": "The human-readable display name of this template."
           },
-          "Object": {
-            "type": "string",
-            "readOnly": true
-          },
           "OverrideSortOrder": {
             "nullable": true,
             "description": "An optional sort order override, or null for default.",
@@ -3194,11 +3167,6 @@
           "PlainTextSource": {
             "type": "string",
             "description": "The plain text fallback content of this template."
-          },
-          "ResourceKey": {
-            "type": "string",
-            "description": "Gets the stable key used when link generation needs to identify this resource instance in URLs.",
-            "readOnly": true
           }
         },
         "additionalProperties": false,
@@ -3314,10 +3282,6 @@
             "type": "boolean",
             "description": "Gets or sets a value indicating whether or not this resource is \u0027partial\u0027, an indication that not all properties have been\npopulated for performance reasons and a client should reload from the \u0027self\u0027 link to retrieve all values."
           },
-          "Object": {
-            "type": "string",
-            "readOnly": true
-          },
           "RenderedHtml": {
             "type": "string",
             "description": "The rendered HTML output with merge fields applied.",
@@ -3326,11 +3290,6 @@
           "RenderedPlainText": {
             "type": "string",
             "description": "The rendered plain text output with merge fields applied.",
-            "readOnly": true
-          },
-          "ResourceKey": {
-            "type": "string",
-            "description": "Gets the stable key used when link generation needs to identify this resource instance in URLs.",
             "readOnly": true
           },
           "TemplateId": {
@@ -3382,19 +3341,10 @@
             "type": "boolean",
             "description": "Gets or sets a value indicating whether or not this resource is \u0027partial\u0027, an indication that not all properties have been\npopulated for performance reasons and a client should reload from the \u0027self\u0027 link to retrieve all values."
           },
-          "Object": {
-            "type": "string",
-            "readOnly": true
-          },
           "PublishedAt": {
             "type": "string",
             "format": "date-time",
             "description": "When this version was published.",
-            "readOnly": true
-          },
-          "ResourceKey": {
-            "type": "string",
-            "description": "Gets the stable key used when link generation needs to identify this resource instance in URLs.",
             "readOnly": true
           },
           "TemplateId": {
