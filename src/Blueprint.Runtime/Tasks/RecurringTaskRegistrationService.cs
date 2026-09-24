@@ -22,42 +22,51 @@ namespace Blueprint.Runtime.Tasks;
 /// </remarks>
 public sealed class RecurringTaskRegistrationService : IHostedService
 {
-    private readonly IEnumerable<IRecurringTaskScheduler> _schedulers;
-    private readonly IRecurringTaskProvider? _provider;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<RecurringTaskRegistrationService> _logger;
     private readonly ILogger<RecurringTaskManager> _managerLogger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RecurringTaskRegistrationService"/> class.
     /// </summary>
-    /// <param name="schedulers">All registered recurring task schedulers.</param>
-    /// <param name="provider">The recurring task provider (may be null if none is registered).</param>
+    /// <param name="scopeFactory">Creates the scope the schedulers and the provider are resolved in.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     /// <param name="managerLogger">Logger for the <see cref="RecurringTaskManager"/> run at startup.</param>
+    /// <remarks>
+    /// The provider is resolved in a scope of its own rather than injected, as legacy's
+    /// <c>RecurringJobManagerRegistrationHostedService</c> resolved it: this service is a singleton, and
+    /// <c>Blueprint.Hangfire</c> registers its provider scoped, as legacy did, so injecting it would capture a scoped
+    /// service in a singleton, which a host that validates scopes refuses to build.
+    /// </remarks>
     public RecurringTaskRegistrationService(
-        IEnumerable<IRecurringTaskScheduler> schedulers,
+        IServiceScopeFactory scopeFactory,
         ILogger<RecurringTaskRegistrationService> logger,
-        IRecurringTaskProvider? provider = null,
         ILogger<RecurringTaskManager>? managerLogger = null)
     {
-        this._schedulers = schedulers;
+        this._scopeFactory = scopeFactory;
         this._logger = logger;
-        this._provider = provider;
         this._managerLogger = managerLogger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<RecurringTaskManager>.Instance;
     }
 
     /// <inheritdoc />
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (this._provider is null)
+        await using var scope = this._scopeFactory.CreateAsyncScope();
+
+        var provider = scope.ServiceProvider.GetService<IRecurringTaskProvider>();
+
+        if (provider is null)
         {
             this._logger.LogDebug(
                 "No IRecurringTaskProvider registered — skipping recurring task registration");
-            return Task.CompletedTask;
+            return;
         }
 
-        return new RecurringTaskManager(this._schedulers, this._provider, this._managerLogger)
-            .RescheduleAllAsync(cancellationToken);
+        var schedulers = scope.ServiceProvider.GetServices<IRecurringTaskScheduler>();
+
+        await new RecurringTaskManager(schedulers, provider, this._managerLogger)
+            .RescheduleAllAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />

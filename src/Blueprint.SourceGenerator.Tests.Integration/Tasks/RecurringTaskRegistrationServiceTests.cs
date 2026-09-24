@@ -139,6 +139,54 @@ public class RecurringTaskRegistrationServiceTests
         registered.RegisteredSchedules.Select(static s => s.Name).Should().Equal("periodic");
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_provider_registered_scoped_beside_AddRecurringTaskProvider_is_started_in_a_scope_of_its_own(bool scopedRegisteredLast)
+    {
+        // Blueprint.Hangfire's AddBlueprintHangfire registers its IRecurringTaskProvider as scoped, as legacy registered it,
+        // and an app with recurring tasks calls AddRecurringTaskProvider too, which registers a singleton provider and this
+        // singleton hosted service. Whichever registration comes last is the one resolved. Legacy's hosted service resolved
+        // the provider in a scope of its own (RecurringJobManagerRegistrationHostedService).
+        var registered = new List<string>();
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        if (!scopedRegisteredLast)
+        {
+            services.AddScoped<IRecurringTaskProvider>(_ => new ScopedRecurringTaskProvider(registered));
+        }
+
+        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
+            static blueprint => blueprint.AddRecurringTaskProvider<TestRecurringTaskProvider>());
+
+        if (scopedRegisteredLast)
+        {
+            services.AddScoped<IRecurringTaskProvider>(_ => new ScopedRecurringTaskProvider(registered));
+        }
+
+        services.AddSingleton<IRecurringTaskScheduler>(new TestRecurringTaskScheduler("periodic", "0 4 * * *"));
+
+        // As an ASP.NET Core host builds its container in development.
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+
+        foreach (var hostedService in provider.GetServices<IHostedService>().OfType<Blueprint.Runtime.Tasks.RecurringTaskRegistrationService>())
+        {
+            await hostedService.StartAsync(CancellationToken.None);
+        }
+
+        if (scopedRegisteredLast)
+        {
+            registered.Should().Equal("periodic");
+        }
+        else
+        {
+            using var scope = provider.CreateScope();
+            ((TestRecurringTaskProvider)scope.ServiceProvider.GetRequiredService<IRecurringTaskProvider>()).RegisteredSchedules
+                .Select(static s => s.Name).Should().Equal("periodic");
+        }
+    }
+
     private static IHost BuildHost(
         IRecurringTaskScheduler[] schedulers,
         IRecurringTaskProvider? provider)
@@ -202,6 +250,16 @@ public class RecurringTaskRegistrationServiceTests
                 new RecurringTaskSchedule("queued-task", new RecurringTestBackgroundTask(), "0 9 * * *", tz, "priority"),
             ];
             return Task.FromResult(schedules);
+        }
+    }
+
+    /// <summary>A provider registered scoped, as Blueprint.Hangfire's is, recording what it is given.</summary>
+    private sealed class ScopedRecurringTaskProvider(List<string> registered) : IRecurringTaskProvider
+    {
+        public Task RegisterSchedulesAsync(IReadOnlyList<RecurringTaskSchedule> schedules, CancellationToken cancellationToken = default)
+        {
+            registered.AddRange(schedules.Select(static s => s.Name));
+            return Task.CompletedTask;
         }
     }
 
