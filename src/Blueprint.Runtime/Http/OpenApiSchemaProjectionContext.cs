@@ -594,7 +594,12 @@ public sealed record OpenApiSchemaProjectionContext(
         var minimum = GetMinimum(validationAttributes);
         var maximum = GetMaximum(validationAttributes);
         var isNullable = IsNullableProperty(property, nullabilityContext);
-        var isRequired = property.IsRequired;
+
+        // Legacy's Newtonsoft.Json contract knew nothing of the C# required keyword, which System.Text.Json counts as
+        // required, so under the legacy rule the serializer's own requirement carries over only from [JsonRequired].
+        var isRequired = requiredProperties == OpenApiRequiredProperties.NonNullable
+            ? property.AttributeProvider?.IsDefined(typeof(System.Text.Json.Serialization.JsonRequiredAttribute), inherit: true) == true
+            : property.IsRequired;
 
         // Legacy required every property whose type is not nullable, and every [Required] one, which it then did not
         // document as nullable.

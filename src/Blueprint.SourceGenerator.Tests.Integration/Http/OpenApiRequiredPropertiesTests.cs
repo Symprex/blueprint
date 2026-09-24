@@ -45,6 +45,21 @@ public sealed class OpenApiRequiredPropertiesTests
     }
 
     [Fact]
+    public void Under_the_legacy_rule_the_required_keyword_does_not_make_a_nullable_property_required()
+    {
+        // Legacy's Newtonsoft.Json contract knew nothing of the C# required keyword: NJsonSchema 11.1 with legacy's settings
+        // leaves a `required string?` property out of `required` and documents it nullable (scratchpad njs-minlength-probe).
+        // So Signature365's `public required IEnumerable<Expandable<AzureAdGroupApiResource>>? LimitToGroups`
+        // (Microsoft365.Contract/Api/Resources/ImportMicrosoft365Capability.cs:37) is missing from legacy Portal's
+        // ImportMicrosoft365Capability.required, and documented nullable (Portal/Spec/openapi.json at 8b40ecc961).
+        using var document = Render(OpenApiRequiredProperties.NonNullable);
+        var component = Component(document, "RequiredShapeApiResource");
+
+        Required(component).Should().NotContain("RequiredKeywordNullableString");
+        component.GetProperty("properties").GetProperty("RequiredKeywordNullableString").GetProperty("nullable").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
     public void Under_the_legacy_rule_a_request_body_requires_its_non_nullable_properties()
     {
         using var document = Render(OpenApiRequiredProperties.NonNullable);
@@ -68,7 +83,8 @@ public sealed class OpenApiRequiredPropertiesTests
     {
         using var document = Render(OpenApiRequiredProperties.Declared);
 
-        Required(Component(document, "RequiredShapeApiResource")).Should().BeEmpty();
+        // A required member is one System.Text.Json requires, so the default rule, which documents what is declared, does.
+        Required(Component(document, "RequiredShapeApiResource")).Should().Equal("RequiredKeywordNullableString");
         Required(Component(document, "CreateRequiredShape")).Should().BeEquivalentTo("code");
         RequiredParameters(document).Should().BeEquivalentTo("code");
         Component(document, "CreateRequiredShape").GetProperty("properties").GetProperty("code").GetProperty("nullable").GetBoolean().Should().BeTrue();
@@ -146,6 +162,9 @@ public sealed class RequiredShapeApiResource
 
     public DateTimeOffset When { get; init; }
 
+    // The C# required keyword, which System.Text.Json reads as required and legacy's Newtonsoft.Json contract ignored.
+    public required string? RequiredKeywordNullableString { get; init; }
+
     // A reference type with no annotation, which legacy did not count as either nullable or not.
 #nullable disable
     public string ObliviousString { get; init; }
@@ -181,7 +200,7 @@ public partial class GetRequiredShapeQuery : IQuery<RequiredShapeApiResource>
 
     public static RequiredShapeApiResource Handle(GetRequiredShapeQuery query)
     {
-        return new RequiredShapeApiResource();
+        return new RequiredShapeApiResource { RequiredKeywordNullableString = null };
     }
 }
 
@@ -200,6 +219,6 @@ public partial class CreateRequiredShapeCommand : ICommand<RequiredShapeApiResou
 
     public static RequiredShapeApiResource Handle(CreateRequiredShapeCommand command)
     {
-        return new RequiredShapeApiResource();
+        return new RequiredShapeApiResource { RequiredKeywordNullableString = null };
     }
 }
