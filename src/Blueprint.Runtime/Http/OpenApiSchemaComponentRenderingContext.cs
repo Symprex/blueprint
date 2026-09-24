@@ -99,7 +99,8 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.DefaultValue,
             property.ExampleValue,
             property.IsReadOnly,
-            property.IsWriteOnly);
+            property.IsWriteOnly,
+            SchemaRef: property.SchemaName);
     }
 
     private static string? MapType(OpenApiSchemaKind kind)

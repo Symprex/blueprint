@@ -294,6 +294,13 @@ configureOpenApi: options =>
 - Two components that end up with one key fail the render with an `InvalidOperationException` naming both, rather
   than producing a document in which one silently replaces the other.
 
+Whatever the naming, an object nested in a body — a property, a collection's items, a dictionary's values, at any
+depth — is a component of its own that the property references (wrapped in `oneOf`, beside `nullable` or
+`description`, where it has either), as legacy made it. The graph is followed through the app's serializer context,
+so a type that context has no metadata for (for example one used only in a request body the context does not
+declare) is still an inline `object`; a type written by a converter, such as a strongly typed id, is not a
+component.
+
 ### Issue: TenantId in Path Parameters
 
 S365 operations may expose `TenantId` as a path parameter in OpenAPI, but this is resolved from the JWT claim, not the URL.

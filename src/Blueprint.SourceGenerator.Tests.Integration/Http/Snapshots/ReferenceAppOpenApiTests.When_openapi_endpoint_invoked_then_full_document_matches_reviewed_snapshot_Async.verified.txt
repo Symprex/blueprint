@@ -2682,6 +2682,28 @@
         },
         "additionalProperties": false
       },
+      "ExpandableOfOwner": {
+        "title": "ExpandableOfOwner",
+        "type": "object",
+        "properties": {
+          "ExpandError": {
+            "type": "string",
+            "nullable": true
+          },
+          "Id": {
+            "type": "string"
+          },
+          "Value": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OwnerApiResource"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "ExportJobApiResource": {
         "title": "ExportJobApiResource",
         "type": "object",
@@ -2786,6 +2808,47 @@
             }
           }
         ]
+      },
+      "OwnerApiResource": {
+        "title": "OwnerApiResource",
+        "type": "object",
+        "properties": {
+          "$links": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Link"
+            },
+            "readOnly": true
+          },
+          "$object": {
+            "type": "string",
+            "readOnly": true
+          },
+          "$partial": {
+            "type": "boolean"
+          },
+          "DisplayName": {
+            "type": "string",
+            "description": "The owner\u0027s display name."
+          },
+          "Email": {
+            "type": "string",
+            "description": "The owner\u0027s email address."
+          },
+          "Id": {
+            "type": "string",
+            "description": "The unique identifier of the owner."
+          },
+          "Object": {
+            "type": "string",
+            "readOnly": true
+          },
+          "ResourceKey": {
+            "type": "string",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
       },
       "PagedApiResourceOfTemplate": {
         "title": "PagedApiResourceOfTemplate",
@@ -2949,9 +3012,13 @@
             "description": "Reason for the priority change. Required unless Level is 5."
           },
           "rule": {
-            "type": "object",
             "nullable": true,
-            "description": "An optional notification rule to attach to the template."
+            "description": "An optional notification rule to attach to the template.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TemplateNotificationRuleApiResource"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -3052,9 +3119,13 @@
             ]
           },
           "Owner": {
-            "type": "object",
             "nullable": true,
-            "description": "The owner of this template, expandable via ?expand=Owner."
+            "description": "The owner of this template, expandable via ?expand=Owner.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExpandableOfOwner"
+              }
+            ]
           },
           "PlainTextSource": {
             "type": "string",

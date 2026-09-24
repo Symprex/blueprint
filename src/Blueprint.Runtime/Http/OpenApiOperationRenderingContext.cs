@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -41,9 +42,9 @@ public sealed record OpenApiOperationRenderingContext(
     {
         ArgumentNullException.ThrowIfNull(responseObjects);
 
-        var naming = responseObjects.SchemaComponents.SchemaProjection.Naming;
+        var schemaProjection = responseObjects.SchemaComponents.SchemaProjection;
         var operations = responseObjects.Operations
-            .Select(operation => CreateOperation(operation, naming, requestBodyNaming))
+            .Select(operation => CreateOperation(operation, schemaProjection, requestBodyNaming))
             .ToImmutableArray();
 
         return new OpenApiOperationRenderingContext(responseObjects, operations);
@@ -143,7 +144,7 @@ public sealed record OpenApiOperationRenderingContext(
 
     private static OpenApiOperationModel CreateOperation(
         OpenApiResponseObjectOperationContext operation,
-        OpenApiSchemaNaming naming,
+        OpenApiSchemaProjectionContext schemaProjection,
         OpenApiRequestBodyNaming requestBodyNaming)
     {
         var httpMethods = operation.Operation.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var httpMethodMetadata)
@@ -163,7 +164,8 @@ public sealed record OpenApiOperationRenderingContext(
             ? ImmutableDictionary<string, string>.Empty.Add(operationGroupMetadata.GroupName, desc)
             : ImmutableDictionary<string, string>.Empty;
 
-        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation, naming);
+        var naming = schemaProjection.Naming;
+        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation, naming, schemaProjection.SchemaNamesByType);
 
         if (requestBody is not null && requestBodyNaming == OpenApiRequestBodyNaming.OperationType)
         {
@@ -222,7 +224,7 @@ public sealed record OpenApiOperationRenderingContext(
         "IL2070",
         Justification = "OpenAPI projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
     private static (ImmutableArray<OpenApiParameterModel> Parameters, OpenApiRequestBodyModel? RequestBody)
-        ProjectInputMetadata(ApiOperationDescriptor descriptor, OpenApiSchemaNaming naming)
+        ProjectInputMetadata(ApiOperationDescriptor descriptor, OpenApiSchemaNaming naming, FrozenDictionary<Type, string> schemaNamesByType)
     {
         if (!descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData))
         {
@@ -271,7 +273,7 @@ public sealed record OpenApiOperationRenderingContext(
             string? paramItemsFormat = null;
             if (schemaType == "array" && clrProperty is not null)
             {
-                var (itemsType, itemsFormat, _, _, _, _) = ResolveCollectionSchema(clrProperty);
+                var (itemsType, itemsFormat, _, _, _, _) = ResolveCollectionSchema(clrProperty, schemaNamesByType);
                 paramItemsType = itemsType;
                 paramItemsFormat = itemsFormat;
             }
@@ -379,7 +381,7 @@ public sealed record OpenApiOperationRenderingContext(
                     break;
 
                 case PropertyBindingSource.Body:
-                    var (bodyItemsType, bodyItemsFormat, bodyItemsSchemaRef, bodyAdditionalType, bodyAdditionalFormat, bodyAdditionalSchemaRef) = ResolveCollectionSchema(clrProperty);
+                    var (bodyItemsType, bodyItemsFormat, bodyItemsSchemaRef, bodyAdditionalType, bodyAdditionalFormat, bodyAdditionalSchemaRef) = ResolveCollectionSchema(clrProperty, schemaNamesByType);
 
                     bodyPropertyNamesByClrName[entry.PropertyName] = entry.BindingName ?? entry.PropertyName;
                     conditionalRequirements.AddRange(OpenApiValidationConstraints.ExtractConditionalRequirements(clrProperty));
@@ -412,6 +414,7 @@ public sealed record OpenApiOperationRenderingContext(
                         DefaultValue = defaultValueAttr?.Value,
                         ExampleValue = exampleValueAttr?.Value,
                         IsWriteOnly = isWriteOnly,
+                        SchemaRef = schemaType == "object" ? FindSchemaName(clrProperty?.PropertyType, schemaNamesByType) : null,
                     });
                     break;
             }
@@ -595,7 +598,8 @@ public sealed record OpenApiOperationRenderingContext(
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
     private static (string? ItemsType, string? ItemsFormat, string? ItemsSchemaRef, string? AdditionalPropertiesType, string? AdditionalPropertiesFormat, string? AdditionalPropertiesSchemaRef) ResolveCollectionSchema(
-        System.Reflection.PropertyInfo? property)
+        System.Reflection.PropertyInfo? property,
+        FrozenDictionary<Type, string> schemaNamesByType)
     {
         if (property is null)
         {
@@ -618,10 +622,8 @@ public sealed record OpenApiOperationRenderingContext(
             var valueType = dictInterface.GetGenericArguments()[1];
             var (additionalType, additionalFormat) = MapClrTypeToOpenApiSchema(valueType);
 
-            // When the value type maps to "object", it's a complex type. We render as
-            // type: "object" inline rather than $ref because the component schemas section
-            // is populated from response projections and the type may not appear there.
-            return (null, null, null, additionalType, additionalFormat, null);
+            // A complex value type with a component of its own is referenced; any other stays an inline object.
+            return (null, null, null, additionalType, additionalFormat, additionalType == "object" ? FindSchemaName(valueType, schemaNamesByType) : null);
         }
 
         // Check for IEnumerable<T>.
@@ -632,13 +634,25 @@ public sealed record OpenApiOperationRenderingContext(
             var elementType = enumInterface.GetGenericArguments()[0];
             var (itemType, itemFormat) = MapClrTypeToOpenApiSchema(elementType);
 
-            // When the element type maps to "object", it's a complex type. We render as
-            // type: "object" inline rather than $ref because the component schemas section
-            // is populated from response projections and the type may not appear there.
-            return (itemType, itemFormat, null, null, null, null);
+            // A complex element type with a component of its own is referenced; any other stays an inline object.
+            return (itemType, itemFormat, itemType == "object" ? FindSchemaName(elementType, schemaNamesByType) : null, null, null, null);
         }
 
         return (null, null, null, null, null, null);
+    }
+
+    /// <summary>
+    /// Returns the name of the schema component projected for <paramref name="type"/>, or <see langword="null"/> when it
+    /// has none. A nullable struct takes its underlying type's.
+    /// </summary>
+    private static string? FindSchemaName(Type? type, FrozenDictionary<Type, string> schemaNamesByType)
+    {
+        if (type is null)
+        {
+            return null;
+        }
+
+        return schemaNamesByType.TryGetValue(Nullable.GetUnderlyingType(type) ?? type, out var name) ? name : null;
     }
 
     /// <summary>

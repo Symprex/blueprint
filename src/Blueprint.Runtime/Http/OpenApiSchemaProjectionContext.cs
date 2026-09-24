@@ -102,30 +102,195 @@ public sealed record OpenApiSchemaProjectionContext(
             .Distinct(StringComparer.Ordinal)
             .OrderBy(static bodyTypeName => bodyTypeName, StringComparer.Ordinal);
 
-        var schemaBuilder = ImmutableArray.CreateBuilder<OpenApiSchemaModel>();
+        // The covered body types some operation needs are projected, and so is every object type they or a request body
+        // reach — through a property, a collection's items, a dictionary's values or another such type — so that a nested
+        // object is a component its property references, as legacy Blueprint made it, rather than a bare object.
+        var projectedTypesByName = new Dictionary<string, Type>(StringComparer.Ordinal);
 
         foreach (var bodyTypeName in coveredBodyTypeNames)
         {
             if (coveredTypesByName.TryGetValue(bodyTypeName, out var bodyType))
             {
-                try
-                {
-                    schemaBuilder.Add(CreateSchema(bodyTypeName, bodyType, serializerContext, coveredTypesByName, naming));
-                }
-                catch (NotSupportedException)
-                {
-                    // Types with custom JsonConverters that STJ source generation cannot handle
-                    // (SYSLIB1220) will throw when GetTypeInfo tries to configure their property
-                    // graph. Skip these types from OpenAPI schema projection — they still serialize
-                    // at runtime via the reflection fallback in HttpOperationResultExecutor.
-                }
+                projectedTypesByName[bodyTypeName] = bodyType;
+            }
+        }
+
+        foreach (var nestedType in CollectNestedObjectTypes(projectedTypesByName.Values.ToList(), GetRequestBodyPropertyTypes(document), serializerContext))
+        {
+            var nestedName = OpenApiSchemaNames.Format(nestedType, naming);
+
+            if (projectedTypesByName.TryGetValue(nestedName, out var existing))
+            {
+                ThrowIfDifferentTypes(nestedName, existing, nestedType);
+                continue;
+            }
+
+            projectedTypesByName[nestedName] = nestedType;
+        }
+
+        var componentTypesByName = projectedTypesByName.ToFrozenDictionary(StringComparer.Ordinal);
+        var schemaNamesByType = projectedTypesByName.ToFrozenDictionary(static pair => pair.Value, static pair => pair.Key);
+
+        var schemaBuilder = ImmutableArray.CreateBuilder<OpenApiSchemaModel>();
+
+        foreach (var (schemaName, schemaType) in projectedTypesByName.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+        {
+            try
+            {
+                schemaBuilder.Add(CreateSchema(schemaName, schemaType, serializerContext, componentTypesByName, naming, schemaNamesByType));
+            }
+            catch (NotSupportedException)
+            {
+                // Types with custom JsonConverters that STJ source generation cannot handle
+                // (SYSLIB1220) will throw when GetTypeInfo tries to configure their property
+                // graph. Skip these types from OpenAPI schema projection — they still serialize
+                // at runtime via the reflection fallback in HttpOperationResultExecutor.
             }
         }
 
         return new OpenApiSchemaProjectionContext(document, schemaBuilder.ToImmutable(), fullNameToShortName)
         {
             Naming = naming,
+            SchemaNamesByType = schemaNamesByType,
         };
+    }
+
+    /// <summary>
+    /// Gets the name of the schema component projected for each CLR type that has one, which a request body property
+    /// of that type references in turn.
+    /// </summary>
+    internal FrozenDictionary<Type, string> SchemaNamesByType { get; init; } = FrozenDictionary<Type, string>.Empty;
+
+    /// <summary>
+    /// Walks the object graph the serializer context describes, from the properties of <paramref name="rootTypes"/> and
+    /// from <paramref name="requestBodyPropertyTypes"/>, and returns every object type reached that is not already a
+    /// root: those need components of their own.
+    /// </summary>
+    /// <remarks>
+    /// Only what the serializer context has metadata for is followed, and only an object-shaped type (not a primitive,
+    /// an enum, a collection, a dictionary or a type written by a converter, such as a strongly typed id) becomes a
+    /// component. <see cref="Blueprint.Model.Link"/> is excluded because the document always carries it as a well-known component.
+    /// </remarks>
+    private static List<Type> CollectNestedObjectTypes(
+        IReadOnlyCollection<Type> rootTypes,
+        IEnumerable<Type> requestBodyPropertyTypes,
+        JsonSerializerContext serializerContext)
+    {
+        var visited = new HashSet<Type>(rootTypes);
+        var nested = new List<Type>();
+
+        foreach (var rootType in rootTypes)
+        {
+            foreach (var childType in GetChildTypes(TryGetTypeInfo(serializerContext, rootType)))
+            {
+                Visit(childType);
+            }
+        }
+
+        foreach (var requestBodyPropertyType in requestBodyPropertyTypes)
+        {
+            Visit(requestBodyPropertyType);
+        }
+
+        return nested;
+
+        void Visit(Type type)
+        {
+            type = Nullable.GetUnderlyingType(type) ?? type;
+
+            if (!visited.Add(type))
+            {
+                return;
+            }
+
+            var typeInfo = TryGetTypeInfo(serializerContext, type);
+
+            if (typeInfo is null)
+            {
+                return;
+            }
+
+            if (typeInfo.Kind == JsonTypeInfoKind.Object)
+            {
+                // A type the document renders as a scalar (a NodaTime Instant is a date-time string, however the
+                // serializer context describes it) is neither a component nor a way into more of them.
+                if (MapKind(type, typeInfo.Kind) != OpenApiSchemaKind.Object)
+                {
+                    return;
+                }
+
+                if (type != typeof(Blueprint.Model.Link) && type != typeof(object))
+                {
+                    nested.Add(type);
+                }
+            }
+
+            foreach (var childType in GetChildTypes(typeInfo))
+            {
+                Visit(childType);
+            }
+        }
+    }
+
+    private static IEnumerable<Type> GetChildTypes(JsonTypeInfo? typeInfo)
+    {
+        return typeInfo?.Kind switch
+        {
+            JsonTypeInfoKind.Object => typeInfo.Properties.Where(static property => !property.IsExtensionData).Select(static property => property.PropertyType),
+            JsonTypeInfoKind.Enumerable or JsonTypeInfoKind.Dictionary when typeInfo.ElementType is { } elementType => [elementType],
+            _ => [],
+        };
+    }
+
+    private static JsonTypeInfo? TryGetTypeInfo(JsonSerializerContext serializerContext, Type type)
+    {
+        try
+        {
+            return serializerContext.GetTypeInfo(type);
+        }
+        catch (NotSupportedException)
+        {
+            // As for a covered type (see Create): a converter the source generator cannot configure is not described.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The CLR types of every body-bound property of every operation in <paramref name="document"/>, which may reach
+    /// object types no response does.
+    /// </summary>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "OpenAPI projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
+    private static IEnumerable<Type> GetRequestBodyPropertyTypes(OpenApiDocumentBuilderContext document)
+    {
+        foreach (var operation in document.Operations)
+        {
+            if (!operation.Operation.TryGetFeatureData<Blueprint.Model.OperationPropertyOwnershipFeatureData>(out var ownership))
+            {
+                continue;
+            }
+
+            foreach (var entry in ownership.Entries)
+            {
+                if (entry.Source == Blueprint.Model.PropertyBindingSource.Body
+                    && operation.Operation.OperationType.GetProperty(entry.PropertyName, BindingFlags.Public | BindingFlags.Instance) is { } property)
+                {
+                    yield return property.PropertyType;
+                }
+            }
+        }
+    }
+
+    private static void ThrowIfDifferentTypes(string name, Type existing, Type candidate)
+    {
+        if (existing != candidate)
+        {
+            throw new InvalidOperationException(
+                $"The types '{existing.FullName}' and '{candidate.FullName}' are both named '{name}' in the OpenAPI document, " +
+                "which cannot hold both under one key. Rename one of them, or give one a name of its own with [OpenApiSchemaName].");
+        }
     }
 
     /// <summary>
@@ -142,11 +307,9 @@ public sealed record OpenApiSchemaProjectionContext(
         {
             var name = OpenApiSchemaNames.Format(type, naming);
 
-            if (!typesByName.TryAdd(name, type) && typesByName[name] != type)
+            if (!typesByName.TryAdd(name, type))
             {
-                throw new InvalidOperationException(
-                    $"The types '{typesByName[name].FullName}' and '{type.FullName}' are both named '{name}' in the OpenAPI document, " +
-                    "which cannot hold both under one key. Rename one of them, or give one a name of its own with [OpenApiSchemaName].");
+                ThrowIfDifferentTypes(name, typesByName[name], type);
             }
         }
 
@@ -158,7 +321,8 @@ public sealed record OpenApiSchemaProjectionContext(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
         JsonSerializerContext serializerContext,
         FrozenDictionary<string, Type> coveredTypesByName,
-        OpenApiSchemaNaming naming)
+        OpenApiSchemaNaming naming,
+        FrozenDictionary<Type, string> schemaNamesByType)
     {
         var typeInfo = serializerContext.GetTypeInfo(bodyType)
             ?? throw new InvalidOperationException($"The serializer context did not expose metadata for covered body type '{bodyTypeName}'.");
@@ -169,7 +333,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         var properties = typeInfo.Kind == JsonTypeInfoKind.Object
             ? typeInfo.Properties
-                .Select(property => CreateProperty(property, bodyType, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, coveredTypesByName, naming))
+                .Select(property => CreateProperty(property, bodyType, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, coveredTypesByName, naming, schemaNamesByType))
                 .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
             : ImmutableArray<OpenApiSchemaPropertyModel>.Empty;
@@ -327,12 +491,21 @@ public sealed record OpenApiSchemaProjectionContext(
         IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName,
         NullabilityInfoContext nullabilityContext,
         FrozenDictionary<string, Type> coveredTypesByName,
-        OpenApiSchemaNaming naming)
+        OpenApiSchemaNaming naming,
+        FrozenDictionary<Type, string> schemaNamesByType)
     {
         var propertyTypeInfo = serializerContext.GetTypeInfo(property.PropertyType);
         var propertyKind = propertyTypeInfo is null
             ? MapKind(property.PropertyType, JsonTypeInfoKind.None)
             : MapKind(property.PropertyType, propertyTypeInfo.Kind);
+
+        // An object with a component of its own is referenced rather than described inline. The underlying type's metadata
+        // decides, as a nullable struct's own metadata is its converter's, not an object's.
+        var underlyingPropertyType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        var referencedSchemaName = schemaNamesByType.TryGetValue(underlyingPropertyType, out var referenced)
+            && TryGetTypeInfo(serializerContext, underlyingPropertyType)?.Kind == JsonTypeInfoKind.Object
+                ? referenced
+                : null;
         var validationAttributes = GetValidationAttributes(property, validationAttributesByJsonPropertyName);
         ThrowIfUnsupportedCrossPropertyValidationAttribute(bodyTypeName, property.Name, validationAttributes);
         var minimum = GetMinimum(validationAttributes);
@@ -411,7 +584,8 @@ public sealed record OpenApiSchemaProjectionContext(
             defaultValue,
             exampleValue,
             isReadOnly,
-            isWriteOnly);
+            isWriteOnly,
+            SchemaName: referencedSchemaName);
     }
 
     /// <summary>
@@ -1195,6 +1369,8 @@ public sealed record OpenApiSchemaModel(
 /// <param name="ExampleValue">A representative example value from <see cref="Blueprint.Model.Attributes.OpenApiExampleAttribute"/>, or null.</param>
 /// <param name="IsReadOnly">Whether this property is read-only (no public setter or annotated with <c>[ReadOnly(true)]</c>).</param>
 /// <param name="IsWriteOnly">Whether this property is write-only (annotated with <c>[OpenApiWriteOnly]</c>, e.g. a password field).</param>
+/// <param name="SchemaName">The component schema name of the object the property holds, when that object has a component of its
+/// own, enabling <c>$ref</c> rendering instead of a bare <c>object</c>.</param>
 public sealed record OpenApiSchemaPropertyModel(
     string Name,
     OpenApiSchemaKind Kind,
@@ -1226,7 +1402,8 @@ public sealed record OpenApiSchemaPropertyModel(
     object? DefaultValue = null,
     object? ExampleValue = null,
     bool IsReadOnly = false,
-    bool IsWriteOnly = false);
+    bool IsWriteOnly = false,
+    string? SchemaName = null);
 
 /// <summary>
 /// Describes the broad schema shape currently projected from serializer metadata.

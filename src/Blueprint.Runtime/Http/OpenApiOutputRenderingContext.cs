@@ -1730,12 +1730,22 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteStartObject();
 
         // Direct schema reference: property IS a $ref to another component (e.g. the "data" property
-        // on a ResourceEvent envelope referencing the inner resource type).
+        // on a ResourceEvent envelope referencing the inner resource type). OpenAPI 3.0 ignores a $ref's siblings, so a
+        // property that is nullable or described wraps the reference in oneOf beside them, as legacy Blueprint did.
         if (property.SchemaRef is not null)
         {
-            if (property.IsNullable)
+            if (property.IsNullable || property.Description is not null)
             {
-                writer.WriteBoolean("nullable", true);
+                if (property.IsNullable)
+                {
+                    writer.WriteBoolean("nullable", true);
+                }
+
+                if (property.Description is not null)
+                {
+                    writer.WriteString("description", property.Description);
+                }
+
                 writer.WritePropertyName("oneOf");
                 writer.WriteStartArray();
                 writer.WriteStartObject();

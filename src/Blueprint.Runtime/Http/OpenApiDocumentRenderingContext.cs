@@ -137,7 +137,8 @@ public sealed record OpenApiDocumentRenderingContext(
                         bodyProperty.DefaultValue,
                         bodyProperty.ExampleValue,
                         IsReadOnly: false,
-                        bodyProperty.IsWriteOnly));
+                        bodyProperty.IsWriteOnly,
+                        SchemaRef: bodyProperty.SchemaRef));
                 }
 
                 builder.Add(new OpenApiSchemaComponentModel(

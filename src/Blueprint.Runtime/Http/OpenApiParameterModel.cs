@@ -179,4 +179,7 @@ public sealed record OpenApiRequestBodyPropertyModel(
 
     /// <summary>Gets whether this property is write-only (annotated with <see cref="Blueprint.Model.Attributes.OpenApiWriteOnlyAttribute"/>).</summary>
     public bool IsWriteOnly { get; init; }
+
+    /// <summary>Gets the component schema name of the object this property holds, rendered as a <c>$ref</c> instead of an inline <c>object</c>.</summary>
+    public string? SchemaRef { get; init; }
 }
