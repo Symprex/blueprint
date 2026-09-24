@@ -14,8 +14,7 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape;
 /// Every expected fact is taken from legacy: names from NJsonSchema 11.1 run on the same shapes of type, then that
 /// rule; property shapes from Signature365's committed Partners document (<c>PartnerTenant</c>,
 /// <c>PagedPartnerCompany</c>, <c>PartnerListOfCountry</c>, <c>ResourceEventOfPartnerTenant</c>,
-/// <c>CreatePartnerTenantCommand</c>, <c>GET /partners</c>'s parameters). The one departure is a created event's status,
-/// 201, which is what the host sends.
+/// <c>CreatePartnerTenantCommand</c>, <c>GET /partners</c>'s parameters).
 /// </remarks>
 public class OpenApiLegacyShapedSampleTests
 {
@@ -57,7 +56,7 @@ public class OpenApiLegacyShapedSampleTests
         var createTenant = paths.GetProperty("/legacy-shape/partners/{PartnerId}/tenants").GetProperty("post");
         createTenant.GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema")
             .GetProperty("$ref").GetString().Should().Be(Schemas + "CreateLegacyShapeTenantCommand");
-        ResponseRef(createTenant, "201").Should().Be(Schemas + "ResourceEventOfLegacyShapeTenant");
+        ResponseRef(createTenant, "200").Should().Be(Schemas + "ResourceEventOfLegacyShapeTenant");
 
         ResponseRef(paths.GetProperty("/legacy-shape/countries").GetProperty("get"), "200").Should().Be(Schemas + "LegacyShapeListOfLegacyShapeCountry");
     }

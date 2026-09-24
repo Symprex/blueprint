@@ -317,11 +317,11 @@ public static class OperationResultContractHelper
             return true;
         }
 
-        // Legacy Blueprint.Http.ResourceEvent<T>: runtime status depends on ChangeType (Created=201,
-        // Updated=200, Deleted=204). Use same sentinel shape as ResourceEventResult for compile-time modelling.
+        // Legacy Blueprint.Http.ResourceEvent<T>, ResourceCreated<T> and the rest: whatever the change type, the host sends
+        // a 200 with the event, as legacy's OkResult did.
         if (IsTypeOrDerivedFromOptional(resultType, resourceEventType))
         {
-            statusCode = 201;
+            statusCode = 200;
             hasResponseBody = true;
             return true;
         }

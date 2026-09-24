@@ -48,7 +48,8 @@ public class AppModelSerializerContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionTrailApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionPreviewApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionOne.CollisionItem",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionTwo.CollisionItem");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionTwo.CollisionItem",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyEventWidgetApiResource");
     }
 
     [Fact]
@@ -93,6 +94,7 @@ public class AppModelSerializerContextTests
             typeof(Http.SchemaNameCollisions.CollisionTrailApiResource),
             typeof(Http.SchemaNameCollisions.CollisionPreviewApiResource),
             typeof(Http.SchemaNameCollisions.CollisionOne.CollisionItem),
-            typeof(Http.SchemaNameCollisions.CollisionTwo.CollisionItem));
+            typeof(Http.SchemaNameCollisions.CollisionTwo.CollisionItem),
+            typeof(Http.LegacyEventWidgetApiResource));
     }
 }

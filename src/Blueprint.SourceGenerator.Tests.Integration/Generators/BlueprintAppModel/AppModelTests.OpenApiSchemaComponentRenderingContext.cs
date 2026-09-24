@@ -37,6 +37,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "ExpandableOfLocation",
             "ExpandableTestEmployee",
             "Guid",
+            "LegacyEventWidgetApiResource",
             "LegacyShapeAddress",
             "LegacyShapeBillingAccount",
             "LegacyShapeClosedInfo",

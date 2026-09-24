@@ -1,14 +1,8 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
-using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 
@@ -27,7 +21,7 @@ public sealed class KestrelBodylessStatusTests
     [Fact]
     public async Task A_deleted_resource_event_is_a_204_with_no_body()
     {
-        await using var host = await KestrelHost.StartAsync();
+        await using var host = await KestrelTestHost.StartAsync();
 
         using var content = new StringContent("""{"resourceId":"del-001"}""", Encoding.UTF8, "application/json");
         using var response = await host.Client.PostAsync("api/e2e/events-delete", content);
@@ -39,7 +33,7 @@ public sealed class KestrelBodylessStatusTests
     [Fact]
     public async Task A_deleted_deferred_resource_event_is_a_204_with_no_body()
     {
-        await using var host = await KestrelHost.StartAsync();
+        await using var host = await KestrelTestHost.StartAsync();
 
         using var content = new StringContent("{}", Encoding.UTF8, "application/json");
         using var response = await host.Client.PostAsync("api/e2e/deferred-events-delete", content);
@@ -54,7 +48,7 @@ public sealed class KestrelBodylessStatusTests
     [InlineData(HttpStatusCode.NotModified)]
     public async Task Plain_text_with_a_status_that_forbids_a_body_is_written_without_one(HttpStatusCode status)
     {
-        await using var host = await KestrelHost.StartAsync();
+        await using var host = await KestrelTestHost.StartAsync();
 
         using var response = await host.Client.GetAsync($"api/e2e/plain-text-status?status={(int)status}");
 
@@ -65,7 +59,7 @@ public sealed class KestrelBodylessStatusTests
     [Fact]
     public async Task Plain_text_with_a_status_that_allows_a_body_is_written_with_it()
     {
-        await using var host = await KestrelHost.StartAsync();
+        await using var host = await KestrelTestHost.StartAsync();
 
         using var response = await host.Client.GetAsync("api/e2e/plain-text-status?status=200");
 
@@ -74,107 +68,12 @@ public sealed class KestrelBodylessStatusTests
         host.ServerErrors.Should().BeEmpty();
     }
 
-    private static async Task ShouldBeBodilessAsync(KestrelHost host, HttpResponseMessage response, HttpStatusCode status)
+    private static async Task ShouldBeBodilessAsync(KestrelTestHost host, HttpResponseMessage response, HttpStatusCode status)
     {
         response.StatusCode.Should().Be(status, "the server raised: {0}", string.Join(" | ", host.ServerErrors.Select(static e => e.Message)));
         (await response.Content.ReadAsByteArrayAsync()).Should().BeEmpty();
         response.Content.Headers.ContentType.Should().BeNull();
         (response.Content.Headers.ContentLength ?? 0).Should().Be(0);
-    }
-
-    /// <summary>The integration app, mapped as a consumer maps it, served by Kestrel on a free local port.</summary>
-    private sealed class KestrelHost : IAsyncDisposable
-    {
-        private readonly WebApplication _app;
-
-        private KestrelHost(WebApplication app, System.Net.Http.HttpClient client, ConcurrentQueue<Exception> serverErrors)
-        {
-            this._app = app;
-            this.Client = client;
-            this.ServerErrors = serverErrors;
-        }
-
-        public System.Net.Http.HttpClient Client { get; }
-
-        /// <summary>Gets every exception the server raised or logged while handling a request.</summary>
-        public ConcurrentQueue<Exception> ServerErrors { get; }
-
-        public static async Task<KestrelHost> StartAsync()
-        {
-            var serverErrors = new ConcurrentQueue<Exception>();
-            var builder = WebApplication.CreateSlimBuilder();
-
-            builder.WebHost.UseUrls("http://127.0.0.1:0");
-            builder.Logging.ClearProviders();
-            builder.Logging.AddProvider(new ExceptionRecordingLoggerProvider(serverErrors));
-            builder.Services
-                .AddSingleton<IntegrationTestBlueprintApp>()
-                .AddSingleton<IntegrationTestBlueprintAppExecutor>();
-
-            var app = builder.Build();
-
-            app.Use(async (context, next) =>
-            {
-                try
-                {
-                    await next(context);
-                }
-                catch (Exception exception)
-                {
-                    serverErrors.Enqueue(exception);
-                    throw;
-                }
-            });
-
-            app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
-
-            await app.StartAsync();
-
-            var client = new System.Net.Http.HttpClient { BaseAddress = new Uri(app.Urls.First().TrimEnd('/') + "/") };
-
-            return new KestrelHost(app, client, serverErrors);
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            this.Client.Dispose();
-            await this._app.StopAsync();
-            await this._app.DisposeAsync();
-        }
-    }
-
-    private sealed class ExceptionRecordingLoggerProvider(ConcurrentQueue<Exception> exceptions) : ILoggerProvider
-    {
-        public ILogger CreateLogger(string categoryName)
-        {
-            return new ExceptionRecordingLogger(exceptions);
-        }
-
-        public void Dispose()
-        {
-        }
-    }
-
-    private sealed class ExceptionRecordingLogger(ConcurrentQueue<Exception> exceptions) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull
-        {
-            return null;
-        }
-
-        public bool IsEnabled(LogLevel logLevel)
-        {
-            return logLevel >= LogLevel.Error;
-        }
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            if (logLevel >= LogLevel.Error)
-            {
-                exceptions.Enqueue(exception ?? new InvalidOperationException(formatter(state, exception)));
-            }
-        }
     }
 }
 

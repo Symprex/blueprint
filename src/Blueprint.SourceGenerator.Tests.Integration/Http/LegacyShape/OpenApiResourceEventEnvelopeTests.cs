@@ -12,7 +12,7 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape;
 /// </summary>
 /// <remarks>
 /// The envelope's properties are legacy's <c>ResourceEventOfPartnerTenant</c>, from Signature365's committed Partners
-/// document. The status is the one the host sends for a created event (201); legacy documented 200.
+/// document, and so is its status, 200, which the host sends for every legacy resource event.
 /// </remarks>
 public class OpenApiResourceEventEnvelopeTests
 {
@@ -56,7 +56,7 @@ public class OpenApiResourceEventEnvelopeTests
     private static string? SuccessSchemaRef(JsonDocument document)
     {
         return document.RootElement.GetProperty("paths").GetProperty(CreateTenantPath).GetProperty("post")
-            .GetProperty("responses").GetProperty("201")
+            .GetProperty("responses").GetProperty("200")
             .GetProperty("content").GetProperty("application/json")
             .GetProperty("schema").GetProperty("$ref").GetString();
     }

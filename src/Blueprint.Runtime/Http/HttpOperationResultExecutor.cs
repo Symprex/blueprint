@@ -308,13 +308,10 @@ public class HttpOperationResultExecutor
                 await fileStreamResult.Stream.CopyToAsync(httpContext.Response.Body, httpContext.RequestAborted).ConfigureAwait(false);
                 return true;
             case ResourceEvent resourceEvent:
-                httpContext.Response.StatusCode = MapResourceEventChangeTypeToStatusCode(resourceEvent.ChangeType);
+                // Whatever its change type, legacy sent a resource event as a 200 with the event and no Location: its
+                // generated pipeline wrapped every returned value that was not an OperationResult in an OkResult.
+                httpContext.Response.StatusCode = StatusCodes.Status200OK;
                 httpContext.Response.ContentType = JsonContentType;
-                if (resourceEvent.ChangeType == ResourceEventChangeType.Created && resourceEvent.Data is not null)
-                {
-                    TrySetLocationHeader(httpContext, resourceEvent.Data);
-                }
-
                 await WriteJsonAsync(httpContext, operationContext, resourceEvent).ConfigureAwait(false);
                 return true;
             case HttpResult httpResult:
@@ -326,8 +323,8 @@ public class HttpOperationResultExecutor
     }
 
     /// <summary>
-    /// Finds whether <paramref name="result"/> is one whose status is decided at run time — by a resource event's change
-    /// type, or by a plain text result's own status — and that status is one a response must carry no body with.
+    /// Finds whether <paramref name="result"/> is one whose status is decided at run time — by a resource event result's
+    /// change type, or by a plain text result's own status — and that status is one a response must carry no body with.
     /// </summary>
     /// <remarks>
     /// Kestrel refuses a body, and even a <c>Content-Length</c>, on a 204, 205 or 304 response, failing the request with a
@@ -344,7 +341,6 @@ public class HttpOperationResultExecutor
         {
             IDeferredResourceEventResult deferredEvent => MapChangeTypeToStatusCode(deferredEvent.ChangeType),
             ResourceEventResult resourceEventResult => MapChangeTypeToStatusCode(resourceEventResult.ChangeType),
-            ResourceEvent resourceEvent => MapResourceEventChangeTypeToStatusCode(resourceEvent.ChangeType),
             PlainTextResult plainTextResult => (int)plainTextResult.StatusCode,
             _ => 0,
         };
@@ -895,17 +891,6 @@ public class HttpOperationResultExecutor
             ChangeType.Created => StatusCodes.Status201Created,
             ChangeType.Updated => StatusCodes.Status200OK,
             ChangeType.Deleted => StatusCodes.Status204NoContent,
-            _ => StatusCodes.Status200OK,
-        };
-    }
-
-    private static int MapResourceEventChangeTypeToStatusCode(ResourceEventChangeType changeType)
-    {
-        return changeType switch
-        {
-            ResourceEventChangeType.Created => StatusCodes.Status201Created,
-            ResourceEventChangeType.Updated => StatusCodes.Status200OK,
-            ResourceEventChangeType.Deleted => StatusCodes.Status204NoContent,
             _ => StatusCodes.Status200OK,
         };
     }

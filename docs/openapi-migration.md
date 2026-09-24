@@ -315,8 +315,8 @@ component.
 
 An operation whose handler returns a legacy `Blueprint.Http.ResourceEvent<T>` (or a subclass of it) documents its
 success response as the `ResourceEventOf{T}` envelope component, since that is what the host writes, not `T` alone.
-The status it documents is the generator's (201); the host sends 201, 200 or 204 by the event's change type, where
-legacy sent 200.
+Whatever the event's change type — `ResourceCreated<T>` and `ResourceDeleted<T>` included — the host sends it as a 200 with
+the envelope and no `Location`, as legacy did, and the document says 200.
 
 ### Issue: TenantId in Path Parameters
 
