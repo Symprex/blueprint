@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using Blueprint.Model;
 
 namespace Blueprint.Runtime.Http;
@@ -95,7 +96,8 @@ public sealed record OpenApiResponseObjectRenderingContext(
             .OfType<OpenApiResponseContentSchemaComponent>()
             .ToImmutableArray();
         var discriminator = TryCreateResourceEventDiscriminator(operation, response.Response, schemaComponents);
-        var isResourceEventEnvelope = discriminator is null && IsResourceEventResultResponse(response.Response);
+        var isResourceEventEnvelope = discriminator is null
+                                      && (IsResourceEventResultResponse(response.Response) || ReturnsResourceEvent(operation, response.Response));
 
         return schemaComponents.IsEmpty
             ? TryCreateNonJsonContent(response.Response)
@@ -238,6 +240,27 @@ public sealed record OpenApiResponseObjectRenderingContext(
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when this is the success response of an operation whose handler returns a
+    /// <see cref="Blueprint.Http.ResourceEvent"/> — the legacy result type, a subclass of it included. The HTTP host writes
+    /// the whole event for it, as legacy Blueprint did, so the schema must describe the envelope rather than the event's
+    /// data, which is what the response metadata names as its body.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Operation types' interfaces are preserved by the source generator's generated pipeline code.")]
+    private static bool ReturnsResourceEvent(ApiOperationDescriptor operation, OperationHttpResponseMetadata response)
+    {
+        if (!response.HasResponseBody || response.StatusCode is < 200 or > 299)
+        {
+            return false;
+        }
+
+        var declaredResultType = operation.OperationType.GetInterfaces()
+            .FirstOrDefault(static candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IReturn<>))
+            ?.GetGenericArguments()[0];
+
+        return declaredResultType is not null && typeof(Blueprint.Http.ResourceEvent).IsAssignableFrom(declaredResultType);
     }
 
     /// <summary>

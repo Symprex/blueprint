@@ -301,6 +301,11 @@ so a type that context has no metadata for (for example one used only in a reque
 declare) is still an inline `object`; a type written by a converter, such as a strongly typed id, is not a
 component.
 
+An operation whose handler returns a legacy `Blueprint.Http.ResourceEvent<T>` (or a subclass of it) documents its
+success response as the `ResourceEventOf{T}` envelope component, since that is what the host writes, not `T` alone.
+The status it documents is the generator's (201); the host sends 201, 200 or 204 by the event's change type, where
+legacy sent 200.
+
 ### Issue: TenantId in Path Parameters
 
 S365 operations may expose `TenantId` as a path parameter in OpenAPI, but this is resolved from the JWT claim, not the URL.
