@@ -169,7 +169,7 @@ public sealed record OpenApiOperationRenderingContext(
             : ImmutableDictionary<string, string>.Empty;
 
         var naming = schemaProjection.Naming;
-        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation, naming, schemaProjection.SchemaNamesByType, queryParameterNaming);
+        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation, naming, schemaProjection.SchemaNamesByType, queryParameterNaming, schemaProjection.RequiredProperties);
 
         if (requestBody is not null && requestBodyNaming == OpenApiRequestBodyNaming.OperationType)
         {
@@ -232,7 +232,8 @@ public sealed record OpenApiOperationRenderingContext(
             ApiOperationDescriptor descriptor,
             OpenApiSchemaNaming naming,
             FrozenDictionary<Type, string> schemaNamesByType,
-            OpenApiParameterNaming queryParameterNaming)
+            OpenApiParameterNaming queryParameterNaming,
+            OpenApiRequiredProperties requiredProperties)
     {
         if (!descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData))
         {
@@ -251,6 +252,7 @@ public sealed record OpenApiOperationRenderingContext(
         // is walked and resolved to JSON names afterwards, once every body property is known.
         var conditionalRequirements = ImmutableArray.CreateBuilder<OpenApiConditionalRequirement>();
         var bodyPropertyNamesByClrName = new Dictionary<string, string>(StringComparer.Ordinal);
+        var nullabilityContext = new NullabilityInfoContext();
 
         foreach (var entry in ownershipData.Entries)
         {
@@ -263,6 +265,13 @@ public sealed record OpenApiOperationRenderingContext(
                 ? MapClrTypeToOpenApiSchema(clrProperty.PropertyType)
                 : MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
             var constraints = OpenApiValidationConstraints.ExtractFromProperty(clrProperty);
+
+            // Legacy required every property whose type is not nullable, and every [Required] one, which it then did not
+            // document as nullable. A route parameter is required either way.
+            var isLegacyRule = requiredProperties == OpenApiRequiredProperties.NonNullable;
+            var isRequired = constraints.IsRequired
+                || (isLegacyRule && clrProperty is not null && OpenApiNullability.IsNotNullable(clrProperty, nullabilityContext));
+            var isNullable = entry.IsNullable && !(isLegacyRule && constraints.IsRequired);
             var description = GetPropertyDescription(clrProperty, entry.PropertyName, docData);
             var enumValues = GetEnumValues(clrProperty);
             var enumSchemaRef = GetEnumSchemaRef(clrProperty, naming);
@@ -318,7 +327,7 @@ public sealed record OpenApiOperationRenderingContext(
                     parameters.Add(new OpenApiParameterModel(
                         queryParameterNaming == OpenApiParameterNaming.PropertyName ? entry.PropertyName : entry.BindingName ?? entry.PropertyName,
                         "query",
-                        Required: constraints.IsRequired,
+                        Required: isRequired,
                         schemaType,
                         effectiveFormat)
                     {
@@ -344,7 +353,7 @@ public sealed record OpenApiOperationRenderingContext(
                     parameters.Add(new OpenApiParameterModel(
                         entry.BindingName ?? entry.PropertyName,
                         "header",
-                        Required: constraints.IsRequired,
+                        Required: isRequired,
                         schemaType,
                         effectiveFormat)
                     {
@@ -368,7 +377,7 @@ public sealed record OpenApiOperationRenderingContext(
                     parameters.Add(new OpenApiParameterModel(
                         entry.BindingName ?? entry.PropertyName,
                         "cookie",
-                        Required: constraints.IsRequired,
+                        Required: isRequired,
                         schemaType,
                         effectiveFormat)
                     {
@@ -400,7 +409,7 @@ public sealed record OpenApiOperationRenderingContext(
                         effectiveFormat)
                     {
                         Description = description,
-                        IsRequired = constraints.IsRequired,
+                        IsRequired = isRequired,
                         MinLength = constraints.MinLength,
                         MaxLength = constraints.MaxLength,
                         Pattern = constraints.Pattern,
@@ -410,7 +419,7 @@ public sealed record OpenApiOperationRenderingContext(
                         ExclusiveMaximum = constraints.ExclusiveMaximum,
                         EnumValues = enumValues,
                         EnumSchemaRef = enumSchemaRef,
-                        IsNullable = entry.IsNullable,
+                        IsNullable = isNullable,
                         ItemsType = bodyItemsType,
                         ItemsFormat = bodyItemsFormat,
                         ItemsSchemaRef = bodyItemsSchemaRef,

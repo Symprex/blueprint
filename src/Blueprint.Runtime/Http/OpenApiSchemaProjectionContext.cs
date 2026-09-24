@@ -45,6 +45,23 @@ public sealed record OpenApiSchemaProjectionContext(
     /// <returns>The schema projection snapshot.</returns>
     public static OpenApiSchemaProjectionContext Create(OpenApiDocumentBuilderContext document, OpenApiSchemaNaming naming)
     {
+        return Create(document, naming, OpenApiRequiredProperties.Declared);
+    }
+
+    /// <summary>
+    /// Creates a schema projection snapshot for the covered body types in the supplied OpenAPI document-builder context,
+    /// naming each schema under <paramref name="naming"/> and marking its properties required as
+    /// <paramref name="requiredProperties"/> says.
+    /// </summary>
+    /// <param name="document">The previously prepared OpenAPI document-builder context.</param>
+    /// <param name="naming">How schemas are named from their CLR types.</param>
+    /// <param name="requiredProperties">Which properties are marked required.</param>
+    /// <returns>The schema projection snapshot.</returns>
+    internal static OpenApiSchemaProjectionContext Create(
+        OpenApiDocumentBuilderContext document,
+        OpenApiSchemaNaming naming,
+        OpenApiRequiredProperties requiredProperties)
+    {
         ArgumentNullException.ThrowIfNull(document);
 
         if (document.App.AppOwnedSerializerContext is not JsonSerializerContext serializerContext)
@@ -52,6 +69,7 @@ public sealed record OpenApiSchemaProjectionContext(
             return new OpenApiSchemaProjectionContext(document, ImmutableArray<OpenApiSchemaModel>.Empty, FrozenDictionary<string, string>.Empty)
             {
                 Naming = naming,
+                RequiredProperties = requiredProperties,
             };
         }
 
@@ -137,7 +155,7 @@ public sealed record OpenApiSchemaProjectionContext(
         {
             try
             {
-                schemaBuilder.Add(CreateSchema(schemaName, schemaType, serializerContext, naming, schemaNamesByType));
+                schemaBuilder.Add(CreateSchema(schemaName, schemaType, serializerContext, naming, requiredProperties, schemaNamesByType));
             }
             catch (NotSupportedException)
             {
@@ -151,10 +169,16 @@ public sealed record OpenApiSchemaProjectionContext(
         return new OpenApiSchemaProjectionContext(document, schemaBuilder.ToImmutable(), fullNameToShortName)
         {
             Naming = naming,
+            RequiredProperties = requiredProperties,
             SchemaNamesByType = schemaNamesByType,
             BaseNames = namer.BaseNames.ToFrozenDictionary(StringComparer.Ordinal),
         };
     }
+
+    /// <summary>
+    /// Gets which properties the schemas mark required, which the operations' request bodies and parameters follow too.
+    /// </summary>
+    internal OpenApiRequiredProperties RequiredProperties { get; init; }
 
     /// <summary>
     /// Gets the name of the schema component projected for each CLR type that has one, which a request body property
@@ -301,6 +325,7 @@ public sealed record OpenApiSchemaProjectionContext(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
         JsonSerializerContext serializerContext,
         OpenApiSchemaNaming naming,
+        OpenApiRequiredProperties requiredProperties,
         FrozenDictionary<Type, string> schemaNamesByType)
     {
         var typeInfo = serializerContext.GetTypeInfo(bodyType)
@@ -312,13 +337,14 @@ public sealed record OpenApiSchemaProjectionContext(
 
         var properties = typeInfo.Kind == JsonTypeInfoKind.Object
             ? typeInfo.Properties
-                .Select(property => CreateProperty(property, bodyType, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, naming, schemaNamesByType))
+                .Select(property => CreateProperty(property, bodyType, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, naming, requiredProperties, schemaNamesByType))
                 .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
             : ImmutableArray<OpenApiSchemaPropertyModel>.Empty;
 
         // The host sets the status of every problem it writes, so a problem's status is required and never null, whatever
-        // the CLR type's int? says; a validation problem's errors may be null. Legacy Blueprint documented both so.
+        // the CLR type's int? says; a validation problem's errors may be null, and are not required whatever the rule for
+        // required properties. Legacy Blueprint documented both so.
         if (typeof(Microsoft.AspNetCore.Mvc.ProblemDetails).IsAssignableFrom(bodyType))
         {
             properties =
@@ -326,7 +352,7 @@ public sealed record OpenApiSchemaProjectionContext(
                 .. properties.Select(static property => property.Name switch
                 {
                     "status" => property with { IsRequired = true, IsNullable = false },
-                    "errors" => property with { IsNullable = true },
+                    "errors" => property with { IsRequired = false, IsNullable = true },
                     _ => property,
                 }),
             ];
@@ -485,6 +511,7 @@ public sealed record OpenApiSchemaProjectionContext(
         IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName,
         NullabilityInfoContext nullabilityContext,
         OpenApiSchemaNaming naming,
+        OpenApiRequiredProperties requiredProperties,
         FrozenDictionary<Type, string> schemaNamesByType)
     {
         var propertyTypeInfo = serializerContext.GetTypeInfo(property.PropertyType);
@@ -504,6 +531,20 @@ public sealed record OpenApiSchemaProjectionContext(
         var minimum = GetMinimum(validationAttributes);
         var maximum = GetMaximum(validationAttributes);
         var isNullable = IsNullableProperty(property, nullabilityContext);
+        var isRequired = property.IsRequired;
+
+        // Legacy required every property whose type is not nullable, and every [Required] one, which it then did not
+        // document as nullable.
+        if (requiredProperties == OpenApiRequiredProperties.NonNullable)
+        {
+            var hasRequiredAttribute = validationAttributes.Any(static attribute => attribute is RequiredAttribute);
+            isRequired |= hasRequiredAttribute
+                || (property.AttributeProvider is PropertyInfo clrProperty
+                    ? OpenApiNullability.IsNotNullable(clrProperty, nullabilityContext)
+                    : property.PropertyType.IsValueType && Nullable.GetUnderlyingType(property.PropertyType) is null);
+            isNullable &= !hasRequiredAttribute;
+        }
+
         var format = MapFormatFromValidationAttributes(validationAttributes) ?? MapFormat(property.PropertyType);
         var (enumValues, enumSchemaName) = MapEnumValues(property.PropertyType, naming);
         var description = GetPropertyDescription(property);
@@ -549,7 +590,7 @@ public sealed record OpenApiSchemaProjectionContext(
         return new OpenApiSchemaPropertyModel(
             property.Name,
             propertyKind,
-            property.IsRequired,
+            isRequired,
             property.IsExtensionData,
             isNullable,
             format,

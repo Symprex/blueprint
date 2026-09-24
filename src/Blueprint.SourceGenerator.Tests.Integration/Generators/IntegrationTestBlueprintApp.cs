@@ -55,4 +55,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.SchemaNameCollisions.CollisionTwo.CollisionItem), TypeInfoPropertyName = "CollisionTwoCollisionItem")]
 [JsonSerializable(typeof(Http.LegacyEventWidgetApiResource))]
 [JsonSerializable(typeof(Http.TypedIdWidgetApiResource))]
+[JsonSerializable(typeof(Http.RequiredShapeApiResource))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

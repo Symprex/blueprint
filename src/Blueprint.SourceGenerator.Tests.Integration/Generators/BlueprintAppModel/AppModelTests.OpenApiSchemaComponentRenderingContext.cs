@@ -53,6 +53,8 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "NodaTimeEchoResponse",
             "PagedApiResourceOfLegacyShapeTenant",
             "ProblemDetails",
+            "RequiredShapeApiResource",
+            "RequiredShapeChild",
             "SampleWidgetApiResource",
             "TypedIdWidgetApiResource",
             "UnexposedFixtureApiResource",

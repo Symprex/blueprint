@@ -291,6 +291,13 @@ configureOpenApi: options =>
 - `options.QueryParameterNaming = OpenApiParameterNaming.PropertyName` names query parameters by their CLR properties
   (`Page`), as legacy did, instead of the camel-case name the framework's client sends (`page`). Generators that use a
   parameter's name as a method argument or query key need it; the host binds a query parameter whatever its case.
+- `options.RequiredProperties = OpenApiRequiredProperties.NonNullable` marks required what legacy marked required. That
+  is every property of a component or request body, and every query, header or cookie parameter, whose type is not
+  nullable: a value type that is not `Nullable<T>`, or a reference type annotated as not nullable. It also marks every
+  `[Required]` one, which it then does not document as nullable. The default marks required only what is declared so:
+  a serializer-required member of a response type, a `[Required]` request-body property or parameter, and a route
+  parameter. Generators that make an unrequired property optional (`?:`) need it to type properties as legacy clients
+  did.
 - `options.RequestBodyNaming = OpenApiRequestBodyNaming.OperationType` keys each request body by the operation's CLR
   type (`CreatePartnerCompanyCommand`), as legacy did, instead of the operation's name (`CreatePartnerCompany`).
   Generators that tell a command from a query by a `Command` suffix on the body's name need it.

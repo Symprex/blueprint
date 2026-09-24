@@ -147,6 +147,13 @@ public sealed class OpenApiInfoOptions
     /// by their CLR properties, as legacy Blueprint did. Route, header and cookie parameters are unaffected.
     /// </summary>
     public OpenApiParameterNaming QueryParameterNaming { get; set; }
+
+    /// <summary>
+    /// Gets or sets which properties and parameters are marked required. Defaults to
+    /// <see cref="OpenApiRequiredProperties.Declared"/>; <see cref="OpenApiRequiredProperties.NonNullable"/> marks every one
+    /// whose type is not nullable, and every <c>[Required]</c> one, as legacy Blueprint did.
+    /// </summary>
+    public OpenApiRequiredProperties RequiredProperties { get; set; }
 }
 
 /// <summary>
