@@ -313,6 +313,12 @@ so a type that context has no metadata for (for example one used only in a reque
 declare) is still an inline `object`; a type written by a converter, such as a strongly typed id, is not a
 component.
 
+A type written by a converter is documented as legacy documented it, whatever the naming. One whose type converter
+converts it to string, such as Signature365's `ApiId`, is `{"type": "string"}` as a property, a parameter or a request
+body property, where it was an unknown `{}` or an `object`. A `byte[]` is `{"type": "string", "format": "byte"}`.
+Legacy took both from Newtonsoft.Json's contracts. One with only a System.Text.Json converter is still `{}`, because
+legacy described its CLR properties, which are not what the converter writes.
+
 An operation whose handler returns a legacy `Blueprint.Http.ResourceEvent<T>` (or a subclass of it) documents its
 success response as the `ResourceEventOf{T}` envelope component, since that is what the host writes, not `T` alone.
 Whatever the event's change type — `ResourceCreated<T>` and `ResourceDeleted<T>` included — the host sends it as a 200 with

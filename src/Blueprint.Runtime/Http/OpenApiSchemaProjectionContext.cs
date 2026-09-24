@@ -1210,7 +1210,9 @@ public sealed record OpenApiSchemaProjectionContext(
     {
         var nonNullableType = Nullable.GetUnderlyingType(bodyType) ?? bodyType;
 
+        // The serializer writes a byte array as a base64 string, and legacy documented it as one.
         if (nonNullableType == typeof(string)
+            || nonNullableType == typeof(byte[])
             || nonNullableType == typeof(char)
             || nonNullableType == typeof(DateOnly)
             || nonNullableType == typeof(TimeOnly)
@@ -1274,6 +1276,13 @@ public sealed record OpenApiSchemaProjectionContext(
                     || nonNullableType.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))))
             {
                 return OpenApiSchemaKind.Array;
+            }
+
+            // A type a converter writes, such as a strongly typed id, whose type converter converts it to string is
+            // documented as the string legacy documented it as.
+            if (!nonNullableType.IsEnum && OpenApiStringConvertibleTypes.IsConvertibleToString(nonNullableType))
+            {
+                return OpenApiSchemaKind.String;
             }
         }
 

@@ -54,6 +54,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "PagedApiResourceOfLegacyShapeTenant",
             "ProblemDetails",
             "SampleWidgetApiResource",
+            "TypedIdWidgetApiResource",
             "UnexposedFixtureApiResource",
             "ValidationProblemDetails",
             "string");

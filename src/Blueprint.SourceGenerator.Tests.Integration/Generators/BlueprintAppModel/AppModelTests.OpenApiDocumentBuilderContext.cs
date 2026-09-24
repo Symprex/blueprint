@@ -44,7 +44,8 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionPreviewApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionOne.CollisionItem",
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionTwo.CollisionItem",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyEventWidgetApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyEventWidgetApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.TypedIdWidgetApiResource");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))

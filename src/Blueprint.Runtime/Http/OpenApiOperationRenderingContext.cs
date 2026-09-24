@@ -677,6 +677,12 @@ public sealed record OpenApiOperationRenderingContext(
             return ("string", null);
         }
 
+        // The serializer writes a byte array as a base64 string, and legacy documented it as one.
+        if (underlying == typeof(byte[]))
+        {
+            return ("string", "byte");
+        }
+
         if (underlying == typeof(int))
         {
             return ("integer", "int32");
@@ -770,6 +776,13 @@ public sealed record OpenApiOperationRenderingContext(
         if (underlying != typeof(string) && underlying.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
         {
             return ("array", null);
+        }
+
+        // A type whose type converter converts it to string, such as a strongly typed id, binds from a route or query
+        // string and is documented as the string legacy documented it as.
+        if (!underlying.IsEnum && OpenApiStringConvertibleTypes.IsConvertibleToString(underlying))
+        {
+            return ("string", null);
         }
 
         // Complex types (classes/structs with no known primitive mapping) render as "object".

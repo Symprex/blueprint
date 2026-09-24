@@ -54,6 +54,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "PagedApiResourceOfLegacyShapeTenant",
             "ProblemDetails",
             "SampleWidgetApiResource",
+            "TypedIdWidgetApiResource",
             "UnexposedFixtureApiResource",
             "ValidationProblemDetails",
             "string");
