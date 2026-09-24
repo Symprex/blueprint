@@ -199,7 +199,7 @@ Background tasks do **not** automatically restore tenant context. Services shoul
 | Typed HTTP client | `BlueprintHttpClient<TApp>` | Calls Blueprint APIs using operation types |
 | Legacy compatibility base | `BlueprintHttpClient` | Lets old S365-generated partial clients compile against the non-generic client shape |
 | DI registration | `AddBlueprintHttpClient<TApp>()` | Registers typed `HttpClient` |
-| Fault handling | `BlueprintApiException` | Non-success response exception |
+| Fault handling | `BlueprintApiException` | An `ApiException` carrying the failed call's problem (see below) |
 
 ### Registration
 
@@ -233,6 +233,20 @@ public class MyHandler
 4. For GET/DELETE: remaining properties → query string
 5. For POST/PUT/PATCH: operation serialized as JSON body
 6. Response: 2xx → deserialize, 422 → `ValidationException`, other → `BlueprintApiException`
+
+`BlueprintApiException` is an `ApiException` with the problem the failure describes, as legacy S365's client threw,
+so a caller matches it by `Type`/`Title`/`HttpStatus` and a pipeline that lets it escape answers with the same problem:
+
+| Failure | Title / Type / HttpStatus / Detail |
+|---|---|
+| Problem details response, 4xx | carried through, with `Extensions` |
+| Problem details response, 5xx | carried through, but `Detail` is "The remote server returned an internal error response"; the original is the `InnerException`'s message |
+| 404 whose body is not JSON | "The remote server responded Not Found" / `not_found` / 404 / "Response from {path} was 404" (the path, never the host) |
+| Other body that is not JSON | "The remote server did not produce a valid JSON response" / `invalid_json` / the response status / the parser's message |
+| Server unreachable | "The remote server did not respond" / `service_unavailable` / 500 / same as title; the `HttpRequestException` (which names the host) is the `InnerException` |
+| Timed out | "Timed out waiting for service response" / `service_timeout` / 408 / the cancellation's message |
+
+`StatusCode` and `ResponseBody` still carry the raw response.
 
 ### S365 Gateway Migration
 

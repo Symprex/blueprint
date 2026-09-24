@@ -23,6 +23,8 @@ namespace Blueprint.HttpClient;
 public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     where TApp : BlueprintApp
 {
+    private const string UpstreamServerErrorDetail = "The remote server returned an internal error response";
+
     /// <summary>
     /// Caches <see cref="PropertyInfo"/> arrays per operation type to avoid repeated
     /// <see cref="Type.GetProperties(BindingFlags)"/> allocations on each request.
@@ -87,25 +89,15 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         try
         {
             using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            return await this.HandleResponseAsync<TResponse>(response, cancellationToken).ConfigureAwait(false);
+            return await this.HandleResponseAsync<TResponse>(request, response, cancellationToken).ConfigureAwait(false);
         }
         catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
         {
-            // Timeout — use RequestTimeout (not GatewayTimeout, which reverse proxies like
-            // Cloudflare intercept and replace with their own HTML error page).
-            throw new BlueprintApiException(
-                HttpStatusCode.RequestTimeout,
-                "Timed out waiting for service response.",
-                e.Message);
+            throw CreateTimeoutException(e);
         }
         catch (HttpRequestException e)
         {
-            // Connection failure — use InternalServerError (not BadGateway, for the same
-            // Cloudflare interception reason).
-            throw new BlueprintApiException(
-                HttpStatusCode.InternalServerError,
-                "The remote server did not respond.",
-                e.Message);
+            throw CreateUnreachableException(e);
         }
     }
 
@@ -146,21 +138,15 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         try
         {
             using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+            await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
         }
         catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
         {
-            throw new BlueprintApiException(
-                HttpStatusCode.RequestTimeout,
-                "Timed out waiting for service response.",
-                e.Message);
+            throw CreateTimeoutException(e);
         }
         catch (HttpRequestException e)
         {
-            throw new BlueprintApiException(
-                HttpStatusCode.InternalServerError,
-                "The remote server did not respond.",
-                e.Message);
+            throw CreateUnreachableException(e);
         }
     }
 
@@ -213,22 +199,16 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         }
         catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
         {
-            throw new BlueprintApiException(
-                HttpStatusCode.RequestTimeout,
-                "Timed out waiting for service response.",
-                e.Message);
+            throw CreateTimeoutException(e);
         }
         catch (HttpRequestException e)
         {
-            throw new BlueprintApiException(
-                HttpStatusCode.InternalServerError,
-                "The remote server did not respond.",
-                e.Message);
+            throw CreateUnreachableException(e);
         }
 
         using (response)
         {
-            await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+            await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
 
             if (response.StatusCode == HttpStatusCode.NoContent)
             {
@@ -313,22 +293,16 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         }
         catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
         {
-            throw new BlueprintApiException(
-                HttpStatusCode.RequestTimeout,
-                "Timed out waiting for service response.",
-                e.Message);
+            throw CreateTimeoutException(e);
         }
         catch (HttpRequestException e)
         {
-            throw new BlueprintApiException(
-                HttpStatusCode.InternalServerError,
-                "The remote server did not respond.",
-                e.Message);
+            throw CreateUnreachableException(e);
         }
 
         using (response)
         {
-            await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+            await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
 
             if (response.StatusCode == HttpStatusCode.NoContent)
             {
@@ -888,7 +862,138 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         return result;
     }
 
+    /// <summary>
+    /// The failure of a request that did not answer within the client's timeout.
+    /// </summary>
+    /// <remarks>
+    /// RequestTimeout, not GatewayTimeout: reverse proxies such as Cloudflare replace a 504 with an HTML page of their own.
+    /// </remarks>
+    /// <param name="exception">The cancellation the timeout raised.</param>
+    /// <returns>The exception to throw.</returns>
+    private static BlueprintApiException CreateTimeoutException(TaskCanceledException exception)
+    {
+        return new BlueprintApiException(
+            new BlueprintApiException.ApiProblem(
+                "Timed out waiting for service response",
+                "service_timeout",
+                exception.Message,
+                (int)HttpStatusCode.RequestTimeout),
+            HttpStatusCode.RequestTimeout,
+            responseBody: null,
+            innerException: null);
+    }
+
+    /// <summary>
+    /// The failure of a request that reached no server. Its message, which names the host, is kept to the inner exception.
+    /// </summary>
+    /// <remarks>
+    /// InternalServerError, not BadGateway, for the same reverse-proxy reason as <see cref="CreateTimeoutException"/>.
+    /// </remarks>
+    /// <param name="exception">The failure the handler raised.</param>
+    /// <returns>The exception to throw.</returns>
+    private static BlueprintApiException CreateUnreachableException(HttpRequestException exception)
+    {
+        return new BlueprintApiException(
+            new BlueprintApiException.ApiProblem(
+                "The remote server did not respond",
+                "service_unavailable",
+                "The remote server did not respond",
+                (int)HttpStatusCode.InternalServerError),
+            HttpStatusCode.InternalServerError,
+            responseBody: null,
+            innerException: exception);
+    }
+
+    /// <summary>
+    /// The failure of a request the remote API answered with an error status other than 422.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Problem details are carried through, except that a 5xx response's detail is replaced, and kept to the inner
+    /// exception, because it describes the remote end's internals. A body that is not JSON maps to <c>not_found</c> for a
+    /// 404 (naming the path, never the host) and to <c>invalid_json</c> otherwise.
+    /// </para>
+    /// <para>
+    /// A problem without a status takes the response's; legacy's took none.
+    /// </para>
+    /// </remarks>
+    /// <param name="request">The request, whose URI the client has made absolute by now.</param>
+    /// <param name="response">The response.</param>
+    /// <param name="body">The response body.</param>
+    /// <returns>The exception to throw.</returns>
+    private BlueprintApiException CreateErrorResponseException(HttpRequestMessage request, HttpResponseMessage response, string body)
+    {
+        var status = (int)response.StatusCode;
+        ProblemDetailsDto? problem;
+
+        try
+        {
+            problem = JsonSerializer.Deserialize<ProblemDetailsDto>(body, this._jsonOptions);
+        }
+        catch (JsonException e)
+        {
+            var notJson = response.StatusCode == HttpStatusCode.NotFound
+                ? new BlueprintApiException.ApiProblem(
+                    "The remote server responded Not Found",
+                    "not_found",
+                    $"Response from {DescribeRequestedResource(request)} was 404",
+                    status)
+                : new BlueprintApiException.ApiProblem(
+                    "The remote server did not produce a valid JSON response",
+                    "invalid_json",
+                    e.Message,
+                    status);
+
+            return new BlueprintApiException(notJson, response.StatusCode, body, innerException: null);
+        }
+
+        if (problem is null)
+        {
+            return new BlueprintApiException(
+                new BlueprintApiException.ApiProblem(
+                    "Response deserialisation failed",
+                    "response_empty",
+                    "The error response could not be deserialised",
+                    (int)HttpStatusCode.BadGateway),
+                response.StatusCode,
+                body,
+                innerException: null);
+        }
+
+        var detail = problem.Detail;
+        Exception? innerException = null;
+
+        if (status >= 500)
+        {
+            detail = UpstreamServerErrorDetail;
+
+            if (!string.IsNullOrWhiteSpace(problem.Detail))
+            {
+                innerException = new InvalidOperationException(problem.Detail);
+            }
+        }
+
+        var extensions = problem.Extensions?.ToDictionary(static e => e.Key, static e => (object)e.Value);
+
+        return new BlueprintApiException(
+            new BlueprintApiException.ApiProblem(problem.Title, problem.Type, detail, problem.Status ?? status, extensions),
+            response.StatusCode,
+            body,
+            innerException);
+    }
+
+    private static string DescribeRequestedResource(HttpRequestMessage request)
+    {
+        return request.RequestUri switch
+        {
+            { IsAbsoluteUri: true } uri => uri.PathAndQuery,
+            { } uri => uri.OriginalString,
+            null => "the requested resource",
+        };
+    }
+
     private async Task<TResponse?> HandleResponseAsync<TResponse>(
+        HttpRequestMessage request,
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
@@ -898,7 +1003,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         if (typeof(StatusCodeResult).IsAssignableFrom(typeof(TResponse)) && typeof(StatusCodeResult) != typeof(TResponse))
         {
             // Validate before consuming the response body — error responses should still throw
-            await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+            await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
 
             var field = typeof(TResponse).GetField(
                 nameof(StatusCodeResult.Accepted.Instance),
@@ -913,7 +1018,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             return default;
         }
 
-        await this.EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
+        await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
 
         if (response.StatusCode == HttpStatusCode.NoContent)
         {
@@ -949,6 +1054,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     }
 
     private async Task EnsureSuccessOrThrowAsync(
+        HttpRequestMessage request,
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
@@ -965,10 +1071,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             throw this.ParseValidationException(body);
         }
 
-        throw new BlueprintApiException(
-            response.StatusCode,
-            $"The remote API returned {(int)response.StatusCode} {response.ReasonPhrase}.",
-            body);
+        throw this.CreateErrorResponseException(request, response, body);
     }
 
     private ValidationException ParseValidationException(string body)
@@ -996,6 +1099,23 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
                     [string.Empty] = [body],
                 });
         }
+    }
+
+    /// <summary>
+    /// Internal DTO for deserializing RFC 9457 / RFC 7807 problem details responses, keeping any further members.
+    /// </summary>
+    private sealed class ProblemDetailsDto
+    {
+        public string? Type { get; set; }
+
+        public string? Title { get; set; }
+
+        public string? Detail { get; set; }
+
+        public int? Status { get; set; }
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public Dictionary<string, JsonElement>? Extensions { get; set; }
     }
 
     /// <summary>

@@ -99,6 +99,31 @@ public sealed class GatewayEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Typed_client_rethrows_the_ApiException_the_upstream_handler_threw()
+    {
+        // The upstream handler throws NotFoundException for an unknown id; the typed client must surface the same
+        // problem, so a caller can match it by type and a gateway can pass it on.
+        using var httpClient = new System.Net.Http.HttpClient(this._upstreamHost!.GetTestServer().CreateHandler())
+        {
+            BaseAddress = new Uri("http://localhost/api/"),
+        };
+        var client = new Blueprint.HttpClient.BlueprintHttpClient<SampleBlueprintApp>(httpClient, new SampleBlueprintApp());
+
+        var act = () => client.SendAsync<System.Text.Json.JsonElement>(new Blueprint.SourceGenerator.Sample.Contract.Api.UpdateTemplateCommand
+        {
+            Id = "missing",
+            Name = "Renamed",
+            HtmlSource = "<p>Renamed</p>",
+        });
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Title.Should().Be("The requested resource could not be found");
+        exception.Type.Should().Be("not_found");
+        exception.HttpStatus.Should().Be(404);
+        exception.Detail.Should().Be("Template 'missing' not found.");
+    }
+
+    [Fact]
     public async Task List_templates_returns_upstream_data_through_gateway()
     {
         // Seed a template directly in the upstream.
