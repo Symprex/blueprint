@@ -16,8 +16,10 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 public class ResourceEventSelfQueryModuleIntegrationTests
 {
     [Fact]
-    public async Task When_handler_returns_ResourceDeleted_with_SelfQuery_then_Data_is_populated_from_query()
+    public async Task When_handler_returns_ResourceDeleted_with_SelfQuery_then_the_SelfQuery_is_not_run()
     {
+        // Legacy's ResourceEventHandler loaded an event's data through its self query only when the event was not a
+        // deletion: a deleted resource cannot be loaded, and its query may fail or find nothing.
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new SelfQueryTestServiceProvider(app);
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
@@ -30,9 +32,8 @@ public class ResourceEventSelfQueryModuleIntegrationTests
 
         result.Should().BeOfType<ResourceDeleted<SelfQueryTestApiResource>>();
         var resourceEvent = (ResourceDeleted<SelfQueryTestApiResource>)result;
-        resourceEvent.Data.Should().NotBeNull("SelfQuery should have been resolved to populate Data");
-        resourceEvent.Data!.Id.Should().Be("test-42", "Data should come from the query result");
-        resourceEvent.Data.Name.Should().Be("Resolved from SelfQuery");
+        resourceEvent.Data.Should().BeNull("the self query of a deleted event is not run");
+        resourceEvent.SelfQuery.Should().BeOfType<GetSelfQueryTestResourceQuery>().Which.Id.Should().Be("test-42");
     }
 
     [Fact]

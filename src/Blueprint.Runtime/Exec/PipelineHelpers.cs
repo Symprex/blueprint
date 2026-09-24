@@ -1189,8 +1189,23 @@ public static class PipelineHelpers
     /// </remarks>
     private static void PopulateResourceEventHref(ApiOperationContext context, OperationResult handlerResult)
     {
-        if (handlerResult is ResourceEvent resourceEvent
-            && TryCreateResourceEventHref(context, resourceEvent.ResourceType, resourceEvent.Data ?? resourceEvent.SelfQuery, out var href))
+        if (handlerResult is not ResourceEvent resourceEvent)
+        {
+            return;
+        }
+
+        // Legacy logged, as a warning, an event whose resource type has no self link to make its href from.
+        if (context.App.GetLinkFor(resourceEvent.ResourceType, "self") is null)
+        {
+            if (Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<ILogger<ResourceEvent>>(context.ServiceProvider) is { } logger)
+            {
+                _logResourceEventHasNoSelfLink(logger, resourceEvent.ResourceType, null);
+            }
+
+            return;
+        }
+
+        if (TryCreateResourceEventHref(context, resourceEvent.ResourceType, resourceEvent.Data ?? resourceEvent.SelfQuery, out var href))
         {
             resourceEvent.Href = href;
         }
@@ -1307,6 +1322,12 @@ public static class PipelineHelpers
             new EventId(30, "ResourceEventSelfQueryResolved"),
             "Resolved ResourceEvent SelfQuery for {OperationType} via {SelfQueryType}");
 
+    private static readonly Action<ILogger, Type, Exception?> _logResourceEventHasNoSelfLink =
+        LoggerMessage.Define<Type>(
+            LogLevel.Warning,
+            new EventId(32, "ResourceEventHasNoSelfLink"),
+            "No self link exists. Href property of the resource event of type {ResourceType} will not be populated");
+
     private static readonly Action<ILogger, string, string, Exception?> _logSelfQueryFailed =
         LoggerMessage.Define<string, string>(
             LogLevel.Warning,
@@ -1337,6 +1358,10 @@ public static class PipelineHelpers
     /// ResourceEvent with its own SelfQuery.
     /// </para>
     /// <para>
+    /// A legacy <c>ResourceEvent</c> that reports a deletion is not resolved, as legacy's handler did not resolve it: a
+    /// deleted resource cannot be loaded. It keeps no <c>Data</c>, and its href is made from its SelfQuery.
+    /// </para>
+    /// <para>
     /// Both legacy <c>ResourceEvent</c> (mutates <c>Data</c> in-place) and new-style
     /// <c>DeferredResourceEventResult</c> (populates <see cref="IDeferredResourceEventResult.ResolvedContent"/>)
     /// are handled by in-place mutation so the pipeline's <c>handlerResult</c> variable type is preserved.
@@ -1363,6 +1388,17 @@ public static class PipelineHelpers
         // Legacy ResourceEvent path: mutates Data in-place
         if (handlerResult is ResourceEvent { SelfQuery: not null, Data: null } resourceEvent)
         {
+            // Legacy's ResourceEventHandler did not load a deleted resource ("cannot, obviously, get for a deleted
+            // record"): its self query may fail or find nothing. The event keeps no data, and its href is made from the
+            // self query. It is stamped as a loaded one is.
+            if (resourceEvent.ChangeType == ResourceEventChangeType.Deleted)
+            {
+                resourceEvent.CorrelationId ??= context.Activity?.Id;
+                resourceEvent.Operation ??= context.Operation;
+
+                return Task.CompletedTask;
+            }
+
             return ResolveResourceEventSelfQueryCoreAsync(executor, context, resourceEvent, logger, operationTypeName);
         }
 
