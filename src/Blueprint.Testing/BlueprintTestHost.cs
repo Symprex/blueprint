@@ -20,6 +20,10 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
     where TApp : BlueprintApp
     where TExec : BlueprintAppExecutor
 {
+    // The base URI legacy Blueprint.Testing's ConfigureHttp gave every context it configured, under which a resource
+    // event's href and a resource's links are made as they are under a request's.
+    private const string TestingBaseUri = "https://api.blueprint-testing.com/api/";
+
     private readonly ServiceProvider _rootProvider;
     private bool _disposed;
 
@@ -104,6 +108,7 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
         {
             Operation = operation,
             HttpContext = httpContext,
+            BaseUri = TestingBaseUri,
         };
 
         var testContext = new BlueprintTestContext(context, scope.ServiceProvider);
