@@ -52,7 +52,10 @@ public class AppModelSerializerContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyEventWidgetApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.TypedIdWidgetApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.RequiredShapeApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.ConverterWrittenBodyId");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.ConverterWrittenBodyId",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.HrefWidgetApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.HrefWidgetSecretPartialApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.HrefUnlinkedApiResource");
     }
 
     [Fact]
@@ -101,6 +104,9 @@ public class AppModelSerializerContextTests
             typeof(Http.LegacyEventWidgetApiResource),
             typeof(Http.TypedIdWidgetApiResource),
             typeof(Http.RequiredShapeApiResource),
-            typeof(Http.ConverterWrittenBodyId));
+            typeof(Http.ConverterWrittenBodyId),
+            typeof(Http.HrefWidgetApiResource),
+            typeof(Http.HrefWidgetSecretPartialApiResource),
+            typeof(Http.HrefUnlinkedApiResource));
     }
 }

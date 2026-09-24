@@ -2,14 +2,12 @@ using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using Blueprint.Auditing;
 using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Middleware;
-using Blueprint.Runtime.Utilities;
 
 namespace Blueprint.Runtime.Exec;
 
@@ -1169,8 +1167,8 @@ public static class PipelineHelpers
         OperationResult handlerResult,
         string operationTypeName)
     {
-        // Always populate ResourceEvent.Href from the self-link, even when no audit sink is registered.
-        // This runs after the link generation stage has added self-links to the resource.
+        // Always populate ResourceEvent.Href from the resource type's self link, even when no audit sink is registered.
+        // This runs after the self query has been resolved, so Data is filled wherever it can be.
         PopulateResourceEventHref(context, handlerResult);
 
         return auditSink != null
@@ -1179,129 +1177,53 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Copies the self-link Href from the resource event's data object (when it implements
-    /// <see cref="ILinkableResource"/>) to <see cref="ResourceEvent.Href"/>. Falls back to
-    /// the operation descriptor's first URL when the resource has no data (e.g. after a DELETE
-    /// where the SelfQuery can no longer find the entity).
+    /// Sets <see cref="ResourceEvent.Href"/> as legacy Blueprint's <c>ResourceEventHandler</c> did: the registered
+    /// <c>self</c> link of the event's <see cref="ResourceEvent.ResourceType"/>, filled from <see cref="ResourceEvent.Data"/>
+    /// or, when there is none, <see cref="ResourceEvent.SelfQuery"/>, under the request's base URI. When no self link is
+    /// registered, or the operation is not running in a request, the href is left as the handler left it.
     /// </summary>
+    /// <remarks>
+    /// Neither the resource's own <c>$links</c> nor the operation's URL is consulted, as legacy consulted neither: a self
+    /// link on the data can be hidden by link authorisation or relative, and the operation's URL is a different resource's
+    /// (a collection's, for a create). Signature365 stores the href with every audited event.
+    /// </remarks>
     private static void PopulateResourceEventHref(ApiOperationContext context, OperationResult handlerResult)
     {
-        if (handlerResult is not ResourceEvent { Href: null } resourceEvent)
+        if (handlerResult is ResourceEvent resourceEvent
+            && TryCreateResourceEventHref(context, resourceEvent.ResourceType, resourceEvent.Data ?? resourceEvent.SelfQuery, out var href))
         {
-            return;
-        }
-
-        // Primary path: extract from the data's self-link (populated by LinkGenerationModule)
-        if (resourceEvent.Data is ILinkableResource { Links: { } links }
-            && links.TryGetValue("self", out var selfLink))
-        {
-            resourceEvent.Href = selfLink.Href;
-            return;
-        }
-
-        // Fallback: build a relative URL from the operation's first registered URL template,
-        // filling placeholders from the operation properties. This covers DELETE operations
-        // where the SelfQuery resolves to null Data because the entity was already removed.
-        if (context.Descriptor.Urls.Count > 0)
-        {
-            resourceEvent.Href = FillUrlTemplate(context.Descriptor.Urls[0].UrlFormat, context.Operation);
+            resourceEvent.Href = href;
         }
     }
 
-    private static readonly ConcurrentDictionary<Type, Dictionary<string, Func<object, object?>>> _propertyAccessorCache = new();
-
     /// <summary>
-    /// Fills an ASP.NET-style route URL template (e.g. <c>/tenants/{TenantId}/users/{Id}</c>)
-    /// by reflecting the named properties from the given <paramref name="source"/> object. Used
-    /// as a fallback for <see cref="PopulateResourceEventHref"/> when the resource Data is null.
+    /// Makes a resource event's href as legacy Blueprint's <c>ResourceEventHandler</c> did: <c>CreateUrl</c> of the
+    /// registered <c>self</c> link of <paramref name="resourceType"/>, its placeholders filled from <paramref name="source"/>,
+    /// under the request's base URI — <see langword="null"/> when a placeholder cannot be filled.
     /// </summary>
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2075",
-        Justification = "Operation types are always preserved because the source generator emits direct references to them in pipeline code.")]
-    [UnconditionalSuppressMessage(
-        "AOT",
-        "IL3050",
-        Justification = "Fallback path for resource event href population. Generated pipelines bypass this via compile-time link builders.")]
-    private static string FillUrlTemplate(string urlTemplate, object source)
+    /// <remarks>
+    /// Only the base URI the router set for the request is used. Outside a request the link generator registered for the
+    /// host guesses one (<c>https://localhost/</c>, without the API's base path), and an href made from it would be stored
+    /// with the audited event as though it were real; legacy had no base URI outside a request either.
+    /// </remarks>
+    /// <param name="context">The operation context, whose app and base URI make the href.</param>
+    /// <param name="resourceType">The resource type the event belongs to, whose self link makes the href.</param>
+    /// <param name="source">The object whose properties fill the self link's placeholders: the event's data, else its self query.</param>
+    /// <param name="href">The href, which is <see langword="null"/> when a placeholder cannot be filled.</param>
+    /// <returns><see langword="false"/> when no self link is registered for the type or there is no request base URI.</returns>
+    internal static bool TryCreateResourceEventHref(ApiOperationContext context, Type resourceType, object? source, out string? href)
     {
-        var sourceType = source.GetType();
+        var selfLink = context.App.GetLinkFor(resourceType, "self");
+        var linkGenerator = GetRequestLinkGenerator(context);
 
-        if (!_propertyAccessorCache.TryGetValue(sourceType, out var accessors))
+        if (selfLink is null || linkGenerator is null)
         {
-            var props = sourceType.GetProperties(BindingFlags.Instance | BindingFlags.Public);
-            accessors = new Dictionary<string, Func<object, object?>>(props.Length, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var p in props)
-            {
-                accessors[p.Name] = CompiledPropertyAccessor.GetGetter(p);
-            }
-
-            accessors = _propertyAccessorCache.GetOrAdd(sourceType, accessors);
+            href = null;
+            return false;
         }
 
-        // Use a single StringBuilder pass to avoid repeated string allocations per placeholder.
-        var sb = new System.Text.StringBuilder(urlTemplate.Length);
-        var lastEnd = 0;
-
-        while (lastEnd < urlTemplate.Length)
-        {
-            var openBrace = urlTemplate.IndexOf('{', lastEnd);
-
-            if (openBrace < 0)
-            {
-                break;
-            }
-
-            var closeBrace = urlTemplate.IndexOf('}', openBrace + 1);
-
-            if (closeBrace < 0)
-            {
-                break;
-            }
-
-            sb.Append(urlTemplate, lastEnd, openBrace - lastEnd);
-
-            var placeholder = urlTemplate.AsSpan(openBrace + 1, closeBrace - openBrace - 1);
-
-            // Colon means fallback: {Primary:Fallback} — try Primary, if null/missing try Fallback
-            var colonIdx = placeholder.IndexOf(':');
-            var propName = colonIdx >= 0 ? placeholder[..colonIdx].ToString() : placeholder.ToString();
-            var fallbackName = colonIdx >= 0 ? placeholder[(colonIdx + 1)..].ToString() : null;
-
-            if (accessors.TryGetValue(propName, out var getter))
-            {
-                var value = getter(source)?.ToString();
-
-                if (value is null && fallbackName is not null && accessors.TryGetValue(fallbackName, out var fallbackGetter))
-                {
-                    value = fallbackGetter(source)?.ToString();
-                }
-
-                sb.Append(value ?? string.Empty);
-            }
-            else if (fallbackName is not null && accessors.TryGetValue(fallbackName, out var fallbackGetter2))
-            {
-                sb.Append(fallbackGetter2(source)?.ToString() ?? string.Empty);
-            }
-            else
-            {
-                // Preserve unresolved placeholders as-is
-                sb.Append('{');
-                sb.Append(placeholder);
-                sb.Append('}');
-            }
-
-            lastEnd = closeBrace + 1;
-        }
-
-        // Append trailing segment after last placeholder
-        if (lastEnd < urlTemplate.Length)
-        {
-            sb.Append(urlTemplate, lastEnd, urlTemplate.Length - lastEnd);
-        }
-
-        return sb.ToString();
+        href = linkGenerator.CreateUrl(selfLink, source);
+        return true;
     }
 
     /// <summary>
@@ -1645,26 +1567,9 @@ public static class PipelineHelpers
             return Task.CompletedTask;
         }
 
-        Blueprint.Http.IApiLinkGenerator? apiLinkGenerator;
+        Blueprint.Http.IApiLinkGenerator? apiLinkGenerator = GetRequestLinkGenerator(context);
 
-        if (context.BaseUri is not null)
-        {
-            // Fast path: reuse the cached generator when the BaseUri reference hasn't changed
-            // (the router middleware reuses the same string instance across requests).
-            // Eliminates ~40B allocation per request on the link-generation hot path.
-            var cached = _cachedApiLinkGenerator;
-
-            if (cached is not null && ReferenceEquals(cached.OriginalBaseUri, context.BaseUri))
-            {
-                apiLinkGenerator = cached;
-            }
-            else
-            {
-                apiLinkGenerator = new Blueprint.Http.ApiLinkGenerator(context.App, context.BaseUri);
-                _cachedApiLinkGenerator = (ApiLinkGenerator)apiLinkGenerator;
-            }
-        }
-        else
+        if (apiLinkGenerator is null)
         {
             // Fallback: resolve from DI for non-HTTP hosts or test contexts where BaseUri
             // was not pre-computed by the router.
@@ -1694,6 +1599,33 @@ public static class PipelineHelpers
             .GetRequiredService<IEnumerable<Blueprint.Http.IResourceLinkGenerator>>(serviceProvider);
 
         await Blueprint.Http.LinkGeneratorHandler.AddLinksAsync(apiLinkGenerator, resourceLinkGenerators, context, handlerResult).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets a link generator for the base URI the router set for the request, or <see langword="null"/> when the operation
+    /// is not running in a request (<see cref="ApiOperationContext.BaseUri"/> is not set).
+    /// </summary>
+    private static ApiLinkGenerator? GetRequestLinkGenerator(ApiOperationContext context)
+    {
+        if (context.BaseUri is null)
+        {
+            return null;
+        }
+
+        // Fast path: reuse the cached generator when the BaseUri reference hasn't changed
+        // (the router middleware reuses the same string instance across requests).
+        // Eliminates ~40B allocation per request on the link-generation hot path.
+        var cached = _cachedApiLinkGenerator;
+
+        if (cached is not null && ReferenceEquals(cached.OriginalBaseUri, context.BaseUri))
+        {
+            return cached;
+        }
+
+        var apiLinkGenerator = new ApiLinkGenerator(context.App, context.BaseUri);
+        _cachedApiLinkGenerator = apiLinkGenerator;
+
+        return apiLinkGenerator;
     }
 
     // ────────────────────────────────────────────────────────────────────

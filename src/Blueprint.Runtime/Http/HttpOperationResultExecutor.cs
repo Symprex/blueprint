@@ -475,13 +475,8 @@ public class HttpOperationResultExecutor
         writer.WriteString(_propCreated, DateTimeOffset.UtcNow);
         writer.WriteString(_propResourceObject, ApiResource.GetTypeName(result.Content.GetType()));
 
-        // href: extract from self-link when the resource is linkable
-        string? href = null;
-        if (result.Content is ILinkableResource { Links: { } links } &&
-            links.TryGetValue("self", out var selfLink))
-        {
-            href = selfLink.Href;
-        }
+        // href: the content type's registered self link filled from the content, as legacy made a resource event's href
+        PipelineHelpers.TryCreateResourceEventHref(operationContext, result.Content.GetType(), result.Content, out var href);
 
         if (href is not null)
         {
@@ -583,12 +578,14 @@ public class HttpOperationResultExecutor
             writer.WriteString(_propResourceObject, ApiResource.GetTypeName(result.ResolvedContent.GetType()));
         }
 
-        // href: extract from self-link when the resolved resource is linkable
+        // href: the event's resource type's registered self link filled from the resolved content or, when the self query
+        // could not load it, the self query, as legacy made a resource event's href
         string? href = null;
-        if (result.ResolvedContent is ILinkableResource { Links: { } links } &&
-            links.TryGetValue("self", out var selfLink))
+        var resourceType = (result as IResourceEventResourceType)?.ResourceType ?? result.ResolvedContent?.GetType();
+
+        if (resourceType is not null)
         {
-            href = selfLink.Href;
+            PipelineHelpers.TryCreateResourceEventHref(operationContext, resourceType, result.ResolvedContent ?? result.SelfQuery, out href);
         }
 
         if (href is not null)

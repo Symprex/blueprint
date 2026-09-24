@@ -37,6 +37,11 @@ Handler returns ResourceEvent<T>
 
 ### ✅ Phase 1: Immediate Wins (Implemented)
 
+> **Superseded.** A resource event's `Href` is no longer made from the operation's URL, so `FillUrlTemplate` is gone.
+> It is made as legacy made it: the registered `self` link of the event's resource type, filled from `Data` or, failing
+> that, `SelfQuery`, under the request's base URI (`PipelineHelpers.TryCreateResourceEventHref`). The operation's URL was
+> another resource's for a create (the collection's), and relative. Items 1 and 2 below describe the removed fallback.
+
 **1. Inline Href from operation properties (eliminates reflection fallback)**
 
 Current: `PipelineHelpers.FillUrlTemplate()` uses `ConcurrentDictionary + CompiledPropertyAccessor` at runtime.

@@ -47,7 +47,10 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyEventWidgetApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.TypedIdWidgetApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.RequiredShapeApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.ConverterWrittenBodyId");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.ConverterWrittenBodyId",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.HrefWidgetApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.HrefWidgetSecretPartialApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.HrefUnlinkedApiResource");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))

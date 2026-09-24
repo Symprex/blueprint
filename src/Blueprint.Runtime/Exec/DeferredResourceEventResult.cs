@@ -21,7 +21,7 @@ namespace Blueprint.Runtime.Exec;
 /// </para>
 /// </remarks>
 /// <typeparam name="T">The expected API resource type that the self-query will resolve to.</typeparam>
-public sealed class DeferredResourceEventResult<T> : OperationResult, IDeferredResourceEventResult where T : notnull
+public sealed class DeferredResourceEventResult<T> : OperationResult, IDeferredResourceEventResult, IResourceEventResourceType where T : notnull
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="DeferredResourceEventResult{T}"/> class.
@@ -104,6 +104,9 @@ public sealed class DeferredResourceEventResult<T> : OperationResult, IDeferredR
     /// request that produced it, useful for cross-service tracing and event replay.
     /// </summary>
     public string? CorrelationId { get; set; }
+
+    /// <inheritdoc />
+    Type IResourceEventResourceType.ResourceType => typeof(T);
 
     /// <summary>
     /// Adds a metadata key-value pair to this event, returning this instance for fluent chaining.
