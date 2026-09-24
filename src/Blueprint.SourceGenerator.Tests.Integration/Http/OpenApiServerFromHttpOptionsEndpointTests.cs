@@ -14,7 +14,7 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 /// <summary>
 /// Proves that <see cref="BlueprintHttpOptions.PublicApiHost" />, once registered via DI and resolved by
 /// <c>MapBlueprintApi</c>, actually reaches the OpenAPI document served by the real endpoint — not merely
-/// the <see cref="OpenApiOutputRenderingContext.Create" /> seam that Task 10 proved directly. Without this
+/// the <c>OpenApiOutputRenderingContext.Create</c> seam that Task 10 proved directly. Without this
 /// wiring the option is inert: <c>MapBlueprintApi</c> resolves <see cref="BlueprintHttpOptions" /> for
 /// routing but never hands it to <see cref="OpenApiDocumentEndpoint.Create" />.
 /// </summary>
@@ -24,7 +24,7 @@ public class OpenApiServerFromHttpOptionsEndpointTests
     public async Task When_public_api_host_configured_in_di_then_served_document_first_server_is_that_address()
     {
         var (json, statusCode) = await InvokeOpenApiEndpointAsync(
-            new BlueprintHttpOptions { PublicApiHost = "gateway.example.com/import/api" });
+            new BlueprintHttpOptions { PublicApiHost = "gateway.example.com/import" });
 
         statusCode.Should().Be(StatusCodes.Status200OK);
 
@@ -32,8 +32,26 @@ public class OpenApiServerFromHttpOptionsEndpointTests
         var servers = doc.RootElement.GetProperty("servers").EnumerateArray().ToArray();
 
         servers.Should().HaveCount(1);
-        var expectedUrl = "https://gateway.example.com/import/api";
+        var expectedUrl = "https://gateway.example.com/import/api/";
         servers[0].GetProperty("url").GetString().Should().Be(expectedUrl, "PublicApiHost registered via DI must reach the document rendered by the real endpoint");
+    }
+
+    [Fact]
+    public async Task When_public_api_host_configured_then_first_server_is_that_address_with_the_mapped_base_path()
+    {
+        // As legacy composed it: the gateway authority and prefix the application never sees, then the base path the
+        // API is mapped at. The paths stay relative to that server, as every legacy document's were.
+        var (json, _) = await InvokeOpenApiEndpointAsync(new BlueprintHttpOptions { PublicApiHost = "gateway.example.com/import" });
+
+        using var doc = JsonDocument.Parse(json);
+        var servers = doc.RootElement.GetProperty("servers").EnumerateArray().ToArray();
+
+        servers.Should().HaveCount(1);
+        servers[0].GetProperty("url").GetString().Should().Be("https://gateway.example.com/import/api/");
+
+        var paths = doc.RootElement.GetProperty("paths").EnumerateObject().Select(static p => p.Name).ToArray();
+        paths.Should().Contain("/templates/{Id}", "a path is relative to the server, which already carries the base path");
+        paths.Should().NotContain(static p => p.StartsWith("/api/", StringComparison.Ordinal), "the base path would then be in the address twice");
     }
 
     [Fact]

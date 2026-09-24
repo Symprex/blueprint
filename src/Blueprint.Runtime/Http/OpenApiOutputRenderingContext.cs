@@ -135,10 +135,9 @@ public sealed record OpenApiOutputRenderingContext(
     /// </param>
     /// <param name="httpOptions">
     /// Optional Blueprint HTTP options consulted when no explicit <see cref="OpenApiInfoOptions.Servers"/> are
-    /// configured: <see cref="BlueprintHttpOptions.PublicApiHost"/> is preferred, falling back to
-    /// <see cref="BlueprintHttpOptions.PublicHost"/>, to populate a single default <c>servers</c> entry with the
-    /// address this API is reachable at. When <see langword="null"/>, or when neither option is set, the
-    /// <c>servers</c> array is omitted unless <see cref="OpenApiInfoOptions.Servers"/> already carries entries.
+    /// configured: <see cref="BlueprintHttpOptions.PublicApiHost"/>, as given, populates a single default
+    /// <c>servers</c> entry. When <see langword="null"/>, or when it is not set, the <c>servers</c> array is omitted
+    /// unless <see cref="OpenApiInfoOptions.Servers"/> already carries entries.
     /// </param>
     /// <returns>The rendered output context carrying the JSON string.</returns>
     public static OpenApiOutputRenderingContext Create(
@@ -147,13 +146,42 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiSchemaProcessorOptions? schemaProcessorOptions = null,
         BlueprintHttpOptions? httpOptions = null)
     {
+        return Create(documentRendering, infoOptions, schemaProcessorOptions, httpOptions, basePath: null);
+    }
+
+    /// <summary>
+    /// Creates a rendered OpenAPI 3.x JSON string from the supplied assembled document model, for an API mapped at
+    /// <paramref name="basePath"/>.
+    /// </summary>
+    /// <param name="documentRendering">The assembled document model to render.</param>
+    /// <param name="infoOptions">Optional customisation for the <c>info</c> block.</param>
+    /// <param name="schemaProcessorOptions">Optional ordered schema processors for the <c>components/schemas</c> section.</param>
+    /// <param name="httpOptions">
+    /// Optional Blueprint HTTP options consulted when no explicit <see cref="OpenApiInfoOptions.Servers"/> are
+    /// configured: the default <c>servers</c> entry is <see cref="BlueprintHttpOptions.PublicApiHost"/> followed by
+    /// <paramref name="basePath"/>.
+    /// </param>
+    /// <param name="basePath">
+    /// The base path the API's routes are mapped under, which the default <c>servers</c> entry ends with, as the
+    /// document's <c>paths</c> are relative to it. <see langword="null"/> when unknown, leaving the entry as
+    /// <see cref="BlueprintHttpOptions.PublicApiHost"/> alone.
+    /// </param>
+    /// <returns>The rendered output context carrying the JSON string.</returns>
+    public static OpenApiOutputRenderingContext Create(
+        OpenApiDocumentRenderingContext documentRendering,
+        OpenApiInfoOptions? infoOptions,
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions,
+        BlueprintHttpOptions? httpOptions,
+        string? basePath)
+    {
         ArgumentNullException.ThrowIfNull(documentRendering);
 
         var json = RenderJson(
             documentRendering,
             infoOptions ?? new OpenApiInfoOptions(),
             schemaProcessorOptions ?? new OpenApiSchemaProcessorOptions(),
-            httpOptions);
+            httpOptions,
+            basePath);
         return new OpenApiOutputRenderingContext(documentRendering, json);
     }
 
@@ -161,12 +189,13 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiDocumentRenderingContext document,
         OpenApiInfoOptions infoOptions,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
-        BlueprintHttpOptions? httpOptions)
+        BlueprintHttpOptions? httpOptions,
+        string? basePath)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true });
 
-        WriteDocument(writer, document, infoOptions, schemaProcessorOptions, httpOptions);
+        WriteDocument(writer, document, infoOptions, schemaProcessorOptions, httpOptions, basePath);
         writer.Flush();
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
@@ -177,7 +206,8 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiDocumentRenderingContext document,
         OpenApiInfoOptions infoOptions,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
-        BlueprintHttpOptions? httpOptions)
+        BlueprintHttpOptions? httpOptions,
+        string? basePath)
     {
         writer.WriteStartObject();
 
@@ -217,7 +247,7 @@ public sealed record OpenApiOutputRenderingContext(
 
         writer.WriteString("openapi", string.IsNullOrWhiteSpace(infoOptions.OpenApiVersion) ? DefaultOpenApiVersion : infoOptions.OpenApiVersion);
         WriteInfo(writer, infoOptions);
-        WriteServers(writer, ResolveServers(infoOptions.Servers, httpOptions));
+        WriteServers(writer, ResolveServers(infoOptions.Servers, httpOptions, basePath));
         WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, infoOptions.SchemaNameFormatter);
         WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, infoOptions.SchemaNameFormatter);
         WriteDocumentTags(writer, document.Paths);
@@ -289,7 +319,9 @@ public sealed record OpenApiOutputRenderingContext(
 
     /// <summary>
     /// Resolves the effective <c>servers</c> list: the explicitly configured entries when there are any, and otherwise
-    /// the single gateway-reachable address in <see cref="BlueprintHttpOptions.PublicApiHost"/>. There is no tier below
+    /// the single gateway-reachable address in <see cref="BlueprintHttpOptions.PublicApiHost"/>, followed by the base
+    /// path the API is mapped under when that is known — as legacy Blueprint composed it, since the document's paths
+    /// are relative to the server and do not carry the base path themselves. There is no tier below
     /// that — when <c>PublicApiHost</c> is unset the <c>servers</c> array stays empty (omitted by
     /// <see cref="WriteServers"/>), and the incoming request's origin is never consulted because the document is
     /// rendered once at registration (<see cref="OpenApiDocumentEndpoint"/>), before any request exists.
@@ -301,7 +333,7 @@ public sealed record OpenApiOutputRenderingContext(
     /// <c>PublicHost</c> — an option that predates this and is set for link generation — silently advertise a
     /// prefix-less URL its API does not answer on.
     /// </remarks>
-    private static List<OpenApiServerEntry> ResolveServers(List<OpenApiServerEntry> configuredServers, BlueprintHttpOptions? httpOptions)
+    private static List<OpenApiServerEntry> ResolveServers(List<OpenApiServerEntry> configuredServers, BlueprintHttpOptions? httpOptions, string? basePath)
     {
         if (configuredServers.Count > 0)
         {
@@ -316,6 +348,13 @@ public sealed record OpenApiOutputRenderingContext(
 
         // The configured host may already carry a scheme (e.g. copied from a full URL); avoid doubling it up.
         var url = publicApiHost.Contains("://", StringComparison.Ordinal) ? publicApiHost : $"https://{publicApiHost}";
+
+        if (basePath is not null)
+        {
+            // Legacy's "{PublicApiHost}/{basePath}", which ends with a slash, the base path having one.
+            var trimmedBasePath = basePath.Trim('/');
+            url = url.TrimEnd('/') + "/" + (trimmedBasePath.Length > 0 ? trimmedBasePath + "/" : string.Empty);
+        }
 
         return [new OpenApiServerEntry { Url = url }];
     }
