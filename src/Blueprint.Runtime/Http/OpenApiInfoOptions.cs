@@ -140,6 +140,13 @@ public sealed class OpenApiInfoOptions
     /// <see cref="SchemaNameFormatter"/> like any other.
     /// </summary>
     public OpenApiRequestBodyNaming RequestBodyNaming { get; set; }
+
+    /// <summary>
+    /// Gets or sets how an operation's query parameters are named. Defaults to
+    /// <see cref="OpenApiParameterNaming.BindingName"/>; <see cref="OpenApiParameterNaming.PropertyName"/> names them
+    /// by their CLR properties, as legacy Blueprint did. Route, header and cookie parameters are unaffected.
+    /// </summary>
+    public OpenApiParameterNaming QueryParameterNaming { get; set; }
 }
 
 /// <summary>

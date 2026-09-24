@@ -288,6 +288,9 @@ configureOpenApi: options =>
   `ResourceEventOfPartnerCompany`.
 - `[OpenApiSchemaName("ImportRun")]` (`Blueprint.Model.Attributes`) gives a type a name of its own, as legacy's
   `[JsonSchema("ImportRun")]` did.
+- `options.QueryParameterNaming = OpenApiParameterNaming.PropertyName` names query parameters by their CLR properties
+  (`Page`), as legacy did, instead of the camel-case name the framework's client sends (`page`). Generators that use a
+  parameter's name as a method argument or query key need it; the host binds a query parameter whatever its case.
 - `options.RequestBodyNaming = OpenApiRequestBodyNaming.OperationType` keys each request body by the operation's CLR
   type (`CreatePartnerCompanyCommand`), as legacy did, instead of the operation's name (`CreatePartnerCompany`).
   Generators that tell a command from a query by a `Command` suffix on the body's name need it.

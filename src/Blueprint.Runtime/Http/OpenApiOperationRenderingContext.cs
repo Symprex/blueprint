@@ -26,25 +26,28 @@ public sealed record OpenApiOperationRenderingContext(
     /// <returns>The rendered OpenAPI operation context.</returns>
     public static OpenApiOperationRenderingContext Create(OpenApiResponseObjectRenderingContext responseObjects)
     {
-        return Create(responseObjects, OpenApiRequestBodyNaming.OperationName);
+        return Create(responseObjects, OpenApiRequestBodyNaming.OperationName, OpenApiParameterNaming.BindingName);
     }
 
     /// <summary>
     /// Creates deterministic OpenAPI-style operation models from the supplied response-object rendering context, keying
-    /// each request body as <paramref name="requestBodyNaming"/> says.
+    /// each request body as <paramref name="requestBodyNaming"/> says and naming query parameters as
+    /// <paramref name="queryParameterNaming"/> says.
     /// </summary>
     /// <param name="responseObjects">The response-object rendering context to compose with operation identity and URLs.</param>
     /// <param name="requestBodyNaming">How request body schema components are keyed.</param>
+    /// <param name="queryParameterNaming">How query parameters are named.</param>
     /// <returns>The rendered OpenAPI operation context.</returns>
     internal static OpenApiOperationRenderingContext Create(
         OpenApiResponseObjectRenderingContext responseObjects,
-        OpenApiRequestBodyNaming requestBodyNaming)
+        OpenApiRequestBodyNaming requestBodyNaming,
+        OpenApiParameterNaming queryParameterNaming)
     {
         ArgumentNullException.ThrowIfNull(responseObjects);
 
         var schemaProjection = responseObjects.SchemaComponents.SchemaProjection;
         var operations = responseObjects.Operations
-            .Select(operation => CreateOperation(operation, schemaProjection, requestBodyNaming))
+            .Select(operation => CreateOperation(operation, schemaProjection, requestBodyNaming, queryParameterNaming))
             .ToImmutableArray();
 
         return new OpenApiOperationRenderingContext(responseObjects, operations);
@@ -145,7 +148,8 @@ public sealed record OpenApiOperationRenderingContext(
     private static OpenApiOperationModel CreateOperation(
         OpenApiResponseObjectOperationContext operation,
         OpenApiSchemaProjectionContext schemaProjection,
-        OpenApiRequestBodyNaming requestBodyNaming)
+        OpenApiRequestBodyNaming requestBodyNaming,
+        OpenApiParameterNaming queryParameterNaming)
     {
         var httpMethods = operation.Operation.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var httpMethodMetadata)
             ? httpMethodMetadata.HttpMethods
@@ -165,7 +169,7 @@ public sealed record OpenApiOperationRenderingContext(
             : ImmutableDictionary<string, string>.Empty;
 
         var naming = schemaProjection.Naming;
-        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation, naming, schemaProjection.SchemaNamesByType);
+        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation, naming, schemaProjection.SchemaNamesByType, queryParameterNaming);
 
         if (requestBody is not null && requestBodyNaming == OpenApiRequestBodyNaming.OperationType)
         {
@@ -224,7 +228,11 @@ public sealed record OpenApiOperationRenderingContext(
         "IL2070",
         Justification = "OpenAPI projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
     private static (ImmutableArray<OpenApiParameterModel> Parameters, OpenApiRequestBodyModel? RequestBody)
-        ProjectInputMetadata(ApiOperationDescriptor descriptor, OpenApiSchemaNaming naming, FrozenDictionary<Type, string> schemaNamesByType)
+        ProjectInputMetadata(
+            ApiOperationDescriptor descriptor,
+            OpenApiSchemaNaming naming,
+            FrozenDictionary<Type, string> schemaNamesByType,
+            OpenApiParameterNaming queryParameterNaming)
     {
         if (!descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData))
         {
@@ -308,7 +316,7 @@ public sealed record OpenApiOperationRenderingContext(
 
                 case PropertyBindingSource.Query:
                     parameters.Add(new OpenApiParameterModel(
-                        entry.BindingName ?? entry.PropertyName,
+                        queryParameterNaming == OpenApiParameterNaming.PropertyName ? entry.PropertyName : entry.BindingName ?? entry.PropertyName,
                         "query",
                         Required: constraints.IsRequired,
                         schemaType,

@@ -103,7 +103,8 @@ internal static class OpenApiDocumentEndpoint
             infoOptions?.UsePlainJsonForErrorResponses ?? false);
         var operationContext = OpenApiOperationRenderingContext.Create(
             responseObjectContext,
-            infoOptions?.RequestBodyNaming ?? OpenApiRequestBodyNaming.OperationName);
+            infoOptions?.RequestBodyNaming ?? OpenApiRequestBodyNaming.OperationName,
+            infoOptions?.QueryParameterNaming ?? OpenApiParameterNaming.BindingName);
 
         // Apply per-operation processors before path-item grouping so consumers can strip
         // auto-populated parameters, override summaries, etc.
