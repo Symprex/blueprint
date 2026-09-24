@@ -44,16 +44,36 @@ public class RecurringTaskRegistrationServiceTests
     }
 
     [Fact]
-    public async Task When_no_schedulers_registered_then_provider_is_not_called()
+    public async Task When_no_schedules_are_declared_then_the_provider_is_given_the_empty_set()
     {
+        // Legacy RecurringTaskManager.RescheduleAllAsync always handed the provider the current set, empty or not, and
+        // the provider removed every job not in it, so the app's last schedule to be deleted from code stopped firing.
         var provider = new TestRecurringTaskProvider();
         var host = BuildHost([], provider);
 
         await host.StartAsync();
         await host.StopAsync();
 
-        provider.RegisteredSchedules.Should().BeEmpty("provider should not be called with empty schedules");
-        provider.RegisterCallCount.Should().Be(0);
+        provider.RegisterCallCount.Should().Be(1, "an empty set is the current set, and the provider must learn of it");
+        provider.RegisteredSchedules.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_a_scheduler_throws_then_it_declares_no_schedules_and_the_others_are_still_registered()
+    {
+        // Legacy logged the failure and treated the scheduler as declaring nothing ("Will delete all existing jobs").
+        var provider = new TestRecurringTaskProvider();
+        var host = BuildHost(
+            [new ThrowingScheduler(), new TestRecurringTaskScheduler("still-registered", "0 3 * * *")],
+            provider);
+
+        var start = () => host.StartAsync();
+
+        await start.Should().NotThrowAsync("one scheduler's failure must not stop the host or the other schedulers");
+        await host.StopAsync();
+
+        provider.RegisterCallCount.Should().Be(1);
+        provider.RegisteredSchedules.Select(static s => s.Name).Should().Equal("still-registered");
     }
 
     [Fact]
@@ -129,6 +149,14 @@ public class RecurringTaskRegistrationServiceTests
             var task = new RecurringTestBackgroundTask();
             IEnumerable<RecurringTaskSchedule> schedules = [new RecurringTaskSchedule(name, task, cronExpression)];
             return Task.FromResult(schedules);
+        }
+    }
+
+    private sealed class ThrowingScheduler : IRecurringTaskScheduler
+    {
+        public Task<IEnumerable<RecurringTaskSchedule>> GetTaskSchedulesAsync()
+        {
+            throw new InvalidOperationException("The scheduler could not load its schedules.");
         }
     }
 

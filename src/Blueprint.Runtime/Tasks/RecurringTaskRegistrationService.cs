@@ -8,9 +8,17 @@ namespace Blueprint.Runtime.Tasks;
 /// <see cref="IRecurringTaskProvider"/> for infrastructure-level registration (e.g., Hangfire recurring jobs).
 /// </summary>
 /// <remarks>
+/// <para>
 /// This is the compile-time equivalent of legacy Blueprint's <c>RecurringTaskSetupTask</c> that ran during
 /// app startup. It ensures all declared recurring tasks are registered (or updated/removed) when the
 /// application starts.
+/// </para>
+/// <para>
+/// The provider always receives the complete current set, even an empty one, and a scheduler that throws declares
+/// nothing, as in legacy's <c>RecurringTaskManager</c>. The provider removes whatever that set no longer contains, so
+/// register this service (through <c>AddRecurringTaskProvider</c>) only in the process that registers every one of the
+/// app's recurring task schedulers. Signature365 did that under its task-processor condition, <c>ShouldRunTaskProcessor</c>.
+/// </para>
 /// </remarks>
 public sealed class RecurringTaskRegistrationService : IHostedService
 {
@@ -48,16 +56,12 @@ public sealed class RecurringTaskRegistrationService : IHostedService
 
         foreach (var scheduler in this._schedulers)
         {
-            var schedules = await scheduler.GetTaskSchedulesAsync().ConfigureAwait(false);
-            allSchedules.AddRange(schedules);
+            allSchedules.AddRange(await this.GetSchedulesAsync(scheduler).ConfigureAwait(false));
         }
 
-        if (allSchedules.Count == 0)
-        {
-            this._logger.LogDebug("No recurring task schedules declared");
-            return;
-        }
-
+        // The provider is given the current set even when it is empty, as legacy RecurringTaskManager.RescheduleAllAsync
+        // always gave it: the provider removes the jobs of every schedule the set no longer contains, so skipping the call
+        // would leave the app's last deleted schedule firing.
         this._logger.LogInformation(
             "Registering {Count} recurring task schedule(s) with {Provider}",
             allSchedules.Count,
@@ -70,5 +74,29 @@ public sealed class RecurringTaskRegistrationService : IHostedService
     public Task StopAsync(CancellationToken cancellationToken)
     {
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Gets a scheduler's schedules, treating one that throws as declaring none, as legacy
+    /// <c>RecurringTaskManager.GetSchedulesAsync</c> did: the failure is logged, and the provider then removes that
+    /// scheduler's jobs along with every other schedule the current set no longer contains.
+    /// </summary>
+    private async Task<IEnumerable<RecurringTaskSchedule>> GetSchedulesAsync(IRecurringTaskScheduler scheduler)
+    {
+        var schedulerName = scheduler.GetType().Name;
+
+        try
+        {
+            return await scheduler.GetTaskSchedulesAsync().ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            this._logger.LogError(
+                e,
+                "Unhandled exception getting schedules from '{SchedulerName}'. Its recurring tasks will be removed",
+                schedulerName);
+
+            return [];
+        }
     }
 }

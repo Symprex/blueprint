@@ -43,6 +43,20 @@ public class HangfireRecurringTaskProviderStaleJobTests
     }
 
     [Fact]
+    public async Task When_no_schedules_are_declared_then_every_job_this_provider_created_is_removed()
+    {
+        // The app's last schedule deleted from code: the registration service hands over the empty set.
+        var (manager, storage) = CreateHangfire("blueprint:last-one", "blueprint:another", "manual-report");
+        var sut = CreateProvider(manager, storage);
+
+        await sut.RegisterSchedulesAsync([]);
+
+        manager.Received(1).RemoveIfExists("blueprint:last-one");
+        manager.Received(1).RemoveIfExists("blueprint:another");
+        manager.DidNotReceive().RemoveIfExists("manual-report");
+    }
+
+    [Fact]
     public async Task A_recurring_job_this_provider_did_not_create_is_never_removed()
     {
         // Legacy's own ids ({SchedulerType}:{Name}) and anything else registered in the same storage.
