@@ -30,6 +30,8 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "CollisionPreviewApiResource",
             "CollisionTrailApiResource",
             "DepartmentResource",
+            "DictionaryShapeApiResource",
+            "DictionaryShapeChild",
             "E2EConflictDetail",
             "E2EJobAcceptedPayload",
             "E2EWidgetResponse",

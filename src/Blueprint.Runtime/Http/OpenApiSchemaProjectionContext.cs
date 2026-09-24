@@ -606,17 +606,20 @@ public sealed record OpenApiSchemaProjectionContext(
         string? additionalPropertiesItemsFormat = null;
         string? additionalPropertiesItemsSchemaName = null;
 
-        if (additionalPropertiesKind == OpenApiSchemaKind.Array)
-        {
-            var dictValueType = ExtractElementType(property.PropertyType, JsonTypeInfoKind.Dictionary);
+        var dictValueType = additionalPropertiesKind is null ? null : ExtractElementType(property.PropertyType, JsonTypeInfoKind.Dictionary);
 
-            if (dictValueType is not null)
-            {
-                var dictValueTypeInfo = serializerContext.GetTypeInfo(dictValueType);
-                (additionalPropertiesItemsKind, additionalPropertiesItemsFormat, additionalPropertiesItemsSchemaName) =
-                    ResolveElementSchema(dictValueTypeInfo, dictValueType, JsonTypeInfoKind.Enumerable, schemaNamesByType);
-            }
+        if (additionalPropertiesKind == OpenApiSchemaKind.Array && dictValueType is not null)
+        {
+            var dictValueTypeInfo = serializerContext.GetTypeInfo(dictValueType);
+            (additionalPropertiesItemsKind, additionalPropertiesItemsFormat, additionalPropertiesItemsSchemaName) =
+                ResolveElementSchema(dictValueTypeInfo, dictValueType, JsonTypeInfoKind.Enumerable, schemaNamesByType);
         }
+
+        // Legacy documented an open value as any value, and a value as nullable when its annotation said so.
+        var valuesAreAnyValue = dictValueType is not null && OpenApiDictionaryValues.IsAnyValue(dictValueType);
+        var valuesAreNullable = dictValueType is not null
+            && !valuesAreAnyValue
+            && OpenApiDictionaryValues.AreValuesNullable(property.AttributeProvider as PropertyInfo, dictValueType, nullabilityContext);
 
         return new OpenApiSchemaPropertyModel(
             property.Name,
@@ -650,7 +653,11 @@ public sealed record OpenApiSchemaProjectionContext(
             exampleValue,
             isReadOnly,
             isWriteOnly,
-            SchemaName: referencedSchemaName);
+            SchemaName: referencedSchemaName)
+        {
+            AllowsAdditionalProperties = valuesAreAnyValue,
+            AdditionalPropertiesAreNullable = valuesAreNullable,
+        };
     }
 
     /// <summary>
@@ -733,15 +740,8 @@ public sealed record OpenApiSchemaProjectionContext(
     {
         if (kind == JsonTypeInfoKind.Dictionary)
         {
-            // Check the type itself first (e.g. IDictionary<string, Link>), then its implemented interfaces.
-            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IDictionary<,>))
-            {
-                return type.GetGenericArguments()[1];
-            }
-
-            var dictInterface = type.GetInterfaces()
-                .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
-            return dictInterface?.GetGenericArguments()[1];
+            // The type itself (e.g. IDictionary<string, Link>) or an implemented interface, read-only ones included.
+            return OpenApiDictionaryValues.GetValueType(type);
         }
 
         if (kind == JsonTypeInfoKind.Enumerable)
@@ -1337,8 +1337,7 @@ public sealed record OpenApiSchemaProjectionContext(
         // When STJ has no metadata (kind == None), infer the shape from CLR interfaces.
         if (kind == JsonTypeInfoKind.None)
         {
-            if ((nonNullableType.IsGenericType && nonNullableType.GetGenericTypeDefinition() == typeof(IDictionary<,>))
-                || nonNullableType.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>)))
+            if (OpenApiDictionaryValues.GetValueType(nonNullableType) is not null)
             {
                 return OpenApiSchemaKind.Object;
             }
@@ -1551,6 +1550,12 @@ public sealed record OpenApiSchemaPropertyModel(
     /// <c>additionalProperties: {}</c>.
     /// </summary>
     public bool AllowsAdditionalProperties { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the property is a dictionary whose values may be null, written with
+    /// <c>"nullable": true</c> in its <c>additionalProperties</c>.
+    /// </summary>
+    public bool AdditionalPropertiesAreNullable { get; init; }
 }
 
 /// <summary>

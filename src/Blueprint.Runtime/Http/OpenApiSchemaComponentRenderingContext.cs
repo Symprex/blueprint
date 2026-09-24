@@ -104,7 +104,10 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.IsReadOnly,
             property.IsWriteOnly,
             SchemaRef: property.SchemaName,
-            AllowsAdditionalProperties: property.AllowsAdditionalProperties);
+            AllowsAdditionalProperties: property.AllowsAdditionalProperties)
+        {
+            AdditionalPropertiesAreNullable = property.AdditionalPropertiesAreNullable,
+        };
     }
 
     private static string? MapType(OpenApiSchemaKind kind)
@@ -301,4 +304,12 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     bool IsReadOnly = false,
     bool IsWriteOnly = false,
     string? SchemaRef = null,
-    bool AllowsAdditionalProperties = false);
+    bool AllowsAdditionalProperties = false)
+{
+    /// <summary>
+    /// Gets a value indicating whether the property is a dictionary whose values may be null, written with
+    /// <c>"nullable": true</c> in its <c>additionalProperties</c> — beside the value's type, or beside a <c>oneOf</c> wrapping
+    /// the value's <c>$ref</c>, which OpenAPI 3.0 would otherwise not let it sit beside.
+    /// </summary>
+    public bool AdditionalPropertiesAreNullable { get; init; }
+}

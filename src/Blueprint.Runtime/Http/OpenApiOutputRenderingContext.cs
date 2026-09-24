@@ -1969,7 +1969,23 @@ public sealed record OpenApiOutputRenderingContext(
         {
             writer.WritePropertyName("additionalProperties");
             writer.WriteStartObject();
-            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef, schemaNameFormatter)}");
+
+            // A nullable value wraps its reference in oneOf beside "nullable", as a nullable property does.
+            if (property.AdditionalPropertiesAreNullable)
+            {
+                writer.WriteBoolean("nullable", true);
+                writer.WritePropertyName("oneOf");
+                writer.WriteStartArray();
+                writer.WriteStartObject();
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef, schemaNameFormatter)}");
+                writer.WriteEndObject();
+                writer.WriteEndArray();
+            }
+            else
+            {
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef, schemaNameFormatter)}");
+            }
+
             writer.WriteEndObject();
         }
         else if (property.AdditionalPropertiesType is not null)
@@ -1981,6 +1997,11 @@ public sealed record OpenApiOutputRenderingContext(
             if (property.AdditionalPropertiesFormat is not null)
             {
                 writer.WriteString("format", property.AdditionalPropertiesFormat);
+            }
+
+            if (property.AdditionalPropertiesAreNullable)
+            {
+                writer.WriteBoolean("nullable", true);
             }
 
             // When dictionary values are arrays, emit the nested items schema.

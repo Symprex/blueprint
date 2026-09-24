@@ -409,6 +409,14 @@ public sealed record OpenApiOperationRenderingContext(
                 case PropertyBindingSource.Body:
                     var (bodyItemsType, bodyItemsFormat, bodyItemsSchemaRef, bodyAdditionalType, bodyAdditionalFormat, bodyAdditionalSchemaRef) = ResolveCollectionSchema(clrProperty, schemaNamesByType);
 
+                    // Legacy documented a dictionary's open value as any value, and a value as nullable when its
+                    // annotation said so.
+                    var bodyValueType = clrProperty is null ? null : OpenApiDictionaryValues.GetValueType(clrProperty.PropertyType);
+                    var bodyValuesAreAnyValue = bodyValueType is not null && OpenApiDictionaryValues.IsAnyValue(bodyValueType);
+                    var bodyValuesAreNullable = bodyValueType is not null
+                        && !bodyValuesAreAnyValue
+                        && OpenApiDictionaryValues.AreValuesNullable(clrProperty, bodyValueType, nullabilityContext);
+
                     bodyPropertyNamesByClrName[entry.PropertyName] = entry.BindingName ?? entry.PropertyName;
                     conditionalRequirements.AddRange(OpenApiValidationConstraints.ExtractConditionalRequirements(clrProperty));
 
@@ -435,6 +443,8 @@ public sealed record OpenApiOperationRenderingContext(
                         AdditionalPropertiesType = bodyAdditionalType,
                         AdditionalPropertiesFormat = bodyAdditionalFormat,
                         AdditionalPropertiesSchemaRef = bodyAdditionalSchemaRef,
+                        AllowsAdditionalProperties = bodyValuesAreAnyValue,
+                        AdditionalPropertiesAreNullable = bodyValuesAreNullable,
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
                         DefaultValue = defaultValueAttr?.Value,
@@ -651,12 +661,16 @@ public sealed record OpenApiOperationRenderingContext(
             return (null, null, null, null, null, null);
         }
 
-        // Check for IDictionary<TKey, TValue> first (dictionaries also implement IEnumerable).
-        var dictInterface = propertyType.GetInterfaces()
-            .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
-        if (dictInterface is not null)
+        // Check for a dictionary first (dictionaries also implement IEnumerable). An open value is any value, which legacy
+        // documented as {} and the body property records with AllowsAdditionalProperties.
+        var valueType = OpenApiDictionaryValues.GetValueType(propertyType);
+        if (valueType is not null)
         {
-            var valueType = dictInterface.GetGenericArguments()[1];
+            if (OpenApiDictionaryValues.IsAnyValue(valueType))
+            {
+                return (null, null, null, null, null, null);
+            }
+
             var (additionalType, additionalFormat) = MapClrTypeToOpenApiSchema(valueType);
 
             // A complex value type with a component of its own is referenced; any other stays an inline object.
@@ -725,12 +739,16 @@ public sealed record OpenApiOperationRenderingContext(
             return null;
         }
 
-        var genericInterface = dictionaryValues ? typeof(IDictionary<,>) : typeof(IEnumerable<>);
+        if (dictionaryValues)
+        {
+            return OpenApiDictionaryValues.GetValueType(type);
+        }
+
         var implemented = type.GetInterfaces()
             .Append(type)
-            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == genericInterface);
+            .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
 
-        return implemented?.GetGenericArguments()[dictionaryValues ? 1 : 0];
+        return implemented?.GetGenericArguments()[0];
     }
 
     /// <summary>
@@ -850,8 +868,8 @@ public sealed record OpenApiOperationRenderingContext(
             return parsableFormat.Value;
         }
 
-        // Check for dictionary (renders as object with additionalProperties).
-        if (underlying.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>)))
+        // Check for dictionary, read-only ones included (renders as object with additionalProperties).
+        if (OpenApiDictionaryValues.GetValueType(underlying) is not null)
         {
             return ("object", null);
         }
@@ -1040,7 +1058,7 @@ public sealed record OpenApiOperationRenderingContext(
             if (underlying == typeof(object)
                 || underlying == typeof(System.Text.Json.JsonElement)
                 || typeof(System.Text.Json.Nodes.JsonNode).IsAssignableFrom(underlying)
-                || underlying.GetInterfaces().Append(underlying).Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>)))
+                || OpenApiDictionaryValues.GetValueType(underlying) is not null)
             {
                 return;
             }
