@@ -70,6 +70,11 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "TypedIdWidgetApiResource",
             "UnexposedFixtureApiResource",
             "ValidationProblemDetails",
+            "XmlDocChild",
+            "XmlDocDerived",
+            "XmlDocDescribedType",
+            "XmlDocGenericOfXmlDocChild",
+            "XmlDocShape",
             "string");
 
         stringSchema.Kind.Should().Be(OpenApiSchemaKind.String);

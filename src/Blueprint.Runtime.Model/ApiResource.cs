@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using Blueprint.Model.Attributes;
 
 namespace Blueprint.Model;
@@ -15,11 +15,14 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     /// <summary>
     /// The object type of this resource, used to indicate to clients what they
     /// are dealing with (i.e. 'user', 'account', 'group').
+    /// </summary>
+    /// <remarks>
     /// Override in derived classes to supply a static string for zero-allocation serialization;
     /// the default implementation derives the name at runtime from the concrete type via
     /// <see cref="GetTypeName"/>.
     /// Derived classes may also assign this property in their constructor to override the default.
-    /// </summary>
+    /// The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     [JsonPropertyName("$object")]
     public virtual string Object
     {

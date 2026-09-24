@@ -281,7 +281,7 @@ public sealed record OpenApiOperationRenderingContext(
             var isRequired = constraints.IsRequired
                 || (isLegacyRule && clrProperty is not null && OpenApiNullability.IsNotNullable(clrProperty, nullabilityContext));
             var isNullable = entry.IsNullable && !(isLegacyRule && constraints.IsRequired);
-            var description = GetPropertyDescription(clrProperty, entry.PropertyName, docData);
+            var description = GetPropertyDescription(clrProperty, entry.PropertyName, docData, isBodyProperty: entry.Source == PropertyBindingSource.Body);
             var enumValues = GetEnumValues(clrProperty);
             var enumSchemaRef = GetEnumSchemaRef(clrProperty, naming);
 
@@ -456,6 +456,9 @@ public sealed record OpenApiOperationRenderingContext(
                         AdditionalPropertiesSchemaRef = bodyAdditionalSchemaRef,
                         AllowsAdditionalProperties = bodyValuesAreAnyValue,
                         AdditionalPropertiesAreNullable = bodyValuesAreNullable,
+                        EnumDescription = enumSchemaRef is null || clrProperty is null
+                            ? null
+                            : OpenApiSchemaProjectionContext.GetTypeDescription(Nullable.GetUnderlyingType(clrProperty.PropertyType) ?? clrProperty.PropertyType),
                         IsDeprecated = isDeprecated,
                         DeprecationReason = propertyDeprecationReason,
                         DefaultValue = defaultValueAttr?.Value,
@@ -487,6 +490,9 @@ public sealed record OpenApiOperationRenderingContext(
             ? new OpenApiRequestBodyModel(Required: true, bodyProperties.ToImmutableArray())
             {
                 Conditionals = ResolveBodyConditionals(conditionalRequirements, bodyPropertyNamesByClrName),
+
+                // Legacy's NJsonSchema described the body's schema by the operation type, as it did any other.
+                Description = OpenApiSchemaProjectionContext.GetTypeDescription(descriptor.OperationType) ?? docData?.Summary,
             }
             : null;
 
@@ -571,7 +577,8 @@ public sealed record OpenApiOperationRenderingContext(
     private static string? GetPropertyDescription(
         System.Reflection.PropertyInfo? property,
         string propertyName,
-        OperationDocumentationFeatureData? docData)
+        OperationDocumentationFeatureData? docData,
+        bool isBodyProperty)
     {
         var attributeDescription = property?
             .GetCustomAttributes(typeof(DescriptionAttribute), inherit: true)
@@ -583,7 +590,19 @@ public sealed record OpenApiOperationRenderingContext(
             return attributeDescription;
         }
 
-        // Fall back to compile-time XML documentation when no [Description] attribute is present
+        // Then the XML documentation file beside the declaring assembly, formatted as legacy formatted it: a body property
+        // as its NJsonSchema described one, a parameter as its own XmlDocsExtensions did. It is read wherever the property
+        // was declared, a base class of another assembly included.
+        var documented = property is null
+            ? null
+            : isBodyProperty ? OpenApiXmlDocs.GetSchemaSummary(property) : OpenApiXmlDocs.GetParameterSummary(property);
+
+        if (documented is not null)
+        {
+            return documented;
+        }
+
+        // Fall back to compile-time XML documentation when no documentation file is deployed
         if (docData?.PropertySummaries.TryGetValue(propertyName, out var xmlSummary) == true)
         {
             return xmlSummary;

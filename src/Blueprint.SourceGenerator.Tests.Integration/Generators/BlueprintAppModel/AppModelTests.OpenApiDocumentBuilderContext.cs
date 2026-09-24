@@ -53,7 +53,8 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.HrefUnlinkedApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.DictionaryShapeApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.ExtensionShapeApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.ParameterTitlesApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.ParameterTitlesApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.XmlDocShape");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))

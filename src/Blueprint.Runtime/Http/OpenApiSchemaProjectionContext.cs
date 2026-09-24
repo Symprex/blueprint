@@ -407,7 +407,8 @@ public sealed record OpenApiSchemaProjectionContext(
             .Select(static property => property.Name)
             .ToImmutableArray();
 
-        var schemaDescription = bodyType.GetCustomAttribute<DescriptionAttribute>()?.Description;
+        // As legacy's NJsonSchema described a schema: the type's [Description], else its XML documentation's summary.
+        var schemaDescription = GetTypeDescription(bodyType);
         var schemaTitle = bodyType.GetCustomAttribute<System.ComponentModel.DisplayNameAttribute>()?.DisplayName;
 
         // Conditional validators are cross-property, so they belong to this schema rather than to any one of its
@@ -597,6 +598,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         var format = MapFormatFromValidationAttributes(validationAttributes) ?? MapFormat(property.PropertyType);
         var (enumValues, enumSchemaName) = MapEnumValues(property.PropertyType, naming);
+        var enumDescription = enumSchemaName is null ? null : GetTypeDescription(Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType);
         var description = GetPropertyDescription(property);
         var obsoleteAttr = property.AttributeProvider is MemberInfo deprecatedMember
             ? deprecatedMember.GetCustomAttribute<ObsoleteAttribute>(inherit: true)
@@ -676,6 +678,7 @@ public sealed record OpenApiSchemaProjectionContext(
         {
             AllowsAdditionalProperties = valuesAreAnyValue,
             AdditionalPropertiesAreNullable = valuesAreNullable,
+            EnumDescription = enumDescription,
         };
     }
 
@@ -987,8 +990,8 @@ public sealed record OpenApiSchemaProjectionContext(
     }
 
     /// <summary>
-    /// Extracts the <see cref="DescriptionAttribute"/> value from a body property's underlying CLR member,
-    /// returning <c>null</c> when no description is specified.
+    /// Returns a body property's description: its underlying CLR member's <see cref="DescriptionAttribute"/>, else the
+    /// summary of its XML documentation, as legacy's NJsonSchema took it; <c>null</c> when it has neither.
     /// </summary>
     private static string? GetPropertyDescription(JsonPropertyInfo property)
     {
@@ -997,7 +1000,18 @@ public sealed record OpenApiSchemaProjectionContext(
             return null;
         }
 
-        return member.GetCustomAttribute<DescriptionAttribute>()?.Description;
+        return member.GetCustomAttribute<DescriptionAttribute>()?.Description ?? OpenApiXmlDocs.GetSchemaSummary(member);
+    }
+
+    /// <summary>
+    /// Returns a type's description as legacy's NJsonSchema took it: its <see cref="DescriptionAttribute"/>, else the summary
+    /// of its XML documentation; <c>null</c> when it has neither.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <returns>The description, or <c>null</c>.</returns>
+    internal static string? GetTypeDescription(Type type)
+    {
+        return type.GetCustomAttribute<DescriptionAttribute>()?.Description ?? OpenApiXmlDocs.GetSchemaSummary(type);
     }
 
     /// <summary>
@@ -1582,6 +1596,12 @@ public sealed record OpenApiSchemaPropertyModel(
     /// <c>"nullable": true</c> in its <c>additionalProperties</c>.
     /// </summary>
     public bool AdditionalPropertiesAreNullable { get; init; }
+
+    /// <summary>
+    /// Gets the description of the enum type the property references, which its component carries, or
+    /// <see langword="null"/> when it is not an enum or has none.
+    /// </summary>
+    public string? EnumDescription { get; init; }
 }
 
 /// <summary>

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Blueprint.Http;
 using Blueprint.Model;
 
 namespace Blueprint.Runtime.Http;
@@ -142,6 +143,7 @@ public sealed record OpenApiDocumentRenderingContext(
                         AllowsAdditionalProperties: bodyProperty.AllowsAdditionalProperties)
                     {
                         AdditionalPropertiesAreNullable = bodyProperty.AdditionalPropertiesAreNullable,
+                        EnumDescription = bodyProperty.EnumDescription,
                     });
                 }
 
@@ -150,6 +152,7 @@ public sealed record OpenApiDocumentRenderingContext(
                     "object",
                     requiredNames.ToImmutable(),
                     properties.ToImmutable(),
+                    Description: requestBody.Description,
                     Conditionals: requestBody.Conditionals));
             }
         }
@@ -244,7 +247,7 @@ public sealed record OpenApiDocumentRenderingContext(
     private static ImmutableArray<OpenApiSchemaComponentModel> CollectEnumSchemaComponents(
         ImmutableArray<OpenApiSchemaComponentModel> existingComponents)
     {
-        var enumSchemas = new Dictionary<string, ImmutableArray<string>>(StringComparer.Ordinal);
+        var enumSchemas = new Dictionary<string, (ImmutableArray<string> Values, string? Description)>(StringComparer.Ordinal);
 
         foreach (var component in existingComponents)
         {
@@ -252,7 +255,7 @@ public sealed record OpenApiDocumentRenderingContext(
             {
                 if (property.EnumSchemaRef is not null && !property.EnumValues.IsDefaultOrEmpty)
                 {
-                    enumSchemas.TryAdd(property.EnumSchemaRef, property.EnumValues);
+                    enumSchemas.TryAdd(property.EnumSchemaRef, (property.EnumValues, property.EnumDescription));
                 }
             }
         }
@@ -264,13 +267,14 @@ public sealed record OpenApiDocumentRenderingContext(
 
         var builder = ImmutableArray.CreateBuilder<OpenApiSchemaComponentModel>(enumSchemas.Count);
 
-        foreach (var (name, values) in enumSchemas)
+        foreach (var (name, (values, description)) in enumSchemas)
         {
             builder.Add(new OpenApiSchemaComponentModel(
                 name,
                 "string",
                 ImmutableArray<string>.Empty,
                 ImmutableArray<OpenApiSchemaComponentPropertyModel>.Empty,
+                Description: description,
                 ComponentEnumValues: values));
         }
 
@@ -365,35 +369,41 @@ public sealed record OpenApiDocumentRenderingContext(
                 "$object",
                 "string",
                 IsExtensionData: false,
-                IsNullable: false),
+                IsNullable: false,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.Object))),
             new OpenApiSchemaComponentPropertyModel(
                 "eventId",
                 "string",
                 IsExtensionData: false,
-                IsNullable: false),
+                IsNullable: false,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.EventId))),
             new OpenApiSchemaComponentPropertyModel(
                 "changeType",
                 null,
                 IsExtensionData: false,
                 IsNullable: false,
                 EnumSchemaRef: "ResourceEventChangeType",
-                EnumValues: ImmutableArray.Create("Created", "Updated", "Deleted")),
+                EnumValues: ImmutableArray.Create("Created", "Updated", "Deleted"),
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.ChangeType))),
             new OpenApiSchemaComponentPropertyModel(
                 "created",
                 "string",
                 IsExtensionData: false,
                 IsNullable: false,
-                Format: "date-time"),
+                Format: "date-time",
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.Created))),
             new OpenApiSchemaComponentPropertyModel(
                 "resourceObject",
                 "string",
                 IsExtensionData: false,
-                IsNullable: false),
+                IsNullable: false,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.ResourceObject))),
             new OpenApiSchemaComponentPropertyModel(
                 "href",
                 "string",
                 IsExtensionData: false,
-                IsNullable: true),
+                IsNullable: true,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.Href))),
             new OpenApiSchemaComponentPropertyModel(
                 "data",
                 null,
@@ -405,31 +415,43 @@ public sealed record OpenApiDocumentRenderingContext(
                 "object",
                 IsExtensionData: false,
                 IsNullable: true,
-                AllowsAdditionalProperties: true),
+                AllowsAdditionalProperties: true,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.Metadata))),
             new OpenApiSchemaComponentPropertyModel(
                 "secureData",
                 "object",
                 IsExtensionData: false,
                 IsNullable: true,
-                AllowsAdditionalProperties: true),
+                AllowsAdditionalProperties: true,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.SecureData))),
             new OpenApiSchemaComponentPropertyModel(
                 "changedValues",
                 "object",
                 IsExtensionData: false,
                 IsNullable: true,
-                AllowsAdditionalProperties: true),
+                AllowsAdditionalProperties: true,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.ChangedValues))),
             new OpenApiSchemaComponentPropertyModel(
                 "correlationId",
                 "string",
                 IsExtensionData: false,
-                IsNullable: true));
+                IsNullable: true,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.CorrelationId))));
 
         var required = ImmutableArray.Create("$object", "eventId", "changeType", "created", "resourceObject", "data");
 
+        // Legacy described the envelope by ResourceEvent<T>'s documentation and its members by ResourceEvent's; the
+        // payload's own description is the resource's.
         return new OpenApiSchemaComponentModel(
             envelopeBodyTypeName,
             "object",
             required,
-            properties);
+            properties,
+            Description: OpenApiXmlDocs.GetSchemaSummary(typeof(ResourceEvent<>)));
+    }
+
+    private static string? DescribeResourceEventProperty(string propertyName)
+    {
+        return typeof(ResourceEvent).GetProperty(propertyName) is { } property ? OpenApiXmlDocs.GetSchemaSummary(property) : null;
     }
 }

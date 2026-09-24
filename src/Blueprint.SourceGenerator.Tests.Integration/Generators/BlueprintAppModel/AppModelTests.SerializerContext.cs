@@ -58,7 +58,8 @@ public class AppModelSerializerContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.HrefUnlinkedApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.DictionaryShapeApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.ExtensionShapeApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.ParameterTitlesApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.ParameterTitlesApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.XmlDocShape");
     }
 
     [Fact]
@@ -113,6 +114,7 @@ public class AppModelSerializerContextTests
             typeof(Http.HrefUnlinkedApiResource),
             typeof(Http.DictionaryShapeApiResource),
             typeof(Http.ExtensionShapeApiResource),
-            typeof(Http.ParameterTitlesApiResource));
+            typeof(Http.ParameterTitlesApiResource),
+            typeof(Http.XmlDocShape));
     }
 }

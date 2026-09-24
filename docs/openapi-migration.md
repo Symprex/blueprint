@@ -338,6 +338,30 @@ success response as the `ResourceEventOf{T}` envelope component, since that is w
 Whatever the event's change type — `ResourceCreated<T>` and `ResourceDeleted<T>` included — the host sends it as a 200 with
 the envelope and no `Location`, as legacy did, and the document says 200.
 
+### Descriptions from XML documentation
+
+Legacy described a schema, a property and a parameter by its XML documentation's `summary`, read at runtime from the
+`{assembly}.xml` beside the declaring assembly. So does the document now: a response component, an enum and a request body
+by its type, and each property and parameter by its member, a `[Description]` attribute winning as it did for legacy's
+schemas. The text is formatted as legacy formatted it: line breaks kept and the first line's indentation removed, a
+`<see cref>` written as the last segment of its target, and an `<inheritdoc/>` taken from the base class or an interface.
+A request-body property or a parameter with no deployed documentation falls back to what the generator read at compile
+time.
+
+Two settings decide what there is to read:
+
+- `<GenerateDocumentationFile>true</GenerateDocumentationFile>` on the projects that declare the API's types, which
+  Signature365's `backend/src/Directory.Build.props` already sets, and which puts each `.xml` beside its assembly in the
+  build and publish output.
+- `<CopyDocumentationFilesFromPackages>true</CopyDocumentationFilesFromPackages>` in the consuming app (for Signature365,
+  `backend/Directory.Build.props`, so its test projects render the same documents). The framework's own members —
+  `$object`, `$links`, `$partial`, a list's and a page's members, `Link` and the resource event envelope — are
+  documented in Blueprint's packages, whose `.xml` files the SDK does not copy to the build or publish output otherwise.
+  Their summaries are legacy's, word for word.
+
+`ProblemDetails` and `ValidationProblemDetails` stay undescribed: their documentation ships only in the SDK's reference
+packs, which a deployed app does not have.
+
 ### Issue: TenantId in Path Parameters
 
 S365 operations may expose `TenantId` as a path parameter in OpenAPI, but this is resolved from the JWT claim, not the URL.

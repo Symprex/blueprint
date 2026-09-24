@@ -103,6 +103,11 @@ public sealed record OpenApiRequestBodyModel(
     /// it by the operation's name.
     /// </summary>
     public string? SchemaName { get; init; }
+
+    /// <summary>
+    /// Gets the description of the body's schema component, or <see langword="null"/> for none.
+    /// </summary>
+    public string? Description { get; init; }
 }
 
 /// <summary>
@@ -188,6 +193,9 @@ public sealed record OpenApiRequestBodyPropertyModel(
 
     /// <summary>Gets whether this property is a dictionary whose values may be null, rendered with <c>"nullable": true</c> in its <c>additionalProperties</c>.</summary>
     public bool AdditionalPropertiesAreNullable { get; init; }
+
+    /// <summary>Gets the description of the enum type <see cref="EnumSchemaRef"/> names, which its component carries, or null.</summary>
+    public string? EnumDescription { get; init; }
 
     /// <summary>Gets whether this property is write-only (annotated with <see cref="Blueprint.Model.Attributes.OpenApiWriteOnlyAttribute"/>).</summary>
     public bool IsWriteOnly { get; init; }

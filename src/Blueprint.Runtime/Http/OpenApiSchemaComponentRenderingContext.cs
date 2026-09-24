@@ -108,6 +108,7 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             AllowsAdditionalProperties: property.AllowsAdditionalProperties)
         {
             AdditionalPropertiesAreNullable = property.AdditionalPropertiesAreNullable,
+            EnumDescription = property.EnumDescription,
         };
     }
 
@@ -313,4 +314,10 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     /// the value's <c>$ref</c>, which OpenAPI 3.0 would otherwise not let it sit beside.
     /// </summary>
     public bool AdditionalPropertiesAreNullable { get; init; }
+
+    /// <summary>
+    /// Gets the description of the enum type <see cref="EnumSchemaRef"/> names, which its component carries, or
+    /// <see langword="null"/> when there is none.
+    /// </summary>
+    public string? EnumDescription { get; init; }
 }

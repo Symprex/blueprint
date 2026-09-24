@@ -1509,6 +1509,13 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName("Link");
         writer.WriteStartObject();
         writer.WriteString("title", "Link");
+
+        // Described by Link's documentation, as legacy described every schema.
+        if (OpenApiXmlDocs.GetSchemaSummary(typeof(Blueprint.Model.Link)) is { } description)
+        {
+            writer.WriteString("description", description);
+        }
+
         writer.WriteString("type", "object");
 
         writer.WritePropertyName("required");
@@ -1546,6 +1553,12 @@ public sealed record OpenApiOutputRenderingContext(
         if (!component.ComponentEnumValues.IsDefaultOrEmpty)
         {
             writer.WriteString("type", "string");
+
+            if (component.Description is not null)
+            {
+                writer.WriteString("description", component.Description);
+            }
+
             WriteEnumValues(writer, component.ComponentEnumValues);
             writer.WriteEndObject();
             return;

@@ -4,10 +4,14 @@ using JetBrains.Annotations;
 namespace Blueprint.Model;
 
 /// <summary>
-/// A paged list resource that wraps a page of items with pagination metadata.
-/// Use when the consumer needs to navigate through a total result set with
-/// page-based offsets (page number + page size).
+/// A specialisation of <see cref="ListApiResource{T}"/> that represents a list of resources
+/// that can be paged on the server.
 /// </summary>
+/// <remarks>
+/// It wraps a page of items with pagination metadata. Use when the consumer needs to navigate through a total result set
+/// with page-based offsets (page number + page size). The summary is legacy Blueprint's, which the OpenAPI document
+/// describes the resource with.
+/// </remarks>
 /// <typeparam name="T">The type of items in the page.</typeparam>
 [PublicAPI]
 public class PagedApiResource<T> : ListApiResource<T>
@@ -37,12 +41,19 @@ public class PagedApiResource<T> : ListApiResource<T>
     }
 
     /// <summary>
-    /// The maximum number of items per page.
+    /// The size of the page requested.
     /// </summary>
+    /// <remarks>
+    /// The maximum number of items per page. The summary is legacy Blueprint's, which the OpenAPI document describes the
+    /// property with.
+    /// </remarks>
     public int PageSize { get; }
 
     /// <summary>
-    /// The 1-based index of the current page.
+    /// The 1-based index of the page requested.
     /// </summary>
+    /// <remarks>
+    /// The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     public int CurrentPage { get; }
 }

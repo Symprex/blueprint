@@ -70,6 +70,11 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "TypedIdWidgetApiResource",
             "UnexposedFixtureApiResource",
             "ValidationProblemDetails",
+            "XmlDocChild",
+            "XmlDocDerived",
+            "XmlDocDescribedType",
+            "XmlDocGenericOfXmlDocChild",
+            "XmlDocShape",
             "string");
 
         var stringComponent = componentContext.Components.Single(static component => component.BodyTypeName == "string");

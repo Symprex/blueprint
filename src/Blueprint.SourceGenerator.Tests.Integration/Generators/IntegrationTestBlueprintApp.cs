@@ -63,4 +63,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.DictionaryShapeApiResource))]
 [JsonSerializable(typeof(Http.ExtensionShapeApiResource))]
 [JsonSerializable(typeof(Http.ParameterTitlesApiResource))]
+[JsonSerializable(typeof(Http.XmlDocShape))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

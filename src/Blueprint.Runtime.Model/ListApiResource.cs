@@ -40,15 +40,21 @@ public class ListApiResource<T> : ApiResource, IApiResourceCollection
     public override string Object => $"list.{GetItemTypeName()}";
 
     /// <summary>
-    /// The items in this list resource.
+    /// The values of this list.
     /// </summary>
+    /// <remarks>
+    /// The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     public IEnumerable<T> Values { get; }
 
     /// <summary>
-    /// The total number of items. For <see cref="ListApiResource{T}"/>, this equals the
-    /// count of <see cref="Values"/>. For <see cref="PagedApiResource{T}"/>, this represents
-    /// the total count across all pages.
+    /// The total count of values in this list.
     /// </summary>
+    /// <remarks>
+    /// For <see cref="ListApiResource{T}"/>, this equals the count of <see cref="Values"/>. For
+    /// <see cref="PagedApiResource{T}"/>, this represents the total count across all pages. The summary is legacy
+    /// Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     public long Total { get; protected internal set; }
 
     /// <inheritdoc />

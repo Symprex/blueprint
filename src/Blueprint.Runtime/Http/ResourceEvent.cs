@@ -55,25 +55,34 @@ public class ResourceEvent : OperationResult
     }
 
     /// <summary>
-    /// Gets the static object-type discriminator for this resource event, always <c>"event"</c>.
-    /// Mirrors the <c>$object</c> convention used by <see cref="ApiResource"/> to let clients identify
-    /// the shape of the JSON payload without inspecting every property.
+    /// Gets the object of this 'resource', which is "event".
     /// </summary>
+    /// <remarks>
+    /// Mirrors the <c>$object</c> convention used by <see cref="ApiResource"/> to let clients identify the shape of the JSON
+    /// payload without inspecting every property. The summary is legacy Blueprint's, which the OpenAPI document describes
+    /// the property with.
+    /// </remarks>
     [JsonPropertyName("$object")]
     [JsonInclude]
     public string Object => "event";
 
     /// <summary>
-    /// Gets the id of this event, for example <c>timeEntry.updated</c> or <c>account.approvals.enabled</c>.
-    /// The id is a dot-delimited string with the first part being the resource type and the remainder
-    /// identifying the specific event.
+    /// Gets the id of this event, for example 'timeEntry.updated' or 'account.approvals.enabled'.
     /// </summary>
+    /// <remarks>
+    /// The id is a dot-delimited string with the first part being the resource type and the remainder identifying the
+    /// specific event. The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     [JsonInclude]
     public string EventId { get; internal set; }
 
     /// <summary>
-    /// Gets the change type of this event, indicating whether the resource was created, updated, or deleted.
+    /// Gets a the change type of this event, which is a higher-level version of the Type property,
+    /// indicating whether the resource was updated, created or deleted.
     /// </summary>
+    /// <remarks>
+    /// The summary is legacy Blueprint's, word for word, which the OpenAPI document describes the property with.
+    /// </remarks>
     [JsonInclude]
     public ResourceEventChangeType ChangeType { get; internal set; }
 
@@ -90,15 +99,23 @@ public class ResourceEvent : OperationResult
     public IQuery? SelfQuery { get; }
 
     /// <summary>
-    /// Gets the type-name token of the resource (for example <c>"user"</c>, <c>"template"</c>).
+    /// Gets the type of resource represented.
     /// </summary>
+    /// <remarks>
+    /// The type-name token of the resource (for example <c>"user"</c>, <c>"template"</c>). The summary is legacy
+    /// Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     [JsonInclude]
     public string ResourceObject { get; internal set; }
 
     /// <summary>
-    /// Gets or sets the href of the resource this event represents, populated by the framework
-    /// from the resource type and id definition.
+    /// Gets or sets the href of the resource this event represents, to be populated by the ResourceEventMiddleware
+    /// component from the resource type and id definition object.
     /// </summary>
+    /// <remarks>
+    /// The framework populates it from the resource type's self link. The summary is legacy Blueprint's, which the
+    /// OpenAPI document describes the property with.
+    /// </remarks>
     [JsonInclude]
     public string? Href { get; set; }
 
@@ -119,32 +136,46 @@ public class ResourceEvent : OperationResult
     internal bool IsDataFromSelfQuery { get; set; }
 
     /// <summary>
-    /// Gets or sets a dictionary of previous values, used to identify what has changed
-    /// between two versions of a resource, keyed on the property name.
+    /// Gets or sets a dictionary of previous values, used to identify what has actually changed
+    /// between two resources, keyed on the property name with the previous value of the resource
+    /// being the value.
     /// </summary>
+    /// <remarks>
+    /// The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     [JsonInclude]
     public Dictionary<string, object>? ChangedValues { get; set; }
 
     /// <summary>
-    /// Gets the metadata dictionary, a free-form bag of key-value pairs that can be stored
-    /// against an event and may be persisted (for example for auditing).
-    /// Lazy-initialized to avoid a ~200-byte dictionary allocation per event when not used.
+    /// Gets the metadata dictionary of this resource event, a simple bag of key value pairs
+    /// of useful information that can be stored free-form against an event.
     /// </summary>
+    /// <remarks>
+    /// It may be persisted (for example for auditing). Lazy-initialized to avoid a ~200-byte dictionary allocation per event
+    /// when not used. The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     [JsonInclude]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, object>? Metadata { get; internal set; }
 
     /// <summary>
     /// Gets a dictionary of security-related data that will NOT be persisted anywhere.
-    /// Lazy-initialized to avoid a ~200-byte dictionary allocation per event when not used.
     /// </summary>
+    /// <remarks>
+    /// Lazy-initialized to avoid a ~200-byte dictionary allocation per event when not used. The summary is legacy
+    /// Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     [JsonInclude]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, object>? SecureData { get; internal set; }
 
     /// <summary>
-    /// Gets or sets the correlation id for this event, tying it back to the initial request.
+    /// Gets or sets the correlation id for this event, which can be used to tie it back to
+    /// the initial request that resulted in an event.
     /// </summary>
+    /// <remarks>
+    /// The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     [JsonInclude]
     public string? CorrelationId { get; set; }
 
@@ -208,9 +239,14 @@ public class ResourceEvent : OperationResult
 }
 
 /// <summary>
-/// A typed subclass of <see cref="ResourceEvent"/> that provides strongly-typed access to the
-/// resource payload via <see cref="Data"/>.
+/// A typed subclass of <see cref="ResourceEvent"/> that redefines the Data type to
+/// be of a specific type, useful for better type safety when dealing with events throughout the code
+/// base.
 /// </summary>
+/// <remarks>
+/// It provides strongly-typed access to the resource payload via <see cref="Data"/>. The summary is legacy Blueprint's,
+/// which the OpenAPI document describes a resource event envelope with.
+/// </remarks>
 /// <typeparam name="TResource">The type of API resource contained within the event.</typeparam>
 public class ResourceEvent<TResource> : ResourceEvent
     where TResource : ApiResource
