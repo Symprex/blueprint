@@ -150,7 +150,11 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                 && (SymbolEqualityComparer.Default.Equals(flattenedResult, keyOnlyResourceEventResultType)
                     || IsTypeOrDerivedFromOptional(flattenedResult, resourceEventResultType)))
             {
-                statusCode = AdjustResourceEventStatusCodeForHttpMethod(statusCode, httpMethod, hasResponseBody);
+                statusCode = AdjustResourceEventStatusCodeForHttpMethod(statusCode, httpMethod);
+
+                // The host sends a deleted event as a 204, which carries no body (HttpOperationResultExecutor's
+                // bodiless-status guard), so the document must not promise the event it would otherwise have written.
+                hasResponseBody &= statusCode != 204;
             }
 
             responses.Add(CreateResponse(
@@ -437,12 +441,13 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     /// Maps the default <c>201 Created</c> status code to the correct runtime status based on the
     /// HTTP method. The runtime's <c>MapChangeTypeToStatusCode</c> produces 204 for <c>ChangeType.Deleted</c>
     /// and 200 for <c>ChangeType.Updated</c>; by convention DELETE → Deleted and PUT/PATCH → Updated.
+    /// A deleted event is sent as a 204 whether or not the event carries content, so a DELETE is documented as one.
     /// </summary>
-    private static int AdjustResourceEventStatusCodeForHttpMethod(int defaultStatusCode, string httpMethod, bool hasResponseBody)
+    private static int AdjustResourceEventStatusCodeForHttpMethod(int defaultStatusCode, string httpMethod)
     {
         return httpMethod switch
         {
-            "DELETE" => hasResponseBody ? 200 : 204,
+            "DELETE" => 204,
             "PUT" or "PATCH" => 200,
             _ => defaultStatusCode,
         };
