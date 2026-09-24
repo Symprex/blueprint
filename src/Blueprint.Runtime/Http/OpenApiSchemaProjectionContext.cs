@@ -337,6 +337,21 @@ public sealed record OpenApiSchemaProjectionContext(
                 .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
             : ImmutableArray<OpenApiSchemaPropertyModel>.Empty;
+
+        // The host sets the status of every problem it writes, so a problem's status is required and never null, whatever
+        // the CLR type's int? says; a validation problem's errors may be null. Legacy Blueprint documented both so.
+        if (typeof(Microsoft.AspNetCore.Mvc.ProblemDetails).IsAssignableFrom(bodyType))
+        {
+            properties =
+            [
+                .. properties.Select(static property => property.Name switch
+                {
+                    "status" => property with { IsRequired = true, IsNullable = false },
+                    "errors" => property with { IsNullable = true },
+                    _ => property,
+                }),
+            ];
+        }
         var propertyNames = properties
             .Select(static property => property.Name)
             .ToImmutableArray();

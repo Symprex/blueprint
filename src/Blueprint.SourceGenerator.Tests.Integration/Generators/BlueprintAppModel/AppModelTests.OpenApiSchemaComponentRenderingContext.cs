@@ -55,7 +55,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
 
         var problemDetailsComponent = componentContext.Components.Single(static component => component.BodyTypeName == "ProblemDetails");
         problemDetailsComponent.Type.Should().Be("object");
-        problemDetailsComponent.RequiredPropertyNames.Should().BeEmpty();
+        problemDetailsComponent.RequiredPropertyNames.Should().Equal("status");
         problemDetailsComponent.Properties.Select(static property => property.Name).Should().Contain(["detail", "status", "title"]);
 
         var validationProblemDetailsComponent = componentContext.Components.Single(static component => component.BodyTypeName == "ValidationProblemDetails");

@@ -2955,6 +2955,9 @@
       "ProblemDetails": {
         "title": "ProblemDetails",
         "type": "object",
+        "required": [
+          "status"
+        ],
         "properties": {
           "detail": {
             "type": "string",
@@ -2966,7 +2969,6 @@
           },
           "status": {
             "type": "integer",
-            "nullable": true,
             "format": "int32"
           },
           "title": {
@@ -3383,6 +3385,9 @@
       "ValidationProblemDetails": {
         "title": "ValidationProblemDetails",
         "type": "object",
+        "required": [
+          "status"
+        ],
         "properties": {
           "detail": {
             "type": "string",
@@ -3390,6 +3395,7 @@
           },
           "errors": {
             "type": "object",
+            "nullable": true,
             "additionalProperties": {
               "type": "array",
               "items": {
@@ -3403,7 +3409,6 @@
           },
           "status": {
             "type": "integer",
-            "nullable": true,
             "format": "int32"
           },
           "title": {
