@@ -17,8 +17,14 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </list>
 /// </para>
 /// <para>
-/// Operations decorated with <c>[NoRebusTransaction]</c> (or the full name
+/// Commands (<c>ICommand</c>) and background tasks (<c>Blueprint.Tasks.IBackgroundTask</c>) participate; queries do
+/// not. Operations decorated with <c>[NoRebusTransaction]</c> (or the full name
 /// <c>Blueprint.Rebus.NoRebusTransactionAttribute</c>) are excluded from transaction wrapping.
+/// </para>
+/// <para>
+/// A pipeline that runs while another Rebus transaction is ambient — a background task executed from inside a message
+/// handler, for example — opens a scope of its own: Rebus nests the scope and restores the outer one when it is
+/// disposed, so the inner operation's messages are sent when it completes, not when the outer transaction does.
 /// </para>
 /// <para>
 /// This module is included in the default pipeline configuration and auto-detects Rebus
@@ -66,8 +72,9 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
         }
 
         // Queries do not publish messages — skip the transaction scope to avoid allocation overhead.
-        // Commands that publish messages through Rebus need the scope to batch and commit.
-        if (!IsCommand(context.Operation.TypeSymbol))
+        // Commands and background tasks that publish messages through Rebus need the scope to batch and commit,
+        // as legacy Blueprint gave both.
+        if (!IsCommand(context.Operation.TypeSymbol) && !IsBackgroundTask(context.Operation.TypeSymbol))
         {
             return;
         }
@@ -119,5 +126,12 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
         return operationType.AllInterfaces.Any(static candidate =>
             candidate.Name is "ICommand"
             && candidate.IsInNamespace("Blueprint", "Model"));
+    }
+
+    private static bool IsBackgroundTask(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name is "IBackgroundTask"
+            && candidate.IsInNamespace("Blueprint", "Tasks"));
     }
 }

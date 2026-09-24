@@ -126,6 +126,138 @@ public class RebusTransactionModuleTests
     }
 
     [Fact]
+    public void When_background_task_then_plan_contains_rebus_setup_and_post_execution()
+    {
+        // Legacy gave background tasks the same Rebus transaction scope as commands, so a task that publishes has its
+        // messages held until it succeeds.
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Tasks;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class SendReminderTask : IBackgroundTask
+            {
+                public static Task HandleAsync(SendReminderTask operation)
+                {
+                    return Task.CompletedTask;
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new RebusTransactionModule(),
+            new HandlerExecutionModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.SendReminderTask", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        result.Value!.Contributions.Should().ContainInOrder(
+            new PipelineContribution(PipelineStage.Setup, nameof(RebusTransactionModule)),
+            new PipelineContribution(PipelineStage.Execution, nameof(HandlerExecutionModule)),
+            new PipelineContribution(PipelineStage.PostExecution, nameof(RebusTransactionModule)));
+    }
+
+    [Fact]
+    public void When_background_task_has_NoRebusTransaction_attribute_then_plan_excludes_rebus_transaction()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Rebus;
+            using Blueprint.Tasks;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [NoRebusTransaction]
+            public partial class FireAndForgetTask : IBackgroundTask
+            {
+                public static Task HandleAsync(FireAndForgetTask operation)
+                {
+                    return Task.CompletedTask;
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig(
+        [
+            new RebusTransactionModule(),
+            new HandlerExecutionModule(),
+            new PipelineReturnModule(),
+        ]);
+        var result = config.BuildPipelinePlan("TestNamespace.FireAndForgetTask", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.ContributorId == nameof(RebusTransactionModule),
+            "NoRebusTransaction should exclude a background task from the scope exactly as it does a command");
+    }
+
+    [Fact]
+    public async Task When_background_task_composed_with_pipeline_generator_then_snapshot_includes_rebus_scope()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Tasks;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class SendReminderTask : IBackgroundTask
+                {
+                    public static Task HandleAsync(SendReminderTask operation)
+                    {
+                        return Task.CompletedTask;
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<RebusCompanionPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"],
+            [
+                MetadataReference.CreateFromFile(typeof(global::Rebus.Transport.RebusTransactionScope).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Blueprint.Rebus.NoRebusTransactionAttribute).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Blueprint.Marten.MartenScopeAccessor).Assembly.Location),
+            ]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(RebusCompanionPipelineSourceGenerator));
+
+        var outputText = new StringBuilder();
+        foreach (var s in pipelineSources.OrderBy(static s => s.HintName))
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Snapshots");
+    }
+
+    [Fact]
     public void When_composed_with_core_modules_then_rebus_complete_is_after_uow_and_outbox()
     {
         var compilation = CreateCompilation(
