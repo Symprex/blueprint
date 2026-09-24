@@ -8,10 +8,11 @@ namespace Blueprint.Runtime.Tasks;
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is legacy Blueprint's <c>RecurringTaskManager</c>. <see cref="RecurringTaskRegistrationService"/> runs it once when
-/// the host starts. A provider may also schedule <see cref="RescheduleAllAsync"/> to run periodically, as the Hangfire
-/// provider does every 30 minutes, so that a schedule a scheduler starts or stops declaring while the app runs is
-/// applied, and a registration that failed is retried.
+/// This is legacy Blueprint's <c>RecurringTaskManager</c>. An <see cref="IPeriodicRecurringTaskProvider"/> schedules
+/// <see cref="RescheduleAllAsync"/> to run periodically, as the Hangfire provider does every 30 minutes, so that a schedule
+/// a scheduler starts or stops declaring while the app runs is applied, and a registration that failed is retried; for
+/// such a provider it runs only then. For any other provider, <see cref="RecurringTaskRegistrationService"/> runs it once
+/// when the host starts.
 /// </para>
 /// <para>
 /// The provider always receives the complete current set, even an empty one. A scheduler that throws is logged and

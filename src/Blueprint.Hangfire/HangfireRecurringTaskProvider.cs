@@ -25,12 +25,14 @@ namespace Blueprint.Hangfire;
 /// create are never removed.
 /// </para>
 /// <para>
-/// Each registration also installs <c>{DefaultQueue}:Scheduler</c>, a recurring job that re-runs
-/// <see cref="RecurringTaskManager.RescheduleAllAsync"/> every 30 minutes, as legacy Blueprint's did.
+/// <c>{DefaultQueue}:Scheduler</c> is a recurring job that re-runs <see cref="RecurringTaskManager.RescheduleAllAsync"/>
+/// every 30 minutes, as legacy Blueprint's did. The host's start-up installs it through
+/// <see cref="SetupRecurringManagerAsync"/> and does nothing else, as legacy's start-up did, so the schedules are registered
+/// only when that job runs. Each registration installs it again too.
 /// </para>
 /// </remarks>
 [PublicAPI]
-public sealed class HangfireRecurringTaskProvider : IRecurringTaskProvider
+public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvider
 {
     /// <summary>
     /// Prefix applied to all Hangfire recurring job IDs created by Blueprint.
@@ -152,6 +154,18 @@ public sealed class HangfireRecurringTaskProvider : IRecurringTaskProvider
 
         // Only once every declared schedule is registered, so a registration that fails part-way removes nothing.
         this.RemoveStaleJobs(registeredIds);
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Installs <c>{DefaultQueue}:Scheduler</c> and nothing else, as legacy's <c>SetupRecurringManagerAsync</c> did
+    /// (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Tasks.Hangfire/HangfireRecurringTaskProvider.cs:110-127</c>).
+    /// </remarks>
+    public Task SetupRecurringManagerAsync(CancellationToken cancellationToken = default)
+    {
+        this.InstallRescheduleJob();
 
         return Task.CompletedTask;
     }

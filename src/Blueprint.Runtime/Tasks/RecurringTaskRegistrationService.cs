@@ -3,21 +3,24 @@ using Blueprint.Tasks;
 namespace Blueprint.Runtime.Tasks;
 
 /// <summary>
-/// A hosted service that discovers all <see cref="IRecurringTaskScheduler"/> implementations
-/// at startup, collects their schedules, and pushes them to the registered
-/// <see cref="IRecurringTaskProvider"/> for infrastructure-level registration (e.g., Hangfire recurring jobs).
+/// A hosted service that sets up the registered <see cref="IRecurringTaskProvider"/>'s recurring task schedules when the
+/// host starts: by installing the provider's own recurring registration, for an <see cref="IPeriodicRecurringTaskProvider"/>,
+/// or else by collecting every <see cref="IRecurringTaskScheduler"/>'s schedules and handing them to the provider.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is the compile-time equivalent of legacy Blueprint's <c>RecurringTaskSetupTask</c> that ran during
-/// app startup. It ensures all declared recurring tasks are registered (or updated/removed) when the
-/// application starts.
+/// This is legacy Blueprint's <c>RecurringJobManagerRegistrationHostedService</c>. For a periodic provider, such as
+/// Blueprint.Hangfire's, it does only what legacy's start-up did: it calls
+/// <see cref="IPeriodicRecurringTaskProvider.SetupRecurringManagerAsync"/>, which installs the job that runs
+/// <see cref="RecurringTaskManager.RescheduleAllAsync"/> every 30 minutes. It asks no scheduler for its schedules, and
+/// registers and removes nothing, so the schedules are first registered when that job first runs, as legacy's were.
 /// </para>
 /// <para>
-/// The provider always receives the complete current set, even an empty one, and a scheduler that throws declares
-/// nothing, as in legacy's <c>RecurringTaskManager</c>. The provider removes whatever that set no longer contains, so
-/// register this service (through <c>AddRecurringTaskProvider</c>) only in the process that registers every one of the
-/// app's recurring task schedulers. Signature365 did that under its task-processor condition, <c>ShouldRunTaskProcessor</c>.
+/// For any other provider it runs <see cref="RecurringTaskManager.RescheduleAllAsync"/> once, here. The provider then
+/// receives the complete current set, even an empty one, and a scheduler that throws declares nothing, as in legacy's
+/// <c>RecurringTaskManager</c>. The provider removes whatever that set no longer contains, so register this service
+/// (through <c>AddRecurringTaskProvider</c>) only in the process that registers every one of the app's recurring task
+/// schedulers. Signature365 did that under its task-processor condition, <c>ShouldRunTaskProcessor</c>.
 /// </para>
 /// </remarks>
 public sealed class RecurringTaskRegistrationService : IHostedService
@@ -59,6 +62,16 @@ public sealed class RecurringTaskRegistrationService : IHostedService
         {
             this._logger.LogDebug(
                 "No IRecurringTaskProvider registered — skipping recurring task registration");
+            return;
+        }
+
+        // As legacy's start-up only installed its provider's recurring registration job (Signature365 8b40ecc961,
+        // Blueprint.Tasks/RecurringJobManagerRegistrationHostedService.cs:37-43), which registered and removed schedules
+        // only when it ran.
+        if (provider is IPeriodicRecurringTaskProvider periodicProvider)
+        {
+            await periodicProvider.SetupRecurringManagerAsync(cancellationToken).ConfigureAwait(false);
+
             return;
         }
 
