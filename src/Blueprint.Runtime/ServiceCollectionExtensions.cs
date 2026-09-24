@@ -423,12 +423,19 @@ public sealed class BlueprintServiceBuilder
     /// Registers a recurring task provider that bridges Blueprint's recurring task model to
     /// a concrete scheduler infrastructure (e.g., Hangfire's <c>IRecurringJobManager</c>).
     /// </summary>
+    /// <remarks>
+    /// Also registers <see cref="Blueprint.Runtime.Tasks.RecurringTaskManager"/>, which a provider's periodic re-run (the
+    /// Hangfire provider's <c>{DefaultQueue}:Scheduler</c> job) resolves through the job activator. The provider removes
+    /// the jobs of every schedule the current set no longer contains, so call this only in the process that registers
+    /// every one of the app's recurring task schedulers.
+    /// </remarks>
     /// <typeparam name="T">The <see cref="Blueprint.Tasks.IRecurringTaskProvider"/> implementation type.</typeparam>
     /// <returns>This builder for chaining.</returns>
     public BlueprintServiceBuilder AddRecurringTaskProvider<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
         where T : class, Blueprint.Tasks.IRecurringTaskProvider
     {
         this.Services.AddSingleton<Blueprint.Tasks.IRecurringTaskProvider, T>();
+        this.Services.TryAddScoped<Blueprint.Runtime.Tasks.RecurringTaskManager>();
         this.Services.AddHostedService<Blueprint.Runtime.Tasks.RecurringTaskRegistrationService>();
         return this;
     }

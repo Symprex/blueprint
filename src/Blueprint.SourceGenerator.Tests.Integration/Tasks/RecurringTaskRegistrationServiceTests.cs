@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using Blueprint.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
@@ -116,6 +117,26 @@ public class RecurringTaskRegistrationServiceTests
         schedule.Queue.Should().Be("priority");
         schedule.TimeZone.Id.Should().Be("Pacific Standard Time");
         schedule.CronExpression.Should().Be("0 9 * * *");
+    }
+
+    [Fact]
+    public async Task AddRecurringTaskProvider_registers_the_manager_the_periodic_reschedule_job_activates()
+    {
+        // The provider's reschedule job names RecurringTaskManager, which the job activator resolves from the container.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
+            static blueprint => blueprint.AddRecurringTaskProvider<TestRecurringTaskProvider>());
+        services.AddSingleton<IRecurringTaskScheduler>(new TestRecurringTaskScheduler("periodic", "0 4 * * *"));
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+
+        var manager = scope.ServiceProvider.GetRequiredService<Blueprint.Runtime.Tasks.RecurringTaskManager>();
+        await manager.RescheduleAllAsync(CancellationToken.None);
+
+        var registered = (TestRecurringTaskProvider)provider.GetRequiredService<IRecurringTaskProvider>();
+        registered.RegisteredSchedules.Select(static s => s.Name).Should().Equal("periodic");
     }
 
     private static IHost BuildHost(

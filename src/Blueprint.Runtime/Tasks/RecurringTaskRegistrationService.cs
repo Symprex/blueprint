@@ -25,6 +25,7 @@ public sealed class RecurringTaskRegistrationService : IHostedService
     private readonly IEnumerable<IRecurringTaskScheduler> _schedulers;
     private readonly IRecurringTaskProvider? _provider;
     private readonly ILogger<RecurringTaskRegistrationService> _logger;
+    private readonly ILogger<RecurringTaskManager> _managerLogger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RecurringTaskRegistrationService"/> class.
@@ -32,71 +33,36 @@ public sealed class RecurringTaskRegistrationService : IHostedService
     /// <param name="schedulers">All registered recurring task schedulers.</param>
     /// <param name="provider">The recurring task provider (may be null if none is registered).</param>
     /// <param name="logger">Logger for diagnostic output.</param>
+    /// <param name="managerLogger">Logger for the <see cref="RecurringTaskManager"/> run at startup.</param>
     public RecurringTaskRegistrationService(
         IEnumerable<IRecurringTaskScheduler> schedulers,
         ILogger<RecurringTaskRegistrationService> logger,
-        IRecurringTaskProvider? provider = null)
+        IRecurringTaskProvider? provider = null,
+        ILogger<RecurringTaskManager>? managerLogger = null)
     {
         this._schedulers = schedulers;
         this._logger = logger;
         this._provider = provider;
+        this._managerLogger = managerLogger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<RecurringTaskManager>.Instance;
     }
 
     /// <inheritdoc />
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         if (this._provider is null)
         {
             this._logger.LogDebug(
                 "No IRecurringTaskProvider registered — skipping recurring task registration");
-            return;
+            return Task.CompletedTask;
         }
 
-        var allSchedules = new List<RecurringTaskSchedule>();
-
-        foreach (var scheduler in this._schedulers)
-        {
-            allSchedules.AddRange(await this.GetSchedulesAsync(scheduler).ConfigureAwait(false));
-        }
-
-        // The provider is given the current set even when it is empty, as legacy RecurringTaskManager.RescheduleAllAsync
-        // always gave it: the provider removes the jobs of every schedule the set no longer contains, so skipping the call
-        // would leave the app's last deleted schedule firing.
-        this._logger.LogInformation(
-            "Registering {Count} recurring task schedule(s) with {Provider}",
-            allSchedules.Count,
-            this._provider.GetType().Name);
-
-        await this._provider.RegisterSchedulesAsync(allSchedules, cancellationToken).ConfigureAwait(false);
+        return new RecurringTaskManager(this._schedulers, this._provider, this._managerLogger)
+            .RescheduleAllAsync(cancellationToken);
     }
 
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken)
     {
         return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Gets a scheduler's schedules, treating one that throws as declaring none, as legacy
-    /// <c>RecurringTaskManager.GetSchedulesAsync</c> did: the failure is logged, and the provider then removes that
-    /// scheduler's jobs along with every other schedule the current set no longer contains.
-    /// </summary>
-    private async Task<IEnumerable<RecurringTaskSchedule>> GetSchedulesAsync(IRecurringTaskScheduler scheduler)
-    {
-        var schedulerName = scheduler.GetType().Name;
-
-        try
-        {
-            return await scheduler.GetTaskSchedulesAsync().ConfigureAwait(false);
-        }
-        catch (Exception e)
-        {
-            this._logger.LogError(
-                e,
-                "Unhandled exception getting schedules from '{SchedulerName}'. Its recurring tasks will be removed",
-                schedulerName);
-
-            return [];
-        }
     }
 }
