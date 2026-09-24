@@ -294,8 +294,17 @@ configureOpenApi: options =>
 - `options.RequestBodyNaming = OpenApiRequestBodyNaming.OperationType` keys each request body by the operation's CLR
   type (`CreatePartnerCompanyCommand`), as legacy did, instead of the operation's name (`CreatePartnerCompany`).
   Generators that tell a command from a query by a `Command` suffix on the body's name need it.
-- Two components that end up with one key fail the render with an `InvalidOperationException` naming both, rather
-  than producing a document in which one silently replaces the other.
+- Types that end up with one key — two types of one simple name, or two a formatter maps together, such as
+  `RuleMatchApiResource` and a `RuleMatch` of another namespace — each keep a component of their own, named as legacy
+  named them: the first the document reaches keeps the name and each later one takes it with the first free counter
+  from 2 (`RuleMatch2`). The document is read in the order it is written: path by path, a request body before the
+  responses, a type before the types its properties reach. Legacy read it in the order its assembly declared the
+  operations, which the document does not know, so where two operations reach a pair of such types in another order
+  than legacy did, the two names are the other way about. And where legacy documented a response whose type took a
+  name already in use as the schema already under it — a different type — this gives the response its own.
+- Two components that still end up with one key, such as a request body and a type both named for one CLR type name,
+  fail the render with an `InvalidOperationException` naming both, rather than producing a document in which one
+  silently replaces the other.
 
 Whatever the naming, an object nested in a body — a property, a collection's items, a dictionary's values, at any
 depth — is a component of its own that the property references (wrapped in `oneOf`, beside `nullable` or

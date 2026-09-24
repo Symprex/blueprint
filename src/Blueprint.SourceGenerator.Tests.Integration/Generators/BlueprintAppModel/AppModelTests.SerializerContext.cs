@@ -43,7 +43,12 @@ public class AppModelSerializerContextTests
             "Blueprint.Model.PagedApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeTenantApiResource>",
             "Blueprint.Http.ResourceEvent<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeTenantApiResource>",
             "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeCountryApiResource>",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeGatewayRunApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeGatewayRunApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionHolderApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionTrailApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionPreviewApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionOne.CollisionItem",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionTwo.CollisionItem");
     }
 
     [Fact]
@@ -83,6 +88,11 @@ public class AppModelSerializerContextTests
             typeof(Blueprint.Model.PagedApiResource<Http.LegacyShape.LegacyShapeTenantApiResource>),
             typeof(Blueprint.Http.ResourceEvent<Http.LegacyShape.LegacyShapeTenantApiResource>),
             typeof(Http.LegacyShape.LegacyShapeListApiResource<Http.LegacyShape.LegacyShapeCountryApiResource>),
-            typeof(Http.LegacyShape.LegacyShapeGatewayRunApiResource));
+            typeof(Http.LegacyShape.LegacyShapeGatewayRunApiResource),
+            typeof(Http.SchemaNameCollisions.CollisionHolderApiResource),
+            typeof(Http.SchemaNameCollisions.CollisionTrailApiResource),
+            typeof(Http.SchemaNameCollisions.CollisionPreviewApiResource),
+            typeof(Http.SchemaNameCollisions.CollisionOne.CollisionItem),
+            typeof(Http.SchemaNameCollisions.CollisionTwo.CollisionItem));
     }
 }

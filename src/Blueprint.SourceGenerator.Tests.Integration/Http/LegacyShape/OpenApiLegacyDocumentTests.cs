@@ -99,17 +99,19 @@ public class OpenApiLegacyDocumentTests
     }
 
     [Fact]
-    public void Two_components_rendering_to_one_key_fail_the_render_naming_both()
+    public void Two_components_a_formatter_maps_to_one_key_are_told_apart_by_legacy_counter()
     {
-        var render = () => Render(static options =>
+        using var document = Render(static options =>
         {
             options.SchemaNaming = OpenApiSchemaNaming.Legacy;
             options.SchemaNameFormatter = static name => name is "LegacyShapeRun" or "LegacyShapeTenantApiResource" ? "LegacyShapeClash" : name;
         });
 
-        render.Should().Throw<InvalidOperationException>()
-            .WithMessage("*'LegacyShapeClash'*")
-            .Which.Message.Should().Contain("LegacyShapeTenantApiResource").And.Contain("LegacyShapeGatewayRunApiResource");
+        // The tenant is reached first, in the event the partner's tenants path creates; the run after it, at its own path.
+        PropertyNames(document, "LegacyShapeClash").Should().Contain("TenantId");
+        PropertyNames(document, "LegacyShapeClash2").Should().Contain("Id").And.NotContain("TenantId");
+        ResponseSchemaRef(document, "/legacy-shape/runs/{Id}", "get", "200").Should().Be("#/components/schemas/LegacyShapeClash2");
+        ComponentNames(document).Should().OnlyHaveUniqueItems();
     }
 
     [Fact]
@@ -197,6 +199,12 @@ public class OpenApiLegacyDocumentTests
     private static IReadOnlyList<string> ComponentNames(JsonDocument document)
     {
         return document.RootElement.GetProperty("components").GetProperty("schemas").EnumerateObject().Select(static p => p.Name).ToList();
+    }
+
+    private static IReadOnlyList<string> PropertyNames(JsonDocument document, string component)
+    {
+        return document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty(component)
+            .GetProperty("properties").EnumerateObject().Select(static p => p.Name).ToList();
     }
 
     private static string? ResponseSchemaRef(JsonDocument document, string path, string method, string status)

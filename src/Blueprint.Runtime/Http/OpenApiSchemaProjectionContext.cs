@@ -55,7 +55,13 @@ public sealed record OpenApiSchemaProjectionContext(
             };
         }
 
-        var coveredTypesByName = IndexByName(document.App.AppOwnedSerializerContextBodyTypes, naming);
+        var namer = new SchemaNamer(naming);
+        var coveredTypesByName = new Dictionary<string, Type>(StringComparer.Ordinal);
+
+        foreach (var bodyType in document.App.AppOwnedSerializerContextBodyTypes)
+        {
+            coveredTypesByName.TryAdd(namer.NameOf(bodyType), bodyType);
+        }
 
         // Build a reverse lookup: full CLR name → FormatTypeName short name.
         // Descriptor feature data stores full CLR names at compile time (using Roslyn's
@@ -68,15 +74,18 @@ public sealed record OpenApiSchemaProjectionContext(
 
         foreach (var bodyType in document.App.AppOwnedSerializerContextBodyTypes)
         {
-            var shortName = OpenApiSchemaNames.Format(bodyType, naming);
+            var shortName = namer.NameOf(bodyType);
             var fullName = bodyType.FullName ?? bodyType.Name;
             fullNameToShortNameBuilder.TryAdd(fullName, shortName);
 
-            if (bodyType.IsGenericType)
+            // Source generators produce angle-bracket format names via ToDisplayString, which also joins a nested type
+            // to its container with a dot rather than a plus. Include this as an alternate key so the lookup succeeds
+            // for either format — a nested type missing it would be found by its simple name alone, which another type
+            // can share.
+            var displayStyleName = FormatFullNameDisplayStyle(bodyType);
+
+            if (!string.Equals(displayStyleName, fullName, StringComparison.Ordinal))
             {
-                // Source generators produce angle-bracket format names via ToDisplayString.
-                // Include this as an alternate key so the lookup succeeds for either format.
-                var displayStyleName = FormatFullNameDisplayStyle(bodyType);
                 fullNameToShortNameBuilder.TryAdd(displayStyleName, shortName);
             }
         }
@@ -117,18 +126,9 @@ public sealed record OpenApiSchemaProjectionContext(
 
         foreach (var nestedType in CollectNestedObjectTypes(projectedTypesByName.Values.ToList(), GetRequestBodyPropertyTypes(document), serializerContext))
         {
-            var nestedName = OpenApiSchemaNames.Format(nestedType, naming);
-
-            if (projectedTypesByName.TryGetValue(nestedName, out var existing))
-            {
-                ThrowIfDifferentTypes(nestedName, existing, nestedType);
-                continue;
-            }
-
-            projectedTypesByName[nestedName] = nestedType;
+            projectedTypesByName.TryAdd(namer.NameOf(nestedType), nestedType);
         }
 
-        var componentTypesByName = projectedTypesByName.ToFrozenDictionary(StringComparer.Ordinal);
         var schemaNamesByType = projectedTypesByName.ToFrozenDictionary(static pair => pair.Value, static pair => pair.Key);
 
         var schemaBuilder = ImmutableArray.CreateBuilder<OpenApiSchemaModel>();
@@ -137,7 +137,7 @@ public sealed record OpenApiSchemaProjectionContext(
         {
             try
             {
-                schemaBuilder.Add(CreateSchema(schemaName, schemaType, serializerContext, componentTypesByName, naming, schemaNamesByType));
+                schemaBuilder.Add(CreateSchema(schemaName, schemaType, serializerContext, naming, schemaNamesByType));
             }
             catch (NotSupportedException)
             {
@@ -152,6 +152,7 @@ public sealed record OpenApiSchemaProjectionContext(
         {
             Naming = naming,
             SchemaNamesByType = schemaNamesByType,
+            BaseNames = namer.BaseNames.ToFrozenDictionary(StringComparer.Ordinal),
         };
     }
 
@@ -160,6 +161,12 @@ public sealed record OpenApiSchemaProjectionContext(
     /// of that type references in turn.
     /// </summary>
     internal FrozenDictionary<Type, string> SchemaNamesByType { get; init; } = FrozenDictionary<Type, string>.Empty;
+
+    /// <summary>
+    /// Gets, for each schema this projection named apart from another type of the same name, the name it would have had —
+    /// from which the document settles, as legacy did, which of the types sharing a name keeps it.
+    /// </summary>
+    internal FrozenDictionary<string, string> BaseNames { get; init; } = FrozenDictionary<string, string>.Empty;
 
     /// <summary>
     /// Walks the object graph the serializer context describes, from the properties of <paramref name="rootTypes"/> and
@@ -283,44 +290,16 @@ public sealed record OpenApiSchemaProjectionContext(
         }
     }
 
-    private static void ThrowIfDifferentTypes(string name, Type existing, Type candidate)
-    {
-        if (existing != candidate)
-        {
-            throw new InvalidOperationException(
-                $"The types '{existing.FullName}' and '{candidate.FullName}' are both named '{name}' in the OpenAPI document, " +
-                "which cannot hold both under one key. Rename one of them, or give one a name of its own with [OpenApiSchemaName].");
-        }
-    }
-
     /// <summary>
     /// Gets how the schemas in this projection are named from their CLR types, which every other name the document
     /// derives from a type (a request body's, an enum's) follows too.
     /// </summary>
     public OpenApiSchemaNaming Naming { get; init; }
 
-    private static FrozenDictionary<string, Type> IndexByName(IEnumerable<Type> types, OpenApiSchemaNaming naming)
-    {
-        var typesByName = new Dictionary<string, Type>(StringComparer.Ordinal);
-
-        foreach (var type in types)
-        {
-            var name = OpenApiSchemaNames.Format(type, naming);
-
-            if (!typesByName.TryAdd(name, type))
-            {
-                ThrowIfDifferentTypes(name, typesByName[name], type);
-            }
-        }
-
-        return typesByName.ToFrozenDictionary(StringComparer.Ordinal);
-    }
-
     private static OpenApiSchemaModel CreateSchema(
         string bodyTypeName,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
         JsonSerializerContext serializerContext,
-        FrozenDictionary<string, Type> coveredTypesByName,
         OpenApiSchemaNaming naming,
         FrozenDictionary<Type, string> schemaNamesByType)
     {
@@ -333,7 +312,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         var properties = typeInfo.Kind == JsonTypeInfoKind.Object
             ? typeInfo.Properties
-                .Select(property => CreateProperty(property, bodyType, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, coveredTypesByName, naming, schemaNamesByType))
+                .Select(property => CreateProperty(property, bodyType, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, naming, schemaNamesByType))
                 .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
             : ImmutableArray<OpenApiSchemaPropertyModel>.Empty;
@@ -505,7 +484,6 @@ public sealed record OpenApiSchemaProjectionContext(
         JsonSerializerContext serializerContext,
         IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName,
         NullabilityInfoContext nullabilityContext,
-        FrozenDictionary<string, Type> coveredTypesByName,
         OpenApiSchemaNaming naming,
         FrozenDictionary<Type, string> schemaNamesByType)
     {
@@ -547,8 +525,8 @@ public sealed record OpenApiSchemaProjectionContext(
         // Extract element type metadata for collection/dictionary properties so schema rendering
         // can emit "items" (arrays) or "additionalProperties" (dictionaries).
         // When JsonTypeInfo is available, use its Kind; otherwise fall back to CLR interface inspection.
-        var (itemsKind, itemsFormat, itemsSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Enumerable, coveredTypesByName, naming);
-        var (additionalPropertiesKind, additionalPropertiesFormat, additionalPropertiesSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Dictionary, coveredTypesByName, naming);
+        var (itemsKind, itemsFormat, itemsSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Enumerable, schemaNamesByType);
+        var (additionalPropertiesKind, additionalPropertiesFormat, additionalPropertiesSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Dictionary, schemaNamesByType);
 
         // When dictionary values are arrays (e.g. Dictionary<string, string[]>), resolve the nested
         // array element type so the schema can emit "items" inside "additionalProperties".
@@ -564,7 +542,7 @@ public sealed record OpenApiSchemaProjectionContext(
             {
                 var dictValueTypeInfo = serializerContext.GetTypeInfo(dictValueType);
                 (additionalPropertiesItemsKind, additionalPropertiesItemsFormat, additionalPropertiesItemsSchemaName) =
-                    ResolveElementSchema(dictValueTypeInfo, dictValueType, JsonTypeInfoKind.Enumerable, coveredTypesByName, naming);
+                    ResolveElementSchema(dictValueTypeInfo, dictValueType, JsonTypeInfoKind.Enumerable, schemaNamesByType);
             }
         }
 
@@ -618,8 +596,7 @@ public sealed record OpenApiSchemaProjectionContext(
         JsonTypeInfo? typeInfo,
         Type propertyType,
         JsonTypeInfoKind expectedKind,
-        FrozenDictionary<string, Type> coveredTypesByName,
-        OpenApiSchemaNaming naming)
+        FrozenDictionary<Type, string> schemaNamesByType)
     {
         // When STJ has type info and the kind matches, use it directly.
         if (typeInfo is not null && typeInfo.Kind == expectedKind)
@@ -632,7 +609,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
             var kind = MapKind(elementType, JsonTypeInfoKind.None);
             var format = MapFormat(elementType);
-            var schemaName = ResolveSchemaRef(elementType, kind, coveredTypesByName, naming);
+            var schemaName = ResolveSchemaRef(elementType, kind, schemaNamesByType);
             return (kind, format, schemaName);
         }
 
@@ -648,7 +625,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
             var kind = MapKind(elementType, JsonTypeInfoKind.None);
             var format = MapFormat(elementType);
-            var schemaName = ResolveSchemaRef(elementType, kind, coveredTypesByName, naming);
+            var schemaName = ResolveSchemaRef(elementType, kind, schemaNamesByType);
             return (kind, format, schemaName);
         }
 
@@ -657,18 +634,21 @@ public sealed record OpenApiSchemaProjectionContext(
 
     /// <summary>
     /// Returns the schema component name when an element type is complex (not a primitive) AND
-    /// appears in the covered body types set (so the <c>$ref</c> target actually exists).
+    /// has a component of its own (so the <c>$ref</c> target actually exists).
     /// Primitive elements (string, integer, number, boolean) are rendered inline.
     /// </summary>
-    private static string? ResolveSchemaRef(Type elementType, OpenApiSchemaKind? kind, FrozenDictionary<string, Type> coveredTypesByName, OpenApiSchemaNaming naming)
+    /// <remarks>
+    /// The element's type, not its name, finds the component: another type of the same name has a component under a name
+    /// of its own, and a name would find that one.
+    /// </remarks>
+    private static string? ResolveSchemaRef(Type elementType, OpenApiSchemaKind? kind, FrozenDictionary<Type, string> schemaNamesByType)
     {
         if (kind is not (null or OpenApiSchemaKind.None or OpenApiSchemaKind.Object))
         {
             return null;
         }
 
-        var typeName = OpenApiSchemaNames.Format(elementType, naming);
-        return coveredTypesByName.ContainsKey(typeName) ? typeName : null;
+        return schemaNamesByType.GetValueOrDefault(elementType);
     }
 
     /// <summary>
@@ -1317,14 +1297,72 @@ public sealed record OpenApiSchemaProjectionContext(
     {
         if (!type.IsGenericType)
         {
-            return type.FullName ?? type.Name;
+            return (type.FullName ?? type.Name).Replace('+', '.');
         }
 
-        var definition = type.GetGenericTypeDefinition().FullName!;
+        var definition = type.GetGenericTypeDefinition().FullName!.Replace('+', '.');
         var backtickIdx = definition.IndexOf('`');
         var baseName = backtickIdx > 0 ? definition[..backtickIdx] : definition;
         var args = string.Join(", ", type.GetGenericArguments().Select(FormatFullNameDisplayStyle));
         return $"{baseName}<{args}>";
+    }
+
+    /// <summary>
+    /// Names each CLR type the projection meets, and no two alike: types can share a name — a nested type's simple
+    /// name, a generic over types that do — and each needs a schema of its own.
+    /// </summary>
+    /// <remarks>
+    /// A type whose name another has taken is given it with the first free counter from 2 appended, as legacy's NJsonSchema
+    /// did, and the name it would have had is recorded. Which of the types that share a name keeps it is not settled here,
+    /// in the order the projection happens to meet them, but when the document is written, from the recorded names, in the
+    /// order the document reaches the types (see <c>OpenApiOutputRenderingContext</c>).
+    /// </remarks>
+    private sealed class SchemaNamer(OpenApiSchemaNaming naming)
+    {
+        private readonly Dictionary<Type, string> _namesByType = [];
+
+        private readonly HashSet<string> _names = new(StringComparer.Ordinal);
+
+        private readonly Dictionary<string, string> _baseNames = new(StringComparer.Ordinal);
+
+        /// <summary>Gets the name each type named apart from another would have had.</summary>
+        public IReadOnlyDictionary<string, string> BaseNames => this._baseNames;
+
+        /// <summary>Returns the name of <paramref name="type"/>, naming it on first sight.</summary>
+        /// <param name="type">The CLR type.</param>
+        /// <returns>The type's name, which no other type the namer has named shares.</returns>
+        public string NameOf(Type type)
+        {
+            if (this._namesByType.TryGetValue(type, out var name))
+            {
+                return name;
+            }
+
+            var baseName = OpenApiSchemaNames.Format(type, naming);
+
+            // An array body type is found by its element's name with "[]" appended, so an array of an element named apart
+            // is named for it.
+            if (type.IsArray && type.GetElementType() is { } elementType && this._baseNames.ContainsKey(this.NameOf(elementType)))
+            {
+                baseName = this.NameOf(elementType) + "[]";
+            }
+
+            name = baseName;
+
+            for (var counter = 2; !this._names.Add(name); counter++)
+            {
+                name = baseName + counter.ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (!string.Equals(name, baseName, StringComparison.Ordinal))
+            {
+                this._baseNames[name] = baseName;
+            }
+
+            this._namesByType[type] = name;
+
+            return name;
+        }
     }
 }
 

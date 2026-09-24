@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -252,11 +253,16 @@ public sealed record OpenApiOutputRenderingContext(
             ? name => formatter(SimplifyClrTypeName(name))
             : infoOptions.SchemaNameFormatter;
 
+        // Every component and every reference to one is written under the key it is assigned here, which no other
+        // component shares.
+        var componentKeys = AssignComponentKeys(document, schemaNameFormatter);
+        string ComponentKeyOf(string name) => componentKeys.TryGetValue(name, out var key) ? key : SanitiseSchemaKey(name, schemaNameFormatter);
+
         writer.WriteString("openapi", string.IsNullOrWhiteSpace(infoOptions.OpenApiVersion) ? DefaultOpenApiVersion : infoOptions.OpenApiVersion);
         WriteInfo(writer, infoOptions);
         WriteServers(writer, ResolveServers(infoOptions.Servers, httpOptions, basePath));
-        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, schemaNameFormatter);
-        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, schemaNameFormatter, DescribeComponentSources(document));
+        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, ComponentKeyOf);
+        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, ComponentKeyOf, DescribeComponentSources(document));
         WriteDocumentTags(writer, document.Paths);
 
         if (allRequireAuth && effectiveSchemes.Count > 0)
@@ -1128,6 +1134,126 @@ public sealed record OpenApiOutputRenderingContext(
     }
 
     /// <summary>
+    /// Gives each schema component the key it is written under, as legacy Blueprint's NJsonSchema gave it: the first
+    /// component the document reaches keeps its name, and each later one whose name is taken is given it with the first
+    /// free counter from 2 appended.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Legacy reached schemas as it walked the document — an operation's request body, then its responses, and each type
+    /// before the types its properties reach — so this walks the operations in the order they are written, and a
+    /// component's references in the order its properties are. A component nothing reaches comes after, in the order it
+    /// is written. The name counted on is the one the schema projection would have given the type had no other type
+    /// shared it (<see cref="OpenApiSchemaProjectionContext.BaseNames"/>), through the formatter: two types can come to
+    /// share a key either way, and legacy counted on from the one name whichever way it was.
+    /// </para>
+    /// <para>
+    /// The well-known <c>Link</c> component is written under its own name, so no other takes it. A component itself
+    /// named <c>Link</c> is not assigned a key: <see cref="EnsureUniqueComponentKey"/> rejects it rather than let it take
+    /// the references every <c>$links</c> property makes to <c>Link</c>.
+    /// </para>
+    /// </remarks>
+    private static Dictionary<string, string> AssignComponentKeys(OpenApiDocumentRenderingContext document, Func<string, string>? schemaNameFormatter)
+    {
+        var baseNames = document.PathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.SchemaProjection.BaseNames;
+        var componentsByName = new Dictionary<string, OpenApiSchemaComponentModel>(StringComparer.Ordinal);
+
+        foreach (var component in document.SchemaComponents)
+        {
+            componentsByName.TryAdd(component.BodyTypeName, component);
+        }
+
+        componentsByName.Remove("Link");
+
+        var keys = new Dictionary<string, string>(StringComparer.Ordinal);
+        var takenKeys = new HashSet<string>(StringComparer.Ordinal) { "Link" };
+
+        foreach (var path in document.Paths)
+        {
+            foreach (var method in path.Methods)
+            {
+                if (method.Operations.IsEmpty)
+                {
+                    continue;
+                }
+
+                // The operation written for the method slot, as WriteMethodSlot writes it.
+                var operation = method.Operations[0];
+
+                if (operation.RequestBody is { Properties.IsEmpty: false } requestBody)
+                {
+                    Reach(requestBody.SchemaName ?? operation.OperationName);
+                }
+
+                foreach (var response in operation.Responses)
+                {
+                    foreach (var content in response.Content)
+                    {
+                        ReachResponseContent(content);
+                    }
+                }
+            }
+        }
+
+        foreach (var component in document.SchemaComponents)
+        {
+            Reach(component.BodyTypeName);
+        }
+
+        return keys;
+
+        // The components a response's content references, as WriteResponseSchema writes them.
+        void ReachResponseContent(OpenApiResponseContentModel content)
+        {
+            if (content.Discriminator is not null)
+            {
+                foreach (var discriminatorCase in content.Discriminator.Cases)
+                {
+                    Reach(discriminatorCase.SchemaComponent.BodyTypeName);
+                }
+            }
+            else if (content.IsResourceEventEnvelope && content.SchemaComponents.Length >= 1)
+            {
+                Reach(OpenApiDocumentRenderingContext.BuildResourceEventEnvelopeBodyTypeName(content.SchemaComponents[0].BodyTypeName));
+            }
+            else
+            {
+                foreach (var component in content.SchemaComponents)
+                {
+                    Reach(component.IsArrayWrapper ? component.Component.BodyTypeName : component.BodyTypeName);
+                }
+            }
+        }
+
+        void Reach(string? name)
+        {
+            if (name is null || keys.ContainsKey(name) || !componentsByName.TryGetValue(name, out var component))
+            {
+                return;
+            }
+
+            var key = SanitiseSchemaKey(baseNames.GetValueOrDefault(name, name), schemaNameFormatter);
+            var uniqueKey = key;
+
+            for (var counter = 2; !takenKeys.Add(uniqueKey); counter++)
+            {
+                uniqueKey = key + counter.ToString(CultureInfo.InvariantCulture);
+            }
+
+            keys[name] = uniqueKey;
+
+            foreach (var property in component.Properties)
+            {
+                Reach(property.SchemaRef);
+                Reach(property.EnumSchemaRef);
+                Reach(property.ItemsSchemaRef);
+                Reach(property.AdditionalPropertiesSchemaRef);
+                Reach(property.AdditionalPropertiesItemsSchemaRef);
+            }
+        }
+    }
+
+    /// <summary>
     /// Maps each schema component's name to the CLR type it was projected from, where it was, so that a clash between
     /// two components can name the types involved rather than only the names they share.
     /// </summary>
@@ -1172,8 +1298,9 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteStartObject();
 
             // Utf8JsonWriter writes a duplicate property name without complaint, and a parser then silently keeps one of
-            // the two schemas, so two components that render to the same key — two types sharing a name, or a formatter
-            // mapping two names to one — must fail here, naming both.
+            // the two schemas. AssignComponentKeys gives two types that share a name keys of their own, so what can still
+            // render to one key — two components under one name, such as a request body and a type both named for the one
+            // CLR type name — must fail here, naming both.
             var sourcesByKey = new Dictionary<string, string>(StringComparer.Ordinal);
 
             foreach (var component in objectSchemaComponents)
