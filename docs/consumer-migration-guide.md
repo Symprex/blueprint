@@ -1093,6 +1093,11 @@ Supported query formats: `?expand=Department`, `?expand=Department,Manager` (com
 `?expand=Department&expand=Manager` (repeated keys), and `?expand[]=Department&expand[]=Manager`
 (array syntax).
 
+A command returning a legacy `Blueprint.Http.ResourceEvent<T>` (or `ResourceCreated<T>` and its siblings) has
+the `Expandable<T>` properties of its data expanded too, as legacy did: the paths are rooted at the event
+(`?expand=Data.Department`), and the expander receives the event itself as its `response`. Data the event's
+`SelfQuery` loaded is expanded only by that query's own pipeline, as legacy expanded before resolving it.
+
 An expander that cannot expand because the upstream system failed (for example an authentication
 error calling Microsoft Graph) leaves `Value` null and sets `Expandable<T>.ExpandError` to a reason
 such as `"authentication_error"`. It is serialised as `expandError` and written as `null` when unset,

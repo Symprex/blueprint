@@ -376,6 +376,76 @@ public class ResourceExpansionModuleTests
             .UseDirectory("Snapshots");
     }
 
+    [Fact]
+    public async Task When_resource_event_data_has_expandable_properties_then_pipeline_snapshot_matches()
+    {
+        // The event is the handler result itself, so expansion casts to it rather than to OkResult<T>, and the paths are
+        // rooted at it ("Data.Group"), as legacy's property walker rooted them.
+        const string source = """
+            using Blueprint;
+            using Blueprint.Http;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public class GroupResource : ApiResource
+                {
+                    public override string Object => "group";
+                }
+
+                public class AddOnResource : ApiResource
+                {
+                    public override string Object => "addOn";
+                    public Expandable<GroupResource> Group { get; set; }
+                    [AlwaysExpand]
+                    public Expandable<GroupResource> AlwaysGroup { get; set; }
+                }
+
+                public partial class UpdateAddOnCommand : ICommand<ResourceUpdated<AddOnResource>>
+                {
+                    public static Task<ResourceUpdated<AddOnResource>> HandleAsync(UpdateAddOnCommand operation)
+                    {
+                        return Task.FromResult(new ResourceUpdated<AddOnResource>(new AddOnResource()));
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            generators,
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var pipelineSources = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+        pipelineSources.Should().HaveCountGreaterOrEqualTo(1, "pipeline should be generated");
+
+        var outputText = new StringBuilder();
+
+        foreach (var s in pipelineSources.OrderBy(static s => s.HintName))
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Snapshots");
+    }
+
     // ── Helper ────────────────────────────────────────────────────────
 
     private static CSharpCompilation CreateCompilation(string source)

@@ -109,6 +109,16 @@ public class ResourceEvent : OperationResult
     public object? Data { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether <see cref="Data"/> was loaded by executing <see cref="SelfQuery"/> rather
+    /// than returned by the handler.
+    /// </summary>
+    /// <remarks>
+    /// Resource expansion skips such data: legacy Blueprint expanded a resource event before resolving its self-query, so
+    /// the only expansion that data ever had was the one the self-query's own pipeline gave it.
+    /// </remarks>
+    internal bool IsDataFromSelfQuery { get; set; }
+
+    /// <summary>
     /// Gets or sets a dictionary of previous values, used to identify what has changed
     /// between two versions of a resource, keyed on the property name.
     /// </summary>

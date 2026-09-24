@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 
+using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
@@ -49,7 +50,7 @@ public static class ResourceExpansionRuntime
             return;
         }
 
-        if (result is not OkResult okResult)
+        if (!TryGetExpansionResponse(result, out var response))
         {
             return;
         }
@@ -64,7 +65,7 @@ public static class ResourceExpansionRuntime
             return;
         }
 
-        await DoExpandAsync(context, okResult, propertyValue, expandableResourceType, isEnumerable).ConfigureAwait(false);
+        await DoExpandAsync(context, response, propertyValue, expandableResourceType, isEnumerable).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -89,17 +90,43 @@ public static class ResourceExpansionRuntime
             return;
         }
 
-        if (result is not OkResult okResult)
+        if (!TryGetExpansionResponse(result, out var response))
         {
             return;
         }
 
-        await DoExpandAsync(context, okResult, propertyValue, expandableResourceType, isEnumerable).ConfigureAwait(false);
+        await DoExpandAsync(context, response, propertyValue, expandableResourceType, isEnumerable).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets the object an expander receives as its <c>response</c>: the content of an <see cref="OkResult"/>, or a
+    /// <see cref="ResourceEvent"/> itself, which legacy Blueprint wrapped in an <c>OkResult</c> and so passed whole.
+    /// </summary>
+    /// <remarks>
+    /// A resource event whose data its self-query loaded is not expanded. Legacy expanded before resolving the
+    /// self-query, when that data was still null, so it was only ever expanded by the self-query's own pipeline.
+    /// </remarks>
+    private static bool TryGetExpansionResponse(OperationResult result, out object response)
+    {
+        switch (result)
+        {
+            case OkResult okResult:
+                response = okResult.Content!;
+                return true;
+
+            case ResourceEvent { IsDataFromSelfQuery: false } resourceEvent:
+                response = resourceEvent;
+                return true;
+
+            default:
+                response = null!;
+                return false;
+        }
     }
 
     private static async ValueTask DoExpandAsync(
         ApiOperationContext context,
-        OkResult okResult,
+        object response,
         object propertyValue,
         Type expandableResourceType,
         bool isEnumerable)
@@ -156,7 +183,7 @@ public static class ResourceExpansionRuntime
 
         await matchingExpander.ExpandAsync(
             context,
-            okResult.Content!,
+            response,
             enumerable,
             context.OperationCancelled).ConfigureAwait(false);
     }

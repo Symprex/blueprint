@@ -77,13 +77,19 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
 
         var operationResultType = context.FindTypeByMetadataName("Blueprint.OperationResult");
 
+        // A legacy ResourceEvent<T> is an OperationResult, but is also the content legacy's middleware expanded: it
+        // wrapped the event in an OkResult, walked the event's own properties (so paths are rooted at it, as in
+        // "Data.Department") and passed the event to the expander as its response.
+        var resourceEventOpenGeneric = context.FindTypeByMetadataName("Blueprint.Http.ResourceEvent`1");
+
         if (operationResultType is not null
             && OperationResultContractHelper.TryGetResultsUnionMembers(declaredResponseType, out var unionMembers))
         {
             foreach (var member in unionMembers)
             {
                 if (member is INamedTypeSymbol namedMember
-                    && !OperationResultContractHelper.IsOperationResultType(namedMember, operationResultType))
+                    && (IsResourceEvent(namedMember, resourceEventOpenGeneric)
+                        || !OperationResultContractHelper.IsOperationResultType(namedMember, operationResultType)))
                 {
                     responseTypes.Add(namedMember);
                 }
@@ -102,8 +108,11 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
 
         foreach (var responseType in responseTypes)
         {
+            var isResourceEvent = IsResourceEvent(responseType, resourceEventOpenGeneric);
+
             // Skip OkResult, NoResult, etc. — only walk concrete content types
-            if (operationResultType is not null
+            if (!isResourceEvent
+                && operationResultType is not null
                 && OperationResultContractHelper.IsOperationResultType(responseType, operationResultType))
             {
                 continue;
@@ -118,7 +127,11 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
 
             foreach (var prop in properties)
             {
-                allExpandableProperties.Add(prop with { ResponseTypeFullName = responseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) });
+                allExpandableProperties.Add(prop with
+                {
+                    ResponseTypeFullName = responseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    ContentIsHandlerResult = isResourceEvent,
+                });
             }
         }
 
@@ -146,16 +159,27 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
 
         // Group by response type so we emit one cast per response type
         var byResponseType = expandableProperties
-            .GroupBy(static p => p.ResponseTypeFullName)
+            .GroupBy(static p => (p.ResponseTypeFullName, p.ContentIsHandlerResult))
             .ToList();
 
         foreach (var group in byResponseType)
         {
-            var responseTypeFullName = group.Key;
+            var (responseTypeFullName, contentIsHandlerResult) = group.Key;
 
             // Use a stable suffix derived from the type name to avoid variable name collisions
             var varSuffix = GetStableTypeSuffix(responseTypeFullName);
             var contentVarName = $"expansionContent_{varSuffix}";
+
+            if (contentIsHandlerResult)
+            {
+                // A resource event is itself the handler result, and is what the property paths are rooted at
+                context.If(
+                    $"handlerResult is {responseTypeFullName} {contentVarName}",
+                    branch => RenderExpansionCalls(branch, group, contentVarName));
+
+                continue;
+            }
+
             var okResultVarName = $"okResult_{varSuffix}";
 
             // Cast handler result to the typed OkResult to access Content
@@ -167,36 +191,63 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
 
                     branch.If(
                         $"{contentVarName} != null",
-                        innerBranch =>
-                        {
-                            foreach (var prop in group)
-                            {
-                                // Build null-safe property access path (a?.B?.C)
-                                var accessPath = BuildNullSafeAccessPath(contentVarName, prop.PropertyPath);
-
-                                if (prop.AlwaysExpand)
-                                {
-                                    // Unconditional expansion
-                                    innerBranch.WriteStatement(
-                                        $"await global::Blueprint.Runtime.Expansion.ResourceExpansionRuntime.ExpandAsync(" +
-                                        $"context, handlerResult, {accessPath}, " +
-                                        $"typeof({prop.ExpandableResourceTypeName}), " +
-                                        $"{(prop.IsEnumerable ? "true" : "false")}).ConfigureAwait(false);");
-                                }
-                                else
-                                {
-                                    // Client-requested expansion via ?expand= query parameter
-                                    innerBranch.WriteStatement(
-                                        $"await global::Blueprint.Runtime.Expansion.ResourceExpansionRuntime.TryExpandAsync(" +
-                                        $"context, handlerResult, {accessPath}, " +
-                                        $"\"{prop.PropertyPath}\", " +
-                                        $"typeof({prop.ExpandableResourceTypeName}), " +
-                                        $"{(prop.IsEnumerable ? "true" : "false")}).ConfigureAwait(false);");
-                                }
-                            }
-                        });
+                        innerBranch => RenderExpansionCalls(innerBranch, group, contentVarName));
                 });
         }
+    }
+
+    private static void RenderExpansionCalls(
+        PipelineRenderContext context,
+        IEnumerable<ExpandablePropertyInfo> properties,
+        string contentVarName)
+    {
+        foreach (var prop in properties)
+        {
+            // Build null-safe property access path (a?.B?.C)
+            var accessPath = BuildNullSafeAccessPath(contentVarName, prop.PropertyPath);
+
+            if (prop.AlwaysExpand)
+            {
+                // Unconditional expansion
+                context.WriteStatement(
+                    $"await global::Blueprint.Runtime.Expansion.ResourceExpansionRuntime.ExpandAsync(" +
+                    $"context, handlerResult, {accessPath}, " +
+                    $"typeof({prop.ExpandableResourceTypeName}), " +
+                    $"{(prop.IsEnumerable ? "true" : "false")}).ConfigureAwait(false);");
+            }
+            else
+            {
+                // Client-requested expansion via ?expand= query parameter
+                context.WriteStatement(
+                    $"await global::Blueprint.Runtime.Expansion.ResourceExpansionRuntime.TryExpandAsync(" +
+                    $"context, handlerResult, {accessPath}, " +
+                    $"\"{prop.PropertyPath}\", " +
+                    $"typeof({prop.ExpandableResourceTypeName}), " +
+                    $"{(prop.IsEnumerable ? "true" : "false")}).ConfigureAwait(false);");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> is, or derives from, the legacy <c>Blueprint.Http.ResourceEvent&lt;T&gt;</c>
+    /// (<c>ResourceCreated&lt;T&gt;</c> and its siblings included).
+    /// </summary>
+    private static bool IsResourceEvent(INamedTypeSymbol type, INamedTypeSymbol? resourceEventOpenGeneric)
+    {
+        if (resourceEventOpenGeneric is null)
+        {
+            return false;
+        }
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, resourceEventOpenGeneric))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string BuildNullSafeAccessPath(string rootVariable, string dotSeparatedPath)
@@ -370,10 +421,20 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
     /// <summary>
     /// Compile-time metadata about a discovered <c>Expandable&lt;T&gt;</c> property.
     /// </summary>
+    /// <param name="PropertyPath">The dot-separated path to the property from the response root.</param>
+    /// <param name="IsEnumerable">Whether the property is a collection of <c>Expandable&lt;T&gt;</c>.</param>
+    /// <param name="AlwaysExpand">Whether the property is marked <c>[AlwaysExpand]</c>.</param>
+    /// <param name="ExpandableResourceTypeName">The fully-qualified <c>T</c> of <c>Expandable&lt;T&gt;</c>.</param>
+    /// <param name="ResponseTypeFullName">The fully-qualified response type the path is rooted at.</param>
+    /// <param name="ContentIsHandlerResult">
+    /// Whether the response type is itself the handler result (a legacy <c>ResourceEvent&lt;T&gt;</c>) rather than the
+    /// content of an <c>OkResult&lt;T&gt;</c>.
+    /// </param>
     private sealed record ExpandablePropertyInfo(
         string PropertyPath,
         bool IsEnumerable,
         bool AlwaysExpand,
         string ExpandableResourceTypeName,
-        string ResponseTypeFullName);
+        string ResponseTypeFullName,
+        bool ContentIsHandlerResult = false);
 }

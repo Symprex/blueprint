@@ -1514,6 +1514,7 @@ public static class PipelineHelpers
             if (result is OkResult okResult && okResult.Content is not null)
             {
                 resourceEvent.Data = okResult.Content;
+                resourceEvent.IsDataFromSelfQuery = true;
 
                 _logSelfQueryResolved(logger, operationTypeName, selfQueryTypeName, null);
             }
