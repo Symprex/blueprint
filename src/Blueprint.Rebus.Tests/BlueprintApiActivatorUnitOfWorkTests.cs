@@ -4,6 +4,7 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Rebus.Config;
 using Rebus.Handlers;
+using Rebus.Messages;
 using Rebus.Retry.Simple;
 using Rebus.Transport;
 using Rebus.Transport.InMem;
@@ -187,6 +188,45 @@ public class BlueprintApiActivatorUnitOfWorkTests
         network.GetCount("error").Should().Be(1);
     }
 
+    [Fact]
+    public async Task Rebus_bus_counts_a_plain_handlers_failing_save_as_a_failed_delivery_attempt_and_dead_letters_the_message()
+    {
+        // Legacy saved inside the dispatch: its one Rebus handler ran the message's whole pipeline, save included, and
+        // rethrew what the pipeline caught (legacy BlueprintApiActivator.cs:80-107; the save is inside the try of
+        // FieldDefinitionDeletedEventExecutorPipeline.cs:77-78, whose catch at :101-115 is what the activator rethrows).
+        // So a save that failed failed the delivery, which Rebus's retry step counted and, past its limit, moved to the
+        // error queue. The save here runs from the received transaction's commit callback instead, and under Rebus 8.6 a
+        // commit callback that throws is counted as a failed delivery attempt in the same way, not redelivered without
+        // end: this pins that behaviour.
+        const int maxDeliveryAttempts = 3;
+        var handled = new SaveCounter();
+        var network = new InMemNetwork();
+
+        using var provider = BuildProvider(services =>
+        {
+            services.AddSingleton(handled);
+            services.AddSingleton(new BlueprintRebusConfiguration());
+            services.AddScoped(static _ => new RecordingUnitOfWork { SaveFailure = new InvalidOperationException("The save failed.") });
+            services.AddScoped<IHandleMessages<BusMessage>, CountingBusMessageHandler>();
+        });
+
+        using (var bus = Configure.With(new BlueprintApiActivator(provider))
+                   .Transport(t => t.UseInMemoryTransport(network, "input"))
+                   .Options(static o => o.RetryStrategy(maxDeliveryAttempts: maxDeliveryAttempts))
+                   .Start())
+        {
+            await bus.SendLocal(new BusMessage());
+            await WaitUntilAsync(() => network.GetCount("error") == 1, "a message whose save always fails should be moved to the error queue");
+        }
+
+        handled.Count.Should().Be(maxDeliveryAttempts, "each failing save uses up one delivery attempt, and no more are made");
+
+        var deadLettered = network.GetNextOrNull("error");
+        deadLettered.Should().NotBeNull();
+        deadLettered!.Headers.Should().ContainKey(Headers.ErrorDetails)
+            .WhoseValue.Should().Contain("The save failed.", "the save's failure is what the message was given up on for");
+    }
+
     private static ServiceProvider BuildProvider(Action<IServiceCollection> configure, bool registerUnitOfWork = true)
     {
         var services = new ServiceCollection();
@@ -340,6 +380,16 @@ public class BlueprintApiActivatorUnitOfWorkTests
             return message.Fail
                 ? throw new InvalidOperationException("The handler failed.")
                 : Task.CompletedTask;
+        }
+    }
+
+    private sealed class CountingBusMessageHandler(SaveCounter handled) : IHandleMessages<BusMessage>
+    {
+        public Task Handle(BusMessage message)
+        {
+            handled.Increment();
+
+            return Task.CompletedTask;
         }
     }
 }
