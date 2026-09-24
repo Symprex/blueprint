@@ -77,12 +77,8 @@ public class ResourceEvent : OperationResult
     public string EventId { get; internal set; }
 
     /// <summary>
-    /// Gets a the change type of this event, which is a higher-level version of the Type property,
-    /// indicating whether the resource was updated, created or deleted.
+    /// Gets the change type of this event, indicating whether the resource was created, updated or deleted.
     /// </summary>
-    /// <remarks>
-    /// The summary is legacy Blueprint's, word for word, which the OpenAPI document describes the property with.
-    /// </remarks>
     [JsonInclude]
     public ResourceEventChangeType ChangeType { get; internal set; }
 
@@ -109,13 +105,9 @@ public class ResourceEvent : OperationResult
     public string ResourceObject { get; internal set; }
 
     /// <summary>
-    /// Gets or sets the href of the resource this event represents, to be populated by the ResourceEventMiddleware
-    /// component from the resource type and id definition object.
+    /// Gets or sets the href of the resource this event represents, populated by the framework from the resource type's
+    /// self link and the event's data or self query.
     /// </summary>
-    /// <remarks>
-    /// The framework populates it from the resource type's self link. The summary is legacy Blueprint's, which the
-    /// OpenAPI document describes the property with.
-    /// </remarks>
     [JsonInclude]
     public string? Href { get; set; }
 

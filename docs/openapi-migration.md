@@ -357,7 +357,8 @@ Two settings decide what there is to read:
   `backend/Directory.Build.props`, so its test projects render the same documents). The framework's own members —
   `$object`, `$links`, `$partial`, a list's and a page's members, `Link` and the resource event envelope — are
   documented in Blueprint's packages, whose `.xml` files the SDK does not copy to the build or publish output otherwise.
-  Their summaries are legacy's, word for word.
+  Their summaries carry legacy's wording. Two envelope members, `changeType` and `href`, are described with legacy's
+  committed text, typo and all, which their corrected summaries no longer carry.
 
 `ProblemDetails` and `ValidationProblemDetails` stay undescribed: their documentation ships only in the SDK's reference
 packs, which a deployed app does not have.

@@ -384,7 +384,7 @@ public sealed record OpenApiDocumentRenderingContext(
                 IsNullable: false,
                 EnumSchemaRef: "ResourceEventChangeType",
                 EnumValues: ImmutableArray.Create("Created", "Updated", "Deleted"),
-                Description: DescribeResourceEventProperty(nameof(ResourceEvent.ChangeType))),
+                Description: LegacyChangeTypeDescription),
             new OpenApiSchemaComponentPropertyModel(
                 "created",
                 "string",
@@ -403,7 +403,7 @@ public sealed record OpenApiDocumentRenderingContext(
                 "string",
                 IsExtensionData: false,
                 IsNullable: true,
-                Description: DescribeResourceEventProperty(nameof(ResourceEvent.Href))),
+                Description: LegacyHrefDescription),
             new OpenApiSchemaComponentPropertyModel(
                 "data",
                 null,
@@ -449,6 +449,17 @@ public sealed record OpenApiDocumentRenderingContext(
             properties,
             Description: OpenApiXmlDocs.GetSchemaSummary(typeof(ResourceEvent<>)));
     }
+
+    // Signature365's committed documents describe these two members in legacy's words, which their own summaries no
+    // longer carry: legacy's change-type summary had a stray "a" and named a Type property ResourceEvent does not have, and
+    // its href summary named the ResourceEventMiddleware that populated it. The document keeps the words, typo and all.
+    private const string LegacyChangeTypeDescription =
+        "Gets a the change type of this event, which is a higher-level version of the Type property,\n"
+        + "indicating whether the resource was updated, created or deleted.";
+
+    private const string LegacyHrefDescription =
+        "Gets or sets the href of the resource this event represents, to be populated by the ResourceEventMiddleware\n"
+        + "component from the resource type and id definition object.";
 
     private static string? DescribeResourceEventProperty(string propertyName)
     {
