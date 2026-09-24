@@ -33,7 +33,12 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.NodaTimeEchoResponse",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.SelfQueryTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.SampleWidgetApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.UnexposedFixtureApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.UnexposedFixtureApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeTenantApiResource",
+            "Blueprint.Model.PagedApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeTenantApiResource>",
+            "Blueprint.Http.ResourceEvent<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeTenantApiResource>",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeCountryApiResource>",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeGatewayRunApiResource");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))

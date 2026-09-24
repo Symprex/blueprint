@@ -117,8 +117,21 @@ public sealed class OpenApiInfoOptions
     /// return a string safe for use as a JSON property key. Names must be unique across all
     /// schema components in the document.
     /// </para>
+    /// <para>
+    /// Under <see cref="OpenApiSchemaNaming.Legacy"/> it receives, instead, the name that naming gives every component —
+    /// a type's legacy name such as <c>PagedApiResourceOfTemplateApiResource</c>, a request body's, a ResourceEvent
+    /// envelope's — so that <c>name =&gt; name.Replace("ApiResource", "")</c> is all a consumer needs to reproduce
+    /// legacy keys that stripped a suffix.
+    /// </para>
     /// </remarks>
     public Func<string, string>? SchemaNameFormatter { get; set; }
+
+    /// <summary>
+    /// Gets or sets how schema components are named from the CLR types they describe. Defaults to
+    /// <see cref="OpenApiSchemaNaming.Default"/>; <see cref="OpenApiSchemaNaming.Legacy"/> reproduces the names legacy
+    /// Blueprint's NJsonSchema generator gave.
+    /// </summary>
+    public OpenApiSchemaNaming SchemaNaming { get; set; }
 }
 
 /// <summary>

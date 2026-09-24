@@ -43,4 +43,9 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(SelfQueryTestApiResource))]
 [JsonSerializable(typeof(SampleWidgetApiResource))]
 [JsonSerializable(typeof(UnexposedFixtureApiResource))]
+[JsonSerializable(typeof(Http.LegacyShape.LegacyShapeTenantApiResource))]
+[JsonSerializable(typeof(PagedApiResource<Http.LegacyShape.LegacyShapeTenantApiResource>))]
+[JsonSerializable(typeof(Blueprint.Http.ResourceEvent<Http.LegacyShape.LegacyShapeTenantApiResource>))]
+[JsonSerializable(typeof(Http.LegacyShape.LegacyShapeListApiResource<Http.LegacyShape.LegacyShapeCountryApiResource>))]
+[JsonSerializable(typeof(Http.LegacyShape.LegacyShapeGatewayRunApiResource))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

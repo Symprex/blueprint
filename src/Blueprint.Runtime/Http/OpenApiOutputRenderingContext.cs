@@ -245,11 +245,18 @@ public sealed record OpenApiOutputRenderingContext(
                 ? [OpenApiSecurityScheme.BearerJwt()]
                 : [];
 
+        // Under legacy naming the formatter is handed the name that naming gives each component, whatever form the key
+        // is carried in here (a type's name, a request body's, a ResourceEvent envelope's synthetic CLR name), so it only
+        // ever sees names and can reproduce a consumer's legacy keys. The default hands it the key as it always has.
+        var schemaNameFormatter = infoOptions.SchemaNaming == OpenApiSchemaNaming.Legacy && infoOptions.SchemaNameFormatter is { } formatter
+            ? name => formatter(SimplifyClrTypeName(name))
+            : infoOptions.SchemaNameFormatter;
+
         writer.WriteString("openapi", string.IsNullOrWhiteSpace(infoOptions.OpenApiVersion) ? DefaultOpenApiVersion : infoOptions.OpenApiVersion);
         WriteInfo(writer, infoOptions);
         WriteServers(writer, ResolveServers(infoOptions.Servers, httpOptions, basePath));
-        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, infoOptions.SchemaNameFormatter);
-        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, infoOptions.SchemaNameFormatter);
+        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, schemaNameFormatter);
+        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, schemaNameFormatter, DescribeComponentSources(document));
         WriteDocumentTags(writer, document.Paths);
 
         if (allRequireAuth && effectiveSchemes.Count > 0)
@@ -1120,12 +1127,31 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
     }
 
+    /// <summary>
+    /// Maps each schema component's name to the CLR type it was projected from, where it was, so that a clash between
+    /// two components can name the types involved rather than only the names they share.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> DescribeComponentSources(OpenApiDocumentRenderingContext document)
+    {
+        var sources = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // Both a type's backtick and angle-bracket full names map to its name; the angle-bracket one reads better.
+        foreach (var (fullName, name) in document.PathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.SchemaProjection.FullNameToShortName
+                     .OrderByDescending(static pair => pair.Key.Contains('<', StringComparison.Ordinal)))
+        {
+            sources.TryAdd(name, fullName);
+        }
+
+        return sources;
+    }
+
     private static void WriteComponents(
         Utf8JsonWriter writer,
         ImmutableArray<OpenApiSchemaComponentModel> schemaComponents,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
         List<OpenApiSecurityScheme> securitySchemes,
-        Func<string, string>? schemaNameFormatter)
+        Func<string, string>? schemaNameFormatter,
+        IReadOnlyDictionary<string, string> componentSources)
     {
         if (schemaComponents.IsEmpty && securitySchemes.Count == 0)
         {
@@ -1145,13 +1171,24 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WritePropertyName("schemas");
             writer.WriteStartObject();
 
+            // Utf8JsonWriter writes a duplicate property name without complaint, and a parser then silently keeps one of
+            // the two schemas, so two components that render to the same key — two types sharing a name, or a formatter
+            // mapping two names to one — must fail here, naming both.
+            var sourcesByKey = new Dictionary<string, string>(StringComparer.Ordinal);
+
             foreach (var component in objectSchemaComponents)
             {
-                WriteSchemaComponent(writer, ProcessSchemaComponent(component, schemaProcessorOptions), schemaNameFormatter);
+                var processed = ProcessSchemaComponent(component, schemaProcessorOptions);
+                EnsureUniqueComponentKey(
+                    sourcesByKey,
+                    SanitiseSchemaKey(processed.BodyTypeName, schemaNameFormatter),
+                    componentSources.GetValueOrDefault(processed.BodyTypeName, processed.BodyTypeName));
+                WriteSchemaComponent(writer, processed, schemaNameFormatter);
             }
 
             // Emit the well-known "Link" schema for HATEOAS $links dictionary values.
             // This enables TypeScript/client generators to produce typed link objects.
+            EnsureUniqueComponentKey(sourcesByKey, "Link", "Blueprint.Model.Link");
             WriteLinkSchemaComponent(writer);
 
             writer.WriteEndObject();
@@ -1171,6 +1208,17 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndObject();
+    }
+
+    private static void EnsureUniqueComponentKey(Dictionary<string, string> sourcesByKey, string key, string source)
+    {
+        if (!sourcesByKey.TryAdd(key, source))
+        {
+            throw new InvalidOperationException(
+                $"The OpenAPI schema components for '{sourcesByKey[key]}' and '{source}' are both named '{key}', and a document " +
+                "cannot hold both under one key. Rename one of the types, give one a name of its own with [OpenApiSchemaName], " +
+                "or change the SchemaNameFormatter that maps them together.");
+        }
     }
 
     private static void WriteSecurityScheme(Utf8JsonWriter writer, OpenApiSecurityScheme scheme)

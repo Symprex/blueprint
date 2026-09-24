@@ -38,7 +38,12 @@ public class AppModelSerializerContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.NodaTimeEchoResponse",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines.SelfQueryTestApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.SampleWidgetApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.UnexposedFixtureApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel.UnexposedFixtureApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeTenantApiResource",
+            "Blueprint.Model.PagedApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeTenantApiResource>",
+            "Blueprint.Http.ResourceEvent<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeTenantApiResource>",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeCountryApiResource>",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeGatewayRunApiResource");
     }
 
     [Fact]
@@ -73,6 +78,11 @@ public class AppModelSerializerContextTests
             typeof(NodaTimeEchoResponse),
             typeof(SelfQueryTestApiResource),
             typeof(SampleWidgetApiResource),
-            typeof(UnexposedFixtureApiResource));
+            typeof(UnexposedFixtureApiResource),
+            typeof(Http.LegacyShape.LegacyShapeTenantApiResource),
+            typeof(Blueprint.Model.PagedApiResource<Http.LegacyShape.LegacyShapeTenantApiResource>),
+            typeof(Blueprint.Http.ResourceEvent<Http.LegacyShape.LegacyShapeTenantApiResource>),
+            typeof(Http.LegacyShape.LegacyShapeListApiResource<Http.LegacyShape.LegacyShapeCountryApiResource>),
+            typeof(Http.LegacyShape.LegacyShapeGatewayRunApiResource));
     }
 }

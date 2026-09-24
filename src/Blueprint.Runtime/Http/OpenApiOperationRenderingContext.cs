@@ -27,8 +27,9 @@ public sealed record OpenApiOperationRenderingContext(
     {
         ArgumentNullException.ThrowIfNull(responseObjects);
 
+        var naming = responseObjects.SchemaComponents.SchemaProjection.Naming;
         var operations = responseObjects.Operations
-            .Select(static operation => CreateOperation(operation))
+            .Select(operation => CreateOperation(operation, naming))
             .ToImmutableArray();
 
         return new OpenApiOperationRenderingContext(responseObjects, operations);
@@ -126,7 +127,7 @@ public sealed record OpenApiOperationRenderingContext(
         return this with { Operations = normalized };
     }
 
-    private static OpenApiOperationModel CreateOperation(OpenApiResponseObjectOperationContext operation)
+    private static OpenApiOperationModel CreateOperation(OpenApiResponseObjectOperationContext operation, OpenApiSchemaNaming naming)
     {
         var httpMethods = operation.Operation.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var httpMethodMetadata)
             ? httpMethodMetadata.HttpMethods
@@ -145,7 +146,7 @@ public sealed record OpenApiOperationRenderingContext(
             ? ImmutableDictionary<string, string>.Empty.Add(operationGroupMetadata.GroupName, desc)
             : ImmutableDictionary<string, string>.Empty;
 
-        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation);
+        var (parameters, requestBody) = ProjectInputMetadata(operation.Operation, naming);
 
         // Extract [Description] from the operation type for the operation-level summary.
         // Fall back to compile-time XML documentation when no [Description] attribute is present.
@@ -199,7 +200,7 @@ public sealed record OpenApiOperationRenderingContext(
         "IL2070",
         Justification = "OpenAPI projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
     private static (ImmutableArray<OpenApiParameterModel> Parameters, OpenApiRequestBodyModel? RequestBody)
-        ProjectInputMetadata(ApiOperationDescriptor descriptor)
+        ProjectInputMetadata(ApiOperationDescriptor descriptor, OpenApiSchemaNaming naming)
     {
         if (!descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData))
         {
@@ -232,7 +233,7 @@ public sealed record OpenApiOperationRenderingContext(
             var constraints = OpenApiValidationConstraints.ExtractFromProperty(clrProperty);
             var description = GetPropertyDescription(clrProperty, entry.PropertyName, docData);
             var enumValues = GetEnumValues(clrProperty);
-            var enumSchemaRef = GetEnumSchemaRef(clrProperty);
+            var enumSchemaRef = GetEnumSchemaRef(clrProperty, naming);
 
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
             var effectiveFormat = constraints.Format ?? schemaFormat;
@@ -549,11 +550,11 @@ public sealed record OpenApiOperationRenderingContext(
     }
 
     /// <summary>
-    /// Returns the simplified CLR enum type name for a property when it is an enum type,
-    /// or <c>null</c> when the property is not an enum. This name is used as the component
-    /// schema key for <c>$ref</c>-based enum rendering in OpenAPI.
+    /// Returns the schema component name of a property's enum type, as the response schemas name it, or <c>null</c>
+    /// when the property is not an enum. This name is used as the component schema key for <c>$ref</c>-based enum
+    /// rendering in OpenAPI.
     /// </summary>
-    private static string? GetEnumSchemaRef(System.Reflection.PropertyInfo? property)
+    private static string? GetEnumSchemaRef(System.Reflection.PropertyInfo? property, OpenApiSchemaNaming naming)
     {
         if (property is null)
         {
@@ -562,7 +563,7 @@ public sealed record OpenApiOperationRenderingContext(
 
         var propertyType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
 
-        return propertyType.IsEnum ? propertyType.Name : null;
+        return propertyType.IsEnum ? OpenApiSchemaNames.Format(propertyType, naming) : null;
     }
 
     /// <summary>

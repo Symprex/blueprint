@@ -94,7 +94,9 @@ internal static class OpenApiDocumentEndpoint
         string? basePath)
     {
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);
-        var schemaProjectionContext = OpenApiSchemaProjectionContext.Create(documentBuilderContext);
+        var schemaProjectionContext = OpenApiSchemaProjectionContext.Create(
+            documentBuilderContext,
+            infoOptions?.SchemaNaming ?? OpenApiSchemaNaming.Default);
         var responseSchemaProjectionContext = OpenApiResponseSchemaReferenceProjectionContext.Create(schemaProjectionContext);
         var responseObjectContext = OpenApiResponseObjectRenderingContext.Create(
             responseSchemaProjectionContext,

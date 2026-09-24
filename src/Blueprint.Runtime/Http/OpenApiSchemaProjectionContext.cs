@@ -19,7 +19,7 @@ namespace Blueprint.Runtime.Http;
 /// <param name="Document">The document-builder snapshot that owns the projected schema set.</param>
 /// <param name="Schemas">The distinct covered body-type schemas available for later OpenAPI work.</param>
 /// <param name="FullNameToShortName">Maps full CLR body-type names (both backtick and angle-bracket formats for generics)
-/// to the short <c>FormatTypeName</c> keys used by schema components.</param>
+/// to the short <see cref="OpenApiSchemaNames"/> keys used by schema components.</param>
 public sealed record OpenApiSchemaProjectionContext(
     OpenApiDocumentBuilderContext Document,
     ImmutableArray<OpenApiSchemaModel> Schemas,
@@ -33,16 +33,29 @@ public sealed record OpenApiSchemaProjectionContext(
     /// <returns>The schema projection snapshot.</returns>
     public static OpenApiSchemaProjectionContext Create(OpenApiDocumentBuilderContext document)
     {
+        return Create(document, OpenApiSchemaNaming.Default);
+    }
+
+    /// <summary>
+    /// Creates a schema projection snapshot for the covered body types in the supplied OpenAPI document-builder context,
+    /// naming each schema under <paramref name="naming"/>.
+    /// </summary>
+    /// <param name="document">The previously prepared OpenAPI document-builder context.</param>
+    /// <param name="naming">How schemas are named from their CLR types.</param>
+    /// <returns>The schema projection snapshot.</returns>
+    public static OpenApiSchemaProjectionContext Create(OpenApiDocumentBuilderContext document, OpenApiSchemaNaming naming)
+    {
         ArgumentNullException.ThrowIfNull(document);
 
         if (document.App.AppOwnedSerializerContext is not JsonSerializerContext serializerContext)
         {
-            return new OpenApiSchemaProjectionContext(document, ImmutableArray<OpenApiSchemaModel>.Empty, FrozenDictionary<string, string>.Empty);
+            return new OpenApiSchemaProjectionContext(document, ImmutableArray<OpenApiSchemaModel>.Empty, FrozenDictionary<string, string>.Empty)
+            {
+                Naming = naming,
+            };
         }
 
-        var coveredTypesByName = document.App.AppOwnedSerializerContextBodyTypes
-            .Select(static bodyType => new KeyValuePair<string, Type>(FormatTypeName(bodyType), bodyType))
-            .ToFrozenDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
+        var coveredTypesByName = IndexByName(document.App.AppOwnedSerializerContextBodyTypes, naming);
 
         // Build a reverse lookup: full CLR name → FormatTypeName short name.
         // Descriptor feature data stores full CLR names at compile time (using Roslyn's
@@ -55,7 +68,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         foreach (var bodyType in document.App.AppOwnedSerializerContextBodyTypes)
         {
-            var shortName = FormatTypeName(bodyType);
+            var shortName = OpenApiSchemaNames.Format(bodyType, naming);
             var fullName = bodyType.FullName ?? bodyType.Name;
             fullNameToShortNameBuilder.TryAdd(fullName, shortName);
 
@@ -97,7 +110,7 @@ public sealed record OpenApiSchemaProjectionContext(
             {
                 try
                 {
-                    schemaBuilder.Add(CreateSchema(bodyTypeName, bodyType, serializerContext, coveredTypesByName));
+                    schemaBuilder.Add(CreateSchema(bodyTypeName, bodyType, serializerContext, coveredTypesByName, naming));
                 }
                 catch (NotSupportedException)
                 {
@@ -109,14 +122,43 @@ public sealed record OpenApiSchemaProjectionContext(
             }
         }
 
-        return new OpenApiSchemaProjectionContext(document, schemaBuilder.ToImmutable(), fullNameToShortName);
+        return new OpenApiSchemaProjectionContext(document, schemaBuilder.ToImmutable(), fullNameToShortName)
+        {
+            Naming = naming,
+        };
+    }
+
+    /// <summary>
+    /// Gets how the schemas in this projection are named from their CLR types, which every other name the document
+    /// derives from a type (a request body's, an enum's) follows too.
+    /// </summary>
+    public OpenApiSchemaNaming Naming { get; init; }
+
+    private static FrozenDictionary<string, Type> IndexByName(IEnumerable<Type> types, OpenApiSchemaNaming naming)
+    {
+        var typesByName = new Dictionary<string, Type>(StringComparer.Ordinal);
+
+        foreach (var type in types)
+        {
+            var name = OpenApiSchemaNames.Format(type, naming);
+
+            if (!typesByName.TryAdd(name, type) && typesByName[name] != type)
+            {
+                throw new InvalidOperationException(
+                    $"The types '{typesByName[name].FullName}' and '{type.FullName}' are both named '{name}' in the OpenAPI document, " +
+                    "which cannot hold both under one key. Rename one of them, or give one a name of its own with [OpenApiSchemaName].");
+            }
+        }
+
+        return typesByName.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
     private static OpenApiSchemaModel CreateSchema(
         string bodyTypeName,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
         JsonSerializerContext serializerContext,
-        FrozenDictionary<string, Type> coveredTypesByName)
+        FrozenDictionary<string, Type> coveredTypesByName,
+        OpenApiSchemaNaming naming)
     {
         var typeInfo = serializerContext.GetTypeInfo(bodyType)
             ?? throw new InvalidOperationException($"The serializer context did not expose metadata for covered body type '{bodyTypeName}'.");
@@ -127,7 +169,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         var properties = typeInfo.Kind == JsonTypeInfoKind.Object
             ? typeInfo.Properties
-                .Select(property => CreateProperty(property, bodyType, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, coveredTypesByName))
+                .Select(property => CreateProperty(property, bodyType, bodyTypeName, serializerContext, validationAttributesByJsonPropertyName, nullabilityContext, coveredTypesByName, naming))
                 .OrderBy(static property => property.Name, StringComparer.Ordinal)
                 .ToImmutableArray()
             : ImmutableArray<OpenApiSchemaPropertyModel>.Empty;
@@ -284,7 +326,8 @@ public sealed record OpenApiSchemaProjectionContext(
         JsonSerializerContext serializerContext,
         IReadOnlyDictionary<string, IReadOnlyList<ValidationAttribute>> validationAttributesByJsonPropertyName,
         NullabilityInfoContext nullabilityContext,
-        FrozenDictionary<string, Type> coveredTypesByName)
+        FrozenDictionary<string, Type> coveredTypesByName,
+        OpenApiSchemaNaming naming)
     {
         var propertyTypeInfo = serializerContext.GetTypeInfo(property.PropertyType);
         var propertyKind = propertyTypeInfo is null
@@ -296,7 +339,7 @@ public sealed record OpenApiSchemaProjectionContext(
         var maximum = GetMaximum(validationAttributes);
         var isNullable = IsNullableProperty(property, nullabilityContext);
         var format = MapFormatFromValidationAttributes(validationAttributes) ?? MapFormat(property.PropertyType);
-        var (enumValues, enumSchemaName) = MapEnumValues(property.PropertyType);
+        var (enumValues, enumSchemaName) = MapEnumValues(property.PropertyType, naming);
         var description = GetPropertyDescription(property);
         var obsoleteAttr = property.AttributeProvider is MemberInfo deprecatedMember
             ? deprecatedMember.GetCustomAttribute<ObsoleteAttribute>(inherit: true)
@@ -316,8 +359,8 @@ public sealed record OpenApiSchemaProjectionContext(
         // Extract element type metadata for collection/dictionary properties so schema rendering
         // can emit "items" (arrays) or "additionalProperties" (dictionaries).
         // When JsonTypeInfo is available, use its Kind; otherwise fall back to CLR interface inspection.
-        var (itemsKind, itemsFormat, itemsSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Enumerable, coveredTypesByName);
-        var (additionalPropertiesKind, additionalPropertiesFormat, additionalPropertiesSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Dictionary, coveredTypesByName);
+        var (itemsKind, itemsFormat, itemsSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Enumerable, coveredTypesByName, naming);
+        var (additionalPropertiesKind, additionalPropertiesFormat, additionalPropertiesSchemaName) = ResolveElementSchema(propertyTypeInfo, property.PropertyType, JsonTypeInfoKind.Dictionary, coveredTypesByName, naming);
 
         // When dictionary values are arrays (e.g. Dictionary<string, string[]>), resolve the nested
         // array element type so the schema can emit "items" inside "additionalProperties".
@@ -333,7 +376,7 @@ public sealed record OpenApiSchemaProjectionContext(
             {
                 var dictValueTypeInfo = serializerContext.GetTypeInfo(dictValueType);
                 (additionalPropertiesItemsKind, additionalPropertiesItemsFormat, additionalPropertiesItemsSchemaName) =
-                    ResolveElementSchema(dictValueTypeInfo, dictValueType, JsonTypeInfoKind.Enumerable, coveredTypesByName);
+                    ResolveElementSchema(dictValueTypeInfo, dictValueType, JsonTypeInfoKind.Enumerable, coveredTypesByName, naming);
             }
         }
 
@@ -373,7 +416,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
     /// <summary>
     /// Resolves the schema kind, format, and optional element type name for element types of
-    /// collections and dictionaries. The element type name is the <see cref="FormatTypeName"/>
+    /// collections and dictionaries. The element type name is the <see cref="OpenApiSchemaNames"/>
     /// representation and is present only when the element type is a complex object that also
     /// appears as a covered schema component (i.e. has a reusable schema in the output).
     /// Prefers <see cref="JsonTypeInfo.Kind"/> when available; falls back to CLR interface
@@ -386,7 +429,8 @@ public sealed record OpenApiSchemaProjectionContext(
         JsonTypeInfo? typeInfo,
         Type propertyType,
         JsonTypeInfoKind expectedKind,
-        FrozenDictionary<string, Type> coveredTypesByName)
+        FrozenDictionary<string, Type> coveredTypesByName,
+        OpenApiSchemaNaming naming)
     {
         // When STJ has type info and the kind matches, use it directly.
         if (typeInfo is not null && typeInfo.Kind == expectedKind)
@@ -399,7 +443,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
             var kind = MapKind(elementType, JsonTypeInfoKind.None);
             var format = MapFormat(elementType);
-            var schemaName = ResolveSchemaRef(elementType, kind, coveredTypesByName);
+            var schemaName = ResolveSchemaRef(elementType, kind, coveredTypesByName, naming);
             return (kind, format, schemaName);
         }
 
@@ -415,7 +459,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
             var kind = MapKind(elementType, JsonTypeInfoKind.None);
             var format = MapFormat(elementType);
-            var schemaName = ResolveSchemaRef(elementType, kind, coveredTypesByName);
+            var schemaName = ResolveSchemaRef(elementType, kind, coveredTypesByName, naming);
             return (kind, format, schemaName);
         }
 
@@ -427,14 +471,14 @@ public sealed record OpenApiSchemaProjectionContext(
     /// appears in the covered body types set (so the <c>$ref</c> target actually exists).
     /// Primitive elements (string, integer, number, boolean) are rendered inline.
     /// </summary>
-    private static string? ResolveSchemaRef(Type elementType, OpenApiSchemaKind? kind, FrozenDictionary<string, Type> coveredTypesByName)
+    private static string? ResolveSchemaRef(Type elementType, OpenApiSchemaKind? kind, FrozenDictionary<string, Type> coveredTypesByName, OpenApiSchemaNaming naming)
     {
         if (kind is not (null or OpenApiSchemaKind.None or OpenApiSchemaKind.Object))
         {
             return null;
         }
 
-        var typeName = FormatTypeName(elementType);
+        var typeName = OpenApiSchemaNames.Format(elementType, naming);
         return coveredTypesByName.ContainsKey(typeName) ? typeName : null;
     }
 
@@ -670,7 +714,7 @@ public sealed record OpenApiSchemaProjectionContext(
         "Trimming",
         "IL2067",
         Justification = "Enum types used in STJ-serializable operations are preserved by the generated serializer context.")]
-    private static (ImmutableArray<string> Values, string? SchemaName) MapEnumValues(Type propertyType)
+    private static (ImmutableArray<string> Values, string? SchemaName) MapEnumValues(Type propertyType, OpenApiSchemaNaming naming)
     {
         var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
 
@@ -679,7 +723,7 @@ public sealed record OpenApiSchemaProjectionContext(
             return (ImmutableArray<string>.Empty, null);
         }
 
-        return (Enum.GetNames(underlying).ToImmutableArray(), FormatTypeName(underlying));
+        return (Enum.GetNames(underlying).ToImmutableArray(), OpenApiSchemaNames.Format(underlying, naming));
     }
 
     /// <summary>
@@ -1074,34 +1118,6 @@ public sealed record OpenApiSchemaProjectionContext(
         };
     }
 
-    private static string FormatTypeName(Type type)
-    {
-        if (type == typeof(string))
-        {
-            return "string";
-        }
-
-        // Generic types: produce "OuterOfInner" (e.g. ResourceEventOfTemplate) instead of the CLR
-        // backtick notation that breaks JSON $ref pointers and is unreadable by TypeScript generators.
-        if (type.IsGenericType)
-        {
-            var baseName = type.Name;
-            var backtickIndex = baseName.IndexOf('`');
-            if (backtickIndex > 0)
-            {
-                baseName = baseName[..backtickIndex];
-            }
-
-            var args = type.GetGenericArguments();
-            var argNames = string.Join("And", args.Select(static a => StripSuffix(a.Name)));
-            return $"{baseName}Of{argNames}";
-        }
-
-        // Short type name by default — matches what TypeScript generators and most OpenAPI
-        // tooling expects (e.g. "TemplateApiResource" not "MyApp_Api_TemplateApiResource").
-        return type.Name;
-    }
-
     /// <summary>
     /// Produces a fully-qualified type name using the same angle-bracket format that Roslyn's
     /// <c>ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)</c> produces. This bridges the
@@ -1120,24 +1136,6 @@ public sealed record OpenApiSchemaProjectionContext(
         var baseName = backtickIdx > 0 ? definition[..backtickIdx] : definition;
         var args = string.Join(", ", type.GetGenericArguments().Select(FormatFullNameDisplayStyle));
         return $"{baseName}<{args}>";
-    }
-
-    /// <summary>
-    /// Strips common API resource suffixes (ApiResource, Resource, DTO, Response) for concise schema names.
-    /// </summary>
-    private static string StripSuffix(string name)
-    {
-        ReadOnlySpan<string> suffixes = ["ApiResource", "Resource", "DTO", "Response"];
-
-        foreach (var suffix in suffixes)
-        {
-            if (name.EndsWith(suffix, StringComparison.Ordinal) && name.Length > suffix.Length)
-            {
-                return name[..^suffix.Length];
-            }
-        }
-
-        return name;
     }
 }
 

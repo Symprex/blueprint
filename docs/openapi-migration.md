@@ -265,6 +265,32 @@ app.MapBlueprintApi<MyApp, MyAppExecutor>(
 **Note:** For generic types, `FormatTypeName` is applied *before* `SanitiseSchemaKey`/`SchemaNameFormatter`,
 so generic types already produce clean names regardless of custom formatter configuration.
 
+### Legacy-compatible schema names
+
+A consumer whose generated clients import types by the names legacy Blueprint gave them can reproduce those names:
+
+```csharp
+configureOpenApi: options =>
+{
+    options.SchemaNaming = OpenApiSchemaNaming.Legacy;
+
+    // Signature365's own rule, as its legacy BlueprintSchemaNameGenerator applied it.
+    options.SchemaNameFormatter = name => name.Replace("ApiResource", "").Replace("PagedOf", "Paged");
+}
+```
+
+- `OpenApiSchemaNaming.Legacy` names types as NJsonSchema 11.1's `DefaultSchemaNameGenerator` did:
+  `PagedApiResource<PartnerCompanyApiResource>` is `PagedApiResourceOfPartnerCompanyApiResource`, recursively for
+  nested generics and joined with `And` for several arguments; `short`/`int`/`long` are `Short`/`Integer`/`Long`;
+  `int?` is `NullableInteger`; an array is `X[]`; a nested type is its own simple name.
+- Under it the formatter receives those names for every component — types, request bodies, ResourceEvent envelopes —
+  never CLR type names, so the rule above yields `PagedPartnerCompany`, `PartnerCompany` and
+  `ResourceEventOfPartnerCompany`.
+- `[OpenApiSchemaName("ImportRun")]` (`Blueprint.Model.Attributes`) gives a type a name of its own, as legacy's
+  `[JsonSchema("ImportRun")]` did.
+- Two components that end up with one key fail the render with an `InvalidOperationException` naming both, rather
+  than producing a document in which one silently replaces the other.
+
 ### Issue: TenantId in Path Parameters
 
 S365 operations may expose `TenantId` as a path parameter in OpenAPI, but this is resolved from the JWT claim, not the URL.
