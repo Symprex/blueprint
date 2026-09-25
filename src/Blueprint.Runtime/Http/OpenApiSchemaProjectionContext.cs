@@ -1426,7 +1426,9 @@ public sealed record OpenApiSchemaProjectionContext(
     /// mismatch between <see cref="Type.FullName"/> (backtick notation for generics) and the
     /// source generator's compile-time body type names (angle-bracket notation).
     /// </summary>
-    private static string FormatFullNameDisplayStyle(Type type)
+    /// <param name="type">The type to name.</param>
+    /// <returns>The type's name as the source generator writes it.</returns>
+    internal static string FormatFullNameDisplayStyle(Type type)
     {
         if (!type.IsGenericType)
         {

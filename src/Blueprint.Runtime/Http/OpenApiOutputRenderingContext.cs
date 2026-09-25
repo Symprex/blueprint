@@ -1102,6 +1102,12 @@ public sealed record OpenApiOutputRenderingContext(
 
         foreach (var discriminatorCase in discriminator.Cases)
         {
+            if (string.Equals(discriminator.PropertyName, OpenApiResponseObjectRenderingContext.ResourceObjectDiscriminatorPropertyName, StringComparison.Ordinal))
+            {
+                WriteLegacyResourceEventDiscriminatorCase(writer, discriminatorCase, schemaNameFormatter);
+                continue;
+            }
+
             writer.WriteStartObject();
             writer.WriteString("type", "object");
             writer.WritePropertyName("required");
@@ -1140,6 +1146,44 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName("discriminator");
         writer.WriteStartObject();
         writer.WriteString("propertyName", discriminator.PropertyName);
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Writes one case of a response made only of legacy resource events: the event the host writes for it, by the
+    /// <c>resourceObject</c> that tells it apart and the <c>data</c> it carries, both of which the event always has
+    /// (<c>ResourceEventOf{Resource}</c>'s required members).
+    /// </summary>
+    private static void WriteLegacyResourceEventDiscriminatorCase(
+        Utf8JsonWriter writer,
+        OpenApiResponseDiscriminatorCaseModel discriminatorCase,
+        Func<string, string>? schemaNameFormatter)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("type", "object");
+        writer.WritePropertyName("required");
+        writer.WriteStartArray();
+        writer.WriteStringValue("resourceObject");
+        writer.WriteStringValue("data");
+        writer.WriteEndArray();
+        writer.WritePropertyName("properties");
+        writer.WriteStartObject();
+
+        writer.WritePropertyName("resourceObject");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WritePropertyName("enum");
+        writer.WriteStartArray();
+        writer.WriteStringValue(discriminatorCase.Value);
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+
+        writer.WritePropertyName("data");
+        writer.WriteStartObject();
+        writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(discriminatorCase.SchemaComponent.BodyTypeName, schemaNameFormatter)}");
+        writer.WriteEndObject();
+
         writer.WriteEndObject();
         writer.WriteEndObject();
     }

@@ -28,6 +28,11 @@ public sealed record OpenApiResponseObjectRenderingContext(
     private const string ValidationProblemDetailsTypeName = "ValidationProblemDetails";
 
     /// <summary>
+    /// The property a response made only of legacy resource events is discriminated by: the event's <c>resourceObject</c>.
+    /// </summary>
+    internal const string ResourceObjectDiscriminatorPropertyName = "resourceObject";
+
+    /// <summary>
     /// Creates deterministic OpenAPI-style response objects from the supplied response-schema reference projection.
     /// This seam intentionally stays response-only: it preserves the current response metadata and only adds JSON content
     /// bindings for covered schema components, leaving operation/document assembly to later slices.
@@ -188,14 +193,27 @@ public sealed record OpenApiResponseObjectRenderingContext(
         OperationHttpResponseMetadata response,
         ImmutableArray<OpenApiResponseContentSchemaComponent> schemaComponents)
     {
-        if (schemaComponents.Length < 2
-            || operation.TryGetFeatureData<OperationResourceEventMetadataFeatureData>(out var metadata) == false)
+        if (schemaComponents.Length < 2)
         {
             return null;
         }
 
         var schemaComponentsByBodyTypeName = schemaComponents
             .ToFrozenDictionary(static component => component.BodyTypeName, StringComparer.Ordinal);
+
+        // A legacy event's eventId is "{resource}.{sub-id}", the sub-id its handler's to choose at run time, not its
+        // resource's [ResourceEvent] id, so a response one of them makes is told apart by the resourceObject or not at all.
+        var legacyEventMembers = ResolveLegacyResourceEventMembers(operation, response);
+        if (legacyEventMembers.Any(static member => member is not null))
+        {
+            return TryCreateLegacyResourceEventDiscriminator(legacyEventMembers, schemaComponentsByBodyTypeName, schemaComponents.Length);
+        }
+
+        if (operation.TryGetFeatureData<OperationResourceEventMetadataFeatureData>(out var metadata) == false)
+        {
+            return null;
+        }
+
         var distinctEventIds = new HashSet<string>(StringComparer.Ordinal);
         var cases = new List<OpenApiResponseDiscriminatorCaseModel>(response.ResultTypeNames.Length);
         foreach (var resultTypeName in response.ResultTypeNames)
@@ -214,6 +232,85 @@ public sealed record OpenApiResponseObjectRenderingContext(
         return cases.Count != schemaComponents.Length
             ? null
             : new OpenApiResponseDiscriminatorModel("eventId", cases.ToImmutableArray());
+    }
+
+    /// <summary>
+    /// Discriminates a response made only of legacy <see cref="Blueprint.Http.ResourceEvent{TResource}"/> members by the
+    /// <c>resourceObject</c> the host writes for each: its resource's type name (<see cref="ApiResource.GetTypeName"/>),
+    /// fixed by the event's type, as legacy Blueprint set it (Signature365 8b40ecc961, Blueprint.Http/ResourceEvent.cs:38,
+    /// :59). Returns <see langword="null"/> when a member is not a legacy event, when two resources share a type name — the
+    /// host would write the same value for either — or when the members do not cover the response's components.
+    /// </summary>
+    private static OpenApiResponseDiscriminatorModel? TryCreateLegacyResourceEventDiscriminator(
+        Type?[] legacyEventMembers,
+        FrozenDictionary<string, OpenApiResponseContentSchemaComponent> schemaComponentsByBodyTypeName,
+        int schemaComponentCount)
+    {
+        var distinctResourceObjects = new HashSet<string>(StringComparer.Ordinal);
+        var cases = new List<OpenApiResponseDiscriminatorCaseModel>(legacyEventMembers.Length);
+        foreach (var member in legacyEventMembers)
+        {
+            if (member is null
+                || GetLegacyEventResourceType(member) is not { } resourceType
+                || !schemaComponentsByBodyTypeName.TryGetValue(NormalizeBodyTypeName(OpenApiSchemaProjectionContext.FormatFullNameDisplayStyle(resourceType)), out var schemaComponent))
+            {
+                return null;
+            }
+
+            var resourceObject = ApiResource.GetTypeName(resourceType);
+            if (!distinctResourceObjects.Add(resourceObject))
+            {
+                return null;
+            }
+
+            cases.Add(new OpenApiResponseDiscriminatorCaseModel(resourceObject, schemaComponent));
+        }
+
+        return cases.Count != schemaComponentCount
+            ? null
+            : new OpenApiResponseDiscriminatorModel(ResourceObjectDiscriminatorPropertyName, cases.ToImmutableArray());
+    }
+
+    /// <summary>
+    /// Resolves each of the response's result types to the member of the operation's declared <c>Results</c> union it
+    /// names, where that member is a legacy <see cref="Blueprint.Http.ResourceEvent"/>, and to <see langword="null"/>
+    /// otherwise. The names are the generator's (Roslyn's display names), so each member is named the same way.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Operation types' interfaces are preserved by the source generator's generated pipeline code.")]
+    private static Type?[] ResolveLegacyResourceEventMembers(ApiOperationDescriptor operation, OperationHttpResponseMetadata response)
+    {
+        var declaredResultType = operation.OperationType.GetInterfaces()
+            .FirstOrDefault(static candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IReturn<>))
+            ?.GetGenericArguments()[0];
+        if (declaredResultType is not { IsGenericType: true } || declaredResultType.GetGenericTypeDefinition() != typeof(Results<,>))
+        {
+            return new Type?[response.ResultTypeNames.Length];
+        }
+
+        var members = declaredResultType.GetGenericArguments();
+
+        return response.ResultTypeNames
+            .Select(resultTypeName => members.FirstOrDefault(member =>
+                typeof(Blueprint.Http.ResourceEvent).IsAssignableFrom(member)
+                && string.Equals(OpenApiSchemaProjectionContext.FormatFullNameDisplayStyle(member), resultTypeName, StringComparison.Ordinal)))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// The resource type of a legacy <see cref="Blueprint.Http.ResourceEvent{TResource}"/>, or <see langword="null"/> for
+    /// the non-generic <see cref="Blueprint.Http.ResourceEvent"/>.
+    /// </summary>
+    private static Type? GetLegacyEventResourceType(Type eventType)
+    {
+        for (var current = eventType; current is not null; current = current.BaseType)
+        {
+            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(Blueprint.Http.ResourceEvent<>))
+            {
+                return current.GetGenericArguments()[0];
+            }
+        }
+
+        return null;
     }
 
     private const string CreatedResultTypeName = "Blueprint.Runtime.Exec.CreatedResult";

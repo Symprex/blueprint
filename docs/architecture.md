@@ -91,6 +91,11 @@ discriminator/OpenAPI steps do not need to infer event identities from runtime-o
 When an HTTP-visible same-status union is made entirely of those proven body-bearing resource-event outcomes, the
 OpenAPI renderer now emits a `oneOf` resource-event envelope with top-level `eventId`, `resourceId`, and `content`
 plus discriminator metadata on `eventId`, while unrelated same-status unions still remain on the diagnostic path.
+A same-status union of legacy `Blueprint.Http.ResourceEvent<T>` members is not discriminated by those ids, because the
+host writes a legacy event's `eventId` as `{resource}.{sub-id}` with a sub-id its handler chooses at run time. It is
+discriminated by the `resourceObject` the host writes, its resource's type name (`ApiResource.GetTypeName`): each `oneOf`
+case is `{ resourceObject, data }`, and a union whose resources share a type name has no discriminator.
+`BlueprintHttpClient` reads such a union by the same property.
 
 The runtime model now follows that same serializer contract end to end: `Blueprint.Model.ApiResource` and
 `Blueprint.Model.Link` rely only on `System.Text.Json` attributes, so `$object`, `$links`, `$partial`, and null-link

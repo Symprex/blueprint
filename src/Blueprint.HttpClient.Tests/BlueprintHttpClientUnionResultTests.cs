@@ -276,6 +276,45 @@ public class BlueprintHttpClientUnionResultTests : IClassFixture<SampleAppFixtur
         result.AsT2.Content.Name.Should().Be("Created Template");
     }
 
+    // Two legacy events of distinct resources, a union the generator accepts (their [ResourceEvent] ids differ), are both a
+    // 200 JSON body. The host writes each with its eventId as "{resource}.{sub-id}", chosen by the handler at run time, and
+    // its resourceObject as its resource's type name (HttpOperationResultExecutor, ApiResource.GetTypeName), so the
+    // resourceObject is what tells them apart. New-only: Signature365 declares no Results<,>.
+    [Fact]
+    public async Task When_the_host_wrote_one_of_two_legacy_events_of_distinct_resources_then_its_resource_object_says_which()
+    {
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(
+            new ResourceUpdated<TemplateVersionApiResource>(new TemplateVersionApiResource(3, DateTimeOffset.UnixEpoch, "t-1")));
+
+        var result = await client.SendAsync<Results<ResourceCreated<TemplateApiResource>, ResourceUpdated<TemplateVersionApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT2.Should().BeTrue();
+        result.AsT2.Data!.Version.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_the_other_of_two_legacy_events_of_distinct_resources_then_its_resource_object_says_which()
+    {
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(
+            new ResourceCreated<TemplateApiResource>(new TemplateApiResource("t-1", "Evented Template", "<p>x</p>", "x")));
+
+        var result = await client.SendAsync<Results<ResourceCreated<TemplateApiResource>, ResourceUpdated<TemplateVersionApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT1.Should().BeTrue();
+        result.AsT1.Data!.Name.Should().Be("Evented Template");
+    }
+
+    [Fact]
+    public async Task When_two_legacy_events_are_of_the_same_resource_then_which_the_host_wrote_still_cannot_be_told()
+    {
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(
+            new ResourceCreated<TemplateApiResource>(new TemplateApiResource("t-1", "Evented Template", "<p>x</p>", "x")));
+
+        var act = () => client.SendAsync<Results<ResourceCreated<TemplateApiResource>, ResourceUpdated<TemplateApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*could be more than one*");
+    }
+
     private async Task<BlueprintHttpClient<SampleBlueprintApp>> CreateClientAnsweringAsTheHostWritesAsync(OperationResult written)
     {
         await using var services = new ServiceCollection()

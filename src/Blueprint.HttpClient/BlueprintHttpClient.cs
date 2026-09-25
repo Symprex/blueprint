@@ -1223,7 +1223,8 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <remarks>
     /// When more than one member could be that JSON body, the body cannot say which one the host wrote, so rather than read
     /// it as whichever is declared first this throws, naming them: a runtime guard, as the union is the caller's choice of
-    /// response type and so is only known at the call.
+    /// response type and so is only known at the call. Legacy resource events of distinct resources are the exception: the
+    /// body's <c>resourceObject</c> says which.
     /// </remarks>
     /// <param name="unionType">The closed <see cref="Results{T1, T2}"/> type.</param>
     /// <param name="response">The response.</param>
@@ -1242,6 +1243,11 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         if (isJson)
         {
             var candidates = memberTypes.Where(memberType => IsJsonMemberOfStatus(memberType, status)).ToArray();
+
+            if (candidates.Length > 1 && candidates.All(static c => typeof(ResourceEvent).IsAssignableFrom(c)))
+            {
+                candidates = await SelectLegacyEventsOfResourceObjectAsync(candidates, response, cancellationToken).ConfigureAwait(false);
+            }
 
             if (candidates.Length > 1)
             {
@@ -1269,6 +1275,55 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             if (member is not null)
             {
                 return ToUnion(unionType, memberType, member);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Narrows legacy resource events that could each be the body to those of the resource the body names. The host writes
+    /// a legacy event's <c>resourceObject</c> as its resource's type name (<see cref="ApiResource.GetTypeName"/>), fixed by
+    /// the event's type, where its <c>eventId</c> carries a sub-id its handler chose at run time. So two events of distinct
+    /// resources, which the generator accepts in one union, are told apart by it, as the OpenAPI document's discriminator
+    /// says.
+    /// </summary>
+    /// <param name="candidates">The legacy event members that could be the body.</param>
+    /// <param name="response">The response, whose content is buffered so it can be read again.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The candidates of the resource the body names, or all of them when it names none.</returns>
+    private static async Task<Type[]> SelectLegacyEventsOfResourceObjectAsync(Type[] candidates, HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        // Read as bytes, which buffers the content without consuming the stream the member is read from afterwards.
+        using var document = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
+
+        if (document.RootElement.ValueKind != JsonValueKind.Object
+            || !document.RootElement.TryGetProperty("resourceObject", out var resourceObject)
+            || resourceObject.ValueKind != JsonValueKind.String)
+        {
+            return candidates;
+        }
+
+        var name = resourceObject.GetString();
+        var matching = candidates
+            .Where(candidate => GetLegacyEventResourceType(candidate) is { } resourceType
+                                && string.Equals(ApiResource.GetTypeName(resourceType), name, StringComparison.Ordinal))
+            .ToArray();
+
+        return matching.Length == 0 ? candidates : matching;
+    }
+
+    /// <summary>
+    /// The resource type of a legacy <see cref="ResourceEvent{TResource}"/> member, or <see langword="null"/> for the
+    /// non-generic <see cref="ResourceEvent"/>.
+    /// </summary>
+    private static Type? GetLegacyEventResourceType(Type eventType)
+    {
+        for (var current = eventType; current is not null; current = current.BaseType)
+        {
+            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(ResourceEvent<>))
+            {
+                return current.GetGenericArguments()[0];
             }
         }
 
