@@ -1040,12 +1040,9 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
                 return (TResponse)union;
             }
 
-            // A 204 no member claims keeps the default every other response type gets for it.
-            if (response.StatusCode == HttpStatusCode.NoContent)
-            {
-                return default;
-            }
-
+            // A response no member claims, a 204 included, is a contract mismatch: a default union would hold no member at
+            // all. Legacy's client threw for any response it could not understand (Signature365 8b40ecc961,
+            // Common.Core/Api/BlueprintHttpClient.cs:228).
             throw new InvalidOperationException(
                 $"The response ({(int)response.StatusCode}, {response.Content.Headers.ContentType?.MediaType ?? "no content"}) " +
                 $"matches none of the results {typeof(TResponse)} declares.");

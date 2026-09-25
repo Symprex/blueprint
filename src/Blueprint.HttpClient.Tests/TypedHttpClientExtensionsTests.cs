@@ -103,16 +103,23 @@ public sealed class TypedHttpClientExtensionsTests : IClassFixture<SampleAppFixt
     [Fact]
     public async Task GetTemplateAsync_get_query_sends_get_request_to_url_with_id()
     {
+        // Only the request is under test. The query is a Results<,> of which a 204 is no member, so the fake answers with
+        // a not-found problem, which the client raises whatever the response type.
         HttpRequestMessage? captured = null;
         var handler = new FakeHttpHandler(req =>
         {
             captured = req;
-            return new HttpResponseMessage(HttpStatusCode.NoContent);
+            return new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent("{\"title\":\"Not Found\",\"status\":404}", System.Text.Encoding.UTF8, "application/problem+json"),
+            };
         });
 
         var client = this._fixture.CreateClient(handler);
 
-        await client.GetTemplateAsync("t-42");
+        var act = () => client.GetTemplateAsync("t-42");
+
+        await act.Should().ThrowAsync<BlueprintApiException>();
 
         captured.Should().NotBeNull();
         captured!.Method.Should().Be(HttpMethod.Get);

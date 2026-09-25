@@ -85,15 +85,17 @@ public class BlueprintHttpClientUnionResultTests : IClassFixture<SampleAppFixtur
     }
 
     [Fact]
-    public async Task When_the_host_wrote_no_content_that_no_member_claims_then_returns_the_default()
+    public async Task When_the_host_wrote_no_content_that_no_member_claims_then_throws()
     {
-        // What SendAsync returns for a 204 whatever the response type, as a generated typed extension relies on.
+        // A 204 neither member claims is a contract mismatch like any other response none claims (below): a default union
+        // holds no member at all, so every IsT* is false and every AsT* throws, far from the call that went wrong. Legacy's
+        // client, which had no unions, threw for any response it could not understand (Signature365 8b40ecc961,
+        // Common.Core/Api/BlueprintHttpClient.cs:228).
         var client = this._fixture.CreateClient(new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.NoContent)));
 
-        var result = await client.SendAsync<Results<StatusCodeResult.Accepted, PlainTextResult>>(new ArchiveTemplateCommand { Id = "t-1" });
+        var act = () => client.SendAsync<Results<StatusCodeResult.Accepted, PlainTextResult>>(new ArchiveTemplateCommand { Id = "t-1" });
 
-        result.IsT1.Should().BeFalse();
-        result.IsT2.Should().BeFalse();
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*204*matches none of*");
     }
 
     [Fact]
