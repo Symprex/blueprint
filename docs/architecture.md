@@ -55,6 +55,19 @@ declared serializer-context type, and both the typed and string-backed `JsonSeri
 generated registration constructor. That gives later OpenAPI coverage-validation and schema slices a consumer-owned JSON
 metadata seam without routing through runtime host options first.
 
+App roots may also declare `[BlueprintAppOperationNames(Remove = "Portal")]`, which removes every ordinal occurrence of
+that text from the name of each operation the app hosts, after `Query`/`Command` suffix stripping — so
+`PortalResetActiveUsersCommand` is named `ResetActiveUsers`. It replaces legacy Blueprint's per-app
+`IOperationScannerConvention` and keeps its semantics. The rename cannot live in the descriptor, because descriptors are
+generated with the operation, often in a contract assembly that cannot see which app hosts it, and one operation can be
+hosted by several apps. Instead the registration constructor emits `this.Register(ApplyOperationNameTransform(Operation.Configure()))`:
+each `Configure()` call returns a fresh descriptor, so the app renames only its own instances before `Freeze()`. Every
+reader of `ApiOperationDescriptor.Name` in that app — OpenAPI `operationId` values, request-body schema keys, `x-links`,
+and code reading `link.OperationDescriptor.Name` such as an authorisation-manifest query — then sees the app's name.
+Resource and response schema names, which come from CLR types, do not change, and nor do the compile-time manifest
+artifacts, which are keyed by operation type. `BP011` fails the build when the removal gives two operations the same name,
+or leaves one with an empty name.
+
 `HttpOperationResultExecutor` now also consumes that same app-owned serializer seam for HTTP API responses. When the app
 declares a `JsonSerializerContext`, the executor prefers its generated type metadata for semantic result bodies and
 problem responses; uncovered fallback bodies still serialize through `System.Text.Json` using the context's options when

@@ -30,6 +30,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "MultiExpandableTestEmployee",
             "NodaTimeEchoResponse",
             "ProblemDetails",
+            "SampleWidgetApiResource",
             "ValidationProblemDetails",
             "string");
 

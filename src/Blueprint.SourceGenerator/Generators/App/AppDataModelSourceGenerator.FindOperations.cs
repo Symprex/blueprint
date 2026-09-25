@@ -42,6 +42,13 @@ public sealed partial class AppDataModelSourceGenerator
         var requiredSerializerCoverageOperations = new HashSet<string>(StringComparer.Ordinal);
         var strippedNameToOperations = new Dictionary<string, List<string>>(128, StringComparer.Ordinal);
 
+        // The names the app registers once its [BlueprintAppOperationNames] removal has run on the stripped names,
+        // keyed by that registered name. Only populated when the app renames operations.
+        var operationNameRemoval = dataModelClass.OperationNameRemoval;
+        var registeredNameToOperations = operationNameRemoval is null
+            ? null
+            : new Dictionary<string, List<(string OperationName, string StrippedName)>>(128, StringComparer.Ordinal);
+
         // Track (route, HTTP method) → first operation to detect cross-operation route collisions.
         // Key is the (route template, HTTP method) pair; value is (operation FQN, operation name, attribute location).
         var routeMethodOwners = new Dictionary<(string Route, string Method), (string OperationFqn, string OperationName, LocationInfo? Location)>(128);
@@ -87,6 +94,18 @@ public sealed partial class AppDataModelSourceGenerator
                 }
 
                 operationNames.Add(operation.Name);
+
+                if (registeredNameToOperations is not null)
+                {
+                    var registeredName = OperationNameHelpers.RemoveFromOperationName(strippedName, operationNameRemoval!);
+                    if (!registeredNameToOperations.TryGetValue(registeredName, out var sharingOperations))
+                    {
+                        sharingOperations = new List<(string OperationName, string StrippedName)>();
+                        registeredNameToOperations[registeredName] = sharingOperations;
+                    }
+
+                    sharingOperations.Add((operation.Name, strippedName));
+                }
 
                 // Cross-operation route collision detection: collect (route, method) pairs and
                 // flag when a second operation claims the same combination.
@@ -178,6 +197,44 @@ public sealed partial class AppDataModelSourceGenerator
                             string.Join(", ", kvp.Value),
                             kvp.Key,
                         ]));
+            }
+        }
+
+        if (registeredNameToOperations is not null)
+        {
+            foreach (var kvp in registeredNameToOperations)
+            {
+                // A name the removal empties has no usable operationId at all, which is the problem to report even
+                // when several operations share it.
+                if (kvp.Key.Length == 0)
+                {
+                    diagnostics.Add(
+                        new DiagnosticInfo(
+                            _emptyRemovedDescriptorNameRule,
+                            dataModelClass.OperationNameRemovalLocation ?? dataModelClass.DeclarationLocation,
+                            [
+                                operationNameRemoval!,
+                                string.Join(", ", kvp.Value.Select(static operation => operation.OperationName)),
+                            ]));
+
+                    continue;
+                }
+
+                // Operations that already shared a stripped name are BP009's to report; this reports only the
+                // collisions the app's removal introduced.
+                if (kvp.Value.Count > 1
+                    && kvp.Value.Select(static operation => operation.StrippedName).Distinct(StringComparer.Ordinal).Skip(1).Any())
+                {
+                    diagnostics.Add(
+                        new DiagnosticInfo(
+                            _duplicateRemovedDescriptorNameRule,
+                            dataModelClass.OperationNameRemovalLocation ?? dataModelClass.DeclarationLocation,
+                            [
+                                string.Join(", ", kvp.Value.Select(static operation => operation.OperationName)),
+                                kvp.Key,
+                                operationNameRemoval!,
+                            ]));
+                }
             }
         }
 

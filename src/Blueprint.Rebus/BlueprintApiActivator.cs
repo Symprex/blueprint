@@ -21,6 +21,14 @@ namespace Blueprint.Rebus;
 /// Each message type is resolved to a <see cref="BlueprintApp.FindOperation"/> descriptor once
 /// and then cached. A fresh DI scope is created per-message to match the Blueprint execution model.
 /// </para>
+/// <para>
+/// For an operation, that scope lives inside the cached handler's <c>Handle</c>. For any other message, the
+/// <see cref="IHandleMessages{TMessage}"/> registered in DI are resolved from a scope owned by the Rebus
+/// transaction context, because Rebus calls <c>Handle</c> after <see cref="GetHandlers{TMessage}"/> has returned.
+/// That scope, and every scoped dependency of those handlers, is disposed when Rebus disposes the transaction
+/// context: after the handlers, and after whichever commit or rollback and ack or nack callbacks Rebus runs for
+/// the outcome, whether the message succeeded or not.
+/// </para>
 /// </remarks>
 public sealed class BlueprintApiActivator : IContainerAdapter
 {
@@ -72,9 +80,14 @@ public sealed class BlueprintApiActivator : IContainerAdapter
                 (sp: this._serviceProvider, desc));
         }
 
-        // Not a Blueprint operation — resolve IHandleMessages<T> from a fresh DI scope.
-        // Each Rebus message dispatch creates a new scope for handler lifetime management.
-        using var scope = this._serviceProvider.CreateScope();
+        // Not a Blueprint operation — resolve IHandleMessages<T> from a fresh DI scope per message. Rebus calls Handle
+        // only after this method has returned, so the scope cannot end here: the transaction context owns it, and it
+        // ends when Rebus disposes that context, after the handlers and the callbacks for the outcome have run.
+        var scope = this._serviceProvider.CreateAsyncScope();
+
+        // Registered before resolving, so a handler that fails to construct cannot leak what was already resolved.
+        transactionContext.OnDisposed(_ => DisposeHandlerScope(scope));
+
         var handlers = scope.ServiceProvider.GetServices<IHandleMessages<TMessage>>().ToList();
 
         return Task.FromResult<IEnumerable<IHandleMessages<TMessage>>>(handlers);
@@ -86,6 +99,24 @@ public sealed class BlueprintApiActivator : IContainerAdapter
         var config = this._serviceProvider.GetRequiredService<BlueprintRebusConfiguration>();
 
         Task.WaitAll(config.SubscribedMessages.Select(bus.Subscribe).ToArray());
+    }
+
+    /// <summary>
+    /// Ends a plain handler's DI scope from <see cref="ITransactionContext.OnDisposed"/>. That is the only transaction
+    /// callback Rebus invokes on every path — a context disposed without a result runs neither its commit nor its ack
+    /// callbacks — and it is synchronous, so the asynchronous disposal is waited for here.
+    /// </summary>
+    /// <remarks>
+    /// The scope is disposed asynchronously because a synchronous dispose throws on a scoped service that implements
+    /// only <see cref="IAsyncDisposable"/>, leaving it and everything resolved before it undisposed. It runs on the
+    /// thread pool so that waiting for it cannot deadlock on a synchronisation context held by whoever disposes the
+    /// transaction context, and it completes before that disposal returns. Rebus reports an exception thrown here
+    /// through the transaction context's error handling rather than to the handler.
+    /// </remarks>
+    /// <param name="scope">The scope the message's handlers were resolved from.</param>
+    private static void DisposeHandlerScope(AsyncServiceScope scope)
+    {
+        Task.Run(() => scope.DisposeAsync().AsTask()).GetAwaiter().GetResult();
     }
 
 #pragma warning disable CA1812 // Instantiated via Activator.CreateInstance

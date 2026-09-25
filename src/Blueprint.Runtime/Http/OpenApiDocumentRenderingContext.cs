@@ -38,8 +38,8 @@ public sealed record OpenApiDocumentRenderingContext(
             .OrderBy(static component => component.BodyTypeName, StringComparer.Ordinal)
             .ToImmutableArray();
 
-        var app = pathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.SchemaProjection.Document.App;
-        schemaComponents = EnrichWithResourceLinks(schemaComponents, app);
+        var schemaProjection = pathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.SchemaProjection;
+        schemaComponents = EnrichWithResourceLinks(schemaComponents, schemaProjection.Document.App, schemaProjection.FullNameToShortName);
 
         // Collect distinct enum types referenced across all schema component properties and emit them
         // as top-level component schemas so properties can use $ref instead of inline enum arrays.
@@ -159,10 +159,13 @@ public sealed record OpenApiDocumentRenderingContext(
     /// </summary>
     private static ImmutableArray<OpenApiSchemaComponentModel> EnrichWithResourceLinks(
         ImmutableArray<OpenApiSchemaComponentModel> components,
-        BlueprintApp app)
+        BlueprintApp app,
+        IReadOnlyDictionary<string, string> fullNameToShortName)
     {
-        // Build a lookup of resource FullName → non-self links, matching the BodyTypeName format
-        // used by the schema projection (Type.FullName for non-string types).
+        // Build a lookup of resource name → non-self links, keyed by the same BodyTypeName schema projection gives the
+        // resource's component: the short name it maps a covered type's CLR full name to. A resource with no mapping
+        // keeps its full name, so a component keyed by full name still matches. Any SchemaNameFormatter is applied to
+        // that BodyTypeName later, when the component is written, so the links follow the component to its final key.
         var linksByResourceName = new Dictionary<string, List<OpenApiSchemaLinkExtension>>(StringComparer.Ordinal);
 
         foreach (var link in app.Links)
@@ -177,7 +180,8 @@ public sealed record OpenApiDocumentRenderingContext(
                 continue;
             }
 
-            var resourceName = link.ResourceType.FullName ?? link.ResourceType.Name;
+            var resourceFullName = link.ResourceType.FullName ?? link.ResourceType.Name;
+            var resourceName = fullNameToShortName.GetValueOrDefault(resourceFullName, resourceFullName);
 
             if (!linksByResourceName.TryGetValue(resourceName, out var linkList))
             {

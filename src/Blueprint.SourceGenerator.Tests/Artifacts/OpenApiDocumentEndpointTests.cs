@@ -378,6 +378,32 @@ public class OpenApiDocumentEndpointTests
     }
 
     [Fact]
+    public async Task When_linked_resource_is_a_closed_generic_then_its_schema_component_renders_x_links()
+    {
+        // A closed generic's schema key ("OpenApiGenericWrapperOfGenericSchemaInner") differs from its CLR Name
+        // ("OpenApiGenericWrapper`1"), unlike a non-generic's, so only a lookup through the projection's key finds it.
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<OpenApiLinkedGenericResourceBlueprintApp, BlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json")!;
+        var response = await InvokeEndpointAsync(endpoint);
+
+        var doc = JsonDocument.Parse(response.Body);
+        var wrapperSchema = doc.RootElement.GetProperty("components").GetProperty("schemas")
+            .GetProperty("OpenApiGenericWrapperOfGenericSchemaInner");
+
+        wrapperSchema.TryGetProperty("x-links", out var links).Should().BeTrue(
+            "the closed generic resource is the target of a non-self link");
+        links.EnumerateArray()
+            .Select(static link => (
+                Rel: link.GetProperty("rel").GetString(),
+                OperationId: link.GetProperty("operationId").GetString(),
+                Method: link.GetProperty("method").GetString()))
+            .Should()
+            .Equal(("archive", "ArchiveGenericWrapper", "POST"));
+    }
+
+    [Fact]
     public async Task When_schema_body_type_has_multiple_generic_arguments_then_schema_key_uses_of_and_and_convention()
     {
         var endpoints = CreateEndpoints();
@@ -417,6 +443,46 @@ public class OpenApiDocumentEndpointTests
             this.AppOwnedSerializerContextBodyTypes = [genericType];
             this.AppOwnedSerializerContextBodyTypeNames = [bodyTypeName];
             this.Register(descriptor);
+        }
+    }
+
+    private sealed class ArchiveGenericWrapperOperation;
+
+    /// <summary>
+    /// Covers the closed generic <see cref="OpenApiGenericWrapper{T}"/> as a response body, and makes it the target of a
+    /// non-self <c>archive</c> link from a POST operation, as Signature365's <c>TenantListOfPlan</c> is in its legacy spec.
+    /// </summary>
+    private sealed class OpenApiLinkedGenericResourceBlueprintApp : BlueprintApp
+    {
+        public OpenApiLinkedGenericResourceBlueprintApp()
+        {
+            var genericType = typeof(OpenApiGenericWrapper<GenericSchemaInner>);
+            var bodyTypeName = $"Blueprint.SourceGenerator.Tests.Artifacts.OpenApiGenericWrapper<Blueprint.SourceGenerator.Tests.Artifacts.GenericSchemaInner>";
+
+            var query = new ApiOperationDescriptor(typeof(TestOperation), "TestOperation", "OpenApiDocumentEndpointTests");
+            query.AddUrl(new ApiOperationUrl("/test"));
+            query.SetFeatureData(new OperationHostExposureFeatureData(["http"]));
+            query.SetFeatureData(new OperationHttpResponseMetadataFeatureData([
+                new OperationHttpResponseMetadata(200, true, ["OkResult"], [bodyTypeName]),
+            ]));
+            query.SetFeatureData(new OperationSerializerContextCoverageFeatureData([bodyTypeName]));
+
+            var archive = new ApiOperationDescriptor(typeof(ArchiveGenericWrapperOperation), "ArchiveGenericWrapper", "OpenApiDocumentEndpointTests");
+            archive.AddUrl(new ApiOperationUrl("/test/archive"));
+            archive.SetFeatureData(new OperationHostExposureFeatureData(["http"]));
+            archive.SetFeatureData(WellKnownFeatureData.HttpPost);
+            archive.SetFeatureData(new OperationHttpResponseMetadataFeatureData([
+                new OperationHttpResponseMetadata(204, false, ["NoContentResult"], []),
+            ]));
+            archive.SetFeatureData(new OperationSerializerContextCoverageFeatureData([]));
+            archive.AddLink(new ApiOperationLink(archive, "/test/archive", "/test/archive", "archive", genericType));
+
+            this.AppOwnedSerializerContext = new OpenApiGenericSchemaJsonContext(new JsonSerializerOptions());
+            this.AppOwnedSerializerContextType = typeof(OpenApiGenericSchemaJsonContext);
+            this.AppOwnedSerializerContextBodyTypes = [genericType];
+            this.AppOwnedSerializerContextBodyTypeNames = [bodyTypeName];
+            this.Register(query);
+            this.Register(archive);
         }
     }
 

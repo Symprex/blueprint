@@ -3065,7 +3065,24 @@
             "readOnly": true
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "x-links": [
+          {
+            "rel": "archive",
+            "operationId": "ArchiveTemplate",
+            "method": "DELETE"
+          },
+          {
+            "rel": "clone",
+            "operationId": "CloneTemplate",
+            "method": "POST"
+          },
+          {
+            "rel": "set-notification-priority",
+            "operationId": "SetTemplateNotificationPriority",
+            "method": "PUT"
+          }
+        ]
       },
       "TemplateNotificationRuleApiResource": {
         "title": "TemplateNotificationRuleApiResource",

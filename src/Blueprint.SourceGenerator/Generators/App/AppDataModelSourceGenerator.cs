@@ -17,6 +17,8 @@ namespace Blueprint.SourceGenerator.Generators.App;
 [Generator(LanguageNames.CSharp)]
 public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator, ITrackedSourceGenerator
 {
+    private const string ApplyOperationNameTransformMethodName = "ApplyOperationNameTransform";
+
     private static readonly DiagnosticDescriptor _missingPartialModifierRule = new(
         id: "BP002",
         title: "Class must be partial",
@@ -76,6 +78,25 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "Blueprint strips 'Query' and 'Command' suffixes from operation type names to produce descriptor names that flow through to OpenAPI operationId values. When two operations produce the same stripped name (e.g. FooQuery and FooCommand both become Foo), the collision must be resolved by renaming one of the operations.");
+
+    private static readonly DiagnosticDescriptor _duplicateRemovedDescriptorNameRule = new(
+        id: "BP011",
+        title: "Duplicate descriptor name after the app's operation-name removal",
+        messageFormat: "Operations {0} produce the same descriptor name '{1}' after the app removes '{2}' from operation names. Rename one of them, or change the app's [BlueprintAppOperationNames], to avoid an OpenAPI operationId collision.",
+        category: "AppDataModelSourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "[BlueprintAppOperationNames(Remove = ...)] removes text from the descriptor name of every operation the app hosts, after Query/Command suffix stripping. When that gives two operations the same name, their OpenAPI operationIds, request-body schema keys and link operation names collide, so the collision must be resolved by renaming an operation or changing the removal.");
+
+    // BP011's second form: a removal that leaves a name empty is the degenerate case of the same misconfiguration.
+    private static readonly DiagnosticDescriptor _emptyRemovedDescriptorNameRule = new(
+        id: "BP011",
+        title: "Empty descriptor name after the app's operation-name removal",
+        messageFormat: "The app's removal of '{0}' from operation names leaves {1} with an empty descriptor name. Rename it, or change the app's [BlueprintAppOperationNames], so its OpenAPI operationId is not empty.",
+        category: "AppDataModelSourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "[BlueprintAppOperationNames(Remove = ...)] removes text from the descriptor name of every operation the app hosts, after Query/Command suffix stripping. When that removes the whole name, the operation has an empty OpenAPI operationId and request-body schema key, so the operation must be renamed or the removal changed.");
 
     private static readonly DiagnosticDescriptor _crossOperationRouteCollisionRule = new(
         id: "BPLG007",
@@ -175,6 +196,8 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         var classBuilder = codeBuilder.AddClass(compilationModel.Class.Name)
             .WithAccessModifier(Accessibility.Public);
 
+        var operationNameRemoval = compilationModel.Class.OperationNameRemoval;
+
         classBuilder.AddConstructor()
             .WithBody(c =>
             {
@@ -195,7 +218,9 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
 
                 foreach (var registration in compilationModel.Operations)
                 {
-                    c.AppendLine($"this.Register({registration}.Configure());");
+                    c.AppendLine(operationNameRemoval is null
+                        ? $"this.Register({registration}.Configure());"
+                        : $"this.Register({ApplyOperationNameTransformMethodName}({registration}.Configure()));");
                 }
 
                 c.AppendLine(string.Empty);
@@ -207,6 +232,25 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                     c.AppendLine("PopulateResourceCheckers(this);");
                 }
             });
+
+        // The app's [BlueprintAppOperationNames] removal is applied here, to this app's own descriptor instances before
+        // they are registered, because the descriptors are generated with the operation — often in a contract assembly
+        // that cannot see which app hosts it — and each Configure() call returns a fresh instance. Every later reader
+        // of ApiOperationDescriptor.Name in this app then sees the renamed descriptor. RemoveFromOperationName is the
+        // compile-time mirror of this code, which the BP011 collision check relies on.
+        if (operationNameRemoval is not null)
+        {
+            classBuilder.AddMethod(ApplyOperationNameTransformMethodName, Accessibility.Private)
+                .MakeStaticMethod()
+                .WithReturnType("global::Blueprint.Model.ApiOperationDescriptor")
+                .AddParameter("global::Blueprint.Model.ApiOperationDescriptor", "descriptor")
+                .WithBody(c =>
+                {
+                    c.AppendLine($"descriptor.Name = descriptor.Name.Replace({CSharpSymbolDisplay.FormatLiteral(operationNameRemoval, quote: true)}, string.Empty, global::System.StringComparison.Ordinal);");
+                    c.AppendLine(string.Empty);
+                    c.AppendLine("return descriptor;");
+                });
+        }
 
         // Always generate RegisterLinkCheckers so consumer call sites compile regardless of
         // whether link checkers currently exist in the scanned assemblies. This also ensures

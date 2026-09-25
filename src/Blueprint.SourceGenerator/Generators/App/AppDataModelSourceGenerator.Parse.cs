@@ -12,6 +12,7 @@ namespace Blueprint.SourceGenerator.Generators.App;
 public sealed partial class AppDataModelSourceGenerator
 {
     private const string SerializerContextAttributeMetadataName = "Blueprint.Model.BlueprintAppSerializerContextAttribute";
+    private const string OperationNamesAttributeMetadataName = "Blueprint.Model.BlueprintAppOperationNamesAttribute";
 
     private static Result<ParseOnlyDataModel>? ParseDataModelWithScanAttributes(GeneratorAttributeSyntaxContext context)
     {
@@ -42,15 +43,48 @@ public sealed partial class AppDataModelSourceGenerator
         }
 
         var serializerContext = GetSerializerContext(classSymbol);
+        var (operationNameRemoval, operationNameRemovalLocation) = GetOperationNameRemoval(classSymbol);
         var model = ParseOnlyBlueprintAppClassModel.Create(
             classSymbol,
             context.TargetNode,
             serializerContext.TypeName,
             serializerContext.Location,
             serializerContext.BodyTypeNames,
-            serializerContext.BodyTypeTypeNames);
+            serializerContext.BodyTypeTypeNames,
+            operationNameRemoval,
+            operationNameRemovalLocation);
 
         return Result.Success(new ParseOnlyDataModel(model, [.. parseAttributes]));
+    }
+
+    /// <summary>
+    /// Reads the app's <c>[BlueprintAppOperationNames(Remove = ...)]</c>. A missing or empty <c>Remove</c> is treated as
+    /// no rename at all, so the registration never emits a <c>string.Replace</c> with an empty value, which throws.
+    /// </summary>
+    private static (string? Removal, LocationInfo? Location) GetOperationNameRemoval(INamedTypeSymbol classSymbol)
+    {
+        foreach (var attribute in classSymbol.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToFullMetadataName() != OperationNamesAttributeMetadataName)
+            {
+                continue;
+            }
+
+            foreach (var namedArgument in attribute.NamedArguments)
+            {
+                if (namedArgument.Key == "Remove"
+                    && namedArgument.Value.Value is string { Length: > 0 } removal)
+                {
+                    var location = attribute.ApplicationSyntaxReference is null
+                        ? null
+                        : LocationInfo.CreateFrom(attribute.ApplicationSyntaxReference.GetSyntax());
+
+                    return (removal, location);
+                }
+            }
+        }
+
+        return (null, null);
     }
 
     private static SerializerContextDeclaration GetSerializerContext(INamedTypeSymbol classSymbol)

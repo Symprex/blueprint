@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Blueprint.Model;
+using Blueprint.SourceGenerator.Tests.Integration.Generators.BlueprintAppModel;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 using Blueprint.SourceGenerator.Tests.Integration.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -10,8 +11,14 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescri
 /// Provides a minimal app shell for integration fixtures that need the generator to discover operations through the same
 /// app-scan entry point used by real Blueprint consumers.
 /// </summary>
+/// <remarks>
+/// The app removes "Sample" from the name of every operation it hosts, which <c>AppModelOperationNameTransformTests</c>
+/// proves through. Any fixture operation whose name contains "Sample" is renamed by this app; name one otherwise
+/// unless the rename is the point.
+/// </remarks>
 [BlueprintAppScan]
 [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(IntegrationTestAppJsonContext))]
+[BlueprintAppOperationNames(Remove = "Sample")]
 public partial class IntegrationTestBlueprintApp : BlueprintApp;
 
 /// <summary>
@@ -34,4 +41,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(MultiExpandableTestEmployee))]
 [JsonSerializable(typeof(Blueprint.SourceGenerator.Tests.Integration.Http.NodaTimeEchoResponse))]
 [JsonSerializable(typeof(SelfQueryTestApiResource))]
+[JsonSerializable(typeof(SampleWidgetApiResource))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;
