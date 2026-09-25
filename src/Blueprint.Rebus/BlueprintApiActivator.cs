@@ -109,6 +109,14 @@ public sealed class BlueprintApiActivator : IContainerAdapter
 
         // Registered before any handler runs, so it precedes the commit callback the transport registers when a handler
         // first sends: the handlers' writes are persisted before the messages announcing them go out.
+        //
+        // This save is never taken back. When a handler fails and second-level retries are on, Rebus discards the
+        // first-level sends and dispatches the failed message again in the same transaction context, but this callback,
+        // and the failed handler's unsaved writes in its scope, stay registered: if that dispatch succeeded, the commit
+        // would save them. It cannot today only because the second-level dispatch asks for the handlers of Rebus's internal
+        // FailedMessageWrapper<TMessage>, which resolution by exact type never finds, so that dispatch fails and nothing
+        // commits. A polymorphic resolver (Autofac's contravariant resolution, say) that answered it with an
+        // IHandleMessages<IFailed<TMessage>> would make it commit, saving the failed handler's writes.
         var cancellationToken = MessageContext.Current?.IncomingStepContext.Load<CancellationToken>() ?? CancellationToken.None;
         transactionContext.OnCommit(_ => SaveHandlerUnitOfWorkAsync(scope.ServiceProvider, cancellationToken));
 
