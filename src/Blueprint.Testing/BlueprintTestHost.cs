@@ -96,8 +96,8 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
         using var scope = this._rootProvider.CreateScope();
         var httpContext = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
 
-        // Pre-populate route values from the operation so the generated pipeline's
-        // BindRouteValue calls succeed without a real ASP.NET routing pass.
+        // Pre-populate route values from the operation, as a real ASP.NET routing pass would. Without them the generated
+        // pipeline keeps the operation's own route property values, as legacy Blueprint did.
         PopulateRouteValues(httpContext, descriptor, operation);
 
         var context = new ApiOperationContext(

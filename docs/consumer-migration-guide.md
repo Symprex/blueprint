@@ -704,6 +704,13 @@ blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
 
 Property populators run at the Authentication stage, after user context is loaded but before validation and authorization.
 
+**Behaviour change for absent route values (v1.0.3).** When a route property's value is not in the request's route
+values, the operation keeps the value it already has, whatever the property's type. This is what legacy Blueprint did.
+It is what happens when an operation is executed in process with a fresh `HttpContext`, as an `ApiFixture` or a CLI
+executes one. Before v1.0.3 that was only true of `string` and `[TypeConverter]` properties: a typed one (`int`, `Guid`,
+…) was a binding failure, so an in-process caller had to fill `HttpContext.Request.RouteValues` itself. It no longer
+has to. A route value that is present but cannot be parsed is still a binding failure.
+
 ## Development-time inspection
 
 Blueprint exposes development-only endpoints for inspecting the generated API surface:

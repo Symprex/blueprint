@@ -1957,8 +1957,9 @@ public static class PipelineHelpers
     // ────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Parses a typed route value. Route parameters are always present (enforced by routing).
-    /// Returns <see langword="null"/> on success, or a <see cref="BindingFailureResult"/> when unparseable.
+    /// Parses a typed route value. The generated pipeline calls this only when the route value is present, and otherwise
+    /// leaves the operation's own value, as legacy Blueprint did. Returns <see langword="null"/> on success, or a
+    /// <see cref="BindingFailureResult"/> when unparseable.
     /// </summary>
     /// <typeparam name="T">The target value type.</typeparam>
     /// <param name="routeValues">The route value dictionary from the current request.</param>

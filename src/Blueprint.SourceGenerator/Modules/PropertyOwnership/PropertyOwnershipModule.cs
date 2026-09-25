@@ -1466,15 +1466,21 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var errVar = $"_routeErr_{entry.PropertyName}";
             var parsedVar = $"_parsed_{entry.PropertyName}";
 
-            context.WriteStatement(
-                $"var {errVar} = BindRouteValue(httpContext.Request.RouteValues, \"{entry.BindingName}\", out var {parsedVar}, {lambda});");
-
-            context.If($"{errVar} != null", errCtx =>
+            // As for a string: when the route value is absent (an operation executed in process, with no routing pass)
+            // the operation keeps the value it has, as legacy Blueprint kept it (Signature365 8b40ecc961,
+            // Blueprint.Http/MessagePopulation/HttpRouteMessagePopulationSource.cs:89-107).
+            context.If($"httpContext.Request.RouteValues.ContainsKey(\"{entry.BindingName}\")", ifCtx =>
             {
-                errCtx.Return(errVar);
-            });
+                ifCtx.WriteStatement(
+                    $"var {errVar} = BindRouteValue(httpContext.Request.RouteValues, \"{entry.BindingName}\", out var {parsedVar}, {lambda});");
 
-            context.WriteStatement(FormatPropertyAssignment(operationExpr, entry, parsedVar));
+                ifCtx.If($"{errVar} != null", errCtx =>
+                {
+                    errCtx.Return(errVar);
+                });
+
+                ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, parsedVar));
+            });
         }
     }
 
