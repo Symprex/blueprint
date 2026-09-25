@@ -16,7 +16,7 @@ namespace Blueprint.SourceGenerator.Tests.Modules.Rebus;
 public class RebusTransactionModuleTests
 {
     [Fact]
-    public void When_command_operation_then_plan_contains_rebus_setup_and_post_execution()
+    public void When_command_operation_then_plan_contains_rebus_validation_and_post_execution()
     {
         var compilation = CreateCompilation(
             """
@@ -47,10 +47,15 @@ public class RebusTransactionModuleTests
 
         var contributions = result.Value!.Contributions;
 
+        // Opened in Validation, not Setup: legacy opened the scope after validation, straight before the handler (legacy
+        // AzureAdOauthReturnCommandExecutorPipeline.cs:91-117 at Signature365 8b40ecc961).
         contributions.Should().ContainInOrder(
-            new PipelineContribution(PipelineStage.Setup, nameof(RebusTransactionModule)),
+            new PipelineContribution(PipelineStage.Validation, nameof(RebusTransactionModule)),
             new PipelineContribution(PipelineStage.Execution, nameof(HandlerExecutionModule)),
             new PipelineContribution(PipelineStage.PostExecution, nameof(RebusTransactionModule)));
+        contributions.Should().NotContain(
+            new PipelineContribution(PipelineStage.Setup, nameof(RebusTransactionModule)),
+            "the scope opens after validation, not before tenant resolution and authorisation");
     }
 
     [Fact]
@@ -126,7 +131,7 @@ public class RebusTransactionModuleTests
     }
 
     [Fact]
-    public void When_background_task_then_plan_contains_rebus_setup_and_post_execution()
+    public void When_background_task_then_plan_contains_rebus_validation_and_post_execution()
     {
         // Legacy gave background tasks the same Rebus transaction scope as commands, so a task that publishes has its
         // messages held until it succeeds.
@@ -157,10 +162,15 @@ public class RebusTransactionModuleTests
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
 
+        // As for a command: legacy's task pipelines validated, then opened the scope (legacy
+        // BillingSoftDeleteBackgroundTaskExecutorPipeline.cs:48-51 at Signature365 8b40ecc961).
         result.Value!.Contributions.Should().ContainInOrder(
-            new PipelineContribution(PipelineStage.Setup, nameof(RebusTransactionModule)),
+            new PipelineContribution(PipelineStage.Validation, nameof(RebusTransactionModule)),
             new PipelineContribution(PipelineStage.Execution, nameof(HandlerExecutionModule)),
             new PipelineContribution(PipelineStage.PostExecution, nameof(RebusTransactionModule)));
+        result.Value!.Contributions.Should().NotContain(
+            new PipelineContribution(PipelineStage.Setup, nameof(RebusTransactionModule)),
+            "the scope opens after validation, not before tenant resolution and authorisation");
     }
 
     [Fact]
@@ -404,10 +414,46 @@ public class RebusTransactionModuleTests
         enlistLine.Should().BeGreaterThan(lastValidationLine, "legacy enlisted only a valid operation");
         enlistLine.Should().BeLessThan(handlerLine, "the outbox must be enlisted before the handler sends anything");
 
-        lines.Skip(enlistLine - 2).Take(3).Should().Equal(
+        // Legacy opened the scope at the same point, straight before it enlisted (StartRebusTransactionScopeMiddleware,
+        // legacy AzureAdOauthReturnCommandExecutorPipeline.cs:116-117, then :119-121), so a message sent while the tenant
+        // was set, the operation authorised or validated (:61-114) went outside it.
+        scopeLine.Should().BeGreaterThan(tenantLine, "legacy set the tenant before it opened the scope");
+        scopeLine.Should().BeGreaterThan(authorisationLine, "legacy authorised before it opened the scope");
+        scopeLine.Should().BeGreaterThan(lastValidationLine, "legacy validated before it opened the scope");
+
+        lines.Skip(scopeLine).Take(4).Should().Equal(
+            "using var rebusTransactionScope = this._hasRebus ? new global::Rebus.Transport.RebusTransactionScope() : null;",
             "if (rebusTransactionScope != null && this.HasUnitOfWork)",
             "{",
             "await global::Blueprint.Rebus.RebusTransactionEnlistment.EnlistAsync(rebusTransactionScope.TransactionContext, context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+    }
+
+    [Fact]
+    public void When_command_does_not_save_a_unit_of_work_then_the_scope_still_opens_after_validation_and_before_the_handler()
+    {
+        // Legacy opened the scope after validation whether or not it went on to enlist an outbox
+        // (legacy AzureAdOauthReturnCommandExecutorPipeline.cs:91-117).
+        var lines = GeneratePipelineLines(
+            """
+            [Blueprint.Persistence.DoNotSaveChanges]
+            public partial class ValidatedFireAndForgetCommand : ICommand<string>
+            {
+                [System.ComponentModel.DataAnnotations.Required]
+                public string Reference { get; set; }
+
+                public static Task<string> HandleAsync(ValidatedFireAndForgetCommand operation) => Task.FromResult("sent");
+            }
+            """,
+            includeBlueprintRebus: true);
+
+        var scopeLine = lines.FindIndex(static l => l.StartsWith("using var rebusTransactionScope", StringComparison.Ordinal));
+        var lastValidationLine = lines.FindLastIndex(static l => l.Contains("CreateValidationFailure(", StringComparison.Ordinal));
+        var handlerLine = lines.FindIndex(static l => l.Contains("ValidatedFireAndForgetCommand.HandleAsync(operation)", StringComparison.Ordinal));
+
+        new[] { scopeLine, lastValidationLine, handlerLine }.Should().OnlyContain(static index => index >= 0);
+
+        scopeLine.Should().BeGreaterThan(lastValidationLine);
+        scopeLine.Should().BeLessThan(handlerLine);
     }
 
     [Fact]

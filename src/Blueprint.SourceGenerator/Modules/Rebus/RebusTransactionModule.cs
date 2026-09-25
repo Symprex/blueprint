@@ -12,15 +12,26 @@ namespace Blueprint.SourceGenerator.Modules;
 /// <para>
 /// This module generates:
 /// <list type="bullet">
-/// <item><description>A <c>using var rebusScope = new RebusTransactionScope();</c> in the Setup stage</description></item>
 /// <item><description>
-/// In a pipeline that saves a unit of work and when Blueprint.Rebus is referenced, a call to
+/// A <c>using var rebusScope = new RebusTransactionScope();</c> as the last step of the Validation stage: after the tenant
+/// is resolved and the operation authorised and validated, and before the handler, where legacy's
+/// <c>StartRebusTransactionScopeMiddleware</c> opened it. So a message sent while the tenant is resolved, a property
+/// populated or the operation authorised is sent at once, as legacy sent it, rather than held in the scope and dropped
+/// when validation or authorisation then refuses the operation
+/// </description></item>
+/// <item><description>
+/// In a pipeline that saves a unit of work and when Blueprint.Rebus is referenced, straight after the scope opens and in
+/// the same render step, so nothing can come between them, a call to
 /// <c>Blueprint.Rebus.RebusTransactionEnlistment.EnlistAsync</c> with the scope's transaction, guarded by an
-/// <c>IUnitOfWork</c> being registered, as the last step of the Validation stage: after the tenant is resolved and the
-/// operation authorised and validated, as legacy enlisted, and before the handler sends anything
+/// <c>IUnitOfWork</c> being registered, as legacy enlisted, before the handler sends anything
 /// </description></item>
 /// <item><description>An <c>await rebusScope.CompleteAsync();</c> in the PostExecution stage after handler success</description></item>
 /// </list>
+/// </para>
+/// <para>
+/// Nothing that runs before the Validation stage's end uses the scope: no other module renders a reference to it, and the
+/// only thing that could depend on it being ambient earlier is a send from one of those steps, which legacy sent outside
+/// any scope.
 /// </para>
 /// <para>
 /// Commands (<c>ICommand</c>) and background tasks (<c>Blueprint.Tasks.IBackgroundTask</c>) participate; queries do
@@ -107,17 +118,14 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
         var enlist = UnitOfWorkModule.SavesUnitOfWork(context.Operation.TypeSymbol)
                      && context.FindTypeByMetadataName(RebusTransactionEnlistmentType) is not null;
 
-        // Setup: create the transaction scope (using ensures dispose on method exit)
-        context.AddRenderStep(PipelineStage.Setup, RenderTransactionScopeStart);
-
-        // Legacy enlisted from Execution-stage middleware added before the handler, so after the tenant was set, and the
-        // operation authorised and validated: an enlistment resolving a tenant-scoped session any earlier gets an
-        // untenanted one, which the handler then shares. The last Validation step is the same point here, as this
-        // module's own Execution step would render after the handler it depends on.
-        if (enlist)
-        {
-            context.AddRenderStep(PipelineStage.Validation, RenderEnlistment);
-        }
+        // Legacy opened the scope and enlisted from Execution-stage middleware added before the handler, so after the tenant
+        // was set, and the operation authorised and validated: an enlistment resolving a tenant-scoped session any earlier
+        // gets an untenanted one, which the handler then shares, and a message sent from those steps went out at once. The
+        // last Validation step is the same point here, as this module's own Execution step would render after the handler
+        // it depends on. One step for both, because two steps in one stage have no guaranteed order.
+        context.AddRenderStep(
+            PipelineStage.Validation,
+            enlist ? RenderTransactionScopeStartAndEnlistment : RenderTransactionScopeStart);
 
         // PostExecution: complete the transaction on success
         context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, RenderTransactionScopeComplete);
@@ -129,11 +137,12 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
         context.WriteStatement($"using var rebusTransactionScope = this._hasRebus ? new global::{RebusTransactionScopeType}() : null;");
     }
 
-    private static void RenderEnlistment(PipelineRenderContext context)
+    private static void RenderTransactionScopeStartAndEnlistment(PipelineRenderContext context)
     {
+        RenderTransactionScopeStart(context);
+
         // Before the handler sends anything; and only with an IUnitOfWork registered, so only where the save that writes
         // an enlisted outbox will actually run.
-        context.WriteBlankLine();
         context.WriteStatement("if (rebusTransactionScope != null && this.HasUnitOfWork)");
         context.WriteStatement("{");
         context.WriteStatement(
