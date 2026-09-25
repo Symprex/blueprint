@@ -158,6 +158,8 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
 }
 ```
 
+Every root link — each `[RootLink]`, and each `[Link(null, ...)]` — of an exposed operation is also listed by the app's **root-metadata document**, which `MapBlueprintApi` serves anonymously at `GET <basePath>`, as legacy Blueprint's `RootMetadataOperation` did: `{"$object":"root","$links":{...},"$partial":false}`, each link keyed by its `Rel`, or by the operation's own descriptor name (before any `[BlueprintAppOperationNames]` removal) when it has none, with an absolute href whose placeholders are left as a template. It is not in the OpenAPI document. An app whose own operation answers `GET` at the base path keeps that operation there instead. A route may be declared with or without a leading slash; both route under the base path with one slash.
+
 ### ApiResource and ILinkableResource
 
 Response types that need `$links` should extend `ApiResource` (in `Blueprint.Model`):

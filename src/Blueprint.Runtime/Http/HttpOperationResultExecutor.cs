@@ -357,6 +357,28 @@ public class HttpOperationResultExecutor
 
     private static readonly ConcurrentDictionary<TypeInfoCacheKey, JsonTypeInfo?> _typeInfoCache = new();
 
+    private static Task WriteJsonAsync(HttpContext httpContext, ApiOperationContext operationContext, object content)
+    {
+        return WriteJsonAsync(httpContext, operationContext.App, content);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="content"/> as a 200 JSON response exactly as an <see cref="OkResult"/>'s content is written,
+    /// for an endpoint the HTTP host serves without an operation pipeline, such as the root-metadata document, so its body
+    /// is serialised as every other response of <paramref name="app"/> is.
+    /// </summary>
+    /// <param name="httpContext">The HTTP context to write to.</param>
+    /// <param name="app">The app whose serializer context and options apply.</param>
+    /// <param name="content">The body to write.</param>
+    /// <returns>A task that completes when the body has been written.</returns>
+    internal static Task WriteOkJsonAsync(HttpContext httpContext, BlueprintApp app, object content)
+    {
+        httpContext.Response.StatusCode = StatusCodes.Status200OK;
+        httpContext.Response.ContentType = JsonContentType;
+
+        return WriteJsonAsync(httpContext, app, content);
+    }
+
     [UnconditionalSuppressMessage(
         "Trimming",
         "IL2026",
@@ -365,9 +387,9 @@ public class HttpOperationResultExecutor
         "AOT",
         "IL3050",
         Justification = "Fallback serialization path uses runtime JSON serialization when the app-owned serializer context does not cover the response type. AOT consumers must ensure their JsonSerializerContext covers all response types.")]
-    private static Task WriteJsonAsync(HttpContext httpContext, ApiOperationContext operationContext, object content)
+    private static Task WriteJsonAsync(HttpContext httpContext, BlueprintApp app, object content)
     {
-        var serializerContext = operationContext.App.AppOwnedSerializerContext;
+        var serializerContext = app.AppOwnedSerializerContext;
         var contentType = content.GetType();
 
         var jsonTypeInfo = _typeInfoCache.GetOrAdd(

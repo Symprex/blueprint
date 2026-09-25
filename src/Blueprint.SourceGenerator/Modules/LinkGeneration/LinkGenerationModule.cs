@@ -5,6 +5,7 @@ using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.LinkGeneration;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
 namespace Blueprint.SourceGenerator.Modules;
 
@@ -93,7 +94,11 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         LookForSelfLinks(context);
         LookForLinks(context);
 
-        context.AddRenderStep(codeWriter => RenderDescriptor(codeWriter, context.GetMetadata<UrlRegistration>(), context.GetMetadata<LinkRegistration>()));
+        context.AddRenderStep(codeWriter => RenderDescriptor(
+            codeWriter,
+            context.GetMetadata<UrlRegistration>(),
+            context.GetMetadata<LinkRegistration>(),
+            context.GetMetadata<RootLinkRegistration>()));
     }
 
     /// <inheritdoc />
@@ -171,7 +176,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     private static void RenderDescriptor(
         ICodeWriter codeWriter,
         IEnumerable<UrlRegistration> urlRegistrations,
-        IEnumerable<LinkRegistration> linkRegistrations)
+        IEnumerable<LinkRegistration> linkRegistrations,
+        IEnumerable<RootLinkRegistration> rootLinkRegistrations)
     {
         var seenUrls = new HashSet<string>(StringComparer.Ordinal);
 
@@ -206,6 +212,29 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             linkIndex++;
         }
+
+        RenderRootLinks(codeWriter, rootLinkRegistrations);
+    }
+
+    /// <summary>
+    /// Records the operation's root links as <c>OperationRootLinksFeatureData</c>, which the app's root-metadata document
+    /// lists. They stay out of <c>this.AddLink</c>, whose links are indexed by resource type.
+    /// </summary>
+    private static void RenderRootLinks(ICodeWriter codeWriter, IEnumerable<RootLinkRegistration> rootLinkRegistrations)
+    {
+        var rootLinks = rootLinkRegistrations
+            .Select(static r => $"new global::Blueprint.Model.OperationRootLink({CSharpSymbolDisplay.FormatLiteral(r.Rel, quote: true)}, {CSharpSymbolDisplay.FormatLiteral(r.Url, quote: true)})")
+            .ToList();
+
+        if (rootLinks.Count == 0)
+        {
+            return;
+        }
+
+        codeWriter.AppendLine(
+            "this.SetFeatureData(new global::Blueprint.Model.OperationRootLinksFeatureData(global::System.Collections.Immutable.ImmutableArray.Create("
+            + string.Join(", ", rootLinks)
+            + ")));");
     }
 
     /// <summary>
@@ -398,6 +427,24 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         var urlRegistration = new UrlRegistration(url, locationInfo);
         context.AddMetadata(urlRegistration);
         context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
+
+        // The same (first) [RootLink] ParseSingle read; its Rel is a named argument.
+        var rel = operationType.GetAttributes()
+            .FirstOrDefault(static a => a.AttributeClass?.Name == "RootLinkAttribute")?
+            .NamedArguments.FirstOrDefault(static a => a.Key == "Rel").Value.Value as string;
+
+        context.AddMetadata(CreateRootLinkRegistration(operationType, rel, url));
+    }
+
+    /// <summary>
+    /// Records a root link under the key legacy Blueprint's root-metadata document gave it: <c>linkAttribute.Rel ??
+    /// descriptor.Name</c>, taken when the link was built and so before an app's conventions renamed the descriptor
+    /// (Signature365 <c>8b40ecc961</c>, <c>Blueprint/Configuration/OperationScanner.cs:294-303</c>), with the name legacy
+    /// gave the operation (<see cref="OperationNameHelpers.GetDescriptorName"/>).
+    /// </summary>
+    private static RootLinkRegistration CreateRootLinkRegistration(INamedTypeSymbol operationType, string? rel, string url)
+    {
+        return new RootLinkRegistration(rel ?? OperationNameHelpers.GetDescriptorName(operationType.Name), url);
     }
 
     private static void LookForSelfLinks(DescriptorContributorContext context)
@@ -639,6 +686,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
                 context.AddMetadata(new UrlRegistration(url!, locationInfo));
                 context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
+
+                // A link without a resource type was a root link (Blueprint/ApiDataModel.cs:212-215, ApiOperationLink.cs:176).
+                context.AddMetadata(CreateRootLinkRegistration(operationType, rel, url!));
 
                 continue;
             }

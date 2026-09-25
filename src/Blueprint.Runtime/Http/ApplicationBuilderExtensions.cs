@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using Blueprint;
 using Blueprint.Http;
@@ -47,8 +48,12 @@ public static class EndpointRouteBuilderExtensions
         Action<OpenApiOperationProcessorOptions>? configureOpenApiOperations = null) where T : BlueprintApp, new()
                          where TExec : BlueprintAppExecutor
     {
-        // Ensure ends with a slash, but only one
+        // Ensure ends with a slash, but only one, as legacy did (Signature365 8b40ecc961,
+        // Blueprint.Http/ApplicationBuilderExtensions.cs:45). Every route is this followed by a URL without its leading slash
+        // (RouteUnder), as legacy appended its leading-slash-trimmed link URLs (:105; Blueprint/ApiOperationLink.cs:48), and
+        // every absolute path is that with a leading slash: "", "/" -> "/"; "api", "api/", "/api/" -> "/api/".
         basePath = basePath.TrimEnd('/') + '/';
+        var absoluteBasePath = "/" + basePath.TrimStart('/');
 
         // Prefer the DI-registered singleton (set up by AddBlueprintApi with serializer options applied).
         // Fall back to direct construction for testing scenarios that build a manual service collection.
@@ -61,7 +66,7 @@ public static class EndpointRouteBuilderExtensions
             runtimeModel,
             endpoints.ServiceProvider.GetRequiredService<ILogger<BlueprintApiRouter<TExec>>>(),
             httpOptions,
-            basePath);
+            absoluteBasePath);
 
         // Pre-size based on expected operations (each may have 1-2 URLs plus fixed well-known endpoints).
         var builders = new List<IEndpointConventionBuilder>((runtimeModel.OperationCount * 2) + 8);
@@ -104,7 +109,7 @@ public static class EndpointRouteBuilderExtensions
         }
 
         var openApiBuilder = endpoints.Map(
-            RoutePatternFactory.Parse(basePath.TrimEnd('/') + "/.blueprint/openapi.json"),
+            RoutePatternFactory.Parse(RouteUnder(basePath, ".blueprint/openapi.json")),
             openApiDelegate);
         openApiBuilder.WithDisplayName("GET Blueprint OpenAPI document");
         openApiBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
@@ -124,7 +129,7 @@ public static class EndpointRouteBuilderExtensions
         // RFC 9727 (June 2025) — api-catalog well-known endpoint for API discovery.
         // Returns a Linkset JSON document (application/linkset+json) pointing to the
         // OpenAPI spec, enabling standardised machine-readable API catalogue discovery.
-        var openApiPath = "/" + basePath.TrimStart('/').TrimEnd('/') + "/.blueprint/openapi.json";
+        var openApiPath = absoluteBasePath + ".blueprint/openapi.json";
         var apiCatalogTitle = infoOptions?.Title ?? "Blueprint API";
         var apiCatalogBuilder = endpoints.Map(
             RoutePatternFactory.Parse("/.well-known/api-catalog"),
@@ -144,6 +149,9 @@ public static class EndpointRouteBuilderExtensions
         var routeOwners = new Dictionary<(string Route, string Method), string>(runtimeModel.OperationCount * 2, RouteMethodComparer.Instance);
 
         var logger = endpoints.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.Routing");
+
+        // Whether one of the app's own operations answers GET at the base path, where the root-metadata document goes.
+        var baseRouteClaimedBy = default(string);
 
         foreach (var operation in runtimeModel.Operations)
         {
@@ -190,7 +198,12 @@ public static class EndpointRouteBuilderExtensions
                     }
                 }
 
-                var builder = endpoints.Map(RoutePatternFactory.Parse(basePath.TrimEnd('/') + url.UrlFormat), router.CreateRequestDelegate(operation));
+                if (url.UrlFormat.Trim('/').Length == 0 && httpMethods.Contains("GET", StringComparer.OrdinalIgnoreCase))
+                {
+                    baseRouteClaimedBy ??= operation.Name;
+                }
+
+                var builder = endpoints.Map(RoutePatternFactory.Parse(RouteUnder(basePath, url.UrlFormat)), router.CreateRequestDelegate(operation));
                 builder.WithMetadata(operation);
                 builder.WithMetadata(new HttpMethodMetadata(httpMethods));
                 builder.WithDisplayName(string.Concat(string.Join('|', httpMethods), " ", operation.Name));
@@ -199,9 +212,29 @@ public static class EndpointRouteBuilderExtensions
             }
         }
 
+        // Legacy answered GET at every HTTP app's base path with its root-metadata document (RootMetadataDocument). An app
+        // that routes an operation of its own there keeps it: legacy would have mapped the two to one route, ambiguously.
+        if (baseRouteClaimedBy is null)
+        {
+            var rootBuilder = endpoints.Map(
+                RoutePatternFactory.Parse(basePath),
+                router.CreateRootMetadataDocumentDelegate(RootMetadataDocument.CollectRootLinks(runtimeModel)));
+            rootBuilder.WithDisplayName("GET Blueprint root metadata document");
+            rootBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+
+            builders.Add(rootBuilder);
+        }
+        else
+        {
+            logger?.LogInformation(
+                "The Blueprint root metadata document is not mapped at {BasePath}, because the operation '{Operation}' answers GET there.",
+                absoluteBasePath,
+                baseRouteClaimedBy);
+        }
+
         if (endpoints.ServiceProvider.GetService<IWebHostEnvironment>()?.IsDevelopment() == true)
         {
-            var manifestInspectionBasePath = basePath.TrimEnd('/') + "/.blueprint/manifests/operations";
+            var manifestInspectionBasePath = RouteUnder(basePath, ".blueprint/manifests/operations");
 
             if (!string.IsNullOrWhiteSpace(httpOptions.OperationsManifestResourceName))
             {
@@ -246,6 +279,15 @@ public static class EndpointRouteBuilderExtensions
         }
 
         return new BlueprintEndpointRouteBuilder(builders);
+    }
+
+    /// <summary>
+    /// Gives the route pattern of <paramref name="relativeUrl"/> under a base path normalised to end with one slash: the
+    /// base path followed by the URL without its leading slash, so a URL declared with or without one routes the same.
+    /// </summary>
+    private static string RouteUnder(string basePath, string relativeUrl)
+    {
+        return basePath + relativeUrl.TrimStart('/');
     }
 
     /// <summary>
@@ -368,6 +410,19 @@ public static class EndpointRouteBuilderExtensions
             };
         }
 
+        /// <summary>
+        /// Creates the delegate that answers <c>GET</c> at the app's base path with its root-metadata document, its hrefs
+        /// made under the same base URI as every link of an operation request.
+        /// </summary>
+        internal RequestDelegate CreateRootMetadataDocumentDelegate(
+            ImmutableArray<(ApiOperationDescriptor Operation, ImmutableArray<OperationRootLink> Links)> rootLinks)
+        {
+            return httpContext => HttpOperationResultExecutor.WriteOkJsonAsync(
+                httpContext,
+                this._app,
+                RootMetadataDocument.Create(this.GetBaseUri(httpContext.Request), rootLinks));
+        }
+
         public async Task RouteAsync(HttpContext httpContext)
         {
             var endpoint = httpContext.GetEndpoint()!;
@@ -401,27 +456,10 @@ public static class EndpointRouteBuilderExtensions
             {
                 HttpContext = httpContext,
                 UserPrincipal = httpContext.User,
+
+                // Computed per request, stable across requests from the same scheme, host and path base (GetBaseUri).
+                BaseUri = this.GetBaseUri(httpRequest),
             };
-
-            // Compute a stable base URI for link generation and redirect targets.
-            // Cache the result to avoid per-request string allocation. Check scheme and host
-            // first (cheapest comparisons) to skip PathBase.Add() allocation on the hot path.
-            var scheme = httpRequest.Scheme;
-            var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
-            var baseUriCache = this._baseUriCache;
-
-            if (baseUriCache is null
-                || !string.Equals(scheme, baseUriCache.Scheme, StringComparison.Ordinal)
-                || !string.Equals(host, baseUriCache.Host, StringComparison.Ordinal)
-                || httpRequest.PathBase != baseUriCache.RequestPathBase)
-            {
-                var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
-                baseUriCache = new BaseUriCacheEntry(scheme, host, httpRequest.PathBase, $"{scheme}://{host}{basePath}");
-                this._baseUriCache = baseUriCache;
-            }
-
-            // Hot path: nothing changed, the cached URI is reused with zero allocation.
-            apiContext.BaseUri = baseUriCache.BaseUri;
 
             // Pipeline.ExecuteAsync never throws in generated code — it wraps all exceptions in
             // OperationResult internally. However, guard defensively in case a custom or hand-rolled
@@ -442,6 +480,35 @@ public static class EndpointRouteBuilderExtensions
             }
 
             return this.RouteOperationSlowPathAsync(httpContext, apiContext, executionTask, operation);
+        }
+
+        /// <summary>
+        /// Gives the request's base URI, for link generation and redirect targets: the scheme, the public host when
+        /// configured, the request's path base and the app's base path.
+        /// </summary>
+        /// <remarks>
+        /// Cached to avoid per-request string allocation, checking scheme and host first (cheapest comparisons) to skip
+        /// the <c>PathBase.Add()</c> allocation on the hot path. The cache is one immutable entry, read once, so the URI
+        /// returned is always the one made from the scheme, host and path base it was compared with.
+        /// </remarks>
+        private string GetBaseUri(HttpRequest httpRequest)
+        {
+            var scheme = httpRequest.Scheme;
+            var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
+            var baseUriCache = this._baseUriCache;
+
+            if (baseUriCache is null
+                || !string.Equals(scheme, baseUriCache.Scheme, StringComparison.Ordinal)
+                || !string.Equals(host, baseUriCache.Host, StringComparison.Ordinal)
+                || httpRequest.PathBase != baseUriCache.RequestPathBase)
+            {
+                var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
+                baseUriCache = new BaseUriCacheEntry(scheme, host, httpRequest.PathBase, $"{scheme}://{host}{basePath}");
+                this._baseUriCache = baseUriCache;
+            }
+
+            // Hot path: nothing changed, the cached URI is reused with zero allocation.
+            return baseUriCache.BaseUri;
         }
 
         /// <summary>

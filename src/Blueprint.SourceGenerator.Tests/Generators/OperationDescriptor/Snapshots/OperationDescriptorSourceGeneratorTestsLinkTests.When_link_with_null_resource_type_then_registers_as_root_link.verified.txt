@@ -26,6 +26,7 @@ namespace TestNamespace
                 : base(typeof(HealthCheckOperation), "HealthCheckOperation", "Source Generated")
             {
                 this.AddUrl(new global::Blueprint.Model.ApiOperationUrl("/healthcheck"));
+                this.SetFeatureData(new global::Blueprint.Model.OperationRootLinksFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(new global::Blueprint.Model.OperationRootLink("HealthCheckOperation", "/healthcheck"))));
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.RequiresAuthentication);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpGet);

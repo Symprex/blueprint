@@ -151,6 +151,17 @@ app.UseEndpoints(endpoints =>
 });
 ```
 
+The base path may be given as `""`, `"/"`, `"api"`, `"api/"` or `"/api/"`; each is normalised to end with one slash, and
+every route, whether declared with a leading slash or not, is mapped under it with one slash, as legacy mapped it.
+
+As legacy Blueprint's `RootMetadataOperation` did, `GET <basePath>` answers anonymously with the root-metadata document:
+`{"$object":"root","$links":{...},"$partial":false}`, one link per `[RootLink]` or `[Link(null, ...)]` of every exposed
+operation, keyed by the attribute's `Rel` or, without one, by the operation's own descriptor name before any
+`[BlueprintAppOperationNames]` removal, its href absolute with placeholders left as a template. It is mapped with the
+app's other endpoints, so conventions applied to the returned builder (for example `RequireAuthorization`) apply to it
+too; it is not described by the OpenAPI document; and an app that routes its own `GET` operation at the base path keeps
+that operation there instead.
+
 ### 6. Migrate authentication
 
 **Legacy:** Authentication was configured through `BlueprintApiBuilder.AddAuthentication(...)` with Blueprint-specific scheme wiring.

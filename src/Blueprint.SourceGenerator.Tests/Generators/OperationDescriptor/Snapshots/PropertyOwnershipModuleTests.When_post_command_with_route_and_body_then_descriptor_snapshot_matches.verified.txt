@@ -26,6 +26,7 @@ namespace TestNamespace
                 : base(typeof(UpdateUserCommand), "UpdateUser", "Source Generated")
             {
                 this.AddUrl(new global::Blueprint.Model.ApiOperationUrl("/users/{Id}"));
+                this.SetFeatureData(new global::Blueprint.Model.OperationRootLinksFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(new global::Blueprint.Model.OperationRootLink("UpdateUser", "/users/{Id}"))));
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.RequiresAuthentication);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpPost);
