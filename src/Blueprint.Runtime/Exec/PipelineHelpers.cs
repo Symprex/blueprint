@@ -1602,6 +1602,16 @@ public static class PipelineHelpers
         ILogger logger,
         string operationTypeName)
     {
+        // Data an event already has when this pipeline reaches it was not loaded by this pipeline's self query, even when
+        // another pipeline's was: an outer handler handing on the event an inner operation returned. Legacy's
+        // ResourceExpandMiddleware expanded such data in the outer pipeline, as it expanded any data the returned event had
+        // (Signature365 8b40ecc961, Common/Api/ResourceExpandMiddleware.cs:53-84), so it is no longer marked as the self
+        // query's.
+        if (handlerResult is ResourceEvent { IsDataFromSelfQuery: true, Data: not null } handedOn)
+        {
+            handedOn.IsDataFromSelfQuery = false;
+        }
+
         if (executor is null)
         {
             return Task.CompletedTask;

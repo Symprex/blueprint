@@ -106,6 +106,10 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
             responseTypes.Add(responseTypeSymbol);
         }
 
+        // One result is one member of a union, so it is expanded as one only. A member derived from another (a
+        // ResourceUpdated<T> beside a ResourceEvent<T>) is tried first, as the result is most exactly that one.
+        responseTypes = OrderDerivedFirst(responseTypes);
+
         // Resolve the AlwaysExpand attribute
         var alwaysExpandAttributeType = context.FindTypeByMetadataName("Blueprint.Model.Attributes.AlwaysExpandAttribute");
 
@@ -168,24 +172,39 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
             .GroupBy(static p => (p.ResponseTypeFullName, p.ContentIsHandlerResult))
             .ToList();
 
-        foreach (var group in byResponseType)
+        RenderExpansionGroups(context, byResponseType, 0);
+    }
+
+    /// <summary>
+    /// Renders the expansion of each response type as one branch of an <c>if</c>/<c>else</c> chain, so a result that is an
+    /// instance of more than one of them is expanded once, as the first.
+    /// </summary>
+    private static void RenderExpansionGroups(
+        PipelineRenderContext context,
+        List<IGrouping<(string ResponseTypeFullName, bool ContentIsHandlerResult), ExpandablePropertyInfo>> groups,
+        int index)
+    {
+        if (index >= groups.Count)
         {
-            var (responseTypeFullName, contentIsHandlerResult) = group.Key;
+            return;
+        }
 
-            // Use a stable suffix derived from the type name to avoid variable name collisions
-            var varSuffix = GetStableTypeSuffix(responseTypeFullName);
-            var contentVarName = $"expansionContent_{varSuffix}";
+        var group = groups[index];
+        var (responseTypeFullName, contentIsHandlerResult) = group.Key;
 
-            if (contentIsHandlerResult)
-            {
-                // A resource event is itself the handler result, and is what the property paths are rooted at
-                context.If(
-                    $"handlerResult is {responseTypeFullName} {contentVarName}",
-                    branch => RenderExpansionCalls(branch, group, contentVarName));
+        // Use a stable suffix derived from the type name to avoid variable name collisions
+        var varSuffix = GetStableTypeSuffix(responseTypeFullName);
+        var contentVarName = $"expansionContent_{varSuffix}";
 
-                continue;
-            }
-
+        if (contentIsHandlerResult)
+        {
+            // A resource event is itself the handler result, and is what the property paths are rooted at
+            context.If(
+                $"handlerResult is {responseTypeFullName} {contentVarName}",
+                branch => RenderExpansionCalls(branch, group, contentVarName));
+        }
+        else
+        {
             var okResultVarName = $"okResult_{varSuffix}";
 
             // Cast handler result to the typed OkResult to access Content
@@ -200,6 +219,45 @@ public sealed class ResourceExpansionModule : IBlueprintSourceGeneratorModule, I
                         innerBranch => RenderExpansionCalls(innerBranch, group, contentVarName));
                 });
         }
+
+        if (index + 1 < groups.Count)
+        {
+            context.Else(elseBranch => RenderExpansionGroups(elseBranch, groups, index + 1));
+        }
+    }
+
+    /// <summary>
+    /// Orders the response types so that one derived from another comes before it, keeping declaration order otherwise.
+    /// </summary>
+    private static List<INamedTypeSymbol> OrderDerivedFirst(List<INamedTypeSymbol> responseTypes)
+    {
+        var remaining = new List<INamedTypeSymbol>(responseTypes);
+        var ordered = new List<INamedTypeSymbol>(responseTypes.Count);
+
+        while (remaining.Count > 0)
+        {
+            // The first type no other remaining type derives from.
+            var next = remaining.First(candidate => !remaining.Any(other =>
+                !SymbolEqualityComparer.Default.Equals(other, candidate) && DerivesFrom(other, candidate)));
+
+            ordered.Add(next);
+            remaining.Remove(next);
+        }
+
+        return ordered;
+    }
+
+    private static bool DerivesFrom(INamedTypeSymbol type, INamedTypeSymbol candidateBase)
+    {
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, candidateBase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void RenderExpansionCalls(

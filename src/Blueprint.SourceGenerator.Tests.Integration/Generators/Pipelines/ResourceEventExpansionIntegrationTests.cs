@@ -80,6 +80,36 @@ public class ResourceEventExpansionIntegrationTests
     }
 
     [Fact]
+    public async Task When_an_outer_handler_returns_an_event_an_inner_pipeline_loaded_by_its_self_query_then_the_outer_pipeline_expands_it()
+    {
+        // Legacy's ResourceExpandMiddleware expanded the data of the event its operation returned whenever that data was
+        // there to expand (Signature365 8b40ecc961, Common/Api/ResourceExpandMiddleware.cs:53-84, :110-129). Only the
+        // pipeline whose self query loaded the data did not, as it expanded before loading it. A command that hands on an
+        // event another command's pipeline returned finds its data loaded, so its pipeline expanded it: once by the self
+        // query's pipeline, once by the outer command's.
+        var (context, pipeline, expander) = Create<PassOnAlwaysExpandEmployeeEventCommand>(new DefaultHttpContext());
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        var resourceEvent = result.Should().BeOfType<ResourceEvent<AlwaysExpandTestEmployee>>().Subject;
+        expander.Responses.Should().HaveCount(2, "the self query's pipeline expands its resource, and the outer pipeline the event it hands on");
+        expander.Responses[0].Should().BeSameAs(resourceEvent.Data, "the first call is the self query's, whose response is its own resource");
+        expander.Responses[1].Should().BeSameAs(resourceEvent, "the second is the outer pipeline's, whose response is the event");
+    }
+
+    [Fact]
+    public async Task When_a_union_declares_a_resource_event_and_a_type_derived_from_it_then_the_event_is_expanded_once()
+    {
+        // Legacy expanded the one declared response its handler's result was (ResourceExpandMiddleware.cs:55-62). A
+        // ResourceUpdated<T> is also a ResourceEvent<T>, so a union of both must not expand it once as each.
+        var (context, pipeline, expander) = Create<UpdateAlwaysExpandEmployeeAsEitherEventCommand>(new DefaultHttpContext());
+
+        await pipeline.ExecuteAsync(context);
+
+        expander.Responses.Should().ContainSingle("the event is one member of the union, and expanded as that member only");
+    }
+
+    [Fact]
     public async Task When_resource_event_data_is_expanded_then_the_resource_event_audit_sink_is_given_it_expanded()
     {
         // Legacy expanded an event before auditing it. In its generated pipeline ResourceExpandMiddleware
@@ -187,6 +217,28 @@ public partial class UpdateExpandableEmployeeCommand : ICommand<ResourceEvent<Ex
             ResourceEventChangeType.Updated,
             "updated",
             new ExpandableTestEmployee { Department = new Expandable<DepartmentResource>("dept-on-request") });
+    }
+}
+
+/// <summary>Hands on the event another command's pipeline returned, whose data that pipeline's self query loaded.</summary>
+public partial class PassOnAlwaysExpandEmployeeEventCommand : ICommand<ResourceEvent<AlwaysExpandTestEmployee>>
+{
+    public static async Task<ResourceEvent<AlwaysExpandTestEmployee>> HandleAsync(PassOnAlwaysExpandEmployeeEventCommand operation, ApiOperationContext context)
+    {
+        var executor = (BlueprintAppExecutor)context.ServiceProvider.GetService(typeof(BlueprintAppExecutor))!;
+        var inner = await executor.ExecuteAsync(context.CreateNested(new UpdateAlwaysExpandEmployeeViaSelfQueryCommand()));
+
+        return (ResourceEvent<AlwaysExpandTestEmployee>)inner;
+    }
+}
+
+/// <summary>Returns an updated event from an operation that declares either a resource event or an updated one.</summary>
+public partial class UpdateAlwaysExpandEmployeeAsEitherEventCommand
+    : ICommand<Results<ResourceEvent<AlwaysExpandTestEmployee>, ResourceUpdated<AlwaysExpandTestEmployee>>>
+{
+    public static Results<ResourceEvent<AlwaysExpandTestEmployee>, ResourceUpdated<AlwaysExpandTestEmployee>> Handle(UpdateAlwaysExpandEmployeeAsEitherEventCommand operation)
+    {
+        return new ResourceUpdated<AlwaysExpandTestEmployee>(new AlwaysExpandTestEmployee { Department = new Expandable<DepartmentResource>("dept-either") });
     }
 }
 
