@@ -6,6 +6,7 @@ using System.Text.Json;
 using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
+using Blueprint.Runtime.Http;
 using Blueprint.Validation;
 
 namespace Blueprint.HttpClient;
@@ -1122,7 +1123,8 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <summary>
     /// Reads a successful response as the member of the <see cref="Results{T1, T2}"/> the host wrote. With no body, the
     /// first <see cref="StatusCodeResult"/> member whose status it is claims it: a nested status result by its own status,
-    /// the base type by the nested result of the response's status. With a body that is not JSON, the first
+    /// the base type by the nested result of the response's status; as do an <see cref="HttpNoContentResult"/> a 204 and a
+    /// <see cref="NoResultOperationResult"/> a 200, which the host writes without a body. With a body that is not JSON, the first
     /// <see cref="PlainTextResult"/> member claims it. With a JSON body, the one member the host writes as a JSON body of
     /// that status claims it: a plain type or a resource event at any success status, an <see cref="OkResult{T}"/>,
     /// <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> at its own status, read as its content.
@@ -1171,6 +1173,22 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
                 if (mediaType is null && FindStatusCodeResult(memberType, status) is { } statusCodeResult)
                 {
                     member = statusCodeResult;
+                }
+            }
+            else if (memberType == typeof(HttpNoContentResult))
+            {
+                // The host writes one as an empty 204 with no content type.
+                if (mediaType is null && status == (int)HttpStatusCode.NoContent)
+                {
+                    member = new HttpNoContentResult();
+                }
+            }
+            else if (memberType == typeof(NoResultOperationResult))
+            {
+                // The host writes one as an empty 200 with no content type.
+                if (mediaType is null && status == (int)HttpStatusCode.OK)
+                {
+                    member = NoResultOperationResult.Instance;
                 }
             }
             else if (memberType == typeof(PlainTextResult))

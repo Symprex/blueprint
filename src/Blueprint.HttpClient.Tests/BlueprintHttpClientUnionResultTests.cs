@@ -4,6 +4,7 @@ using System.Text;
 using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
+using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
 using FluentAssertions;
 
@@ -178,5 +179,30 @@ public class BlueprintHttpClientUnionResultTests : IClassFixture<SampleAppFixtur
         var act = () => client.SendAsync<Results<TemplateApiResource, OkResult<TemplateApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*more than one*");
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_no_content_for_an_http_no_content_member_then_returns_it()
+    {
+        // The host writes an HttpNoContentResult as an empty 204 with no content type (HttpOperationResultExecutor); a union
+        // may declare one (BP112 keeps it apart from NoResultOperationResult), so a 204 is that member, not an unmatched one.
+        var client = this._fixture.CreateClient(new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.NoContent)));
+
+        var result = await client.SendAsync<Results<OkResult<TemplateApiResource>, HttpNoContentResult>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT2.Should().BeTrue();
+        result.AsT2.Should().BeOfType<HttpNoContentResult>();
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_an_empty_200_for_a_no_result_member_then_returns_it()
+    {
+        // The host writes a NoResultOperationResult as an empty 200 with no content type (HttpOperationResultExecutor).
+        var client = this._fixture.CreateClient(new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)));
+
+        var result = await client.SendAsync<Results<NoResultOperationResult, PlainTextResult>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT1.Should().BeTrue();
+        result.AsT1.Should().BeSameAs(NoResultOperationResult.Instance);
     }
 }
