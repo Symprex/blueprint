@@ -9,6 +9,14 @@ namespace Blueprint.SourceGenerator.Helpers;
 public static class OperationResultContractHelper
 {
     /// <summary>
+    /// Gets the statuses the HTTP host can write a <c>KeyOnlyResourceEventResult</c> with, each with no body: that of its
+    /// change type, which is only known at run time — 201 for created, 200 for updated, 204 for deleted
+    /// (<c>HttpOperationResultExecutor.MapChangeTypeToStatusCode</c>). <see cref="TryGetHttpOperationResultResponseShape"/>
+    /// gives the created one alone, the one the response metadata starts from.
+    /// </summary>
+    public static ImmutableArray<int> KeyOnlyResourceEventStatusCodes { get; } = ImmutableArray.Create(201, 200, 204);
+
+    /// <summary>
     /// Gets the declared operation result contract from the generic Blueprint operation interface, if one exists.
     /// </summary>
     /// <param name="operationType">The operation type.</param>

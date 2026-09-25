@@ -54,14 +54,48 @@ public class OperationDescriptorSourceGeneratorTestsHttpUnionDiscriminationTests
             .Contain(static source => source.Contains("UnionWithUnsupportedMemberOperationDescriptor"));
     }
 
+    // Not legacy-derived (KeyOnlyResourceEventResult is new-only). The host writes a key-only event as an empty 201, 200
+    // or 204 by its change type (HttpOperationResultExecutor's MapChangeTypeToStatusCode), so the unions below are judged
+    // against all three statuses, not 201 alone.
+    [Theory]
+    [InlineData("NoResultOperationResult")]
+    [InlineData("Blueprint.Runtime.Http.HttpNoContentResult")]
+    public void When_http_exposed_operation_declares_key_only_resource_event_and_another_empty_result_at_one_of_its_statuses_then_generator_reports_host_translation_ambiguity(string otherMember)
+    {
+        // An updated key-only event is an empty 200, as a NoResultOperationResult is; a deleted one an empty 204, as an
+        // HttpNoContentResult is: the client cannot tell them apart.
+        var result = OperationDescriptorSourceGeneratorTests.Compile($$"""
+            using Blueprint.Runtime.Exec;
+
+            [RootLink("/host-aware/key-only-resource-event-with-empty-result")]
+            public partial class KeyOnlyResourceEventAndEmptyResultOperation : IQuery<Results<KeyOnlyResourceEventResult, {{otherMember}}>> {}
+            """);
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id).Should().Contain("BP109");
+    }
+
     [Fact]
-    public void When_http_exposed_operation_declares_key_only_resource_event_and_no_result_union_then_generator_keeps_http_union_discrimination_diagnostic_clear()
+    public void When_http_exposed_operation_declares_key_only_resource_event_and_ok_union_then_generator_reports_http_union_discrimination_diagnostic()
+    {
+        // An updated key-only event is an empty 200 beside the OK result's body-bearing 200.
+        var result = OperationDescriptorSourceGeneratorTests.Compile("""
+            using Blueprint.Runtime.Exec;
+
+            [RootLink("/host-aware/key-only-resource-event-with-ok")]
+            public partial class KeyOnlyResourceEventAndOkOperation : IQuery<Results<KeyOnlyResourceEventResult, OkResult<string>>> {}
+            """);
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id).Should().Contain("BP110");
+    }
+
+    [Fact]
+    public void When_http_exposed_operation_declares_key_only_resource_event_and_a_result_at_none_of_its_statuses_then_generator_keeps_both_diagnostics_clear()
     {
         var result = OperationDescriptorSourceGeneratorTests.Compile("""
             using Blueprint.Runtime.Exec;
 
-            [RootLink("/host-aware/key-only-resource-event-with-no-result")]
-            public partial class KeyOnlyResourceEventAndNoResultOperation : IQuery<Results<KeyOnlyResourceEventResult, NoResultOperationResult>> {}
+            [RootLink("/host-aware/key-only-resource-event-with-not-found")]
+            public partial class KeyOnlyResourceEventAndNotFoundOperation : IQuery<Results<KeyOnlyResourceEventResult, NotFoundResult<string>>> {}
             """);
 
         var diagnosticIds = result.Diagnostics.Select(static diagnostic => diagnostic.Id).ToArray();
