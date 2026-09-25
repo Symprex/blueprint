@@ -679,6 +679,22 @@ success. For a consumer that registers an `IMessageOutbox`:
 A task that relied on its outbox messages being dropped needs `[DoNotPublishMessages]`. A consumer with no
 `IMessageOutbox` registered sees no change.
 
+**A host with no operations.** A host that uses Blueprint only for Rebus — it declares no operations and maps no
+Blueprint routes, as Signature365's GraphProxy does — registers its app directly and does not call `AddBlueprintApi`:
+
+```csharp
+services.AddSingleton<BlueprintApp, GraphProxyBlueprintApp>();
+services.AddBlueprintRebusConsumer(_ => { });
+services.AddBlueprintRebus(/* the host's Rebus configuration */);
+```
+
+`AddBlueprintApi<TApp, TExec>` needs the executor the generator emits for an app with a `[BlueprintAppScan]`, and a scan
+that finds no operations is `BP003`, so such an app has no executor to name. `BlueprintApiActivator` needs only the app,
+plus the `BlueprintRebusConfiguration` that `AddBlueprintRebusConsumer` registers. The executor is needed only to run an
+operation, and this host has none, so it sends, publishes and handles plain `IHandleMessages<T>` messages without one.
+Legacy's activator needed the same. `[BlueprintAppSerializerContext]` does nothing on an app without a
+`[BlueprintAppScan]`.
+
 ### 15. Property population
 
 Replace manual property-setting middleware (like legacy `SetTenantMiddleware`) with `IPropertyPopulator`:
