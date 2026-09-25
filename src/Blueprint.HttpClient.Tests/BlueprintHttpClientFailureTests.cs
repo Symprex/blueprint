@@ -126,7 +126,7 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         exception.Detail.Should().Be("Template 't-1' was changed by someone else.");
         exception.InnerException.Should().BeNull();
         exception.Extensions.Should().ContainKey("currentVersion")
-            .WhoseValue.Should().BeOfType<JsonElement>().Which.GetInt32().Should().Be(7);
+            .WhoseValue.Should().BeOfType<double>("legacy read a number extension as a double (legacy ProblemDetailsJsonConverter.cs:84)").Which.Should().Be(7d);
     }
 
     [Theory]
@@ -151,8 +151,8 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
 
         var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
         exception.Extensions.Keys.Should().BeEquivalentTo("traceId", "retryAfter");
-        exception.Extensions["traceId"].Should().BeOfType<JsonElement>().Which.GetString().Should().Be("0af7651916cd43dd8448eb211c80319c");
-        exception.Extensions["retryAfter"].Should().BeOfType<JsonElement>().Which.GetInt32().Should().Be(30);
+        exception.Extensions["traceId"].Should().BeOfType<string>().Which.Should().Be("0af7651916cd43dd8448eb211c80319c");
+        exception.Extensions["retryAfter"].Should().BeOfType<double>().Which.Should().Be(30d);
     }
 
     [Fact]
@@ -170,6 +170,48 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
 
         var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
         exception.Extensions.Keys.Should().BeEquivalentTo("currentVersion", "stackTrace");
+    }
+
+    [Fact]
+    public async Task When_a_problem_has_extensions_of_every_kind_then_carries_them_as_legacy_read_them_under_any_casing()
+    {
+        // Legacy's ProblemDetailsJsonConverter read each extension into a dictionary keyed case-insensitively, a string as a
+        // string, a number as a double, true and false as a bool, null as null, and anything else through
+        // JsonSerializer.Deserialize(object), which is a JsonElement (Signature365 8b40ecc961,
+        // Blueprint.Http/ProblemDetailsJsonConverter.cs:75-91); its client handed that dictionary to the ApiException
+        // (Common.Core/Api/BlueprintHttpClient.cs:158-172).
+        var client = this.CreateClient(
+            HttpStatusCode.Conflict,
+            """{"type":"template_conflict","title":"Conflict","status":409,"code":"stale","attempts":2.5,"retry":true,"final":false,"hint":null,"versions":[6,7],"owner":{"id":"u-1"}}""",
+            "application/problem+json");
+
+        var act = () => client.SendAsync(new ArchiveTemplateCommand { Id = "t-1" });
+
+        var extensions = (await act.Should().ThrowAsync<ApiException>()).Which.Extensions;
+        extensions["CODE"].Should().Be("stale", "the keys are case-insensitive");
+        extensions["attempts"].Should().BeOfType<double>().Which.Should().Be(2.5d);
+        extensions["retry"].Should().Be(true);
+        extensions["final"].Should().Be(false);
+        extensions.Should().ContainKey("hint").WhoseValue.Should().BeNull();
+        extensions["versions"].Should().BeOfType<JsonElement>().Which.ValueKind.Should().Be(JsonValueKind.Array);
+        extensions["owner"].Should().BeOfType<JsonElement>().Which.GetProperty("id").GetString().Should().Be("u-1");
+    }
+
+    [Theory]
+    [InlineData("""{"type":"template_conflict","title":"Conflict","detail":"No status."}""")]
+    [InlineData("""{"type":"template_conflict","title":"Conflict","status":null,"detail":"A null status."}""")]
+    public async Task When_a_problem_has_no_status_then_its_status_is_zero_as_legacys_was(string body)
+    {
+        // Legacy's ProblemDetails.Status was an int that its converter left at 0 when the member was absent or null
+        // (legacy ProblemDetails.cs:36-37, ProblemDetailsJsonConverter.cs:63-74), and its client threw with that status
+        // (Common.Core/Api/BlueprintHttpClient.cs:162, :171), not the response's.
+        var client = this.CreateClient(HttpStatusCode.Conflict, body, "application/problem+json");
+
+        var act = () => client.SendAsync(new ArchiveTemplateCommand { Id = "t-1" });
+
+        var exception = (await act.Should().ThrowAsync<BlueprintApiException>()).Which;
+        exception.HttpStatus.Should().Be(0);
+        exception.StatusCode.Should().Be(HttpStatusCode.Conflict, "the response's own status is still carried");
     }
 
     [Fact]

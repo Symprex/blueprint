@@ -920,7 +920,8 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// maps to <c>not_found</c> for a 404 (naming the path, never the host) and to <c>invalid_json</c> otherwise.
     /// </para>
     /// <para>
-    /// A problem without a status takes the response's; legacy's took none.
+    /// A problem without a status has status 0, as legacy's had; the response's own status is still the exception's
+    /// <see cref="BlueprintApiException.StatusCode"/>. Extensions are keyed case-insensitively and read as legacy read them.
     /// </para>
     /// </remarks>
     /// <param name="request">The request, whose URI the client has made absolute by now.</param>
@@ -981,15 +982,48 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         // A host exposing exception details writes a 5xx's stack trace as an extension, which a gateway would write back
         // out with every other one; legacy's host wrote it as the detail, replaced above.
-        var extensions = problem.Extensions?
-            .Where(e => status < 500 || !string.Equals(e.Key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(static e => e.Key, static e => (object)e.Value);
+        Dictionary<string, object>? extensions = null;
 
+        if (problem.Extensions is not null)
+        {
+            // Keyed case-insensitively, each value as legacy's ProblemDetailsJsonConverter read it (Signature365
+            // 8b40ecc961, Blueprint.Http/ProblemDetailsJsonConverter.cs:75-91).
+            extensions = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (key, value) in problem.Extensions)
+            {
+                if (status < 500 || !string.Equals(key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase))
+                {
+                    extensions[key] = ToLegacyExtensionValue(value)!;
+                }
+            }
+        }
+
+        // Legacy's status was an int its converter left at 0 when the problem had none (legacy ProblemDetails.cs:36-37,
+        // ProblemDetailsJsonConverter.cs:63-74), and its client threw with it (legacy BlueprintHttpClient.cs:162, :171).
         return new BlueprintApiException(
-            new BlueprintApiException.ApiProblem(problem.Title, problem.Type, detail, problem.Status ?? status, extensions),
+            new BlueprintApiException.ApiProblem(problem.Title, problem.Type, detail, problem.Status ?? 0, extensions),
             response.StatusCode,
             body,
             innerException);
+    }
+
+    /// <summary>
+    /// An extension value as legacy's <c>ProblemDetailsJsonConverter</c> read it: a string as a string, a number as a
+    /// <see cref="double"/>, true and false as a <see cref="bool"/>, null as <see langword="null"/>, and anything else as the
+    /// <see cref="JsonElement"/> <c>JsonSerializer.Deserialize(object)</c> gives.
+    /// </summary>
+    private static object? ToLegacyExtensionValue(JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.GetDouble(),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Null => null,
+            _ => value.Clone(),
+        };
     }
 
     private static string DescribeRequestedResource(HttpRequestMessage request)
