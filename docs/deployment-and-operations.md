@@ -44,7 +44,7 @@ This is the only setting that controls whether exception messages and stack trac
 
 ## Error response surface
 
-All error responses return RFC 7807 `application/problem+json` bodies. Clients can parse every error consistently:
+All error responses return RFC 7807 problem bodies, sent as `application/problem+json` unless `BlueprintHttpOptions.NegotiateErrorContentType` chooses the content type from the `Accept` header as legacy Blueprint did. Clients can parse every error consistently:
 
 | Status | Trigger | Body type |
 |--------|---------|-----------|

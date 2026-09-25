@@ -15,6 +15,30 @@ public sealed class BlueprintHttpOptions
     public bool ExposeExceptionDetailsInErrorResponses { get; set; }
 
     /// <summary>
+    /// Whether an error response's <c>Content-Type</c> is chosen from the request's <c>Accept</c> header as legacy
+    /// Blueprint chose it, rather than always being <c>application/problem+json; charset=utf-8</c>. <see langword="false"/>
+    /// by default.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Legacy Blueprint wrote every error — a validation failure, an authorisation denial, an <see cref="ApiException"/>
+    /// or any other exception — through the same output formatter as a success, and chose its content type by content
+    /// negotiation. With no <c>Accept</c> header, or one that includes <c>*/*</c> anywhere, it wrote exactly
+    /// <c>application/json</c>, with no charset. Otherwise it took the accepted media types in descending quality. The
+    /// first that is <c>application/json</c>, <c>text/json</c> or an <c>application/*+json</c> type (including
+    /// <c>application/problem+json</c>) gave the content type. Its content type was the whole <c>Accept</c> header line
+    /// that media type came from. With none of them, it wrote <c>application/json</c>.
+    /// </para>
+    /// <para>
+    /// Turn this on for clients that read a body as JSON only when its content type contains <c>application/json</c>
+    /// and send no <c>Accept</c>, as legacy's own clients did. Pair it with
+    /// <see cref="OpenApiInfoOptions.UsePlainJsonForErrorResponses"/> so that the OpenAPI document describes what the
+    /// wire carries.
+    /// </para>
+    /// </remarks>
+    public bool NegotiateErrorContentType { get; set; }
+
+    /// <summary>
     /// Gets or sets the optional embedded resource name for the canonical operations manifest that hosted inspection
     /// surfaces should expose. Keeping this explicit avoids introducing a hidden runtime resource-discovery convention
     /// before the manifest emission story is widened deliberately.

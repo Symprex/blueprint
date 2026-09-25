@@ -225,7 +225,7 @@ The migration gate is not NSwag compatibility; it is raw OpenAPI JSON compatibil
 | Enum metadata | `x-enumNames` | `x-enumNames` + `x-enum-varnames` | Superset |
 | Request body schema | Direct or `$ref` | `$ref` to components | Compatible |
 | Response schema | Usually `200` | Semantic `2xx` + optional synthetic `200` | Requires flag for TS return types |
-| Error content-type | `application/json` | `application/problem+json` by default | Use compat flag when needed |
+| Error content-type | Negotiated: `application/json` with no `Accept` or `*/*` | `application/problem+json` by default | Wire: `BlueprintHttpOptions.NegotiateErrorContentType`; document: `UsePlainJsonForErrorResponses` |
 | Generic schema naming | `TypeOfArg` pattern | Same after fixes | Critical for TS generation |
 | `additionalProperties: false` | Present on object schemas | Present after fix | Needed for strict TS schemas |
 
@@ -864,7 +864,7 @@ The migration is ready, but a few items still deserve explicit verification duri
 
 - **Per-service TypeScript verification**: generate the new OpenAPI document, run the existing Handlebars generator unchanged, and diff `api.ts`.
 - **Status-code compatibility flag**: enable `UseStatus200ForSuccessResponses` anywhere a frontend still assumes `responses["200"]` is the only success schema.
-- **Error content-type compatibility**: enable `UsePlainJsonForErrorResponses` when older clients assume `application/json` rather than `application/problem+json`.
+- **Error content-type compatibility**: enable `BlueprintHttpOptions.NegotiateErrorContentType` (the wire) and `UsePlainJsonForErrorResponses` (the document) when older clients assume `application/json` rather than `application/problem+json`. The OpenAPI flag alone changes only the document.
 - **Query-string casing**: legacy PascalCase query parameters become camelCase in the new client path; hand-built URLs must be updated.
 - **Serilog tenant enrichment**: keep it as standard ASP.NET Core middleware; it is not a `TenantModule` responsibility.
 - **`ApiId` performance**: add `TryParse` / `IParsable<ApiId>` if the info-level TypeConverter fallback warning becomes noise or invalid-input cost matters.

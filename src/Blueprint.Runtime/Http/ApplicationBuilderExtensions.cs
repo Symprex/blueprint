@@ -594,7 +594,9 @@ public static class EndpointRouteBuilderExtensions
             if (!httpContext.Response.HasStarted)
             {
                 httpContext.Response.StatusCode = 500;
-                httpContext.Response.ContentType = "application/problem+json";
+                httpContext.Response.ContentType = this._httpOptions.NegotiateErrorContentType
+                    ? LegacyErrorContentTypeNegotiation.Negotiate(httpContext.Request.Headers.Accept)
+                    : "application/problem+json";
 
                 var exposeDetails = this._httpOptions.ExposeExceptionDetailsInErrorResponses;
                 var detail = exposeDetails ? ex.ToString() : "An unexpected error occurred.";

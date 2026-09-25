@@ -284,6 +284,21 @@ carries the denial as `Failure`. Coming from legacy Blueprint nothing changes. C
 "Forbidden" bodies are gone, and a denial whose failure type is not `Authorisation` (a `default` `ExecutionAllowed`
 included) is a 401 where it was a 403.
 
+**Error content type (v1.0.3, opt-in).** Every error is written as `application/problem+json; charset=utf-8` by default.
+Legacy Blueprint negotiated it:
+- no `Accept`, or one that includes `*/*`: exactly `application/json`;
+- otherwise the highest-quality accepted `application/json`, `text/json` or `application/*+json` type, written as the
+  `Accept` line it came from;
+- failing that: `application/json`.
+
+A client that reads a body as JSON only when its content type contains `application/json` needs legacy's behaviour. Set
+`BlueprintHttpOptions.NegotiateErrorContentType = true` for it, and `OpenApiInfoOptions.UsePlainJsonForErrorResponses =
+true` so the document agrees:
+
+```csharp
+services.Configure<BlueprintHttpOptions>(o => o.NegotiateErrorContentType = true);
+```
+
 #### State-based link visibility
 
 Use `StateBasedLinkChecker<TOperation, TResource>` (which implements `ILinkVisibilityAuthoriser`) for state-based link hiding:

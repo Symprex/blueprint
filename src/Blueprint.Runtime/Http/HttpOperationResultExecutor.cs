@@ -139,24 +139,24 @@ public class HttpOperationResultExecutor
 
             // Pre-serialized static error responses — Body.WriteAsync often completes synchronously.
             case UnauthenticatedResult { Failure: { } authenticationFailure }:
-                return WriteDenialAndReturnTrue(httpContext, operationContext, StatusCodes.Status401Unauthorized, SecurityFailureProblemType, authenticationFailure.Message, preserialized: null);
+                return WriteDenialAndReturnTrue(httpContext, operationContext, httpOptions, StatusCodes.Status401Unauthorized, SecurityFailureProblemType, authenticationFailure.Message, preserialized: null);
 
             case UnauthenticatedResult:
-                return WriteDenialAndReturnTrue(httpContext, operationContext, StatusCodes.Status401Unauthorized, SecurityFailureProblemType, AnonymousAccessDeniedTitle, _unauthorizedProblemBytes);
+                return WriteDenialAndReturnTrue(httpContext, operationContext, httpOptions, StatusCodes.Status401Unauthorized, SecurityFailureProblemType, AnonymousAccessDeniedTitle, _unauthorizedProblemBytes);
 
             case ForbiddenResult { Failure: { } authorisationFailure }:
-                return WriteDenialAndReturnTrue(httpContext, operationContext, StatusCodes.Status403Forbidden, AuthorisationFailureProblemType, authorisationFailure.Message, preserialized: null);
+                return WriteDenialAndReturnTrue(httpContext, operationContext, httpOptions, StatusCodes.Status403Forbidden, AuthorisationFailureProblemType, authorisationFailure.Message, preserialized: null);
 
             // A denial with no authoriser's detail, a resource authorization provider's, which legacy did not have.
             case ForbiddenResult:
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-                httpContext.Response.ContentType = ProblemJsonContentType;
+                httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
                 httpContext.Response.ContentLength = _forbiddenProblemBytes.Length;
                 return WritePreserializedAndReturnTrue(httpContext, _forbiddenProblemBytes);
 
             case UnsupportedMediaTypeResult:
                 httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                httpContext.Response.ContentType = ProblemJsonContentType;
+                httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
                 httpContext.Response.ContentLength = _unsupportedMediaTypeProblemBytes.Length;
                 return WritePreserializedAndReturnTrue(httpContext, _unsupportedMediaTypeProblemBytes);
 
@@ -239,15 +239,16 @@ public class HttpOperationResultExecutor
     /// </summary>
     /// <param name="httpContext">The HTTP context.</param>
     /// <param name="operationContext">The operation's context, whose activity gives the trace id.</param>
+    /// <param name="httpOptions">The active HTTP host options, which decide the content type.</param>
     /// <param name="status">The response status.</param>
     /// <param name="type">The problem's type.</param>
     /// <param name="title">The problem's title, the denial's message.</param>
     /// <param name="preserialized">The body written when there is no activity, if it is fixed.</param>
     /// <returns><see langword="true"/> when the body has been written.</returns>
-    private static Task<bool> WriteDenialAndReturnTrue(HttpContext httpContext, ApiOperationContext operationContext, int status, string type, string? title, byte[]? preserialized)
+    private static Task<bool> WriteDenialAndReturnTrue(HttpContext httpContext, ApiOperationContext operationContext, BlueprintHttpOptions httpOptions, int status, string type, string? title, byte[]? preserialized)
     {
         httpContext.Response.StatusCode = status;
-        httpContext.Response.ContentType = ProblemJsonContentType;
+        httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
 
         var activity = operationContext.Activity;
 
@@ -310,11 +311,11 @@ public class HttpOperationResultExecutor
         switch (result)
         {
             case ValidationFailedResult validationFailedResult when DescriptorSupportsFailureResult(operationContext.Descriptor, validationFailedResult):
-                await WriteValidationFailureAsync(httpContext, operationContext, validationFailedResult).ConfigureAwait(false);
+                await WriteValidationFailureAsync(httpContext, operationContext, validationFailedResult, httpOptions).ConfigureAwait(false);
                 return true;
             case BindingFailureResult bindingFailureResult:
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                httpContext.Response.ContentType = ProblemJsonContentType;
+                httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
                 await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
                 {
                     Status = StatusCodes.Status400BadRequest,
@@ -851,7 +852,7 @@ public class HttpOperationResultExecutor
         return false;
     }
 
-    private static async Task WriteValidationFailureAsync(HttpContext httpContext, ApiOperationContext operationContext, ValidationFailedResult validationFailedResult)
+    private static async Task WriteValidationFailureAsync(HttpContext httpContext, ApiOperationContext operationContext, ValidationFailedResult validationFailedResult, BlueprintHttpOptions httpOptions)
     {
         IDictionary<string, string[]> validationErrors;
 
@@ -904,7 +905,7 @@ public class HttpOperationResultExecutor
         };
 
         httpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
-        httpContext.Response.ContentType = ProblemJsonContentType;
+        httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
         await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
     }
 
@@ -996,8 +997,23 @@ public class HttpOperationResultExecutor
         }
 
         httpContext.Response.StatusCode = statusCode;
-        httpContext.Response.ContentType = ProblemJsonContentType;
+        httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
         await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets the content type an error response is written with: <c>application/problem+json; charset=utf-8</c>, or, with
+    /// <see cref="BlueprintHttpOptions.NegotiateErrorContentType"/>, what legacy Blueprint's content negotiation chose for
+    /// the request's <c>Accept</c> header (<see cref="LegacyErrorContentTypeNegotiation"/>).
+    /// </summary>
+    /// <param name="httpContext">The HTTP context, whose request carries the <c>Accept</c> header.</param>
+    /// <param name="httpOptions">The active HTTP host options.</param>
+    /// <returns>The content type to write.</returns>
+    internal static string GetErrorContentType(HttpContext httpContext, BlueprintHttpOptions httpOptions)
+    {
+        return httpOptions.NegotiateErrorContentType
+            ? LegacyErrorContentTypeNegotiation.Negotiate(httpContext.Request.Headers.Accept)
+            : ProblemJsonContentType;
     }
 
     /// <summary>

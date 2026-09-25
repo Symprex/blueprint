@@ -91,7 +91,7 @@ When adding or changing runtime behavior, ask:
 
 ## HTTP error response surface
 
-All error responses use [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) `application/problem+json` bodies, giving clients a consistent machine-readable error envelope across every failure path. The `HttpOperationResultExecutor` switch statement maps each `OperationResult` subclass to the appropriate HTTP response.
+All error responses use [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) problem bodies, giving clients a consistent machine-readable error envelope across every failure path. They are sent as `application/problem+json; charset=utf-8`. With `BlueprintHttpOptions.NegotiateErrorContentType` set, the content type is instead chosen from the request's `Accept` header as legacy Blueprint chose it: `application/json`, with no charset, for no `Accept` or one that includes `*/*`. The `HttpOperationResultExecutor` switch statement maps each `OperationResult` subclass to the appropriate HTTP response.
 
 ### Status codes and response shapes
 
