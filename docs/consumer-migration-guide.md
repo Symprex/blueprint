@@ -543,18 +543,34 @@ public partial class PreviewCommand : ICommand<OkResult<Preview>> { }
 
 ### 14. Messaging
 
-Register a message outbox to publish messages after successful command execution:
+Register a message outbox to publish messages after successful command or background task execution:
 
 ```csharp
 blueprint.AddMessageOutbox<RebusMessageOutbox>();
 ```
 
-The generated pipeline calls `FlushAsync()` on `IMessageOutbox` after successful command execution (and after unit-of-work save). Opt out per-operation:
+The generated pipeline calls `CommitAsync()` on `IMessageOutbox` after a command or background task succeeds (and after unit-of-work save). Opt out per-operation:
 
 ```csharp
 [DoNotPublishMessages]
 public partial class InternalSyncCommand : ICommand<NoResultOperationResult> { }
 ```
+
+`IMessageOutbox` is Blueprint's own seam; legacy Blueprint had nothing like it, and it is not the Marten session outbox
+legacy's `UseMartenAsOutboxMiddleware` enlisted (for that, see `IRebusTransactionEnlistment` in
+[integration-packages.md](integration-packages.md#transactional-outbox)).
+
+**Behaviour change for background tasks (v1.0.3).** Before v1.0.3, only `ICommand` pipelines committed the
+`IMessageOutbox`, so every message a background task enqueued through it was discarded with the task's scope. Background
+tasks (`Blueprint.Tasks.IBackgroundTask`) now commit it as commands do, after the unit of work save and only on
+success. For a consumer that registers an `IMessageOutbox`:
+
+- messages its background tasks enqueue through it are now published;
+- `[DoNotPublishMessages]` on a background task now opts that task out, and no longer raises `BPM001`;
+- `BPM001` still warns for `[DoNotPublishMessages]` on any operation that is neither a command nor a background task.
+
+A task that relied on its outbox messages being dropped needs `[DoNotPublishMessages]`. A consumer with no
+`IMessageOutbox` registered sees no change.
 
 ### 15. Property population
 
@@ -629,7 +645,7 @@ The source generator catches contract errors at build time. Key diagnostics:
 | BP001–BP008 | Core contracts | Missing partial, missing handler, unsupported return type |
 | BP101–BP104 | Validation | Invalid CompareAttribute, GreaterThanProperty, LessThanProperty references |
 | BPA001 | Auditing | [Sensitive] on non-public property |
-| BPM001 | Messaging | [DoNotPublishMessages] on non-command |
+| BPM001 | Messaging | [DoNotPublishMessages] on an operation that is neither a command nor a background task |
 | BPP001 | Persistence | [DoNotSaveChanges] on non-command |
 | BPT001 | Background tasks | BackgroundTask operation not a command |
 | BPMOD001–004 | Module system | Ordering conflicts, duplicate contributors, missing variables |
@@ -737,7 +753,7 @@ The `ConsumerModuleCompositionTests` in this repository prove that companion gen
 
 ### Rebus messaging
 
-Blueprint includes a built-in `IMessageOutbox` pipeline module that commits enqueued messages after successful command execution. This replaces legacy Blueprint's `StartRebusTransactionScopeMiddleware` / `CommitRebusTransactionScopeMiddleware` pair:
+Blueprint includes a built-in `IMessageOutbox` pipeline module that commits enqueued messages after a command or background task succeeds. It does not replace legacy Blueprint's `StartRebusTransactionScopeMiddleware` / `CommitRebusTransactionScopeMiddleware` pair; the generated `RebusTransactionModule` does that, opening and completing a `RebusTransactionScope` itself. `IMessageOutbox` is an additional seam legacy did not have, for example:
 
 ```csharp
 public class RebusMessageOutbox : IMessageOutbox
@@ -757,7 +773,7 @@ Register it via the builder:
 blueprint.AddMessageOutbox<RebusMessageOutbox>();
 ```
 
-The generated pipeline calls `CommitAsync` in the PostExecution stage (after UnitOfWork save, before auditing) only when `handlerResult.WasSuccessful` is true. Operations decorated with `[DoNotPublishMessages]` are excluded.
+The generated pipeline calls `CommitAsync` in the PostExecution stage of a command or background task (after UnitOfWork save, before auditing) only when `handlerResult.WasSuccessful` is true. Operations decorated with `[DoNotPublishMessages]` are excluded.
 
 For Rebus handler discovery, create a companion generator that:
 

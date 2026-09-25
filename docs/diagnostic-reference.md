@@ -171,7 +171,7 @@ These attributes inspect an item count, so they only make sense on a collection 
 
 | ID | Severity | Title |
 |----|----------|-------|
-| BPM001 | Warning | `[DoNotPublishMessages]` on non-command operation (no effect) |
+| BPM001 | Warning | `[DoNotPublishMessages]` on an operation that is neither a command nor a background task (no effect) |
 
 ## Background tasks (BPT)
 

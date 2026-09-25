@@ -47,7 +47,7 @@ does not dispatch or publish an event twice.
 | S365 Pattern | Blueprint Equivalent |
 |---|---|
 | `SaveMartenChangesMiddleware` | `UnitOfWorkModule` → `IUnitOfWork.SaveChangesAsync()` |
-| `StartRebusTransactionMiddleware` | `MessageOutboxModule` → `IMessageOutbox.CommitAsync()` |
+| `StartRebusTransactionMiddleware` | `RebusTransactionModule` → a generated `RebusTransactionScope` (`IMessageOutbox`, committed by `MessageOutboxModule`, is a separate seam legacy did not have) |
 | `UseMartenAsOutboxMiddleware` | Consumer-supplied: an `IRebusTransactionEnlistment` plus a drain listener added with `options.AddBlueprintOutboxListener(...)` (see [Transactional outbox](#transactional-outbox)) |
 | Marten `IDocumentSession` injection | Same — injected via DI, scoped per request |
 

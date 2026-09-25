@@ -188,14 +188,14 @@ This two-layer design means trace spans naturally carry the exception info (with
 
 ### Messaging outbox coordination
 
-The `MessageOutboxModule` contributes a PostExecution render step at Order 920 (after UnitOfWork save at 900, before auditing at 950) that commits enqueued messages via `IMessageOutbox.CommitAsync`. This replaces legacy Blueprint's `StartRebusTransactionScopeMiddleware` / `CommitRebusTransactionScopeMiddleware` pair.
+The `MessageOutboxModule` contributes a PostExecution render step at Order 920 (after UnitOfWork save at 900, before auditing at 950) that commits enqueued messages via `IMessageOutbox.CommitAsync`. `IMessageOutbox` is Blueprint's own seam, with no legacy equivalent; legacy Blueprint's `StartRebusTransactionScopeMiddleware` / `CommitRebusTransactionScopeMiddleware` pair is replaced by the `RebusTransactionModule`, and its Marten session outbox by a consumer's `IRebusTransactionEnlistment`.
 
 Key characteristics:
-- **Command-only**: only command operations participate (queries never have outbox commits)
+- **Commands and background tasks**: only command and background task operations participate (queries never have outbox commits); background tasks joined in v1.0.3
 - **Success-guarded**: `handlerResult.WasSuccessful` must be true for commit
 - **Opt-out**: `[DoNotPublishMessages]` suppresses outbox commit per-operation
 - **Optional resolution**: if no `IMessageOutbox` is registered, the step is a no-op
-- **Diagnostic**: `BPM001` warning for `[DoNotPublishMessages]` on non-command operations
+- **Diagnostic**: `BPM001` warning for `[DoNotPublishMessages]` on an operation that is neither a command nor a background task
 
 The `MessageOutboxManifestModule` contributes `messaging.outboxCommitEnabled` to the debug manifest.
 
