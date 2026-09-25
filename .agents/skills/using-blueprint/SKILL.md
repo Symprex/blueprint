@@ -420,7 +420,7 @@ The `Blueprint.Migration.Analyzers` package flags legacy patterns at build time:
 | Diagnostic | What it flags | Action |
 | --- | --- | --- |
 | BPMIG001 | Redundant `AddOpenApi()` (parameterless) | Auto-fix: safe removal |
-| BPMIG002 | Redundant `AddHateoasLinks()` (parameterless) | Auto-fix: safe removal |
+| BPMIG002 | Redundant `AddHateoasLinks()` (parameterless) | Auto-fix: safe removal (links are on by default). An app that never called it generated no links: add `DisableHateoasLinks()` by hand — no diagnostic sees an absent call |
 | BPMIG003 | Redundant `AddAuthorisation()` (parameterless) | Auto-fix: safe removal |
 | BPMIG100 | Configured `AddOpenApi(Action<OpenApiOptions>)` | Config-required: migrate to `MapBlueprintApi(configureOpenApi: ...)` |
 | BPMIG101 | Configured `AddAuthentication(...)` | Config-required: migrate to ASP.NET Core auth middleware |
@@ -433,6 +433,7 @@ The `Blueprint.Migration.Analyzers` package flags legacy patterns at build time:
 | --- | --- |
 | `BlueprintApiBuilder.AddOpenApi()` | Built-in — remove call |
 | `BlueprintApiBuilder.AddHateoasLinks()` | Built-in — remove call |
+| No `AddHateoasLinks()` call (the app wrote `"$links":{}`) | `AddBlueprintApi<TApp, TExec>(b => b.DisableHateoasLinks())` |
 | `BlueprintApiBuilder.AddAuthorisation()` | Built-in — remove call |
 | `AddOpenApi(opts => ...)` | `MapBlueprintApi(..., configureOpenApi: info => ...)` |
 | `AddAuthentication(...)` | ASP.NET Core `UseAuthentication()` middleware |

@@ -295,6 +295,27 @@ public sealed class ResourceEventAuditRepositoryTests
     }
 
     [Fact]
+    public async Task A_commands_resource_event_whose_data_its_self_query_loaded_is_audited_with_no_links_when_its_app_disables_them()
+    {
+        // In an app that never called AddHateoasLinks() (BlueprintApiBuilderExtensions.cs:101-111) no pipeline had a link
+        // step, the self query's nested one included (EventStore's generated pipelines have none), so the data was audited
+        // with no links, "$links":{} (EventStore.Tests/Handlers/ResourceEventCreatedEventHandlerTests.cs:70). The href was
+        // made from the resource type's self link whatever the app (ResourceEventHandler.cs:54-65).
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(
+            records,
+            static blueprint => blueprint.AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>().DisableHateoasLinks());
+
+        using var body = JsonDocument.Parse(await host.PutAsync("api/audited-events/widgets/widget-11"));
+
+        var record = records.Repository.Should().ContainSingle().Subject;
+        record.DataLinkRels.Should().BeEmpty("the self query's own pipeline has no link step in an app that does not link");
+        record.Href.Should().Be(new Uri(host.Client.BaseAddress!, "api/href-events/widgets/widget-11").AbsoluteUri);
+        body.RootElement.GetProperty("data").GetProperty("$links").EnumerateObject().Should().BeEmpty();
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_commands_resource_event_that_is_a_member_of_its_results_union_is_resolved_stamped_given_its_href_and_audited()
     {
         // Legacy's ResourceEventHandler matched the result its command returned, an OkResult whose content was a

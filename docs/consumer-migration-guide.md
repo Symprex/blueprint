@@ -17,7 +17,7 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `BlueprintApiBuilder` references | `AddBlueprintApi<TApp, TExec>()` + `BlueprintServiceBuilder` | Consumer rewrite (BPMIG302) |
 | `IMiddlewareBuilder` implementations | `IBlueprintSourceGeneratorModule` companion generators | Consumer rewrite (BPMIG301) |
 | `AddOpenApi()` | Automatic with HTTP host | Auto-fixable (BPMIG001) |
-| `AddHateoasLinks()` | Automatic when `[SelfLink]`/`[RootLink]` exist | Auto-fixable (BPMIG002) |
+| `AddHateoasLinks()` | Automatic when `[SelfLink]`/`[RootLink]` exist; an app that never called it needs `DisableHateoasLinks()` | Auto-fixable (BPMIG002) where present; configuration-required where absent |
 | `AddAuthorisation()` | Automatic when `[Resource]`/`[MustBeAuthenticated]` exist | Auto-fixable (BPMIG003) |
 | `AddOpenApi(Action<OpenApiOptions>)` | `configureOpenApi:` parameter on `MapBlueprintApi` | Configuration-required (BPMIG100) |
 | `AddAuthentication(...)` | ASP.NET Core `AddAuthentication()` + `UseAuthentication()` | Configuration-required (BPMIG101) |
@@ -445,7 +445,22 @@ public partial class GetTemplateQuery : IQuery<OkResult<Template>>
 public partial class ListTemplatesQuery : IQuery<OkResult<TemplateList>> { }
 ```
 
-Link generation is automatic when link metadata exists — no `AddHateoasLinks()` call needed.
+Link generation is automatic when link metadata exists — no `AddHateoasLinks()` call needed, and `BPMIG002` removes one
+that is present.
+
+**An app whose legacy `AddBlueprintApi(...)` never called `AddHateoasLinks()` generated no links at all**: legacy had no
+link step without it (`BlueprintApiBuilderExtensions.AddHateoasLinks`), so every resource it returned, and every
+resource-event payload it audited, carried `"$links":{}`. To keep that output, opt the app out when migrating it:
+
+```csharp
+services.AddBlueprintApi<MyBlueprintApp, MyBlueprintAppExecutor>(blueprint => blueprint.DisableHateoasLinks());
+```
+
+No tool can do this for you, because the call to look for is absent. `DisableHateoasLinks()` applies to that app only,
+to every one of its pipelines (a resource event's self query included), and to every registered `IResourceLinkGenerator`.
+It keeps links a handler adds itself, a resource event's `href`, the root-metadata document, the OpenAPI `x-links` and
+`IApiLinkGenerator`, as legacy did. A `201`'s `Location` header, taken from the created resource's `self` link, is then
+not written unless the handler adds that link.
 
 ### 10. Migrate auditing
 

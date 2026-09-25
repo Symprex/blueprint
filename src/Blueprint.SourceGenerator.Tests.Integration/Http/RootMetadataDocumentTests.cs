@@ -131,6 +131,18 @@ public sealed class RootMetadataDocumentTests
     }
 
     [Fact]
+    public async Task When_the_app_disables_links_then_the_root_document_still_lists_its_root_links()
+    {
+        // RootMetadataOperation.Invoke added the root links itself (RootMetadataOperation.cs:27-38), so an app without
+        // AddHateoasLinks() served them too: EventStore's generated RootMetadataOperationExecutorPipeline has no link step.
+        await using var host = await RootMetadataHost.StartAsync("api/", configure: static blueprint => blueprint.DisableHateoasLinks());
+
+        var links = await host.GetRootLinksAsync("/api/");
+
+        links["bulk-delete"].Should().Be(host.AbsoluteUri("/api/root-metadata/bulk-delete"));
+    }
+
+    [Fact]
     public async Task When_the_openapi_document_is_rendered_then_it_describes_no_root_document()
     {
         // RootMetadataOperation was [UnexposedOperation] (RootMetadataOperation.cs:12), so no OpenAPI path described it.
@@ -177,7 +189,11 @@ public sealed class RootMetadataDocumentTests
 
         public ConcurrentQueue<Exception> ServerErrors { get; }
 
-        public static async Task<RootMetadataHost> StartAsync(string basePath, string? pathBase = null, string? publicHost = null)
+        public static async Task<RootMetadataHost> StartAsync(
+            string basePath,
+            string? pathBase = null,
+            string? publicHost = null,
+            Action<BlueprintServiceBuilder>? configure = null)
         {
             var serverErrors = new ConcurrentQueue<Exception>();
             var builder = WebApplication.CreateSlimBuilder();
@@ -188,7 +204,7 @@ public sealed class RootMetadataDocumentTests
 
             // The one expander type every test expanding DepartmentResource uses (see TestDepartmentExpander's remarks).
             builder.Services.AddSingleton<IResourceExpander, TestDepartmentExpander>();
-            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(configure);
 
             if (publicHost is not null)
             {

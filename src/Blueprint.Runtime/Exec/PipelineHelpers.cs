@@ -1827,7 +1827,10 @@ public static class PipelineHelpers
         ApiOperationContext context,
         OperationResult handlerResult)
     {
-        if (handlerResult is INotModifiedResult)
+        // An app that disables links has no link step, as a legacy app without AddHateoasLinks() had none
+        // (Blueprint.Http/BlueprintApiBuilderExtensions.cs:101-111 at Signature365 8b40ecc961). A nested pipeline's context
+        // carries its parent's app, so a self query's result is not linked either.
+        if (handlerResult is INotModifiedResult || context.App.HateoasLinksDisabled)
         {
             return Task.CompletedTask;
         }

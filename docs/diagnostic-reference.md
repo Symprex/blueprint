@@ -197,7 +197,7 @@ See also [consumer-migration-guide.md](consumer-migration-guide.md).
 | ID | Severity | Category | Title |
 |----|----------|----------|-------|
 | BPMIG001 | Info | Auto-fixable | Remove redundant `AddOpenApi()` activation |
-| BPMIG002 | Info | Auto-fixable | Remove redundant `AddHateoasLinks()` activation |
+| BPMIG002 | Info | Auto-fixable | Remove redundant `AddHateoasLinks()` activation (links are on by default; an app that never called it needs `DisableHateoasLinks()`, which no diagnostic can prompt) |
 | BPMIG003 | Info | Auto-fixable | Remove redundant `AddAuthorisation()` activation |
 | BPMIG100 | Warning | Config required | Migrate configured `AddOpenApi(...)` usage |
 | BPMIG101 | Warning | Config required | Migrate configured `AddAuthentication(...)` usage |

@@ -34,7 +34,10 @@ public static class ServiceCollectionExtensions
         where TApp : BlueprintApp, new()
         where TExec : BlueprintAppExecutor
     {
-        services.AddSingleton<TApp>(static sp =>
+        // Created first so the app's factory reads what configure (run below, before the app is ever resolved) sets on it.
+        var builder = new BlueprintServiceBuilder(services);
+
+        services.AddSingleton<TApp>(sp =>
         {
             var app = new TApp();
             var jsonOptions = sp.GetService<IOptions<BlueprintJsonOptions>>();
@@ -42,6 +45,8 @@ public static class ServiceCollectionExtensions
             {
                 app.ApplySerializerOptions(opts.SerializerOptions);
             }
+
+            app.HateoasLinksDisabled = builder.HateoasLinksDisabled;
 
             return app;
         });
@@ -94,7 +99,6 @@ public static class ServiceCollectionExtensions
         // Pre-rendered OpenAPI document holder — populated at endpoint mapping time
         services.TryAddSingleton<PreRenderedOpenApiDocumentHolder>();
 
-        var builder = new BlueprintServiceBuilder(services);
         configure?.Invoke(builder);
 
         return services;
@@ -379,6 +383,44 @@ public sealed class BlueprintServiceBuilder
         this.Services.AddScoped<Blueprint.Http.IResourceLinkGenerator, T>();
         return this;
     }
+
+    /// <summary>
+    /// Turns off HATEOAS link population for this app, so its resources are written with empty <c>$links</c>, as a
+    /// legacy Blueprint app that never called <c>AddHateoasLinks()</c> wrote them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Links are populated by default wherever link metadata exists. Legacy Blueprint linked only in an app that called
+    /// <c>AddHateoasLinks()</c> (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/BlueprintApiBuilderExtensions.cs:101-111</c>);
+    /// any other app had no link step, so every resource it returned, and every one it audited, carried
+    /// <c>"$links":{}</c>. Call this when migrating such an app, to keep that output. The migration tooling cannot do
+    /// it for you: <c>BPMIG002</c> removes an <c>AddHateoasLinks()</c> that is present, which is safe because linking is
+    /// the default, but no tool can see a call that is absent.
+    /// </para>
+    /// <para>
+    /// Every pipeline of the app skips the link step, nested ones (such as a resource event's self query) included, and
+    /// no registered <c>IResourceLinkGenerator</c> runs. Links a handler adds itself are kept. A resource event's
+    /// <c>href</c>, the root-metadata document, the OpenAPI <c>x-links</c>, and <c>IApiLinkGenerator</c> for handlers are
+    /// unaffected, as legacy's were. A <c>201</c>'s <c>Location</c> header, which is taken from the created resource's
+    /// <c>self</c> link, is not written unless the handler adds that link; legacy's resource events were <c>200</c>s with
+    /// no <c>Location</c>.
+    /// </para>
+    /// <para>
+    /// The setting belongs to the app registered by this <c>AddBlueprintApi</c> call.
+    /// </para>
+    /// </remarks>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder DisableHateoasLinks()
+    {
+        this.HateoasLinksDisabled = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether <see cref="DisableHateoasLinks"/> has been called, which the app registered with
+    /// this builder is given when it is created.
+    /// </summary>
+    internal bool HateoasLinksDisabled { get; private set; }
 
     /// <summary>
     /// Registers the <see cref="Blueprint.Http.ETagger"/> service that provides ETag-based conditional

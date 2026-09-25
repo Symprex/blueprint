@@ -103,6 +103,85 @@ public sealed class ResourceLinkWireTests
         host.ServerErrors.Should().BeEmpty();
     }
 
+    // Legacy linked only in an app that called AddHateoasLinks(), which registered EntityOperationResourceLinkGenerator and
+    // the LinkGeneratorMiddlewareBuilder pipeline step (Signature365 8b40ecc961, Blueprint.Http/
+    // BlueprintApiBuilderExtensions.cs:101-111). An app that did not had no link step at all (EventStore's generated
+    // pipelines have none), so its resources were written with the dictionary ApiResource always carries, empty
+    // (ApiResource.cs:45-48): "$links":{} (EventStore.Tests/Handlers/ResourceEventCreatedEventHandlerTests.cs:70).
+    [Fact]
+    public async Task When_the_app_disables_links_then_a_querys_resource_is_written_with_empty_links()
+    {
+        await using var host = await LinkWireHost.StartAsync(static blueprint => blueprint.DisableHateoasLinks());
+
+        using var body = JsonDocument.Parse(await host.SendAsync(System.Net.Http.HttpMethod.Get, "api/link-wire/widgets/widget-1"));
+
+        AssertEmptyLinks(body.RootElement);
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_the_app_disables_links_then_a_commands_event_data_has_empty_links_and_the_event_keeps_its_href()
+    {
+        // The href never came from the data's links: ResourceEventHandler made it from the resource type's self link
+        // itself, in every app (ResourceEventHandler.cs:54-65).
+        await using var host = await LinkWireHost.StartAsync(static blueprint => blueprint.DisableHateoasLinks());
+
+        using var body = JsonDocument.Parse(await host.SendAsync(System.Net.Http.HttpMethod.Post, "api/link-wire/widgets"));
+
+        AssertEmptyLinks(body.RootElement.GetProperty("data"));
+        body.RootElement.GetProperty("href").GetString().Should().Be(host.AbsoluteUri("api/link-wire/widgets/widget-2"));
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_the_app_disables_links_then_a_list_querys_items_have_empty_links()
+    {
+        await using var host = await LinkWireHost.StartAsync(static blueprint => blueprint.DisableHateoasLinks());
+
+        using var body = JsonDocument.Parse(await host.SendAsync(System.Net.Http.HttpMethod.Get, "api/link-wire/widgets"));
+
+        var items = body.RootElement.GetProperty("values").EnumerateArray().ToArray();
+        items.Should().HaveCount(2);
+        foreach (var item in items)
+        {
+            AssertEmptyLinks(item);
+        }
+
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_the_app_disables_links_then_a_link_its_handler_added_is_still_written()
+    {
+        // Only the link step was missing; a resource's own AddLink was the handler's (ApiResource.cs:87-107).
+        await using var host = await LinkWireHost.StartAsync(static blueprint => blueprint.DisableHateoasLinks());
+
+        using var body = JsonDocument.Parse(await host.SendAsync(System.Net.Http.HttpMethod.Get, "api/link-wire/handler-linked-widgets/widget-5"));
+
+        body.RootElement.GetProperty("$links").EnumerateObject().Select(static link => (link.Name, link.Value.GetProperty("href").GetString()))
+            .Should().Equal(("manual", "https://elsewhere.example/widgets/widget-5"));
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_the_app_does_not_disable_links_then_the_handlers_link_is_written_beside_the_generated_ones()
+    {
+        await using var host = await LinkWireHost.StartAsync();
+
+        using var body = JsonDocument.Parse(await host.SendAsync(System.Net.Http.HttpMethod.Get, "api/link-wire/handler-linked-widgets/widget-5"));
+
+        body.RootElement.GetProperty("$links").EnumerateObject().Select(static link => link.Name)
+            .Should().BeEquivalentTo(["manual", "self", "archive"]);
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    private static void AssertEmptyLinks(JsonElement resource)
+    {
+        resource.TryGetProperty("$links", out var links).Should().BeTrue("legacy always wrote the links dictionary; the resource was {0}", resource.GetRawText());
+        links.ValueKind.Should().Be(JsonValueKind.Object);
+        links.EnumerateObject().Should().BeEmpty("an app without AddHateoasLinks() had no link step; the resource was {0}", resource.GetRawText());
+    }
+
     /// <summary>The integration app registered and mapped as a consumer registers and maps it, served by Kestrel.</summary>
     private sealed class LinkWireHost : IAsyncDisposable
     {
@@ -119,7 +198,7 @@ public sealed class ResourceLinkWireTests
 
         public ConcurrentQueue<Exception> ServerErrors { get; }
 
-        public static async Task<LinkWireHost> StartAsync()
+        public static async Task<LinkWireHost> StartAsync(Action<BlueprintServiceBuilder>? configure = null)
         {
             var serverErrors = new ConcurrentQueue<Exception>();
             var builder = WebApplication.CreateSlimBuilder();
@@ -130,7 +209,7 @@ public sealed class ResourceLinkWireTests
 
             // The one expander type every test expanding DepartmentResource uses (see TestDepartmentExpander's remarks).
             builder.Services.AddSingleton<IResourceExpander, TestDepartmentExpander>();
-            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(configure);
 
             var app = builder.Build();
             app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
@@ -249,6 +328,22 @@ public partial class ListLinkWireWidgetsQuery : IQuery<ListApiResource<LinkWireW
     public static ListApiResource<LinkWireWidgetApiResource> Handle(ListLinkWireWidgetsQuery query)
     {
         return new ListApiResource<LinkWireWidgetApiResource>([new LinkWireWidgetApiResource { Id = "widget-3" }, new LinkWireWidgetApiResource { Id = "widget-4" }]);
+    }
+}
+
+/// <summary>Gets a widget whose handler adds a link of its own.</summary>
+[AllowAnonymous]
+[RootLink("/link-wire/handler-linked-widgets/{Id}")]
+public partial class GetHandlerLinkedLinkWireWidgetQuery : IQuery<LinkWireWidgetApiResource>
+{
+    public string Id { get; set; } = null!;
+
+    public static LinkWireWidgetApiResource Handle(GetHandlerLinkedLinkWireWidgetQuery query)
+    {
+        var widget = new LinkWireWidgetApiResource { Id = query.Id };
+        widget.AddLink("manual", new Link { Href = "https://elsewhere.example/widgets/" + query.Id });
+
+        return widget;
     }
 }
 

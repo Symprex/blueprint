@@ -88,6 +88,14 @@ public class BlueprintApp
     public ImmutableArray<string> AppOwnedSerializerContextBodyTypeNames { get; protected set; } = ImmutableArray<string>.Empty;
 
     /// <summary>
+    /// Gets or sets a value indicating whether this app populates no HATEOAS links, set by
+    /// <c>BlueprintServiceBuilder.DisableHateoasLinks()</c> when the app is registered. Held on the app rather than in the
+    /// service provider so that two apps sharing a process keep their own setting, and so that every pipeline of the app,
+    /// nested ones included, sees the same setting through its context's app.
+    /// </summary>
+    internal bool HateoasLinksDisabled { get; set; }
+
+    /// <summary>
     /// Registers the given operation descriptor.
     /// </summary>
     /// <param name="descriptor">The descriptor to register, must be non-null.</param>

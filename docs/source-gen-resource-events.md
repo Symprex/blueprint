@@ -20,7 +20,9 @@ Handler returns ResourceEvent<T>
 Links are added after the audit, as legacy's `LinkGeneratorMiddlewareBuilder` ran after its
 `ResourceEventHandlerMiddlewareBuilder` (`AdminPortalCloseTenantCommandExecutorPipeline.cs:140-149`): the audited data
 carries only the links its handler, or its self query's own pipeline, gave it (Signature365 stored `"$links":{}` for
-handler-returned data).
+handler-returned data). In an app registered with `DisableHateoasLinks()` — a legacy app that never called
+`AddHateoasLinks()` — no pipeline links, the self query's included, so the data is audited and written with
+`"$links":{}`; its `Href`, made from the resource type's self link, is unaffected.
 
 `ResourceEventAuditModule` activates for commands only, as legacy's `ResourceEventHandlerMiddlewareBuilder` matched
 `IsCommand` (Signature365 `8b40ecc961`, `ResourceEventHandlerMiddlewareBuilder.cs:12-15`). A query that returns a
