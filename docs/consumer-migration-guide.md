@@ -284,6 +284,12 @@ carries the denial as `Failure`. Coming from legacy Blueprint nothing changes. C
 "Forbidden" bodies are gone, and a denial whose failure type is not `Authorisation` (a `default` `ExecutionAllowed`
 included) is a 401 where it was a 403.
 
+**Behaviour change for form-level validation errors (v1.0.3).** A validation failure that names no member — an
+`IValidatableObject` result without member names, `new ValidationException(message)`, or
+`ValidationFailures.AddFailure(new ValidationResult(message))` — is keyed `form` in a 422's `errors`, and
+`ValidationFailures.FormLevelPropertyName` is `"form"`, as in legacy Blueprint. Coming from legacy Blueprint nothing
+changes. Coming from v1.0.2, the key was `""`.
+
 **Error content type (v1.0.3, opt-in).** Every error is written as `application/problem+json; charset=utf-8` by default.
 Legacy Blueprint negotiated it:
 - no `Accept`, or one that includes `*/*`: exactly `application/json`;

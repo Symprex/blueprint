@@ -940,7 +940,8 @@ public class HttpOperationResultExecutor
 
         if (!hasAny)
         {
-            return [(string.Empty, errorMessage)];
+            // Legacy keyed a result naming no member "form" (Signature365 8b40ecc961, Validation/ValidationFailures.cs:44-47).
+            return [(Blueprint.Validation.ValidationFailures.FormLevelPropertyName, errorMessage)];
         }
 
         return [(first!, errorMessage)];
