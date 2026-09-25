@@ -114,6 +114,11 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
     /// <c>ResourceEventResult</c>, <c>KeyOnlyResourceEventResult</c>, and <c>ResourceEvent</c>
     /// are all supported resource-event result hierarchies that require audit sink execution.
     /// </summary>
+    /// <remarks>
+    /// A <c>Results&lt;T1, T2&gt;</c> declares one of its members, so it is a resource-event result when any member is: legacy's
+    /// <c>ResourceEventHandler</c> matched the event its command returned, not the command's declared type (Signature365
+    /// <c>8b40ecc961</c>, <c>ResourceEventHandler.cs:26-30</c>).
+    /// </remarks>
     private static string? GetResourceEventCastType(INamedTypeSymbol operationType)
     {
         var declaredResultType = OperationResultContractHelper.GetDeclaredOperationResultType(operationType);
@@ -122,6 +127,16 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
             return null;
         }
 
+        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredResultType, out var unionMembers))
+        {
+            return unionMembers.Select(GetResourceEventCastTypeOf).FirstOrDefault(static castType => castType is not null);
+        }
+
+        return GetResourceEventCastTypeOf(declaredResultType);
+    }
+
+    private static string? GetResourceEventCastTypeOf(ITypeSymbol declaredResultType)
+    {
         for (var current = declaredResultType; current is not null; current = current.BaseType)
         {
             if (current.IsInNamespace("Blueprint", "Runtime", "Exec"))

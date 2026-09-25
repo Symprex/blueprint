@@ -295,6 +295,26 @@ public sealed class ResourceEventAuditRepositoryTests
     }
 
     [Fact]
+    public async Task A_commands_resource_event_that_is_a_member_of_its_results_union_is_resolved_stamped_given_its_href_and_audited()
+    {
+        // Legacy's ResourceEventHandler matched the result its command returned, an OkResult whose content was a
+        // ResourceEvent (Signature365 8b40ecc961, ResourceEventHandler.cs:26-30), not the command's declared type, so an
+        // event was loaded through its self query (:49-52), stamped (:38-39), given its href (:54-65) and audited (:72-77)
+        // whatever the command declared. A Results<,> is only declared: the handler returns one of its members.
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint.AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>());
+
+        await host.PutAsync("api/audited-events/union-widgets/widget-12");
+
+        var record = records.Repository.Should().ContainSingle("the union's resource event is audited as any command's is").Subject;
+        record.OperationType.Should().Be(typeof(UpdateAuditedWidgetOrNotFoundCommand));
+        record.CorrelationId.Should().StartWith($"00-{TraceId}-");
+        record.Href.Should().Be(new Uri(host.Client.BaseAddress!, "api/href-events/widgets/widget-12").AbsoluteUri);
+        record.DataId.Should().Be("widget-12", "the event's self query loaded its data");
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_querys_resource_event_is_given_no_metadata()
     {
         // Legacy's ResourceEventHandler, which filled the metadata, never ran for a query
@@ -634,6 +654,24 @@ public partial class UpdateAuditedWidgetCommand : ICommand<ResourceUpdated<HrefW
     public string Id { get; set; } = null!;
 
     public static ResourceUpdated<HrefWidgetApiResource> Handle(UpdateAuditedWidgetCommand command)
+    {
+        return new ResourceUpdated<HrefWidgetApiResource>(new GetHrefWidgetQuery { Id = command.Id });
+    }
+}
+
+/// <summary>
+/// Updates a widget, reporting it with a legacy updated event that names the widget by its self query, from a command that
+/// declares it could instead find no widget.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/audited-events/union-widgets/{Id}")]
+[HttpPut]
+public partial class UpdateAuditedWidgetOrNotFoundCommand
+    : ICommand<Results<ResourceUpdated<HrefWidgetApiResource>, NotFoundResult<HrefWidgetApiResource>>>
+{
+    public string Id { get; set; } = null!;
+
+    public static Results<ResourceUpdated<HrefWidgetApiResource>, NotFoundResult<HrefWidgetApiResource>> Handle(UpdateAuditedWidgetOrNotFoundCommand command)
     {
         return new ResourceUpdated<HrefWidgetApiResource>(new GetHrefWidgetQuery { Id = command.Id });
     }

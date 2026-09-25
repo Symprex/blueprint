@@ -76,7 +76,9 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
     /// <summary>
     /// Determines whether the operation's declared result type includes a self-query-bearing result.
     /// Both legacy <c>ResourceEvent</c> (from <c>Blueprint.Http</c>) and new-style
-    /// <c>DeferredResourceEventResult&lt;T&gt;</c> are detected.
+    /// <c>DeferredResourceEventResult&lt;T&gt;</c> are detected, as is a <c>Results&lt;T1, T2&gt;</c> with such a member: legacy
+    /// resolved the self query of the event its command returned, whatever the command declared (Signature365
+    /// <c>8b40ecc961</c>, <c>ResourceEventHandler.cs:26-30</c>, <c>:49-52</c>).
     /// </summary>
     private static bool HasSelfQueryResult(INamedTypeSymbol operationType)
     {
@@ -86,6 +88,13 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
             return false;
         }
 
+        return OperationResultContractHelper.TryGetResultsUnionMembers(declaredResultType, out var unionMembers)
+            ? unionMembers.Any(IsSelfQueryResult)
+            : IsSelfQueryResult(declaredResultType);
+    }
+
+    private static bool IsSelfQueryResult(ITypeSymbol declaredResultType)
+    {
         for (var current = declaredResultType; current is not null; current = current.BaseType)
         {
             // Legacy ResourceEvent from Blueprint.Http
