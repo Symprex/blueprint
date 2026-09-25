@@ -17,9 +17,12 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 /// </summary>
 /// <remarks>
 /// Legacy loaded an event's data through its self query only when the event was not a deletion ("cannot, obviously, get
-/// for a deleted record"), so a deleted event kept no data and its href came from the self query; and it logged
+/// for a deleted record"), so a deleted event kept no data and its href came from the self query (Signature365
+/// <c>8b40ecc961</c>, <c>Blueprint.Http/Middleware/ResourceEventHandler.cs:86-90</c>, the check at <c>:87</c>); and it logged
 /// <c>"No self link exists. Href property of the resource event of type {ResourceType} will not be populated"</c> as a
-/// warning when the event's resource type had no self link.
+/// warning when the event's resource type had no self link, making the href from the self link otherwise
+/// (<c>ResourceEventHandler.cs:54-65</c>). It stamped every event with the request's correlation id and the operation
+/// (<c>ResourceEventHandler.cs:38-39</c>).
 /// </remarks>
 public sealed class LegacyResourceEventHandlingTests
 {
@@ -86,7 +89,8 @@ public sealed class LegacyResourceEventHandlingTests
     public async Task Every_event_is_stamped_with_the_request_correlation_id_and_its_operation(Type operationType)
     {
         // Legacy's ResourceEventHandler set both on every event, whatever its change type and whether or not it had data,
-        // a self query or a self link; Signature365's audit stores both (ResourceEventCreatedEvent, ApiEvent).
+        // a self query or a self link (ResourceEventHandler.cs:38-39); Signature365's audit stores both
+        // (ResourceEventCreatedEvent, ApiEvent).
         using var activity = new System.Diagnostics.Activity("resource-event-stamping").Start();
         var operation = Activator.CreateInstance(operationType)!;
 

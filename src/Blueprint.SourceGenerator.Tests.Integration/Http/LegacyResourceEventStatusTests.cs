@@ -16,9 +16,12 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 /// </summary>
 /// <remarks>
 /// Legacy's generated pipeline wrapped whatever an operation returned that was not an <c>OperationResult</c> in an
-/// <c>OkResult</c> (<c>OperationExecutorMiddlewareBuilder.OperationResultCastFrame</c>), whose status is 200 unless set,
+/// <c>OkResult</c> (<c>OperationExecutorMiddlewareBuilder.OperationResultCastFrame</c>; Signature365 <c>8b40ecc961</c>,
+/// for example <c>AdminPortalCloseTenantCommandExecutorPipeline.cs:130</c>), whose status is 200 unless set
+/// (<c>Blueprint/OkResult.cs:39</c>),
 /// and a resource event — <c>ResourceCreated</c>, <c>ResourceUpdated</c> and <c>ResourceDeleted</c> included — is a plain
-/// object. Its <c>OkResultOperationExecutor</c> wrote the status and the content and no <c>Location</c>. Signature365's
+/// object. Its <c>OkResultOperationExecutor</c> wrote the status and the content and no <c>Location</c>
+/// (<c>Blueprint.Http/OkResultOperationExecutor.cs:32-46</c>). Signature365's
 /// committed documents document every such operation, a DELETE included, as a 200 with the <c>ResourceEventOf…</c>
 /// envelope.
 /// </remarks>

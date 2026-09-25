@@ -6,6 +6,10 @@ using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Http;
@@ -15,7 +19,8 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 /// event's resource type, filled from the event's data or, failing that, its self query, under the API's base URI.
 /// </summary>
 /// <remarks>
-/// Legacy's <c>ResourceEventHandler</c> set <c>Href = apiLinkGenerator.CreateUrl(DataModel.GetLinkFor(ResourceType,
+/// Legacy's <c>ResourceEventHandler</c> (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/Middleware/ResourceEventHandler.cs:54-65</c>)
+/// set <c>Href = apiLinkGenerator.CreateUrl(DataModel.GetLinkFor(ResourceType,
 /// "self"), Data ?? SelfQuery)</c>, and left it alone when no self link was registered. <c>CreateUrl</c> is the base URI
 /// (<c>{scheme}://{host}{pathBase}/{basePath}/</c>) followed by the link's URL with its placeholders filled. It read neither
 /// the resource's own <c>$links</c> nor the operation's URL. Signature365 stores the href with every audited event
@@ -67,25 +72,72 @@ public sealed class ResourceEventHrefTests
     }
 
     [Fact]
+    public async Task A_resource_event_whose_handler_gave_it_an_href_is_given_its_self_link_href_instead()
+    {
+        // Legacy set the href unconditionally when a self link was registered (Signature365 8b40ecc961,
+        // Blueprint.Http/Middleware/ResourceEventHandler.cs:54-65, the assignment at :64), whatever the handler had put there.
+        await using var host = await KestrelTestHost.StartAsync();
+
+        using var response = await host.Client.PostAsync(
+            "api/href-events/legacy/owned-href-widgets",
+            new StringContent("{}", Encoding.UTF8, "application/json"));
+        var body = await response.Content.ReadAsStringAsync();
+
+        ((int)response.StatusCode).Should().Be(200, "the server raised: {0}", string.Join(" | ", host.ServerErrors.Select(static e => e.Message)));
+        using var envelope = JsonDocument.Parse(body);
+        envelope.RootElement.EnumerateObject().Single(static p => string.Equals(p.Name, "href", StringComparison.OrdinalIgnoreCase)).Value.GetString()
+            .Should().Be(new Uri(host.Client.BaseAddress!, "api/href-events/widgets/widget-1").AbsoluteUri);
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_resource_event_under_a_path_base_and_a_public_host_is_given_its_href_under_both()
+    {
+        // Legacy's base URI was {scheme}://{PublicHost ?? Host}{PathBase}/{basePath} (Signature365 8b40ecc961,
+        // Blueprint.Http/ApplicationBuilderExtensions.cs:232-234), which the href was made under (ResourceEventHandler.cs:64,
+        // ApiLinkGenerator.cs:92-110): Signature365's gateways serve each API under a path prefix and advertise a public host.
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Logging.ClearProviders();
+        builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(static blueprint =>
+            blueprint.ConfigureHttp(static options => options.PublicHost = "api.example.test"));
+
+        await using var app = builder.Build();
+        app.UsePathBase("/partners");
+        app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        await app.StartAsync();
+
+        using var client = new System.Net.Http.HttpClient { BaseAddress = new Uri(app.Urls.First().TrimEnd('/') + "/") };
+        using var response = await client.PostAsync("partners/api/href-events/legacy/widgets", new StringContent("{}", Encoding.UTF8, "application/json"));
+        var body = await response.Content.ReadAsStringAsync();
+
+        ((int)response.StatusCode).Should().Be(200, body);
+        using var envelope = JsonDocument.Parse(body);
+        envelope.RootElement.GetProperty("href").GetString().Should().Be("http://api.example.test/partners/api/href-events/widgets/widget-1");
+
+        await app.StopAsync();
+    }
+
+    [Fact]
     public async Task A_resource_event_executed_outside_a_request_keeps_the_href_its_handler_gave_it()
     {
         // Outside a request there is no base URI to make the href under. The link generator registered for such hosts
         // guesses one (https://localhost/, without the API's base path), and an href made from it would be stored with
-        // the audited event as though it were real.
+        // the audited event as though it were real. So the href is the one the handler gave the event.
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new OutOfRequestServiceProvider(app);
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         serviceProvider.Executor = executor;
 
-        var context = new ApiOperationContext(serviceProvider, app, ReportHrefWidgetChangedCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, ReportHrefWidgetWithUpstreamHrefCommand.Configure(), CancellationToken.None);
 
-        var result = await executor.GetPipeline(typeof(ReportHrefWidgetChangedCommand)).ExecuteAsync(context);
+        var result = await executor.GetPipeline(typeof(ReportHrefWidgetWithUpstreamHrefCommand)).ExecuteAsync(context);
 
         var resourceEvent = result.Should().BeAssignableTo<ResourceEvent>(
             "the pipeline raised: {0}",
             (result as UnhandledExceptionResult)?.Exception.ToString()).Subject;
         resourceEvent.Data.Should().NotBeNull("the event carries a widget, from which a self link could have been filled");
-        resourceEvent.Href.Should().BeNull();
+        resourceEvent.Href.Should().Be(ReportHrefWidgetWithUpstreamHrefCommand.UpstreamHref);
     }
 
     private sealed class OutOfRequestServiceProvider(BlueprintApp app) : IServiceProvider
@@ -263,6 +315,33 @@ public partial class UpdateHrefNativeWidgetCommand : ICommand<DeferredResourceEv
             ChangeType.Updated,
             "hrefWidget.updated",
             new GetHrefWidgetQuery { Id = command.Id });
+    }
+}
+
+/// <summary>Creates a widget, reporting it with a legacy created event its handler gave an href of its own.</summary>
+[AllowAnonymous]
+[RootLink("/href-events/legacy/owned-href-widgets")]
+[HttpPost]
+[Blueprint.Auditing.DoNotAudit]
+public partial class CreateHrefLegacyWidgetWithOwnHrefCommand : ICommand<ResourceCreated<HrefWidgetApiResource>>
+{
+    public static ResourceCreated<HrefWidgetApiResource> Handle(CreateHrefLegacyWidgetWithOwnHrefCommand command)
+    {
+        return new ResourceCreated<HrefWidgetApiResource>(new HrefWidgetApiResource { Id = "widget-1" })
+        {
+            Href = "https://elsewhere.example.test/widgets/widget-1",
+        };
+    }
+}
+
+/// <summary>Reports a change to a widget from outside a request, with a legacy updated event its handler gave an href.</summary>
+public partial class ReportHrefWidgetWithUpstreamHrefCommand : ICommand<ResourceUpdated<HrefWidgetApiResource>>
+{
+    public const string UpstreamHref = "https://upstream.example.test/widgets/widget-6";
+
+    public static ResourceUpdated<HrefWidgetApiResource> Handle(ReportHrefWidgetWithUpstreamHrefCommand command)
+    {
+        return new ResourceUpdated<HrefWidgetApiResource>(new HrefWidgetApiResource { Id = "widget-6" }) { Href = UpstreamHref };
     }
 }
 
