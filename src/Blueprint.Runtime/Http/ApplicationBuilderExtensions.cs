@@ -329,11 +329,10 @@ public static class EndpointRouteBuilderExtensions
         private readonly TExec _executor;
         private readonly HttpOperationResultExecutor? _resultExecutor;
 
-        // Cached base URI to avoid per-request string interpolation when scheme/host/path are stable
-        private string? _cachedBaseUri;
-        private string? _cachedScheme;
-        private string? _cachedHost;
-        private PathString _cachedRequestPathBase;
+        // Cached base URI to avoid per-request string interpolation when scheme/host/path are stable. One immutable entry,
+        // read once per request, so a request is always given the base URI made from the scheme, host and path base it was
+        // compared with, whatever a concurrent request for another host writes.
+        private volatile BaseUriCacheEntry? _baseUriCache;
 
         public BlueprintApiRouter(
             IServiceProvider rootServiceProvider,
@@ -409,24 +408,20 @@ public static class EndpointRouteBuilderExtensions
             // first (cheapest comparisons) to skip PathBase.Add() allocation on the hot path.
             var scheme = httpRequest.Scheme;
             var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
+            var baseUriCache = this._baseUriCache;
 
-            if (this._cachedBaseUri is not null
-                && string.Equals(scheme, this._cachedScheme, StringComparison.Ordinal)
-                && string.Equals(host, this._cachedHost, StringComparison.Ordinal)
-                && httpRequest.PathBase == this._cachedRequestPathBase)
-            {
-                // Hot path: nothing changed, reuse cached URI with zero allocation.
-            }
-            else
+            if (baseUriCache is null
+                || !string.Equals(scheme, baseUriCache.Scheme, StringComparison.Ordinal)
+                || !string.Equals(host, baseUriCache.Host, StringComparison.Ordinal)
+                || httpRequest.PathBase != baseUriCache.RequestPathBase)
             {
                 var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
-                this._cachedScheme = scheme;
-                this._cachedHost = host;
-                this._cachedRequestPathBase = httpRequest.PathBase;
-                this._cachedBaseUri = $"{scheme}://{host}{basePath}";
+                baseUriCache = new BaseUriCacheEntry(scheme, host, httpRequest.PathBase, $"{scheme}://{host}{basePath}");
+                this._baseUriCache = baseUriCache;
             }
 
-            apiContext.BaseUri = this._cachedBaseUri;
+            // Hot path: nothing changed, the cached URI is reused with zero allocation.
+            apiContext.BaseUri = baseUriCache.BaseUri;
 
             // Pipeline.ExecuteAsync never throws in generated code — it wraps all exceptions in
             // OperationResult internally. However, guard defensively in case a custom or hand-rolled
@@ -594,6 +589,13 @@ public static class EndpointRouteBuilderExtensions
                 return length;
             }
         }
+
+        /// <summary>A request's scheme, host and path base, and the base URI made from them.</summary>
+        /// <param name="Scheme">The request's scheme.</param>
+        /// <param name="Host">The host, the public one when configured.</param>
+        /// <param name="RequestPathBase">The request's path base.</param>
+        /// <param name="BaseUri">The base URI made from them.</param>
+        private sealed record BaseUriCacheEntry(string Scheme, string? Host, PathString RequestPathBase, string BaseUri);
     }
 
     /// <summary>
