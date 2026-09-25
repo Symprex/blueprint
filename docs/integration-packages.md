@@ -151,11 +151,15 @@ already acknowledged it, so Rebus logs the failure and does not redeliver.
 `MartenUnitOfWork` makes its own scope `MartenScopeAccessor.Current` for the save, so the listeners also run for a
 plain handler's save, where no generated pipeline has set it.
 
-A limit nothing reaches today: on the `RebusTransactionScope` a generated pipeline opens, a message **first** sent from
-inside one of the scope's commit callbacks is silently never sent — Rebus 8.6's scope runs only the commit callbacks it
-holds when it completes, so the send's own callback never runs — whereas a received message's transaction does run it
-(both pinned by `RebusCommitAmbientContextTests`). An enlistment must not send from a commit callback it registers on a
-generated pipeline's transaction, or must send outside it.
+A limit nothing reaches today and nothing detects: a message sent from a commit callback can be silently lost. Rebus
+8.6's transport sends a transaction's messages from one commit callback of its own, registered only with the
+transaction's first send (`AbstractRebusTransport.Send`, inside its `GetOrAdd("outgoing-messages")` factory). So a send
+made after that callback has run, on either kind of transaction, is never sent. A first send made from a commit callback
+registers the callback too late for the `RebusTransactionScope` a generated pipeline opens, which runs only the callbacks
+it held when it started completing, though a received message's transaction runs it. A send from a callback that runs
+before the transport's gets through: one registered before the transaction's first send, or a received message's first,
+where a plain handler's unit of work is saved. All of it is pinned by `RebusCommitAmbientContextTests`. An enlistment
+must not send from a commit callback it registers, or must send outside the transaction.
 
 Two Marten 6.4.2 facts the drain depends on, pinned against a real PostgreSQL by `MartenSaveListenerPostgresTests`:
 
