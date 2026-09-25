@@ -299,10 +299,10 @@ public sealed class ResourceEventAuditRepositoryTests
     public async Task A_commands_resource_event_is_audited_before_its_data_is_linked()
     {
         // Legacy's generated pipeline ran ResourceEventHandler, which audited the event (ResourceEventHandler.cs:72-77),
-        // before LinkGeneratorHandler.AddLinksAsync linked its data (Signature365 8b40ecc961,
-        // AdminPortalCloseTenantCommandExecutorPipeline.cs:140-146). So the data Signature365 stored had the links its
-        // handler gave it, none here: "$links":{} (EventStore.Tests/Handlers/ResourceEventCreatedEventHandlerTests.cs:70).
-        // The response, written after, carried them.
+        // before LinkGeneratorHandler.AddLinksAsync linked its data, and returned it only after both (Signature365
+        // 8b40ecc961, AdminPortalCloseTenantCommandExecutorPipeline.cs:140-149: the audit at :141-143, the links at :146,
+        // the return at :149). So the data Signature365 stored had only the links its handler gave it, none here, and the
+        // response, written after, carried them all.
         var records = new AuditRecords();
         await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint.AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>());
 
@@ -320,15 +320,21 @@ public sealed class ResourceEventAuditRepositoryTests
     {
         // Legacy loaded the data through the self query's nested pipeline (ResourceEventHandler.cs:49-52, :113-125), which
         // linked its own result (LinkGeneratorMiddlewareBuilder.cs:14, SupportsNestedExecution), before the outer event
-        // was audited. So data a self query loaded was audited with its links.
+        // was audited. So data a self query loaded was audited with its links, each made as every link was: the request's
+        // base URI and the link's filled URL (EntityOperationResourceLinkGenerator.cs:86, :104-107; ApiLinkGenerator.cs:
+        // 92-110). Signature365 stores the audited data, links and all (EventMapper.cs:30).
         var records = new AuditRecords();
         await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint.AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>());
 
         await host.PutAsync("api/audited-events/widgets/widget-11");
 
-        records.Repository.Should().ContainSingle().Which.DataLinkRels.Should().Equal(
+        var record = records.Repository.Should().ContainSingle().Subject;
+        record.DataLinkRels.Should().Equal(
             ["self"],
             "the self query's own pipeline linked the widget it loaded before the event was audited");
+        record.DataLinkHrefs["self"].Should().Be(
+            new Uri(host.Client.BaseAddress!, "api/href-events/widgets/widget-11").AbsoluteUri,
+            "the self query's pipeline made the link under this request's base URI");
         host.ServerErrors.Should().BeEmpty();
     }
 
@@ -405,6 +411,7 @@ public sealed class ResourceEventAuditRepositoryTests
     /// <param name="DepartmentName">The name of the department the employee the event carries belongs to, if expanded.</param>
     /// <param name="Metadata">The event's metadata, in its dictionary's order, each value as its string.</param>
     /// <param name="DataLinkRels">The rels of the links the event's data carried when it was audited.</param>
+    /// <param name="DataLinkHrefs">The hrefs of those links, by rel.</param>
     public sealed record AuditRecord(
         Type? OperationType,
         string? CorrelationId,
@@ -412,7 +419,8 @@ public sealed class ResourceEventAuditRepositoryTests
         string? DataId,
         string? DepartmentName,
         IReadOnlyList<(string Key, string? Value)> Metadata,
-        IReadOnlyList<string> DataLinkRels);
+        IReadOnlyList<string> DataLinkRels,
+        IReadOnlyDictionary<string, string?> DataLinkHrefs);
 
     /// <summary>A repository, registered scoped as <c>AddResourceEventAuditRepository</c> registers it, that records what it is given.</summary>
     public sealed class RecordingResourceEventAuditRepository(AuditRecords records) : IResourceEventAuditRepository
@@ -424,6 +432,8 @@ public sealed class ResourceEventAuditRepositoryTests
 
         public Task AddAsync(ResourceEvent resourceEvent)
         {
+            var links = (resourceEvent.Data as ILinkableResource)?.Links;
+
             records.Repository.Enqueue(new AuditRecord(
                 resourceEvent.Operation?.GetType(),
                 resourceEvent.CorrelationId,
@@ -431,7 +441,8 @@ public sealed class ResourceEventAuditRepositoryTests
                 (resourceEvent.Data as HrefWidgetApiResource)?.Id,
                 (resourceEvent.Data as AlwaysExpandTestEmployee)?.Department.Value?.Name,
                 resourceEvent.Metadata.Select(static m => (m.Key, m.Value?.ToString())).ToArray(),
-                (resourceEvent.Data as ILinkableResource)?.Links.Keys.ToArray() ?? []));
+                links?.Keys.ToArray() ?? [],
+                links?.ToDictionary(static l => l.Key, static l => (string?)l.Value.Href) ?? []));
 
             return Task.CompletedTask;
         }

@@ -121,7 +121,11 @@ public sealed class ResourceEventHrefTests
     [Fact]
     public async Task A_resource_event_executed_outside_a_request_keeps_the_href_its_handler_gave_it()
     {
-        // Outside a request there is no base URI to make the href under. The link generator registered for such hosts
+        // Not legacy-derived. Legacy never reached the href outside a request: its ResourceEventHandler first ran the
+        // registered IContextMetadataProviders (Signature365 8b40ecc961, ResourceEventHandler.cs:41-46), and the
+        // HttpContextMetadataProvider every HTTP app registered read context.GetHttpContext(), which throws without one
+        // (HttpContextMetadataProvider.cs:16; BlueprintApiBuilderExtensions.cs:80). So this pins the framework's own choice:
+        // outside a request there is no base URI to make the href under. The link generator registered for such hosts
         // guesses one (https://localhost/, without the API's base path), and an href made from it would be stored with
         // the audited event as though it were real. So the href is the one the handler gave the event.
         var app = new IntegrationTestBlueprintApp();
