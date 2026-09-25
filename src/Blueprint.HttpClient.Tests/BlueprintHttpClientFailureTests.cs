@@ -173,6 +173,24 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
     }
 
     [Fact]
+    public async Task When_a_client_error_response_says_it_is_a_server_error_then_its_stack_trace_is_dropped()
+    {
+        // The exception takes the problem's status (above), so a 4xx whose problem says 500, as a non-Blueprint upstream can
+        // write, is re-emitted by a gateway as a 500 with every extension it carries (HttpOperationResultExecutor's
+        // WriteUnhandledExceptionAsync). Its stackTrace is the upstream's internals whichever status says so.
+        var client = this.CreateClient(
+            HttpStatusCode.BadRequest,
+            """{"type":"upstream_error","title":"Upstream service failed","status":500,"stackTrace":"at Upstream.Handler() in /src/Handler.cs:line 12","traceId":"0af7651916cd43dd8448eb211c80319c"}""",
+            "application/problem+json");
+
+        var act = () => client.SendAsync(new ArchiveTemplateCommand { Id = "t-1" });
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.HttpStatus.Should().Be(500);
+        exception.Extensions.Keys.Should().BeEquivalentTo(["traceId"], "the stack trace is dropped when either status is a server error's");
+    }
+
+    [Fact]
     public async Task When_a_problem_has_extensions_of_every_kind_then_carries_them_as_legacy_read_them_under_any_casing()
     {
         // Legacy's ProblemDetailsJsonConverter read each extension into a dictionary keyed case-insensitively, a string as a

@@ -915,7 +915,8 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <remarks>
     /// <para>
     /// Problem details are carried through, except that a 5xx response's detail is replaced, and kept to the inner
-    /// exception, and its <c>stackTrace</c> extension (in any casing) dropped, because they describe the remote end's
+    /// exception, and the <c>stackTrace</c> extension (in any casing) of a 5xx response, or of a problem whose own status is
+    /// 5xx, dropped, because they describe the remote end's
     /// internals; and <c>instance</c> is never carried, as legacy's client carried it at no status. A body that is not JSON
     /// maps to <c>not_found</c> for a 404 (naming the path, never the host) and to <c>invalid_json</c> otherwise.
     /// </para>
@@ -981,7 +982,10 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         }
 
         // A host exposing exception details writes a 5xx's stack trace as an extension, which a gateway would write back
-        // out with every other one; legacy's host wrote it as the detail, replaced above.
+        // out with every other one; legacy's host wrote it as the detail, replaced above. It is dropped when either the
+        // response's status or the problem's says server error: the exception takes the problem's status, so a 4xx whose
+        // problem says 500 is re-emitted by a gateway as a 500 with every extension it carries.
+        var isServerError = status >= 500 || problem.Status >= 500;
         Dictionary<string, object>? extensions = null;
 
         if (problem.Extensions is not null)
@@ -992,7 +996,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
             foreach (var (key, value) in problem.Extensions)
             {
-                if (status < 500 || !string.Equals(key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase))
+                if (!isServerError || !string.Equals(key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase))
                 {
                     extensions[key] = ToLegacyExtensionValue(value)!;
                 }
