@@ -1321,17 +1321,6 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Sets <see cref="ResourceEvent.Href"/> as legacy Blueprint's <c>ResourceEventHandler</c> did: the registered
-    /// <c>self</c> link of the event's <see cref="ResourceEvent.ResourceType"/>, filled from <see cref="ResourceEvent.Data"/>
-    /// or, when there is none, <see cref="ResourceEvent.SelfQuery"/>, under the request's base URI. When no self link is
-    /// registered, or the operation is not running in a request, the href is left as the handler left it.
-    /// </summary>
-    /// <remarks>
-    /// Neither the resource's own <c>$links</c> nor the operation's URL is consulted, as legacy consulted neither: a self
-    /// link on the data can be hidden by link authorisation or relative, and the operation's URL is a different resource's
-    /// (a collection's, for a create). Signature365 stores the href with every audited event.
-    /// </remarks>
-    /// <summary>
     /// Stamps a legacy <see cref="ResourceEvent"/> with the request's correlation id and the operation that raised it, and
     /// fills its <see cref="ResourceEvent.Metadata"/>, as legacy Blueprint's <c>ResourceEventHandler</c> did for every event:
     /// whatever its change type, and whether or not it has data, a self query or a self link, or is audited. Signature365's
@@ -1400,6 +1389,17 @@ public static class PipelineHelpers
         }
     }
 
+    /// <summary>
+    /// Sets <see cref="ResourceEvent.Href"/> as legacy Blueprint's <c>ResourceEventHandler</c> did: the registered
+    /// <c>self</c> link of the event's <see cref="ResourceEvent.ResourceType"/>, filled from <see cref="ResourceEvent.Data"/>
+    /// or, when there is none, <see cref="ResourceEvent.SelfQuery"/>, under the request's base URI. When no self link is
+    /// registered, or the operation is not running in a request, the href is left as the handler left it.
+    /// </summary>
+    /// <remarks>
+    /// Neither the resource's own <c>$links</c> nor the operation's URL is consulted, as legacy consulted neither: a self
+    /// link on the data can be hidden by link authorisation or relative, and the operation's URL is a different resource's
+    /// (a collection's, for a create). Signature365 stores the href with every audited event.
+    /// </remarks>
     private static void PopulateResourceEventHref(ApiOperationContext context, OperationResult handlerResult)
     {
         if (handlerResult is not ResourceEvent resourceEvent)
