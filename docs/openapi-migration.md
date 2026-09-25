@@ -462,6 +462,21 @@ instead: that changes only the rendered `operationId` and leaves every other rea
 Resource schema names keep the prefix, and `BP011` fails the build if the removal gives two operations
 the same name or leaves one with an empty name.
 
+### operationId of an operation at several URLs
+
+An operation published at more than one URL is given a distinct `operationId` at each, as legacy's
+NSwag 14.2.0 document gave it (`OpenApiDocument.GenerateOperationIds`):
+- a shared id gets `All` on a collection-returning operation, unless every operation sharing it
+  returns a collection;
+- then the upper-cased method, when the methods differ;
+- then numbers: the first URL declared keeps the name, the next is `{Name}2`, then `{Name}3`.
+
+S365's Portal `CheckTenantDomains` / `CheckTenantDomains2` and the Admin Portal's
+`GetAccountInjectionStatus` / `GetAccountInjectionStatus2` are named so, and a request body and an
+`x-links` entry keep the operation's own name. Up to v1.0.2 every URL carried the same id. An
+operation at several URLs with a request body also made the v1.0.3 document fail to render: two
+components under one name. It is now written once.
+
 ### TenantId
 
 A `TenantId` is bound from the request like any other property, so it is published where the request

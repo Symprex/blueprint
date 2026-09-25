@@ -87,6 +87,11 @@ public sealed record OpenApiDocumentRenderingContext(
     {
         var builder = ImmutableArray.CreateBuilder<OpenApiSchemaComponentModel>();
 
+        // An operation published at several URLs has one request body, which legacy wrote once, as the operation type's
+        // schema, and referenced from every URL (Signature365 8b40ecc961, Blueprint.OpenApi/OpenApiDocumentBuilder.cs:160-178).
+        // Only another operation's body under the same name is a clash, left for the component writer to report.
+        var operationsByBodyName = new Dictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var path in paths)
         {
             foreach (var method in path.Methods)
@@ -94,6 +99,14 @@ public sealed record OpenApiDocumentRenderingContext(
                 var primaryOperation = method.Operations.IsEmpty ? null : method.Operations[0];
 
                 if (primaryOperation?.RequestBody is not { } requestBody || requestBody.Properties.IsEmpty)
+                {
+                    continue;
+                }
+
+                var bodyName = requestBody.SchemaName ?? primaryOperation.OperationName;
+
+                if (!operationsByBodyName.TryAdd(bodyName, primaryOperation.OperationTypeName)
+                    && string.Equals(operationsByBodyName[bodyName], primaryOperation.OperationTypeName, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -148,7 +161,7 @@ public sealed record OpenApiDocumentRenderingContext(
                 }
 
                 builder.Add(new OpenApiSchemaComponentModel(
-                    requestBody.SchemaName ?? primaryOperation.OperationName,
+                    bodyName,
                     "object",
                     requiredNames.ToImmutable(),
                     properties.ToImmutable(),

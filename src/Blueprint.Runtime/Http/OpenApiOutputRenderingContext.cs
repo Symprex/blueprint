@@ -265,7 +265,7 @@ public sealed record OpenApiOutputRenderingContext(
         // A parameter's title is a schema name, passed through the consumer's formatter as legacy's schema name generator
         // passed it, but not a component key: no counter, no sanitising.
         var parameterTitleFormatter = infoOptions.SchemaNaming == OpenApiSchemaNaming.Legacy ? infoOptions.SchemaNameFormatter : null;
-        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, ComponentKeyOf, parameterTitleFormatter);
+        WritePaths(writer, document.Paths, LegacyOperationIds.Assign(document), allRequireAuth, effectiveSchemes, ComponentKeyOf, parameterTitleFormatter);
         WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, ComponentKeyOf, DescribeComponentSources(document));
         WriteDocumentTags(writer, document.Paths);
 
@@ -402,42 +402,43 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
+    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, IReadOnlyDictionary<(string UrlFormat, string Method), string> operationIds, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
     {
         writer.WritePropertyName("paths");
         writer.WriteStartObject();
 
         foreach (var pathItem in paths)
         {
-            WritePathItem(writer, pathItem, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter);
+            WritePathItem(writer, pathItem, operationIds, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
+    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, IReadOnlyDictionary<(string UrlFormat, string Method), string> operationIds, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
     {
         writer.WritePropertyName(pathItem.UrlFormat);
         writer.WriteStartObject();
 
         foreach (var methodSlot in pathItem.Methods)
         {
-            WriteMethodSlot(writer, methodSlot, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter);
+            WriteMethodSlot(writer, methodSlot, operationIds.GetValueOrDefault((pathItem.UrlFormat, methodSlot.HttpMethod.ToUpperInvariant())), useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
+    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, string? operationId, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
     {
         writer.WritePropertyName(methodSlot.HttpMethod.ToLowerInvariant());
         writer.WriteStartObject();
 
-        // When multiple operations share a method slot, use the first alphabetically for operationId.
+        // When multiple operations share a method slot, use the first alphabetically. Its operationId is its name, made
+        // unique across the document as legacy's was (LegacyOperationIds).
         var primaryOperation = methodSlot.Operations.IsEmpty ? null : methodSlot.Operations[0];
         if (primaryOperation is not null)
         {
-            writer.WriteString("operationId", primaryOperation.OperationName);
+            writer.WriteString("operationId", operationId ?? primaryOperation.OperationName);
 
             if (primaryOperation.Summary is not null)
             {
