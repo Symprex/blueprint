@@ -93,6 +93,36 @@ public sealed class BlueprintHttpClientResourceEventTests : IClassFixture<Sample
         AssertReadAsWritten(read.AsT2, written, "template.created", ResourceEventChangeType.Created);
     }
 
+    [Fact]
+    public async Task When_the_envelope_reader_reads_a_resource_event_then_its_dictionaries_are_read_as_SendAsync_reads_them()
+    {
+        // SendAsync reads a resource event's dictionaries as legacy's converter did (JsonConverterFactoryForResourceEventOfT.cs:
+        // 231-263): a number as an int, a string as a string, a boolean as a bool, and, where legacy threw, a number that is
+        // no int as a double (ResourceEventReader). The envelope reader, new-only, reads the same body the same way.
+        var written = Stamp(new ResourceUpdated<TemplateApiResource>("renamed", Template()));
+        written.WithMetadata("Ratio", 2.5).WithSecureData("Pin", 1234);
+        written.ChangedValues = new Dictionary<string, object> { ["Revision"] = 7, ["Name"] = "Old" };
+        var (body, mediaType) = await this.WriteAsTheHostWritesAsync(written);
+        var client = this._fixture.CreateClient(new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(body) { Headers = { ContentType = MediaTypeHeaderValue.Parse(mediaType) } },
+        }));
+
+        var envelope = await client.SendResourceEventEnvelopeAsync<TemplateApiResource>(new ArchiveTemplateCommand { Id = "t-1" });
+        var read = await client.SendAsync<ResourceEvent<TemplateApiResource>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        foreach (var readEvent in new[] { envelope!, read! })
+        {
+            readEvent.Metadata["UserId"].Should().BeOfType<string>().Which.Should().Be("user-1");
+            readEvent.Metadata["Attempts"].Should().BeOfType<int>().Which.Should().Be(3);
+            readEvent.Metadata["Elevated"].Should().BeOfType<bool>().Which.Should().BeTrue();
+            readEvent.Metadata["Ratio"].Should().BeOfType<double>().Which.Should().Be(2.5);
+            readEvent.SecureData["Pin"].Should().BeOfType<int>().Which.Should().Be(1234);
+            readEvent.ChangedValues!["Revision"].Should().BeOfType<int>().Which.Should().Be(7);
+            readEvent.ChangedValues["Name"].Should().BeOfType<string>().Which.Should().Be("Old");
+        }
+    }
+
     private static TemplateApiResource Template()
     {
         return new TemplateApiResource("t-1", "Welcome", "<p>Hi</p>", "Hi");

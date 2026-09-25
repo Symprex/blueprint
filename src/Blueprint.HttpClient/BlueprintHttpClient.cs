@@ -397,51 +397,22 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             resourceEvent.CorrelationId = corrElement.GetString();
         }
 
+        // Each dictionary is read as SendAsync reads a resource event's (ResourceEventReader.ReadDictionary): a number as an
+        // int, or a double when it is no int; a string as a string; a boolean as a bool; an object or array as a JsonElement;
+        // a null value as null.
         if (root.TryGetProperty("changedValues", out var changedElement) && changedElement.ValueKind == JsonValueKind.Object)
         {
-            resourceEvent.ChangedValues = changedElement.Deserialize<Dictionary<string, object>>(jsonOptions);
+            resourceEvent.ChangedValues = ResourceEventReader.ReadDictionary(changedElement, jsonOptions);
         }
 
-        // Populate metadata through per-entry WithMetadata to respect internal setter
         if (root.TryGetProperty("metadata", out var metaElement) && metaElement.ValueKind == JsonValueKind.Object)
         {
-            foreach (var prop in metaElement.EnumerateObject())
-            {
-                var value = prop.Value.ValueKind switch
-                {
-                    JsonValueKind.String => (object?)prop.Value.GetString(),
-                    JsonValueKind.Number => prop.Value.GetDouble(),
-                    JsonValueKind.True => true,
-                    JsonValueKind.False => false,
-                    _ => prop.Value.GetRawText(),
-                };
-
-                if (value is not null)
-                {
-                    resourceEvent.WithMetadata(prop.Name, value);
-                }
-            }
+            resourceEvent.Metadata = ResourceEventReader.ReadDictionary(metaElement, jsonOptions)!;
         }
 
-        // Populate secureData through per-entry WithSecureData to respect internal setter
         if (root.TryGetProperty("secureData", out var secElement) && secElement.ValueKind == JsonValueKind.Object)
         {
-            foreach (var prop in secElement.EnumerateObject())
-            {
-                var value = prop.Value.ValueKind switch
-                {
-                    JsonValueKind.String => (object?)prop.Value.GetString(),
-                    JsonValueKind.Number => prop.Value.GetDouble(),
-                    JsonValueKind.True => true,
-                    JsonValueKind.False => false,
-                    _ => prop.Value.GetRawText(),
-                };
-
-                if (value is not null)
-                {
-                    resourceEvent.WithSecureData(prop.Name, value);
-                }
-            }
+            resourceEvent.SecureData = ResourceEventReader.ReadDictionary(secElement, jsonOptions)!;
         }
 
         return resourceEvent;

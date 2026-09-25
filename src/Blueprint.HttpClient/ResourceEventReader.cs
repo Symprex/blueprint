@@ -141,7 +141,15 @@ internal static class ResourceEventReader
         return null;
     }
 
-    private static Dictionary<string, object>? ReadDictionary(JsonElement value, JsonSerializerOptions options)
+    /// <summary>
+    /// Reads a resource event's dictionary (<c>metadata</c>, <c>secureData</c> or <c>changedValues</c>) as legacy read one
+    /// (see the class remarks); <c>SendResourceEventEnvelopeAsync</c> reads the envelope's with it too.
+    /// </summary>
+    /// <param name="value">The dictionary's JSON value.</param>
+    /// <param name="options">The options an object or array value is read with.</param>
+    /// <returns>The dictionary, or <see langword="null"/> for a JSON <c>null</c>.</returns>
+    /// <exception cref="JsonException">When <paramref name="value"/> is neither an object nor <c>null</c>.</exception>
+    internal static Dictionary<string, object>? ReadDictionary(JsonElement value, JsonSerializerOptions options)
     {
         if (value.ValueKind == JsonValueKind.Null)
         {

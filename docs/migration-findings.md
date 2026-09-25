@@ -573,7 +573,7 @@ An error problem's `type`, `title`, `detail`, `instance` and `status` are matche
 converter matched them, so one written in another casing is an extension.
 
 ### ResourceEvent HTTP-client fix
-A real compatibility gap did exist for typed `ResourceEvent<T>` HTTP responses. Because the base `ResourceEvent.Data` property is `object?` and the typed `new TResource? Data` property is ignored during default STJ deserialization, the client could surface `JsonElement` instead of `TResource`. The fix is explicit envelope parsing in `SendResourceEventEnvelopeAsync<TResource>()`, which reconstructs a properly typed `ResourceEvent<TResource>` including `$object`, event metadata, and the typed `data` payload.
+A real compatibility gap did exist for typed `ResourceEvent<T>` HTTP responses. Because the base `ResourceEvent.Data` property is `object?` and the typed `new TResource? Data` property is ignored during default STJ deserialization, the client could surface `JsonElement` instead of `TResource`. The fix is explicit envelope parsing in `SendResourceEventEnvelopeAsync<TResource>()`, which reconstructs a properly typed `ResourceEvent<TResource>` including `$object`, event metadata, and the typed `data` payload. Its `metadata`, `secureData` and `changedValues` are read as `SendAsync` reads a resource event's (below): a number as an `int`, or a `double` when it is no `int` (v1.0.3; every number was a `double` before).
 
 `SendAsync<T>`/`CallAsync<T>` (and a `Results<,>` member) read every generic resource event type the host writes —
 `ResourceEvent<T>`, `ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>` — as legacy's
