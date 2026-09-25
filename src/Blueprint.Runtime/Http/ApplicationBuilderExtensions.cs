@@ -298,13 +298,11 @@ public static class EndpointRouteBuilderExtensions
     /// </summary>
     private static RequestDelegate CreateApiCatalogDelegate(string openApiPath, string title)
     {
-        // Pre-render cache: avoids per-request string interpolation for the common case
-        // where scheme/host/pathBase are stable across requests.
-        string? cachedScheme = null;
-        string? cachedHost = null;
-        PathString cachedPathBase = default;
-        byte[]? cachedJsonBytes = null;
-        string? cachedLinkHeader = null;
+        // Pre-render cache: avoids per-request string interpolation for the common case where scheme/host/pathBase are
+        // stable across requests. One immutable entry, read once per request, so a request is always answered with the
+        // catalog made from the scheme, host and path base it was compared with, whatever a concurrent request for another
+        // host writes, as the router's base-URI cache is.
+        ApiCatalogCacheEntry? cache = null;
 
         return context =>
         {
@@ -312,20 +310,18 @@ public static class EndpointRouteBuilderExtensions
             var scheme = request.Scheme;
             var host = request.Host.Value;
             var pathBase = request.PathBase;
+            var entry = Volatile.Read(ref cache);
 
-            if (cachedJsonBytes is null
-                || !string.Equals(scheme, cachedScheme, StringComparison.Ordinal)
-                || !string.Equals(host, cachedHost, StringComparison.Ordinal)
-                || pathBase != cachedPathBase)
+            // The path base is compared by its characters: PathString's own equality ignores case.
+            if (entry is null
+                || !string.Equals(scheme, entry.Scheme, StringComparison.Ordinal)
+                || !string.Equals(host, entry.Host, StringComparison.Ordinal)
+                || !string.Equals(pathBase.Value, entry.PathBase.Value, StringComparison.Ordinal))
             {
                 var baseUri = $"{scheme}://{host}{pathBase}";
                 var openApiHref = baseUri + openApiPath;
-
-                cachedScheme = scheme;
-                cachedHost = host;
-                cachedPathBase = pathBase;
-                cachedLinkHeader = $"<{openApiHref}>; rel=\"service-desc\"; type=\"application/openapi+json;version=3.0\"";
-                cachedJsonBytes = System.Text.Encoding.UTF8.GetBytes($$"""
+                var linkHeader = $"<{openApiHref}>; rel=\"service-desc\"; type=\"application/openapi+json;version=3.0\"";
+                var jsonBytes = System.Text.Encoding.UTF8.GetBytes($$"""
                     {
                       "linkset": [
                         {
@@ -347,19 +343,32 @@ public static class EndpointRouteBuilderExtensions
                       ]
                     }
                     """);
+
+                entry = new ApiCatalogCacheEntry(scheme, host, pathBase, linkHeader, jsonBytes);
+                Volatile.Write(ref cache, entry);
             }
 
             context.Response.ContentType = "application/linkset+json; profile=\"https://www.rfc-editor.org/info/rfc9727\"";
-            context.Response.Headers["Link"] = cachedLinkHeader;
+            context.Response.Headers["Link"] = entry.LinkHeader;
 
             if (HttpMethods.IsHead(request.Method))
             {
                 return Task.CompletedTask;
             }
 
-            return context.Response.Body.WriteAsync(cachedJsonBytes).AsTask();
+            return context.Response.Body.WriteAsync(entry.JsonBytes).AsTask();
         };
     }
+
+    /// <summary>
+    /// The api-catalog response made for one scheme, host and path base.
+    /// </summary>
+    /// <param name="Scheme">The request scheme.</param>
+    /// <param name="Host">The request host.</param>
+    /// <param name="PathBase">The request's path base.</param>
+    /// <param name="LinkHeader">The <c>Link</c> header made from them.</param>
+    /// <param name="JsonBytes">The Linkset document made from them.</param>
+    private sealed record ApiCatalogCacheEntry(string Scheme, string? Host, PathString PathBase, string LinkHeader, byte[] JsonBytes);
 
     private class BlueprintApiRouter<TExec> where TExec : BlueprintAppExecutor
     {
