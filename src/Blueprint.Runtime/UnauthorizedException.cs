@@ -14,19 +14,23 @@ public class UnauthorizedException : ApiException
     /// <summary>
     /// Initializes a new instance of the <see cref="UnauthorizedException"/> class.
     /// </summary>
-    /// <param name="message">A description of why authentication failed (used as the problem detail).</param>
+    /// <param name="message">
+    /// A description of why authentication failed, used as the problem title with no detail, as legacy Blueprint's
+    /// <c>UnauthorizedException(message)</c> was (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint/Errors/UnauthorizedException.cs:15-18</c>).
+    /// </param>
     public UnauthorizedException(string message)
-        : base("Unauthorized", "security_failure", message, 401)
+        : base(message, "security_failure", null, 401)
     {
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="UnauthorizedException"/> class.
     /// </summary>
-    /// <param name="message">A description of why authentication failed (used as the problem detail).</param>
+    /// <param name="message">A description of why authentication failed, used as the problem title with no detail.</param>
     /// <param name="innerException">The inner exception.</param>
     public UnauthorizedException(string message, Exception innerException)
-        : base("Unauthorized", "security_failure", message, 401, innerException)
+        : base(message, "security_failure", null, 401, innerException)
     {
     }
 }

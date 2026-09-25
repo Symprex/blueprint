@@ -102,11 +102,11 @@ All error responses use [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) probl
 | 403 | `ForbiddenResult` | `ProblemDetails` | From an authoriser, as legacy wrote it: type `unauthorized`, title the authoriser's `Message`, no detail (its `Reason` is logged, never written). From a resource authorization provider: fixed "You do not have permission to access this resource." |
 | 415 | `UnsupportedMediaTypeResult` | `ProblemDetails` | Fixed: "The request content type is not supported. Expected 'application/json'." |
 | 422 | `ValidationFailedResult` | `ValidationProblemDetails` | Per-member validation errors from DataAnnotations / IValidatableObject |
-| 500 | `UnhandledExceptionResult` | `ProblemDetails` | Generic message unless `ExposeExceptionDetailsInErrorResponses` is true |
-| 4xx | `UnhandledExceptionResult` (via `ApiException`) | `ProblemDetails` | Exception message (intentionally developer-authored) |
+| 500 | `UnhandledExceptionResult` (not an `ApiException`) | `ProblemDetails` | As legacy wrote it: type `unknown_error`, title "Something has gone wrong, please try again", no detail; with `ExposeExceptionDetailsInErrorResponses`, title the exception's message and detail its stack trace |
+| any | `UnhandledExceptionResult` (an `ApiException`) | `ProblemDetails` | As legacy wrote it: the exception's own type, title, status, detail and extensions, a null one left out, whatever the status and the exposure setting |
 
-A 401, or an authoriser's 403, also carries a `traceId` extension (the operation activity's trace id) when the operation has
-an activity, as legacy's did, and an authoriser's denial is logged at Information under `Blueprint.Authorisation.AuthorisationMiddlewareBuilder`
+Every exception, and a 401 or an authoriser's 403, also carries a `traceId` extension (the operation activity's trace id),
+after any other, when the operation has an activity, as legacy's did, and an authoriser's denial is logged at Information under `Blueprint.Authorisation.AuthorisationMiddlewareBuilder`
 ("Permission check failed. reason={0} authoriser={1}"). A denial whose failure type is not `Authorisation`, a default
 `ExecutionAllowed`'s included, is a 401, as legacy made it.
 
@@ -114,10 +114,12 @@ an activity, as legacy's did, and an authoriser's denial is logged at Informatio
 
 `BlueprintHttpOptions.ExposeExceptionDetailsInErrorResponses` controls 500-level detail exposure:
 
-- **false (default/production)**: 500 responses show `"An unexpected error occurred."` — no stack traces or internal details leak.
-- **true (development)**: 500 responses include the exception message and stack trace in the `stackTrace` extension property.
+- **false (default/production)**: an exception that is not an `ApiException` is titled "Something has gone wrong, please
+  try again", with no detail — no message or stack trace leaks.
+- **true (development)**: it is titled with the exception's message, and its detail is the stack trace, as legacy wrote it.
 
-Non-500 `ApiException` responses always include the exception message because `ApiException` is designed for developer-authored, client-facing error messages.
+An `ApiException`, whatever its status, is always written with its own title and detail, because `ApiException` is
+designed for developer-authored, client-facing error messages. Legacy wrote it so too.
 
 ### OpenAPI alignment
 

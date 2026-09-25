@@ -283,8 +283,10 @@ public partial class OperationResultTranslationEndpointTests
 
         response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
         response.ContentType.Should().Be("application/problem+json");
-        response.Body.Should().Contain("\"status\":500")
-            .And.Contain("An unexpected error occurred.");
+
+        // Legacy wrote an exception its result writing threw as any other (Signature365 8b40ecc961,
+        // Blueprint.Http/OkResultOperationExecutor.cs:48-65, UnhandledExceptionOperationResultExecutor.cs:60-67).
+        response.Body.Should().Be("""{"type":"unknown_error","title":"Something has gone wrong, please try again","status":500}""");
     }
 
     private static async Task<TestEndpointInvocationResult> InvokeEndpointAsync(RouteEndpoint endpoint, IServiceProvider serviceProvider)

@@ -457,6 +457,19 @@ public class HttpOperationResultExecutor
         return WriteJsonAsync(httpContext, app, content);
     }
 
+    /// <summary>
+    /// Writes <paramref name="content"/> as the response body, serialised as every other response of
+    /// <paramref name="app"/> is, leaving the status and content type as the caller set them.
+    /// </summary>
+    /// <param name="httpContext">The HTTP context to write to.</param>
+    /// <param name="app">The app whose serializer context and options apply.</param>
+    /// <param name="content">The body to write.</param>
+    /// <returns>A task that completes when the body has been written.</returns>
+    internal static Task WriteJsonBodyAsync(HttpContext httpContext, BlueprintApp app, object content)
+    {
+        return WriteJsonAsync(httpContext, app, content);
+    }
+
     [UnconditionalSuppressMessage(
         "Trimming",
         "IL2026",
@@ -964,38 +977,19 @@ public class HttpOperationResultExecutor
         }
     }
 
+    /// <summary>
+    /// Writes an exception an operation threw as legacy Blueprint's <c>UnhandledExceptionOperationResultExecutor</c> wrote
+    /// it (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/UnhandledExceptionOperationResultExecutor.cs:30-68</c>):
+    /// an <see cref="ApiException"/> as its own status, title, type, detail and extensions, whatever its status and the
+    /// exposure setting; any other exception as a 500 of type <c>unknown_error</c>, titled "Something has gone wrong, please
+    /// try again" with no detail, or, with details exposed, titled with its message and detailed with its stack trace; and
+    /// a <c>traceId</c> extension after the others when the operation has an activity. A null member is left out
+    /// (<c>ProblemDetailsJsonConverter.cs:107-139</c>).
+    /// </summary>
     private static async Task WriteUnhandledExceptionAsync(HttpContext httpContext, ApiOperationContext operationContext, UnhandledExceptionResult unhandledExceptionResult, BlueprintHttpOptions httpOptions)
     {
-        var exposeDetails = httpOptions.ExposeExceptionDetailsInErrorResponses;
-        var apiEx = unhandledExceptionResult.Exception as ApiException;
-
-        var statusCode = apiEx?.HttpStatus ?? StatusCodes.Status500InternalServerError;
-
-        var problemDetails = new MvcProblemDetails
-        {
-            Status = statusCode,
-            Title = apiEx?.Title ?? (statusCode >= 500 ? "Server error" : "Request error"),
-            Type = apiEx?.Type,
-            Detail = exposeDetails
-                ? apiEx?.Detail ?? unhandledExceptionResult.Exception.Message
-                : statusCode >= 500
-                    ? "An unexpected error occurred."
-                    : apiEx?.Detail ?? unhandledExceptionResult.Exception.Message,
-        };
-
-        // Carry over any extension data from the ApiException into the ProblemDetails response.
-        if (apiEx?.Extensions is { Count: > 0 })
-        {
-            foreach (var kvp in apiEx.Extensions)
-            {
-                problemDetails.Extensions[kvp.Key] = kvp.Value;
-            }
-        }
-
-        if (exposeDetails && statusCode >= 500)
-        {
-            problemDetails.Extensions["stackTrace"] = unhandledExceptionResult.Exception.ToString();
-        }
+        var problemDetails = CreateLegacyExceptionProblem(unhandledExceptionResult.Exception, httpOptions.ExposeExceptionDetailsInErrorResponses, operationContext.Activity);
+        var statusCode = problemDetails.Status!.Value;
 
         httpContext.Response.StatusCode = statusCode;
         httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
@@ -1015,6 +1009,51 @@ public class HttpOperationResultExecutor
         return httpOptions.NegotiateErrorContentType
             ? LegacyErrorContentTypeNegotiation.Negotiate(httpContext.Request.Headers.Accept)
             : ProblemJsonContentType;
+    }
+
+    /// <summary>
+    /// Makes the problem legacy Blueprint wrote for <paramref name="exception"/> (see <see cref="WriteUnhandledExceptionAsync"/>).
+    /// </summary>
+    /// <param name="exception">The exception the operation threw.</param>
+    /// <param name="exposeDetails">Whether exception details are exposed, which changes only a non-<see cref="ApiException"/>'s.</param>
+    /// <param name="activity">The operation's activity, whose trace id is carried when there is one.</param>
+    /// <returns>The problem to write.</returns>
+    internal static MvcProblemDetails CreateLegacyExceptionProblem(Exception exception, bool exposeDetails, System.Diagnostics.Activity? activity)
+    {
+        MvcProblemDetails problemDetails;
+
+        if (exception is ApiException apiException)
+        {
+            problemDetails = new MvcProblemDetails
+            {
+                Status = apiException.HttpStatus,
+                Title = apiException.Title,
+                Type = apiException.Type,
+                Detail = apiException.Detail,
+            };
+
+            foreach (var kvp in apiException.Extensions)
+            {
+                problemDetails.Extensions[kvp.Key] = kvp.Value;
+            }
+        }
+        else
+        {
+            problemDetails = new MvcProblemDetails
+            {
+                Status = StatusCodes.Status500InternalServerError,
+                Type = "unknown_error",
+                Title = exposeDetails ? exception.Message : "Something has gone wrong, please try again",
+                Detail = exposeDetails ? exception.StackTrace : null,
+            };
+        }
+
+        if (activity is not null)
+        {
+            problemDetails.Extensions["traceId"] = activity.TraceId.ToString();
+        }
+
+        return problemDetails;
     }
 
     /// <summary>

@@ -284,6 +284,21 @@ carries the denial as `Failure`. Coming from legacy Blueprint nothing changes. C
 "Forbidden" bodies are gone, and a denial whose failure type is not `Authorisation` (a `default` `ExecutionAllowed`
 included) is a 401 where it was a 403.
 
+**Behaviour change for exception bodies (v1.0.3).** An exception is written with the body legacy Blueprint wrote:
+- an `ApiException` with its own type, title, status, detail and extensions, a null one left out, whatever its status and
+  `ExposeExceptionDetailsInErrorResponses`;
+- any other exception as `{"type":"unknown_error","title":"Something has gone wrong, please try again","status":500}`, or,
+  with details exposed, titled with its message and detailed with its stack trace;
+- in each case a `traceId` extension last, when the operation has an activity.
+
+`UnauthorizedException(message)` puts the message in the title, with no detail. Coming from legacy Blueprint nothing
+changes. Coming from v1.0.2:
+- a null title or detail was filled in ("Server error", "Request error", the exception message);
+- a 5xx `ApiException`'s detail was replaced;
+- exposed stack traces went in a `stackTrace` extension;
+- no exception body carried `traceId`;
+- `UnauthorizedException` was titled "Unauthorized", with the message as its detail.
+
 **Behaviour change for a handler's `Identity` (v1.0.3).** A handler property of type `IUserAuthorisationContext`
 (`BlueprintApiOperations.Identity`, or a consumer base class's) is given the operation's user as it is:
 `null` when there is no authenticated user, as legacy Blueprint gave it. Coming from legacy Blueprint nothing changes.

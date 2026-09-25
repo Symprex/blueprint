@@ -598,66 +598,11 @@ public static class EndpointRouteBuilderExtensions
                     ? LegacyErrorContentTypeNegotiation.Negotiate(httpContext.Request.Headers.Accept)
                     : "application/problem+json";
 
-                var exposeDetails = this._httpOptions.ExposeExceptionDetailsInErrorResponses;
-                var detail = exposeDetails ? ex.ToString() : "An unexpected error occurred.";
+                // As legacy's writer wrote an exception its result writing threw (Signature365 8b40ecc961,
+                // Blueprint.Http/OkResultOperationExecutor.cs:48-65, UnhandledExceptionOperationResultExecutor.cs:30-68).
+                var problem = HttpOperationResultExecutor.CreateLegacyExceptionProblem(ex, this._httpOptions.ExposeExceptionDetailsInErrorResponses, activity);
 
-                await httpContext.Response.WriteAsync(
-                    $$"""{"type":"https://httpstatuses.com/500","title":"Internal Server Error","status":500,"detail":"{{EscapeJsonString(detail)}}"}""",
-                    httpContext.RequestAborted).ConfigureAwait(false);
-            }
-        }
-
-        private static string EscapeJsonString(string value)
-        {
-            // Fast path: if no special characters, return unchanged (zero allocation).
-            if (!NeedsEscaping(value))
-            {
-                return value;
-            }
-
-            // Single-pass escape avoids 5 chained Replace allocations.
-            return string.Create(CountEscapedLength(value), value, static (span, src) =>
-            {
-                var pos = 0;
-                foreach (var c in src)
-                {
-                    switch (c)
-                    {
-                        case '\\': span[pos++] = '\\'; span[pos++] = '\\'; break;
-                        case '"': span[pos++] = '\\'; span[pos++] = '"'; break;
-                        case '\n': span[pos++] = '\\'; span[pos++] = 'n'; break;
-                        case '\r': span[pos++] = '\\'; span[pos++] = 'r'; break;
-                        case '\t': span[pos++] = '\\'; span[pos++] = 't'; break;
-                        default: span[pos++] = c; break;
-                    }
-                }
-            });
-
-            static bool NeedsEscaping(string s)
-            {
-                foreach (var c in s)
-                {
-                    if (c is '\\' or '"' or '\n' or '\r' or '\t')
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-
-            static int CountEscapedLength(string s)
-            {
-                var length = s.Length;
-                foreach (var c in s)
-                {
-                    if (c is '\\' or '"' or '\n' or '\r' or '\t')
-                    {
-                        length++;
-                    }
-                }
-
-                return length;
+                await HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, this._app, problem).ConfigureAwait(false);
             }
         }
 
