@@ -18,9 +18,18 @@ namespace Blueprint.Runtime.Tasks;
 /// The provider always receives the complete current set, even an empty one. A scheduler that throws is logged and
 /// counted as declaring nothing, so its jobs are removed along with every other schedule the set no longer contains.
 /// </para>
+/// <para>
+/// Each schedule reaches the provider with the <see cref="RecurringTaskSchedule.Id"/> legacy gave it,
+/// <c>{SchedulerType}:{Name}</c>, and the <see cref="RecurringTaskSchedule.Name"/> its scheduler declared.
+/// </para>
 /// </remarks>
 public sealed class RecurringTaskManager
 {
+    /// <summary>
+    /// Joins a scheduler's type name and a schedule's name into the schedule's id, as legacy's <c>IdSplitter</c> did.
+    /// </summary>
+    private const char IdSeparator = ':';
+
     private readonly IEnumerable<IRecurringTaskScheduler> _schedulers;
     private readonly IRecurringTaskProvider _provider;
     private readonly ILogger<RecurringTaskManager> _logger;
@@ -56,7 +65,13 @@ public sealed class RecurringTaskManager
 
         foreach (var scheduler in this._schedulers)
         {
-            allSchedules.AddRange(await this.GetSchedulesAsync(scheduler).ConfigureAwait(false));
+            // Each registered under legacy's id, {SchedulerType}:{Name}, from the scheduler's Type.Name (legacy
+            // RecurringTaskManager.cs:70-73, :123-130), so the job legacy registered for it is the same job.
+            var group = scheduler.GetType().Name + IdSeparator;
+
+            allSchedules.AddRange(
+                (await this.GetSchedulesAsync(scheduler).ConfigureAwait(false))
+                .Select(schedule => new RecurringTaskSchedule(schedule, group + schedule.Name)));
         }
 
         // The provider is given the current set even when it is empty, as legacy RecurringTaskManager.RescheduleAllAsync

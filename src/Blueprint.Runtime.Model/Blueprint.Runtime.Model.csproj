@@ -13,5 +13,11 @@
     <PackageReference Include="JetBrains.Annotations" Version="2024.3.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- RecurringTaskManager gives each collected schedule its legacy id through an internal constructor, so that the id
+         is not settable by anyone else. -->
+    <InternalsVisibleTo Include="Blueprint.Runtime" />
+  </ItemGroup>
+
 </Project>
 

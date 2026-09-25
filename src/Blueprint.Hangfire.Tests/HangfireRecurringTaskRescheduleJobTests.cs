@@ -85,12 +85,12 @@ public class HangfireRecurringTaskRescheduleJobTests
     public async Task The_reschedule_job_is_never_removed_as_a_stale_recurring_task()
     {
         var (manager, _) = CreateManager();
-        var sut = CreateProvider(manager, CreateStorage("portal:Scheduler", "blueprint:removed-from-code"));
+        var sut = CreateProvider(manager, CreateStorage("portal:Scheduler", "NightlyScheduler:removed-from-code"));
 
         await sut.RegisterSchedulesAsync([]);
 
         manager.DidNotReceive().RemoveIfExists("portal:Scheduler");
-        manager.Received(1).RemoveIfExists("blueprint:removed-from-code");
+        manager.Received(1).RemoveIfExists("NightlyScheduler:removed-from-code");
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class HangfireRecurringTaskRescheduleJobTests
         // So the next run retries the registration, as legacy's separately installed scheduler job did.
         var (manager, calls) = CreateManager();
         manager
-            .When(static m => m.AddOrUpdate("blueprint:broken", Arg.Any<Job>(), Arg.Any<string>(), Arg.Any<RecurringJobOptions>()))
+            .When(static m => m.AddOrUpdate("broken", Arg.Any<Job>(), Arg.Any<string>(), Arg.Any<RecurringJobOptions>()))
             .Do(static _ => throw new InvalidOperationException("The storage rejected the job."));
         var sut = CreateProvider(manager, CreateStorage());
 

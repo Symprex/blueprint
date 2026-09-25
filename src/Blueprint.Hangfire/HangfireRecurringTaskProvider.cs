@@ -18,11 +18,19 @@ namespace Blueprint.Hangfire;
 /// </summary>
 /// <remarks>
 /// <para>
-/// On each call to <see cref="RegisterSchedulesAsync"/>, this provider adds or updates
-/// every schedule in the supplied list using Hangfire's <c>AddOrUpdate</c>, then removes
-/// the recurring jobs it created earlier whose schedules are no longer present, so that
-/// schedules removed from code are also removed from Hangfire. Recurring jobs it did not
-/// create are never removed.
+/// On each call to <see cref="RegisterSchedulesAsync"/>, this provider adds or updates every schedule in the supplied list
+/// using Hangfire's <c>AddOrUpdate</c>, under the schedule's <see cref="RecurringTaskSchedule.Id"/>, then removes every
+/// other recurring job its storage lists except its own <c>{DefaultQueue}:Scheduler</c>, as legacy Blueprint's provider
+/// did. The ids are legacy's, <c>{SchedulerType}:{Name}</c>, which <see cref="RecurringTaskManager"/> gives each schedule,
+/// so a job legacy registered for a schedule that is still declared is the same Hangfire recurring job, updated in place.
+/// </para>
+/// <para>
+/// The storage must therefore list only this app's recurring jobs, as Signature365's
+/// <c>RecurringJobPartitionedSqlServerStorage</c> does by app: in a storage shared with other apps or other code, their
+/// recurring jobs are removed too, as they were under legacy. That partitioning covers only the list of ids; Hangfire keeps
+/// each job itself in the hash <c>recurring-job:{id}</c>, which apps sharing a storage share. So two such apps must not
+/// register schedulers of the same type name declaring the same schedule name: they would overwrite one job, and either
+/// removing it would remove the other's, as under legacy.
 /// </para>
 /// <para>
 /// <c>{DefaultQueue}:Scheduler</c> is a recurring job that re-runs <see cref="RecurringTaskManager.RescheduleAllAsync"/>
@@ -34,12 +42,6 @@ namespace Blueprint.Hangfire;
 [PublicAPI]
 public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvider
 {
-    /// <summary>
-    /// Prefix applied to all Hangfire recurring job IDs created by Blueprint.
-    /// Prevents collisions with non-Blueprint recurring jobs and enables orphan detection.
-    /// </summary>
-    internal const string JobIdPrefix = "blueprint:";
-
     /// <summary>
     /// Appended to the app's default queue to form the id of the job that re-runs registration, legacy's
     /// <c>{DefaultQueue}:Scheduler</c>.
@@ -128,7 +130,9 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
 
         foreach (var schedule in schedules)
         {
-            var jobId = JobIdPrefix + schedule.Name;
+            // Legacy's id, {SchedulerType}:{Name} (legacy HangfireRecurringTaskProvider.cs:85-86), so the job legacy registered
+            // for this schedule is updated in place: AddOrUpdate rewrites the stored job of the id it is given.
+            var jobId = schedule.Id;
             registeredIds.Add(jobId);
 
             var payload = JsonSerializer.Serialize(new HangfireTaskPayload
@@ -151,8 +155,9 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
                 new RecurringJobOptions { TimeZone = schedule.TimeZone });
 
             this._logger.LogInformation(
-                "Registered recurring task {ScheduleName} ({TaskType}) with cron '{Cron}' on queue '{Queue}'",
+                "Registered recurring task {ScheduleName} as {JobId} ({TaskType}) with cron '{Cron}' on queue '{Queue}'",
                 schedule.Name,
+                jobId,
                 schedule.BackgroundTask.GetType().Name,
                 schedule.CronExpression,
                 queue);
@@ -183,10 +188,9 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
     /// (<c>*/30 * * * *</c>) and the same queue (Hangfire's <c>default</c> when none is set).
     /// </summary>
     /// <remarks>
-    /// Its id does not carry <see cref="JobIdPrefix"/>, so stale-job removal never removes it. It is installed as part of
-    /// registration, so it exists only where the app's schedules are registered, which is where legacy installed it. The
-    /// job activator must be able to resolve <see cref="RecurringTaskManager"/>, which <c>AddRecurringTaskProvider</c>
-    /// registers.
+    /// Stale-job removal excepts its id, as legacy's did (legacy <c>HangfireRecurringTaskProvider.cs:58</c>). The job runs
+    /// in whichever process's Hangfire server listens to its queue, and the job activator there builds the
+    /// <see cref="RecurringTaskManager"/> from that process's container; see <c>AddRecurringTaskProvider</c>.
     /// </remarks>
     private void InstallRescheduleJob()
     {
@@ -199,21 +203,23 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
     }
 
     /// <summary>
-    /// Removes each recurring job in the storage that this provider created — its id carries <see cref="JobIdPrefix"/> —
-    /// and whose schedule is not among <paramref name="declaredIds"/>.
+    /// Removes each recurring job in the storage that is neither among <paramref name="declaredIds"/> nor the scheduler
+    /// job, as legacy Blueprint's provider did (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint.Tasks.Hangfire/HangfireRecurringTaskProvider.cs:52-66</c>).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The set of recurring jobs is read from the storage, which is what scopes removal to one app: legacy Blueprint
-    /// removed every undeclared recurring job its storage listed, and Signature365 partitions that list by app. Within it,
-    /// a job whose id this provider did not create — legacy's <c>{scheduler}:{name}</c> ids, or any other code's — is left
-    /// alone. The supplied schedules are therefore taken to be the app's complete set, so the provider belongs only in the
-    /// process that registers every one of the app's recurring task schedulers.
+    /// The set of recurring jobs is read from the storage, which is what scopes removal to one app: Signature365 partitions
+    /// that set by app. Every job it lists that is not declared is removed, whatever its id: a schedule deleted from code, a
+    /// scheduler that declares nothing or no longer exists, a legacy job no schedule re-declares, and a job an earlier
+    /// release of this provider created under a <c>blueprint:</c> id. The supplied schedules are therefore taken to be the
+    /// app's complete set.
     /// </para>
     /// <para>
-    /// A declared id is matched case-insensitively, as Hangfire's SQL storage matches it, so a stored id differing only in
-    /// case is the job just registered and is kept. Failing to read the storage is logged rather than thrown: the declared
-    /// schedules are registered by then, and a stale job that survives is the safe side of that failure.
+    /// Ids are matched case-insensitively, as Hangfire's SQL storage matches them, so a stored id differing only in case is
+    /// the job just registered, or the scheduler job, and is kept; legacy compared them ordinally. Failing to read the
+    /// storage is logged rather than thrown: the declared schedules are registered by then, and a stale job that survives is
+    /// the safe side of that failure.
     /// </para>
     /// </remarks>
     /// <param name="declaredIds">The ids of the recurring jobs just registered.</param>
@@ -227,7 +233,8 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
 
             staleIds = connection.GetRecurringJobs()
                 .Select(static job => job.Id)
-                .Where(id => id.StartsWith(JobIdPrefix, StringComparison.Ordinal) && !declaredIds.Contains(id))
+                .Where(id => !declaredIds.Contains(id)
+                             && !string.Equals(id, this._schedulerJobId, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
         catch (Exception e)
