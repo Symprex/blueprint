@@ -2075,7 +2075,8 @@ public static class PipelineHelpers
     private static readonly ConcurrentDictionary<(System.Text.Json.Serialization.JsonSerializerContext?, Type), System.Text.Json.Serialization.Metadata.JsonTypeInfo?> _inlineTypeInfoCache = new();
 
     // Thread-local buffer and writer for inline JSON response writing from generated pipelines.
-    // These are the same pattern as HttpOperationResultExecutor's fields — thread locality eliminates contention.
+    // These are the same pattern as HttpOperationResultExecutor's fields — thread locality eliminates contention, and a
+    // write that does not finish at once takes the buffer from the thread.
     [ThreadStatic]
     private static System.Buffers.ArrayBufferWriter<byte>? _inlineResponseBuffer;
 
@@ -2142,6 +2143,15 @@ public static class PipelineHelpers
             httpContext.Response.ContentLength = buffer.WrittenCount;
 
             var writeTask = httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted);
+
+            // A write that has not finished may still read the buffer after an await (a compressing body stream does),
+            // while this thread serves another request: that write takes the buffer, and the thread's next one gets a
+            // new buffer, so one response can never carry another's bytes (HttpOperationResultExecutor.WriteThreadBufferAsync).
+            if (!writeTask.IsCompleted)
+            {
+                _inlineResponseBuffer = null;
+            }
+
             return writeTask.IsCompletedSuccessfully
                 ? Task.CompletedTask
                 : writeTask.AsTask();

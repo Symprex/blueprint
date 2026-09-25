@@ -248,6 +248,13 @@ in Kestrel) and returns `Task.CompletedTask` synchronously when the response
 body `WriteAsync` completes without awaiting — eliminating the async state machine
 for small payloads.
 
+A write that does *not* complete at once keeps the buffer: the thread gets a new one
+for its next response (v1.0.3). A body stream may read its input across awaits (a
+compressing wrapper does), while the thread serves another request; sharing the
+buffer then sent one request's bytes in another's response. The same rule covers the
+resource-event envelopes and `PipelineHelpers.WriteOkJsonResponseAsync`. The
+synchronous path is unchanged, so it still allocates nothing.
+
 ### Sync-First JSON Body Reading (commit 7f3cb3b6)
 
 `ReadJsonBodyAsync` now checks whether the first `ReadAsync` call on the request

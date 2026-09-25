@@ -68,8 +68,8 @@ public class HttpOperationResultExecutor
     private static readonly Task<bool> _trueTask = Task.FromResult(true);
     private static readonly Task<bool> _falseTask = Task.FromResult(false);
 
-    // Thread-local ArrayBufferWriter to avoid per-request allocation for resource event envelope
-    // serialization. Cleared after each use so the buffer is reusable within the same thread.
+    // Thread-local ArrayBufferWriter to avoid per-request allocation for response body serialization. Cleared before each
+    // use; a write that does not finish at once takes it and leaves the thread a new one (WriteThreadBufferAsync).
     [ThreadStatic]
     private static System.Buffers.ArrayBufferWriter<byte>? _threadLocalBuffer;
 
@@ -421,7 +421,7 @@ public class HttpOperationResultExecutor
 
             // WriteAsync on response body completes synchronously for small payloads in Kestrel.
             // Avoid async state machine allocation by checking IsCompletedSuccessfully.
-            var writeTask = httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted);
+            var writeTask = WriteThreadBufferAsync(httpContext, buffer);
             return writeTask.IsCompletedSuccessfully
                 ? Task.CompletedTask
                 : writeTask.AsTask();
@@ -550,7 +550,7 @@ public class HttpOperationResultExecutor
         writer.Flush();
 
         httpContext.Response.ContentLength = buffer.WrittenCount;
-        await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted).ConfigureAwait(false);
+        await WriteThreadBufferAsync(httpContext, buffer).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -660,7 +660,33 @@ public class HttpOperationResultExecutor
         writer.Flush();
 
         httpContext.Response.ContentLength = buffer.WrittenCount;
-        await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted).ConfigureAwait(false);
+        await WriteThreadBufferAsync(httpContext, buffer).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes what the thread's serialization buffer holds to the response body and, when the write does not finish at
+    /// once, gives the buffer to that write: the thread's next response serializes into a new one.
+    /// </summary>
+    /// <remarks>
+    /// A body stream may read the memory it was given until its write completes, and a compressing wrapper such as
+    /// <c>BrotliStream</c> does, across awaits. While it waits the thread is free to serve another request; were that
+    /// request to serialize into the same buffer, the pending write would send its bytes, one user's response carrying
+    /// another's data. So memory handed to an unfinished write is never reachable from the thread again. A write that
+    /// finishes at once, the usual case under Kestrel, keeps the buffer on the thread, so that path still allocates nothing.
+    /// </remarks>
+    /// <param name="httpContext">The HTTP context whose response body is written.</param>
+    /// <param name="buffer">The thread's buffer, holding the serialized body.</param>
+    /// <returns>The body stream's write.</returns>
+    private static ValueTask WriteThreadBufferAsync(HttpContext httpContext, System.Buffers.ArrayBufferWriter<byte> buffer)
+    {
+        var writeTask = httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted);
+
+        if (!writeTask.IsCompleted)
+        {
+            _threadLocalBuffer = null;
+        }
+
+        return writeTask;
     }
 
     private static readonly ConcurrentDictionary<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptionsCache = new();
