@@ -107,7 +107,9 @@ public static class MartenServiceCollectionExtensions
     /// of an operation that sent but wrote nothing. <see cref="MartenUnitOfWork"/> closes that gap for a listener added
     /// here: when it saves a session with nothing to save and one of the session's listeners was added here, it queues a
     /// statement that does nothing, so that Marten runs the listeners and saves what the drain writes. That costs one
-    /// round trip for such a save. A drain that was never passed to this method — one added only to a session's own
+    /// round trip for such a save, and needs the database even when nothing was sent. A drain that is also an
+    /// <see cref="IOutboxDrainListener"/> avoids both: it is run that way only when it says it has messages to write, so a
+    /// save that has nothing to write, and sends nothing, touches no database, as legacy's did. A drain that was never passed to this method — one added only to a session's own
     /// listeners, as legacy's per-session outbox listener was, or only to <see cref="StoreOptions.Listeners"/> — gets no
     /// such guarantee, and must make sure the session has something to save itself.
     /// </para>

@@ -64,6 +64,70 @@ public class MartenUnitOfWorkOutboxDrainTests
         (await query.LoadAsync<VersionedDocument>("DOC-1")).Should().NotBeNull();
     }
 
+    [PostgresFact]
+    public async Task A_drain_that_says_it_has_messages_writes_when_the_unit_of_work_saves_a_session_with_nothing_else_to_save()
+    {
+        await using var database = await PostgresTestStore.CreateAsync();
+        database.Store.Options.AddBlueprintOutboxListener(new PendingAwareDrainListener(database.OutboxTable, "MSG-1", hasPendingMessages: true));
+
+        await using (var session = database.Store.LightweightSession())
+        {
+            await new MartenUnitOfWork(session).SaveChangesAsync();
+        }
+
+        (await database.ReadOutboxIdsAsync()).Should().Equal("MSG-1");
+    }
+
+    [PostgresFact]
+    public async Task A_drain_that_says_it_has_no_messages_is_not_run_for_a_session_with_nothing_else_to_save()
+    {
+        // Legacy's session had work exactly when a message had been sent, because the Rebus commit queued its outbox rows
+        // on the session before the save (Signature365 8b40ecc961, AzureAdOauthReturnCommandExecutorPipeline.cs:133-137);
+        // otherwise its save had nothing to do and Marten returned before running any listener (DocumentSessionBase
+        // .SaveChangesAsync :569-572, pinned by MartenSaveListenerPostgresTests).
+        await using var database = await PostgresTestStore.CreateAsync();
+        var drain = new PendingAwareDrainListener(database.OutboxTable, "MSG-1", hasPendingMessages: false);
+        database.Store.Options.AddBlueprintOutboxListener(drain);
+
+        await using (var session = database.Store.LightweightSession())
+        {
+            await new MartenUnitOfWork(session).SaveChangesAsync();
+        }
+
+        drain.Ran.Should().BeFalse("nothing was sent and nothing stored, so legacy's save did nothing");
+        (await database.ReadOutboxIdsAsync()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_session_with_nothing_to_save_whose_drain_has_no_messages_is_saved_without_touching_the_database()
+    {
+        // A handler that writes nothing and sends nothing needed no database under legacy, so it must not fail, and be
+        // retried or dead-lettered, while PostgreSQL is down. Nothing listens on this port, so any statement would fail.
+        var options = UnreachableOptions();
+        options.AddBlueprintOutboxListener(new PendingAwareDrainListener("unused", "MSG-1", hasPendingMessages: false));
+        using var store = new DocumentStore(options);
+        await using var session = store.LightweightSession();
+
+        var save = () => new MartenUnitOfWork(session).SaveChangesAsync();
+
+        await save.Should().NotThrowAsync("a drain with nothing to write needs no connection");
+    }
+
+    [Fact]
+    public async Task A_session_with_nothing_to_save_whose_drain_cannot_say_whether_it_has_messages_still_runs_it()
+    {
+        // A drain that is not an IOutboxDrainListener cannot say, so its save still opens a connection to run it rather
+        // than risk losing what it would write: against an unreachable database, that is a failed save.
+        var options = UnreachableOptions();
+        options.AddBlueprintOutboxListener(new DrainListener("unused", "MSG-1"));
+        using var store = new DocumentStore(options);
+        await using var session = store.LightweightSession();
+
+        var save = () => new MartenUnitOfWork(session).SaveChangesAsync();
+
+        await save.Should().ThrowAsync<Exception>("the drain is run, which needs the database");
+    }
+
     [Fact]
     public async Task A_session_with_nothing_to_save_and_no_outbox_listener_is_saved_without_touching_the_database()
     {
@@ -105,6 +169,29 @@ public class MartenUnitOfWorkOutboxDrainTests
             }
 
             session.QueueSqlCommand($"insert into {outboxTable} (id, body) values (?, ?)", id, "drained");
+
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>A consumer's drain that says whether it has messages to write, and writes one outbox row when it runs.</summary>
+    private sealed class PendingAwareDrainListener(string outboxTable, string id, bool hasPendingMessages) : DocumentSessionListenerBase, IOutboxDrainListener
+    {
+        public bool Ran { get; private set; }
+
+        public bool HasPendingMessages(IDocumentSession session)
+        {
+            return hasPendingMessages;
+        }
+
+        public override Task BeforeSaveChangesAsync(IDocumentSession session, CancellationToken token)
+        {
+            this.Ran = true;
+
+            if (hasPendingMessages)
+            {
+                session.QueueSqlCommand($"insert into {outboxTable} (id, body) values (?, ?)", id, "drained");
+            }
 
             return Task.CompletedTask;
         }

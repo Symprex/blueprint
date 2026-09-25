@@ -25,12 +25,26 @@ internal static class OutboxListenerRegistry
     }
 
     /// <summary>
-    /// Gets whether any of <paramref name="listeners"/> was added as an outbox drain.
+    /// Gets whether one of <paramref name="session"/>'s listeners is an outbox drain that may have something to write: one
+    /// that is not an <see cref="IOutboxDrainListener"/>, so cannot say, or one that says it has messages.
     /// </summary>
-    /// <param name="listeners">A session's listeners.</param>
-    /// <returns><see langword="true"/> when at least one of them is an outbox drain.</returns>
-    public static bool ContainsAny(IEnumerable<IDocumentSessionListener> listeners)
+    /// <param name="session">The session about to be saved with nothing else to save.</param>
+    /// <returns><see langword="true"/> when a drain must be run for the save.</returns>
+    public static bool HasDrainToRun(IDocumentSession session)
     {
-        return listeners.Any(static listener => _listeners.TryGetValue(listener, out _));
+        foreach (var listener in session.Listeners)
+        {
+            if (!_listeners.TryGetValue(listener, out _))
+            {
+                continue;
+            }
+
+            if (listener is not IOutboxDrainListener drain || drain.HasPendingMessages(session))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

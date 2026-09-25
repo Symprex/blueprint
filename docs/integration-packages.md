@@ -159,6 +159,14 @@ Two Marten 6.4.2 facts the drain depends on, pinned against a real PostgreSQL by
   listeners run and what the drain writes is saved. It costs one round trip for such a save, and none where no such
   drain is added. A drain attached any other way, such as only to a session's own listeners as legacy's
   `UseMartenSessionAsOutbox` attached its listener, gets no such guarantee.
+- A drain that is not an `IOutboxDrainListener` is run that way on **every** save with nothing to save, so an operation
+  that writes nothing and sends nothing then needs the database: a plain handler is retried and dead-lettered while
+  PostgreSQL is down, where legacy's empty save touched no database (its Rebus commit queued the outbox rows on the
+  session, so the session had work exactly when a message had been sent). A drain that implements
+  `IOutboxDrainListener.HasPendingMessages(session)` — the ambient Rebus transaction has messages it has not drained yet —
+  is run that way only when it says so, which is legacy's behaviour. It is asked only for a session with nothing else to
+  save, before the save, and must not change the session; answering `true` when unsure costs a round trip, answering
+  `false` wrongly loses messages.
 
 Marten also creates a document type's storage before it runs the listeners, so a drain that stores a document type the
 session did not already hold needs that type's schema in place beforehand, as it is once a deployed app has applied

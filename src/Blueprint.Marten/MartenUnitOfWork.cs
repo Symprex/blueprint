@@ -23,7 +23,9 @@ namespace Blueprint.Marten;
 /// first <c>BeforeSaveChangesAsync</c>. So when the session has nothing to save but one of its listeners is an outbox drain
 /// added with <see cref="MartenServiceCollectionExtensions.AddBlueprintOutboxListener"/>, the save first queues
 /// <see cref="DrainTriggerSql"/>, which does nothing, so that the drain runs and what it writes is saved. That is the one
-/// case in which this save opens a connection for a session with nothing to save.
+/// case in which this save opens a connection for a session with nothing to save. A drain that is an
+/// <see cref="IOutboxDrainListener"/> is run that way only when it says it has messages to write, so a save with nothing
+/// to write and nothing sent needs no database, as legacy's did; one that is not is run that way on every such save.
 /// </para>
 /// <para>
 /// It is an <see cref="Persistence.IUnitOfWorkSaveGuard"/>: once it has saved, work queued on the session — documents
@@ -82,8 +84,8 @@ public sealed class MartenUnitOfWork : Persistence.IUnitOfWork, Persistence.IUni
         }
 
         // Otherwise Marten would return before the drain ran, and an operation that sent but wrote nothing would lose its
-        // messages.
-        if (!HasPendingWork(this._session) && OutboxListenerRegistry.ContainsAny(this._session.Listeners))
+        // messages. A drain that says it has none leaves the save with nothing to do, touching no database, as legacy's was.
+        if (!HasPendingWork(this._session) && OutboxListenerRegistry.HasDrainToRun(this._session))
         {
             this._session.QueueSqlCommand(DrainTriggerSql);
         }
