@@ -130,6 +130,44 @@ public sealed class ResourceEventAuditRepositoryTests
     }
 
     [Fact]
+    public async Task A_repository_that_throws_a_client_error_ApiException_is_logged_at_information_as_legacy_logged_a_non_5xx_one()
+    {
+        // Legacy's pipeline catch logged an escaped ApiException whose HttpStatus was below 500 as _NonException: Information,
+        // EventId(4, "Non500Exception"), "A non-5xx ApiException has occurred with message {ExceptionMessage}", and only any
+        // other exception as the Error above (Signature365 8b40ecc961, AdminPortalCloseTenantCommandExecutorPipeline.cs:15,
+        // :165-176).
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint
+            .AddResourceEventAuditRepository<ClientErrorResourceEventAuditRepository>());
+
+        var body = await host.PostAsync("api/audited-events/widgets");
+
+        body.Should().Contain("widget-7");
+        host.ServerErrors.Should().BeEmpty("a non-5xx ApiException was not an error to legacy");
+        var entry = host.Logged.Should().ContainSingle(static e => e.Category == "CreateAuditedWidgetCommandExecutorPipeline").Subject;
+        entry.Level.Should().Be(LogLevel.Information);
+        entry.EventId.Should().Be(new EventId(4, "Non500Exception"));
+        entry.Message.Should().Be("A non-5xx ApiException has occurred with message The event was already recorded.");
+        entry.Exception.Should().BeOfType<ApiException>().Which.HttpStatus.Should().Be(409);
+    }
+
+    [Fact]
+    public async Task A_repository_that_throws_a_server_error_ApiException_is_logged_as_an_error_as_legacy_logged_it()
+    {
+        // The other branch of the same catch (AdminPortalCloseTenantCommandExecutorPipeline.cs:16, :170-176).
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint
+            .AddResourceEventAuditRepository<ServerErrorResourceEventAuditRepository>());
+
+        await host.PostAsync("api/audited-events/widgets");
+
+        var entry = host.Logged.Should().ContainSingle(static e => e.Category == "CreateAuditedWidgetCommandExecutorPipeline").Subject;
+        entry.Level.Should().Be(LogLevel.Error);
+        entry.EventId.Should().Be(new EventId(5, "UnhandledException"));
+        entry.Exception.Should().BeOfType<ApiException>().Which.HttpStatus.Should().Be(503);
+    }
+
+    [Fact]
     public async Task A_repository_that_cannot_be_constructed_is_logged_as_an_error_by_the_pipeline_and_does_not_fail_the_command_whose_changes_it_audits()
     {
         // As a repository whose AddAsync throws (above): its failure is the audit's, not the saved operation's. Legacy
@@ -455,6 +493,34 @@ public sealed class ResourceEventAuditRepositoryTests
         }
     }
 
+    /// <summary>A repository whose every write is refused with a client error.</summary>
+    public sealed class ClientErrorResourceEventAuditRepository : IResourceEventAuditRepository
+    {
+        public Task<object?> GetCurrentDataAsync(string href, Type resourceType)
+        {
+            return Task.FromResult<object?>(null);
+        }
+
+        public Task AddAsync(ResourceEvent resourceEvent)
+        {
+            throw new ApiException("The event was already recorded.", 409);
+        }
+    }
+
+    /// <summary>A repository whose every write fails with a server error.</summary>
+    public sealed class ServerErrorResourceEventAuditRepository : IResourceEventAuditRepository
+    {
+        public Task<object?> GetCurrentDataAsync(string href, Type resourceType)
+        {
+            return Task.FromResult<object?>(null);
+        }
+
+        public Task AddAsync(ResourceEvent resourceEvent)
+        {
+            throw new ApiException("The audit store is down.", 503);
+        }
+    }
+
     /// <summary>A repository whose construction fails, as one whose store client cannot be created does.</summary>
     public sealed class UnconstructableResourceEventAuditRepository : IResourceEventAuditRepository
     {
@@ -493,20 +559,25 @@ public sealed class ResourceEventAuditRepositoryTests
 
         private readonly WebApplication _app;
 
-        private AuditingHost(WebApplication app, System.Net.Http.HttpClient client, ConcurrentQueue<ServerError> serverErrors)
+        private AuditingHost(WebApplication app, System.Net.Http.HttpClient client, ConcurrentQueue<ServerError> serverErrors, ConcurrentQueue<LoggedEntry> logged)
         {
             this._app = app;
             this.Client = client;
             this.ServerErrors = serverErrors;
+            this.Logged = logged;
         }
 
         public System.Net.Http.HttpClient Client { get; }
 
         public ConcurrentQueue<ServerError> ServerErrors { get; }
 
+        /// <summary>Gets every entry logged at Information or above.</summary>
+        public ConcurrentQueue<LoggedEntry> Logged { get; }
+
         public static async Task<AuditingHost> StartAsync(AuditRecords records, Action<BlueprintServiceBuilder> configure)
         {
             var serverErrors = new ConcurrentQueue<ServerError>();
+            var logged = new ConcurrentQueue<LoggedEntry>();
             var builder = WebApplication.CreateSlimBuilder();
 
             builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -518,7 +589,7 @@ public sealed class ResourceEventAuditRepositoryTests
 
             // Logging enabled at Critical is also what makes ASP.NET Core start the request's activity.
             builder.Logging.ClearProviders();
-            builder.Logging.AddProvider(new ErrorRecordingLoggerProvider(serverErrors));
+            builder.Logging.AddProvider(new ErrorRecordingLoggerProvider(serverErrors, logged));
             builder.Services.AddSingleton(records);
 
             // The one expander type every test expanding DepartmentResource uses (see TestDepartmentExpander's remarks).
@@ -546,7 +617,7 @@ public sealed class ResourceEventAuditRepositoryTests
 
             var client = new System.Net.Http.HttpClient { BaseAddress = new Uri(app.Urls.First().TrimEnd('/') + "/") };
 
-            return new AuditingHost(app, client, serverErrors);
+            return new AuditingHost(app, client, serverErrors, logged);
         }
 
         public Task<string> PostAsync(string path, params (string Name, string Value)[] headers)
@@ -601,11 +672,19 @@ public sealed class ResourceEventAuditRepositoryTests
     /// <param name="Exception">The exception logged, or one carrying the message when none was.</param>
     private sealed record ServerError(string Category, Exception Exception);
 
-    private sealed class ErrorRecordingLoggerProvider(ConcurrentQueue<ServerError> errors) : ILoggerProvider
+    /// <summary>An entry logged at Information or above.</summary>
+    /// <param name="Category">The logger's category.</param>
+    /// <param name="Level">The entry's level.</param>
+    /// <param name="EventId">The entry's event id.</param>
+    /// <param name="Message">The formatted message.</param>
+    /// <param name="Exception">The exception logged, if any.</param>
+    private sealed record LoggedEntry(string Category, LogLevel Level, EventId EventId, string Message, Exception? Exception);
+
+    private sealed class ErrorRecordingLoggerProvider(ConcurrentQueue<ServerError> errors, ConcurrentQueue<LoggedEntry> logged) : ILoggerProvider
     {
         public ILogger CreateLogger(string categoryName)
         {
-            return new ErrorRecordingLogger(categoryName, errors);
+            return new ErrorRecordingLogger(categoryName, errors, logged);
         }
 
         public void Dispose()
@@ -613,7 +692,7 @@ public sealed class ResourceEventAuditRepositoryTests
         }
     }
 
-    private sealed class ErrorRecordingLogger(string category, ConcurrentQueue<ServerError> errors) : ILogger
+    private sealed class ErrorRecordingLogger(string category, ConcurrentQueue<ServerError> errors, ConcurrentQueue<LoggedEntry> logged) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull
@@ -623,11 +702,16 @@ public sealed class ResourceEventAuditRepositoryTests
 
         public bool IsEnabled(LogLevel logLevel)
         {
-            return logLevel >= LogLevel.Error;
+            return logLevel >= LogLevel.Information;
         }
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
+            if (logLevel >= LogLevel.Information)
+            {
+                logged.Enqueue(new LoggedEntry(category, logLevel, eventId, formatter(state, exception), exception));
+            }
+
             if (logLevel >= LogLevel.Error)
             {
                 errors.Enqueue(new ServerError(category, exception ?? new InvalidOperationException(formatter(state, exception))));

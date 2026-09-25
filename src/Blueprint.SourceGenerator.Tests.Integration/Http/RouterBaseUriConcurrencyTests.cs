@@ -64,13 +64,45 @@ public sealed class RouterBaseUriConcurrencyTests
         wrongHosts.Should().BeEmpty("every request's self link is made under its own host");
     }
 
-    private static async Task<string> SendAsync(RequestDelegate requestDelegate, IServiceProvider provider, string host)
+    [Fact]
+    public async Task A_request_whose_path_base_differs_only_by_case_has_links_made_under_its_own_path_base()
+    {
+        // Legacy wrote the request's own PathBase into every request's base URI (ApplicationBuilderExtensions.cs:232), so
+        // a request under "/GATEWAY" had "/GATEWAY" links though the one before it was under "/gateway". PathString's own
+        // equality ignores case.
+        var services = new ServiceCollection().AddLogging();
+        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+        await using var provider = services.BuildServiceProvider();
+        var endpoint = FindWidgetEndpoint(provider);
+
+        var first = await SendAsync(endpoint.RequestDelegate!, provider, "a.example.test", "/gateway");
+        var second = await SendAsync(endpoint.RequestDelegate!, provider, "a.example.test", "/GATEWAY");
+
+        first.Should().Contain("\"http://a.example.test/gateway/api/link-wire/widgets/widget-1\"");
+        second.Should().Contain("\"http://a.example.test/GATEWAY/api/link-wire/widgets/widget-1\"", "the second request's links are made under its own path base");
+    }
+
+    private static RouteEndpoint FindWidgetEndpoint(IServiceProvider provider)
+    {
+        var endpoints = new TestEndpointRouteBuilder(provider);
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        return endpoints.DataSources
+            .SelectMany(static dataSource => dataSource.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Single(static e => e.RoutePattern.RawText == "api/link-wire/widgets/{Id}"
+                                && e.Metadata.GetMetadata<HttpMethodMetadata>() is { } methods
+                                && methods.HttpMethods.Contains("GET"));
+    }
+
+    private static async Task<string> SendAsync(RequestDelegate requestDelegate, IServiceProvider provider, string host, string pathBase = "")
     {
         await using var scope = provider.CreateAsyncScope();
         var httpContext = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
         httpContext.Request.Method = HttpMethods.Get;
         httpContext.Request.Scheme = "http";
         httpContext.Request.Host = new HostString(host);
+        httpContext.Request.PathBase = pathBase;
         httpContext.Request.Path = "/api/link-wire/widgets/widget-1";
         httpContext.Request.RouteValues = new RouteValueDictionary { ["Id"] = "widget-1" };
 

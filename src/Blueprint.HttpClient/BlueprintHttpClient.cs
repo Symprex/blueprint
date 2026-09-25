@@ -32,6 +32,11 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     private const string StackTraceExtensionName = "stackTrace";
 
     /// <summary>
+    /// The problem member naming the occurrence, which can name the remote end's own host.
+    /// </summary>
+    private const string InstanceMemberName = "instance";
+
+    /// <summary>
     /// Caches <see cref="PropertyInfo"/> arrays per operation type to avoid repeated
     /// <see cref="Type.GetProperties(BindingFlags)"/> allocations on each request.
     /// </summary>
@@ -61,8 +66,12 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <typeparam name="TResponse">The expected response type.</typeparam>
     /// <param name="operation">The operation to send.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The deserialized response, or <c>default</c> for 204 No Content responses.</returns>
+    /// <returns>
+    /// The deserialized response. A 204 No Content is <see cref="StatusCodeResult.NoContent.Instance"/> when
+    /// <typeparamref name="TResponse"/> can hold a <see cref="StatusCodeResult"/>, as legacy's client made one.
+    /// </returns>
     /// <exception cref="BlueprintApiException">Thrown for non-success status codes (4xx/5xx).</exception>
+    /// <exception cref="InvalidOperationException">A 204 No Content for a <typeparamref name="TResponse"/> that cannot hold a <see cref="StatusCodeResult"/>, as legacy's client threw.</exception>
     /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity with validation errors.</exception>
     public Task<TResponse?> SendAsync<TResponse>(
         IOperation operation,
@@ -79,8 +88,12 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <param name="operation">The operation to send.</param>
     /// <param name="options">Optional call options to modify the outgoing request (e.g. add headers).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The deserialized response, or <c>default</c> for 204 No Content responses.</returns>
+    /// <returns>
+    /// The deserialized response. A 204 No Content is <see cref="StatusCodeResult.NoContent.Instance"/> when
+    /// <typeparamref name="TResponse"/> can hold a <see cref="StatusCodeResult"/>, as legacy's client made one.
+    /// </returns>
     /// <exception cref="BlueprintApiException">Thrown for non-success status codes (4xx/5xx).</exception>
+    /// <exception cref="InvalidOperationException">A 204 No Content for a <typeparamref name="TResponse"/> that cannot hold a <see cref="StatusCodeResult"/>, as legacy's client threw.</exception>
     /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity with validation errors.</exception>
     public async Task<TResponse?> SendAsync<TResponse>(
         IOperation operation,
@@ -95,7 +108,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         try
         {
             using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            return await this.HandleResponseAsync<TResponse>(request, response, cancellationToken).ConfigureAwait(false);
+            return await this.HandleResponseAsync<TResponse>(operation.GetType().Name, request, response, cancellationToken).ConfigureAwait(false);
         }
         catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
         {
@@ -918,7 +931,8 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// Problem details are carried through, except that a 5xx response's detail is replaced, and kept to the inner
     /// exception, and the <c>stackTrace</c> extension (in any casing) of a 5xx response, or of a problem whose own status is
     /// 5xx, dropped, because they describe the remote end's
-    /// internals; and <c>instance</c> is never carried, as legacy's client carried it at no status. A body that is not JSON
+    /// internals; and the <c>instance</c> member is never carried, as legacy's client carried it at no status (written in
+    /// another casing it is an extension, as it was to legacy, dropped from a 5xx with the stack trace). A body that is not JSON
     /// maps to <c>not_found</c> for a 404 (naming the path, never the host) and to <c>invalid_json</c> otherwise.
     /// </para>
     /// <para>
@@ -937,7 +951,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         try
         {
-            problem = JsonSerializer.Deserialize<ProblemDetailsDto>(body, this._jsonOptions);
+            problem = this.ReadProblemDetails(body);
         }
         catch (JsonException e)
         {
@@ -997,7 +1011,11 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
             foreach (var (key, value) in problem.Extensions)
             {
-                if (!isServerError || !string.Equals(key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase))
+                // "instance" in another casing is an extension, as it was to legacy (ReadProblemDetails), and like the member
+                // it can name the remote end's internals.
+                if (!isServerError
+                    || !(string.Equals(key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(key, InstanceMemberName, StringComparison.OrdinalIgnoreCase)))
                 {
                     extensions[key] = ToLegacyExtensionValue(value)!;
                 }
@@ -1011,6 +1029,84 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             response.StatusCode,
             body,
             innerException);
+    }
+
+    /// <summary>
+    /// Reads an error body as legacy's <c>ProblemDetailsJsonConverter</c> read one (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint.Http/ProblemDetailsJsonConverter.cs:45-92</c>): <c>type</c>, <c>title</c>, <c>detail</c>,
+    /// <c>instance</c> and <c>status</c> by their exact names (<c>reader.ValueTextEquals</c>), and every other member, one of
+    /// those five in another casing included, as an extension.
+    /// </summary>
+    /// <param name="body">The response body.</param>
+    /// <returns>The problem, or <see langword="null"/> for a JSON <c>null</c>.</returns>
+    /// <exception cref="JsonException">
+    /// The body is not JSON, not an object, or has one of the five members as a value of the wrong kind, as legacy's reader
+    /// threw for one.
+    /// </exception>
+    private ProblemDetailsDto? ReadProblemDetails(string body)
+    {
+        // The client's own reading options apply, except that a document can skip comments but not keep them.
+        using var document = JsonDocument.Parse(body, new JsonDocumentOptions
+        {
+            AllowTrailingCommas = this._jsonOptions.AllowTrailingCommas,
+            CommentHandling = this._jsonOptions.ReadCommentHandling == JsonCommentHandling.Disallow ? JsonCommentHandling.Disallow : JsonCommentHandling.Skip,
+            MaxDepth = this._jsonOptions.MaxDepth,
+        });
+        var root = document.RootElement;
+
+        if (root.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException($"The error response is a JSON {root.ValueKind}, not an object.");
+        }
+
+        var problem = new ProblemDetailsDto();
+
+        foreach (var member in root.EnumerateObject())
+        {
+            switch (member.Name)
+            {
+                case "type":
+                    problem.Type = ReadProblemString(member);
+                    break;
+                case "title":
+                    problem.Title = ReadProblemString(member);
+                    break;
+                case "detail":
+                    problem.Detail = ReadProblemString(member);
+                    break;
+                case InstanceMemberName:
+                    problem.Instance = ReadProblemString(member);
+                    break;
+                case "status":
+                    problem.Status = member.Value.ValueKind switch
+                    {
+                        JsonValueKind.Null => null,
+                        JsonValueKind.Number when member.Value.TryGetInt32(out var status) => status,
+                        _ => throw new JsonException($"The problem's status is not an integer: {member.Value.GetRawText()}"),
+                    };
+                    break;
+                default:
+                    (problem.Extensions ??= new Dictionary<string, JsonElement>(StringComparer.Ordinal))[member.Name] = member.Value.Clone();
+                    break;
+            }
+        }
+
+        return problem;
+    }
+
+    private static string? ReadProblemString(JsonProperty member)
+    {
+        return member.Value.ValueKind switch
+        {
+            JsonValueKind.String => member.Value.GetString(),
+            JsonValueKind.Null => null,
+            _ => throw new JsonException($"The problem's {member.Name} is not a string: {member.Value.GetRawText()}"),
+        };
     }
 
     /// <summary>
@@ -1042,6 +1138,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     }
 
     private async Task<TResponse?> HandleResponseAsync<TResponse>(
+        string operationName,
         HttpRequestMessage request,
         HttpResponseMessage response,
         CancellationToken cancellationToken)
@@ -1089,7 +1186,22 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         if (response.StatusCode == HttpStatusCode.NoContent)
         {
-            return default;
+            // A result the host writes as an empty 204 is read as that result, as a union's member is. Otherwise, as legacy's
+            // client had nothing to read in a 204, it is a StatusCodeResult of the status when the response type can hold
+            // one, and anything else throws (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:199-228).
+            // StatusCodeResult is abstract here, so the 204's is its own nested result.
+            if (CreateBodilessResult(typeof(TResponse), (int)HttpStatusCode.NoContent) is { } bodiless)
+            {
+                return (TResponse)bodiless;
+            }
+
+            if (typeof(StatusCodeResult).IsAssignableTo(typeof(TResponse)))
+            {
+                return (TResponse)(object)StatusCodeResult.NoContent.Instance;
+            }
+
+            throw new InvalidOperationException(
+                $"Could not understand the response of calling {operationName}: {DescribeRequestedResource(request)}");
         }
 
         var contentType = response.Content.Headers.ContentType?.MediaType;
@@ -1174,62 +1286,57 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         foreach (var memberType in memberTypes)
         {
-            object? member = null;
+            var member = mediaType is null ? CreateBodilessResult(memberType, status) : null;
 
-            if (typeof(StatusCodeResult).IsAssignableFrom(memberType))
+            if (memberType == typeof(PlainTextResult) && mediaType is not null)
             {
-                if (mediaType is null && FindStatusCodeResult(memberType, status) is { } statusCodeResult)
-                {
-                    member = statusCodeResult;
-                }
-            }
-            else if (memberType == typeof(HttpNoContentResult))
-            {
-                // The host writes one as an empty 204 with no content type.
-                if (mediaType is null && status == (int)HttpStatusCode.NoContent)
-                {
-                    member = new HttpNoContentResult();
-                }
-            }
-            else if (memberType == typeof(NoResultOperationResult))
-            {
-                // The host writes one as an empty 200 with no content type.
-                if (mediaType is null && status == (int)HttpStatusCode.OK)
-                {
-                    member = NoResultOperationResult.Instance;
-                }
-            }
-            else if (memberType == typeof(HttpAcceptedResult))
-            {
-                // The host writes one as an empty 202 with no content type.
-                if (mediaType is null && status == (int)HttpStatusCode.Accepted)
-                {
-                    member = new HttpAcceptedResult();
-                }
-            }
-            else if (memberType == typeof(KeyOnlyResourceEventResult))
-            {
-                // The host writes one as an empty 201, 200 or 204 with no content type, the status chosen by its change
-                // type, and writes nothing else of it.
-                if (mediaType is null && TryGetKeyOnlyChangeType(status, out var changeType))
-                {
-                    member = new KeyOnlyResourceEventResult(changeType);
-                }
-            }
-            else if (memberType == typeof(PlainTextResult))
-            {
-                if (mediaType is not null)
-                {
-                    var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-                    member = new PlainTextResult(text, response.StatusCode) { ContentType = mediaType };
-                }
+                member = new PlainTextResult(text, response.StatusCode) { ContentType = mediaType };
             }
 
             if (member is not null)
             {
                 return ToUnion(unionType, memberType, member);
             }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The <paramref name="resultType"/> a response with no body and <paramref name="status"/> is, when the host writes
+    /// one that way: a <see cref="StatusCodeResult"/> by its status, an <see cref="HttpNoContentResult"/> as a 204, a
+    /// <see cref="NoResultOperationResult"/> as a 200, an <see cref="HttpAcceptedResult"/> as a 202, and a
+    /// <see cref="KeyOnlyResourceEventResult"/> as the 201, 200 or 204 of its change type.
+    /// </summary>
+    /// <returns>The result, or <see langword="null"/> when the host writes no <paramref name="resultType"/> so.</returns>
+    private static object? CreateBodilessResult(Type resultType, int status)
+    {
+        if (typeof(StatusCodeResult).IsAssignableFrom(resultType))
+        {
+            return FindStatusCodeResult(resultType, status);
+        }
+
+        if (resultType == typeof(HttpNoContentResult))
+        {
+            return status == (int)HttpStatusCode.NoContent ? new HttpNoContentResult() : null;
+        }
+
+        if (resultType == typeof(NoResultOperationResult))
+        {
+            return status == (int)HttpStatusCode.OK ? NoResultOperationResult.Instance : null;
+        }
+
+        if (resultType == typeof(HttpAcceptedResult))
+        {
+            return status == (int)HttpStatusCode.Accepted ? new HttpAcceptedResult() : null;
+        }
+
+        // The host writes a key-only event's change type as its status, and nothing else of it.
+        if (resultType == typeof(KeyOnlyResourceEventResult))
+        {
+            return TryGetKeyOnlyChangeType(status, out var changeType) ? new KeyOnlyResourceEventResult(changeType) : null;
         }
 
         return null;
@@ -1383,7 +1490,8 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     }
 
     /// <summary>
-    /// Internal DTO for deserializing RFC 9457 / RFC 7807 problem details responses, keeping any further members.
+    /// An RFC 9457 / RFC 7807 problem details response as <see cref="ReadProblemDetails"/> reads one, keeping any further
+    /// members.
     /// </summary>
     private sealed class ProblemDetailsDto
     {
@@ -1399,10 +1507,8 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         /// Gets or sets the reference to this occurrence, read so that it is not taken for an extension, and never passed
         /// on: legacy's converter read it into a member of its own, which its client never carried.
         /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("instance")]
         public string? Instance { get; set; }
 
-        [System.Text.Json.Serialization.JsonExtensionData]
         public Dictionary<string, JsonElement>? Extensions { get; set; }
     }
 

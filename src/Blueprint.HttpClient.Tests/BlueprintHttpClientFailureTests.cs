@@ -215,6 +215,49 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         extensions["owner"].Should().BeOfType<JsonElement>().Which.GetProperty("id").GetString().Should().Be("u-1");
     }
 
+    [Fact]
+    public async Task When_a_problem_writes_a_standard_member_in_another_casing_then_it_is_an_extension_as_legacy_read_it()
+    {
+        // Legacy's ProblemDetailsJsonConverter matched type, title, detail, instance and status by their exact names
+        // (reader.ValueTextEquals, Signature365 8b40ecc961, Blueprint.Http/ProblemDetailsJsonConverter.cs:47-74); any other
+        // member, one of those five in another casing included, was an extension (:75-91), and its client carried every
+        // extension of a 4xx problem (Common.Core/Api/BlueprintHttpClient.cs:167-172).
+        var client = this.CreateClient(
+            HttpStatusCode.Conflict,
+            """{"type":"template_conflict","Title":"Capitalised title","status":409,"Detail":"Capitalised detail","Instance":"/templates/t-1"}""",
+            "application/problem+json");
+
+        var act = () => client.SendAsync(new ArchiveTemplateCommand { Id = "t-1" });
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Type.Should().Be("template_conflict");
+        exception.Title.Should().BeNull("\"Title\" is not \"title\"");
+        exception.Detail.Should().BeNull("\"Detail\" is not \"detail\"");
+        exception.HttpStatus.Should().Be(409);
+        exception.Extensions.Should().BeEquivalentTo(new Dictionary<string, object>
+        {
+            ["Title"] = "Capitalised title",
+            ["Detail"] = "Capitalised detail",
+            ["Instance"] = "/templates/t-1",
+        });
+    }
+
+    [Fact]
+    public async Task When_a_server_error_problem_writes_instance_in_another_casing_then_it_is_not_carried()
+    {
+        // Legacy carried it as an extension (above) on a 5xx too; like the stack trace it names the remote end's internals,
+        // so it is dropped from a server error, as the instance member and the stack trace are.
+        var client = this.CreateClient(
+            HttpStatusCode.InternalServerError,
+            $$"""{"type":"upstream_error","title":"Upstream service failed","status":500,"Instance":"https://{{InternalHost}}/templates/t-1","traceId":"0af7651916cd43dd8448eb211c80319c"}""",
+            "application/problem+json");
+
+        var act = () => client.SendAsync<JsonElement>(new GetTemplateQuery { Id = "t-1" });
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Extensions.Keys.Should().BeEquivalentTo(["traceId"]);
+    }
+
     [Theory]
     [InlineData("""{"type":"template_conflict","title":"Conflict","detail":"No status."}""")]
     [InlineData("""{"type":"template_conflict","title":"Conflict","status":null,"detail":"A null status."}""")]

@@ -1294,10 +1294,13 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Records an audit repository's failure as a <c>blueprint.resource_event_audit.failed</c> activity event and logs it at
-    /// <see cref="LogLevel.Error"/> through the operation's pipeline logger, with the event id, message and level legacy's
-    /// pipeline logged an escaped exception with (<c>_UnhandledException</c>, <c>EventId(5, "UnhandledException")</c>), so
-    /// whatever watched legacy's logs for it still sees it.
+    /// Records an audit repository's failure as a <c>blueprint.resource_event_audit.failed</c> activity event and logs it
+    /// through the operation's pipeline logger with the event id, message and level legacy's pipeline logged an escaped
+    /// exception with, so whatever watched legacy's logs for it still sees it: an <see cref="ApiException"/> whose
+    /// <see cref="ApiException.HttpStatus"/> is below 500 at <see cref="LogLevel.Information"/> (<c>_NonException</c>,
+    /// <c>EventId(4, "Non500Exception")</c>), any other at <see cref="LogLevel.Error"/> (<c>_UnhandledException</c>,
+    /// <c>EventId(5, "UnhandledException")</c>) (Signature365 <c>8b40ecc961</c>,
+    /// <c>AdminPortalCloseTenantCommandExecutorPipeline.cs:15-16</c>, <c>:163-176</c>).
     /// </summary>
     private static void RecordResourceEventAuditRepositoryFailure(
         ApiOperationContext context,
@@ -1314,7 +1317,16 @@ public static class PipelineHelpers
             resourceEvent.EventId,
             resourceEvent.Data is IHaveResourceKey resourceKey ? resourceKey.ResourceKey ?? string.Empty : string.Empty);
 
-        if (logger is not null)
+        if (logger is null)
+        {
+            return;
+        }
+
+        if (resourceEventAuditException is ApiException { HttpStatus: < 500 })
+        {
+            _logResourceEventAuditRepositoryRefused(logger, resourceEventAuditException.Message, resourceEventAuditException);
+        }
+        else
         {
             _logResourceEventAuditRepositoryFailed(logger, resourceEventAuditException.Message, resourceEventAuditException);
         }
@@ -1549,6 +1561,14 @@ public static class PipelineHelpers
             LogLevel.Error,
             new EventId(5, "UnhandledException"),
             "An unhandled exception has occurred with message {ExceptionMessage}");
+
+    // Legacy's pipeline logged an escaped non-5xx ApiException as _NonException instead (Signature365 8b40ecc961,
+    // AdminPortalCloseTenantCommandExecutorPipeline.cs:15, :165-169).
+    private static readonly Action<ILogger, string, Exception?> _logResourceEventAuditRepositoryRefused =
+        LoggerMessage.Define<string>(
+            LogLevel.Information,
+            new EventId(4, "Non500Exception"),
+            "A non-5xx ApiException has occurred with message {ExceptionMessage}");
 
     private static readonly Action<ILogger, string, string, Exception?> _logSelfQueryFailed =
         LoggerMessage.Define<string, string>(

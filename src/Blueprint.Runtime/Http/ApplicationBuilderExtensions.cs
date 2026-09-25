@@ -497,10 +497,12 @@ public static class EndpointRouteBuilderExtensions
             var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
             var baseUriCache = this._baseUriCache;
 
+            // The path base is compared by its characters: PathString's own equality ignores case, and legacy wrote each
+            // request's own path base into its base URI (Signature365 8b40ecc961, ApplicationBuilderExtensions.cs:232).
             if (baseUriCache is null
                 || !string.Equals(scheme, baseUriCache.Scheme, StringComparison.Ordinal)
                 || !string.Equals(host, baseUriCache.Host, StringComparison.Ordinal)
-                || httpRequest.PathBase != baseUriCache.RequestPathBase)
+                || !string.Equals(httpRequest.PathBase.Value, baseUriCache.RequestPathBase.Value, StringComparison.Ordinal))
             {
                 var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
                 baseUriCache = new BaseUriCacheEntry(scheme, host, httpRequest.PathBase, $"{scheme}://{host}{basePath}");

@@ -49,8 +49,9 @@ public sealed class GatewayHandlerIntegrationTests : IClassFixture<SampleAppFixt
     [Fact]
     public async Task ListGatewayTemplatesQueryHandler_returns_empty_array_when_upstream_returns_null()
     {
+        // A JSON null reads as null. A 204 is no TemplateApiResource[]: the client throws for it, as legacy's did.
         var handler = new FakeHttpHandler(_ =>
-            new HttpResponseMessage(HttpStatusCode.NoContent));
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("null", System.Text.Encoding.UTF8, "application/json") });
 
         var client = this._fixture.CreateClient(handler);
         var sut = new ListGatewayTemplatesQueryHandler(client);

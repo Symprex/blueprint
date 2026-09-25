@@ -565,6 +565,13 @@ services.AddBlueprintHttpClient<BackendApp>((sp, client) =>
 ### Response handling and resilience
 BlueprintHttpClient now covers the S365 result surface that was duplicated across several findings. It recognizes `StatusCodeResult` subclasses by matching their static `Instance` singleton, handles `PlainTextResult` for non-JSON payloads such as `text/vcard`, maps `TaskCanceledException` to `RequestTimeout`, maps `HttpRequestException` to `InternalServerError`, and uses cached property metadata plus efficient query-string building to avoid per-request reflection churn.
 
+A 204 for `SendAsync<T>`/`CallAsync<T>` is read as legacy's client read it (v1.0.3; it was `default` before): as a result
+the host writes as an empty 204 (`HttpNoContentResult`, a deleted `KeyOnlyResourceEventResult`,
+`StatusCodeResult.NoContent`), as `StatusCodeResult.NoContent.Instance` when `T` can hold a `StatusCodeResult` (`object`,
+`OperationResult`), and otherwise as an `InvalidOperationException` ("Could not understand the response of calling …").
+An error problem's `type`, `title`, `detail`, `instance` and `status` are matched by their exact names, as legacy's
+converter matched them, so one written in another casing is an extension.
+
 ### ResourceEvent HTTP-client fix
 A real compatibility gap did exist for typed `ResourceEvent<T>` HTTP responses. Because the base `ResourceEvent.Data` property is `object?` and the typed `new TResource? Data` property is ignored during default STJ deserialization, the client could surface `JsonElement` instead of `TResource`. The fix is explicit envelope parsing in `SendResourceEventEnvelopeAsync<TResource>()`, which reconstructs a properly typed `ResourceEvent<TResource>` including `$object`, event metadata, and the typed `data` payload.
 

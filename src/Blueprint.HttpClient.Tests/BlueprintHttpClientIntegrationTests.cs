@@ -122,15 +122,47 @@ public sealed class BlueprintHttpClientTests : IClassFixture<SampleAppFixture>
         captured.RequestUri!.PathAndQuery.Should().Contain("/templates/t-99");
     }
 
+    // Legacy's client read a body only when it was JSON or text; a response with neither, a 204 among them, it read as a
+    // StatusCodeResult of the response's status when the response type could hold one, and threw
+    // InvalidOperationException("Could not understand the response of calling {operation}: {url}") for any other
+    // (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:199-228).
     [Fact]
-    public async Task SendAsync_204_no_content_returns_default()
+    public async Task SendAsync_204_no_content_for_a_type_that_holds_no_status_code_result_throws_as_legacy_did()
     {
         var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.NoContent));
         var client = this._fixture.CreateClient(handler);
 
-        var result = await client.SendAsync<TemplateApiResource>(new ArchiveTemplateCommand { Id = "t-1" });
+        var act = () => client.SendAsync<TemplateApiResource>(new ArchiveTemplateCommand { Id = "t-1" });
 
-        result.Should().BeNull();
+        var exception = (await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Could not understand the response of calling ArchiveTemplateCommand: *templates/t-1")).Which;
+        exception.Message.Should().NotContain("localhost", "the message names the path called, never the host");
+    }
+
+    [Fact]
+    public async Task SendAsync_204_no_content_for_a_key_only_resource_event_returns_a_deleted_one()
+    {
+        // New-only: the host writes a deleted key-only event as an empty 204 (see the union tests, which read the host's own
+        // write), so a call declaring one reads it as a union member is read.
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var client = this._fixture.CreateClient(handler);
+
+        var result = await client.SendAsync<Runtime.Exec.KeyOnlyResourceEventResult>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.Should().NotBeNull().And.BeOfType<Runtime.Exec.KeyOnlyResourceEventResult>()
+            .Which.ChangeType.Should().Be(Blueprint.Model.ChangeType.Deleted);
+    }
+
+    [Fact]
+    public async Task SendAsync_204_no_content_for_a_status_code_result_returns_the_no_content_result()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var client = this._fixture.CreateClient(handler);
+
+        (await client.SendAsync<Runtime.Exec.StatusCodeResult>(new ArchiveTemplateCommand { Id = "t-1" }))
+            .Should().BeSameAs(Runtime.Exec.StatusCodeResult.NoContent.Instance, "legacy made a StatusCodeResult of the 204");
+        (await client.SendAsync<object>(new ArchiveTemplateCommand { Id = "t-1" }))
+            .Should().BeSameAs(Runtime.Exec.StatusCodeResult.NoContent.Instance, "an object holds a StatusCodeResult too");
     }
 
     [Fact]
