@@ -42,6 +42,26 @@ public class HangfireRecurringTaskRescheduleJobTests
     }
 
     [Fact]
+    public async Task With_no_default_queue_the_reschedule_job_is_legacys_colon_Scheduler_on_hangfires_default_queue()
+    {
+        // Legacy's option had no default (Blueprint.Tasks/BlueprintTaskOptions.cs:10-11 at Signature365 8b40ecc961), and its
+        // provider built the id from it unchanged, "" + ":Scheduler" (Blueprint.Tasks.Hangfire/HangfireRecurringTaskProvider.cs:45),
+        // but ran the job on Hangfire's default queue (:46, :116, :122).
+        var (manager, calls) = CreateManager();
+        var sut = new HangfireRecurringTaskProvider(
+            manager,
+            CreateStorage(),
+            Options.Create(new BlueprintTaskOptions()),
+            NullLogger<HangfireRecurringTaskProvider>.Instance);
+
+        await sut.SetupRecurringManagerAsync();
+
+        var (id, job, _) = calls.Should().ContainSingle().Subject;
+        id.Should().Be(":Scheduler");
+        job.Queue.Should().Be("default");
+    }
+
+    [Fact]
     public async Task The_reschedule_job_reschedules_every_declared_schedule_when_it_runs()
     {
         var (manager, calls) = CreateManager();

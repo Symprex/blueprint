@@ -32,7 +32,7 @@ public sealed class HangfireRecurringTaskProvider : IRecurringTaskProvider
 
         this._recurringJobManager = recurringJobManager;
         this._logger = logger;
-        this._defaultQueue = taskOptions.Value.DefaultQueue;
+        this._defaultQueue = taskOptions.Value.DefaultQueue ?? global::Hangfire.States.EnqueuedState.DefaultQueue;
     }
 
     /// <inheritdoc />

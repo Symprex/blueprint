@@ -13,9 +13,15 @@ public sealed class BlueprintTaskOptions
     /// <summary>
     /// Gets or sets the default queue name used by <see cref="IBackgroundTaskScheduleProvider"/>
     /// implementations when a task type does not specify a <see cref="QueueAttribute"/>.
-    /// Defaults to <c>"default"</c>.
+    /// Defaults to <see langword="null"/>, for which the providers use Hangfire's <c>"default"</c> queue.
     /// </summary>
-    public string DefaultQueue { get; set; } = "default";
+    /// <remarks>
+    /// Unset by default, as legacy Blueprint's was (<c>Blueprint.Tasks/BlueprintTaskOptions.cs:10-11</c> at Signature365
+    /// <c>8b40ecc961</c>), because the value itself is part of an id: the Hangfire recurring task provider's scheduler job
+    /// is <c>{DefaultQueue}:Scheduler</c>, which with no default queue is legacy's <c>:Scheduler</c>, while the job still
+    /// runs on the <c>"default"</c> queue.
+    /// </remarks>
+    public string? DefaultQueue { get; set; }
 
     /// <summary>
     /// Gets or sets the default number of automatic retry attempts for failed background tasks.

@@ -54,6 +54,7 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
     private readonly IRecurringJobManager _recurringJobManager;
     private readonly ILogger<HangfireRecurringTaskProvider> _logger;
     private readonly string _defaultQueue;
+    private readonly string _schedulerJobId;
     private readonly JobStorage? _storage;
 
     /// <summary>
@@ -86,6 +87,10 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
         this._recurringJobManager = recurringJobManager;
         this._logger = logger;
         this._defaultQueue = taskOptions.Value.DefaultQueue ?? EnqueuedState.DefaultQueue;
+
+        // From the option as set, not the queue the job runs on: with no default queue, legacy's id was ":Scheduler"
+        // (legacy Blueprint.Tasks.Hangfire/HangfireRecurringTaskProvider.cs:45-46).
+        this._schedulerJobId = taskOptions.Value.DefaultQueue + RescheduleJobIdSuffix;
     }
 
     /// <summary>
@@ -173,7 +178,8 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
     /// <summary>
     /// Adds or updates the recurring job that re-runs <see cref="RecurringTaskManager.RescheduleAllAsync"/> every 30 minutes
     /// on the app's default queue, as legacy Blueprint's provider did in <c>SetupRecurringManagerAsync</c>: the same id
-    /// (<c>{DefaultQueue}:Scheduler</c>), the same cron (<c>*/30 * * * *</c>) and the same queue.
+    /// (<c>{DefaultQueue}:Scheduler</c>, so <c>:Scheduler</c> when no default queue is set), the same cron
+    /// (<c>*/30 * * * *</c>) and the same queue (Hangfire's <c>default</c> when none is set).
     /// </summary>
     /// <remarks>
     /// Its id does not carry <see cref="JobIdPrefix"/>, so stale-job removal never removes it. It is installed as part of
@@ -184,7 +190,7 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
     private void InstallRescheduleJob()
     {
         this._recurringJobManager.AddOrUpdate<RecurringTaskManager>(
-            this._defaultQueue + RescheduleJobIdSuffix,
+            this._schedulerJobId,
             this._defaultQueue,
             manager => manager.RescheduleAllAsync(CancellationToken.None),
             RescheduleCron,

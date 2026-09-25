@@ -32,7 +32,8 @@ public class HangfireRecurringTaskProviderTests
 
         // IRecurringJobManager.AddOrUpdate(string, string, Job, string, RecurringJobOptions) is called
         // via the extension method. Verify a call was received for each schedule, besides the reschedule job:
-        RecurringJobIds(jobManager).Should().BeEquivalentTo("blueprint:daily-cleanup", "blueprint:every-five-min", "default:Scheduler");
+        // No default queue is set, so the reschedule job is legacy's ":Scheduler" (legacy HangfireRecurringTaskProvider.cs:45).
+        RecurringJobIds(jobManager).Should().BeEquivalentTo("blueprint:daily-cleanup", "blueprint:every-five-min", ":Scheduler");
     }
 
     [Fact]
@@ -44,7 +45,7 @@ public class HangfireRecurringTaskProviderTests
 
         await sut.RegisterSchedulesAsync([]);
 
-        RecurringJobIds(jobManager).Should().Equal("default:Scheduler");
+        RecurringJobIds(jobManager).Should().Equal(":Scheduler");
     }
 
     private static IEnumerable<string> RecurringJobIds(IRecurringJobManager jobManager)
