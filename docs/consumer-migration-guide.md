@@ -264,6 +264,16 @@ For authorisers that need **both** execution and link visibility, implement `IAp
 blueprint.AddApiAuthoriser<FullAuthoriser>();
 ```
 
+**Behaviour change for authorisation denials (v1.0.3).** A denial is answered with the body legacy Blueprint wrote for it:
+`{"type":"unauthorized","title":"<Message>","status":403}` for an `Authorisation` failure,
+`{"type":"security_failure","title":"<Message>","status":401}` for any other, and
+`{"type":"security_failure","title":"Access denied. Anonymous access is not allowed.","status":401}` for an anonymous caller,
+each with a `traceId` when the operation has an activity. The `Reason` is never written; it is logged at Information under
+`Blueprint.Authorisation.AuthorisationMiddlewareBuilder`. The `ForbiddenResult` or `UnauthenticatedResult` a pipeline returns
+carries the denial as `Failure`. Coming from legacy Blueprint nothing changes. Coming from v1.0.2, the fixed "Unauthorized" /
+"Forbidden" bodies are gone, and a denial whose failure type is not `Authorisation` (a `default` `ExecutionAllowed`
+included) is a 401 where it was a 403.
+
 #### State-based link visibility
 
 Use `StateBasedLinkChecker<TOperation, TResource>` (which implements `ILinkVisibilityAuthoriser`) for state-based link hiding:
@@ -1043,6 +1053,15 @@ below). They still work but will produce `[Obsolete]` warnings.
 Blueprint provides clean interfaces for third-party infrastructure integration. These replace
 the legacy middleware-builder pattern with DI-resolved contracts that the generated pipeline
 calls at the correct stage.
+
+### Service-to-service calls (BlueprintHttpClient)
+
+**Behaviour change for a 204 (v1.0.3).** `SendAsync<T>` (and `CallAsync<T>`) read a 204 No Content as legacy Blueprint's
+client read it: as a result the host writes as an empty 204 (`HttpNoContentResult`, a deleted
+`KeyOnlyResourceEventResult`, `StatusCodeResult.NoContent`), as `StatusCodeResult.NoContent.Instance` when `T` can hold a
+`StatusCodeResult` (`object`, `OperationResult`), and otherwise by throwing `InvalidOperationException` ("Could not
+understand the response of calling …"). Coming from legacy Blueprint nothing changes. Coming from v1.0.2, where a 204
+returned `default`, a caller that checked for `null` after a 204 must declare a result that can hold one.
 
 ### Hangfire (background task scheduling)
 
