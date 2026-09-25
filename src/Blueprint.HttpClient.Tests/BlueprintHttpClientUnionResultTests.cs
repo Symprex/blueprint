@@ -237,6 +237,45 @@ public class BlueprintHttpClientUnionResultTests : IClassFixture<SampleAppFixtur
         result.AsT2.ResourceId.Should().BeEmpty("an empty response carries no resource id");
     }
 
+    // The host writes a legacy resource event as a 200 whatever its change type (OperationResultContractHelper, "Legacy
+    // Blueprint.Http.ResourceEvent<T> ... the host sends a 200"; BlueprintHttpClientResourceEventTests pins it), and a plain
+    // value as an OkResult's 200. So a legacy event or a plain type is the JSON body of a 200 only. These are new-only
+    // unions (Signature365 declares no Results<,>), so the expected members come from the host's own writes.
+    [Fact]
+    public async Task When_the_host_wrote_the_created_result_beside_a_legacy_created_event_then_the_201_is_the_created_result()
+    {
+        // A union the generator accepts (no BP109: a 200 JSON body and a 201 JSON body).
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(new CreatedResult<TemplateApiResource>(new TemplateApiResource("t-1", "Created Template", "<p>x</p>", "x")));
+
+        var result = await client.SendAsync<Results<ResourceCreated<TemplateApiResource>, CreatedResult<TemplateApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT2.Should().BeTrue();
+        result.AsT2.Content.Name.Should().Be("Created Template");
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_the_legacy_created_event_beside_a_created_result_then_the_200_is_the_event()
+    {
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(new ResourceCreated<TemplateApiResource>(new TemplateApiResource("t-1", "Evented Template", "<p>x</p>", "x")));
+
+        var result = await client.SendAsync<Results<ResourceCreated<TemplateApiResource>, CreatedResult<TemplateApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT1.Should().BeTrue();
+        result.AsT1.Data!.Name.Should().Be("Evented Template");
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_the_created_result_beside_a_plain_type_then_the_201_is_the_created_result()
+    {
+        // A union only a caller chooses (a plain type is no server union member: BP111), read by the same rule.
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(new CreatedResult<TemplateApiResource>(new TemplateApiResource("t-1", "Created Template", "<p>x</p>", "x")));
+
+        var result = await client.SendAsync<Results<TemplateApiResource, CreatedResult<TemplateApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT2.Should().BeTrue();
+        result.AsT2.Content.Name.Should().Be("Created Template");
+    }
+
     private async Task<BlueprintHttpClient<SampleBlueprintApp>> CreateClientAnsweringAsTheHostWritesAsync(OperationResult written)
     {
         await using var services = new ServiceCollection()

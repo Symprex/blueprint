@@ -1134,7 +1134,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <see cref="KeyOnlyResourceEventResult"/> the 201, 200 or 204 of its change type, which the host writes without a body.
     /// With a body that is not JSON, the first
     /// <see cref="PlainTextResult"/> member claims it. With a JSON body, the one member the host writes as a JSON body of
-    /// that status claims it: a plain type or a resource event at any success status, an <see cref="OkResult{T}"/>,
+    /// that status claims it: a plain type or a resource event at a 200, an <see cref="OkResult{T}"/>,
     /// <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> at its own status, read as its content.
     /// </summary>
     /// <remarks>
@@ -1284,15 +1284,21 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
     /// <summary>
     /// Whether the host writes a <paramref name="memberType"/> as a JSON body with <paramref name="status"/>: a type that is
-    /// not an operation result, or a resource event, as a 200 or any other success status the caller reads it from; an
-    /// <see cref="OkResult{T}"/>, <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> as its content with its
-    /// own status. No other operation result is read back from a body.
+    /// not an operation result, or a resource event, as a 200 only; an <see cref="OkResult{T}"/>,
+    /// <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> as its content with its own status. No other
+    /// operation result is read back from a body.
     /// </summary>
+    /// <remarks>
+    /// The host writes nothing else: a handler's plain value is sent as an <see cref="OkResult{T}"/>, and a resource event
+    /// as a 200 whatever its change type, as legacy's <c>OkResult</c> sent one. Claiming either at another status would
+    /// make, for example, <c>Results&lt;ResourceCreated&lt;T&gt;, CreatedResult&lt;T&gt;&gt;</c>, a union the generator
+    /// accepts, refuse the <see cref="CreatedResult{T}"/>'s 201 as a body two members could be.
+    /// </remarks>
     private static bool IsJsonMemberOfStatus(Type memberType, int status)
     {
         if (typeof(ResourceEvent).IsAssignableFrom(memberType) || !typeof(OperationResult).IsAssignableFrom(memberType))
         {
-            return true;
+            return status == (int)HttpStatusCode.OK;
         }
 
         if (!memberType.IsGenericType)
