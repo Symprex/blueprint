@@ -1157,8 +1157,10 @@ public static class PipelineHelpers
     /// is not a resource-event type, the method returns immediately with no overhead.
     /// </summary>
     /// <remarks>
-    /// A legacy <see cref="ResourceEvent"/> is also handed to the <see cref="IResourceEventAuditRepository"/> resolved from
-    /// the operation's own services, when one is registered and the operation's type does not carry
+    /// The generated pipeline calls this for commands only, as legacy's <c>ResourceEventHandlerMiddlewareBuilder</c> matched
+    /// commands only (<c>ResourceEventHandlerMiddlewareBuilder.cs:12-15</c>). A legacy <see cref="ResourceEvent"/> is also
+    /// handed to the <see cref="IResourceEventAuditRepository"/> resolved from the operation's own services, when one is
+    /// registered and the operation's type does not carry
     /// <see cref="DoNotAuditAttribute"/>, as legacy Blueprint's <c>ResourceEventHandler</c> handed it
     /// (<c>ResourceEventHandler.cs:72-77</c> at Signature365 <c>8b40ecc961</c>): stamped, with its href, and after its data
     /// has been expanded. The repository is called beside the sink, not through it, so registering either never displaces

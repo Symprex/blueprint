@@ -7,7 +7,7 @@ namespace Blueprint.Http;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The generated pipeline calls <see cref="AddAsync"/> for every legacy <see cref="ResourceEvent"/> an operation raises,
+/// The generated pipeline calls <see cref="AddAsync"/> for every legacy <see cref="ResourceEvent"/> a command raises,
 /// unless the operation's type carries <c>[DoNotAudit]</c>, once the event is stamped, has its href and has its data
 /// expanded, as legacy Blueprint's <c>ResourceEventHandler</c> did. It does not call <see cref="GetCurrentDataAsync"/>,
 /// which legacy called for an updated event to fill its changed values.

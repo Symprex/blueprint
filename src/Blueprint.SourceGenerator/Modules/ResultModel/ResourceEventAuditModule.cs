@@ -11,8 +11,12 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 /// <remarks>
 /// <para>
-/// This module only activates for operations whose declared result contract includes a
-/// resource-event result type. It runs at Order=1020, last of the PostExecution steps: after
+/// This module only activates for commands whose declared result contract includes a resource-event result type. A query
+/// that returns one, as Signature365's AdminPortal injection override queries return the event Subscriptions gave them,
+/// passes it on untouched: legacy's <c>ResourceEventHandlerMiddlewareBuilder</c> matched commands only (Signature365
+/// <c>8b40ecc961</c>, <c>ResourceEventHandlerMiddlewareBuilder.cs:12-15</c>), so a query's event was never stamped, given
+/// an href or audited. That covers the <c>IResourceEventAuditSink</c> too, which legacy did not have. It runs at
+/// Order=1020, last of the PostExecution steps: after
 /// <see cref="UnitOfWorkModule"/> (900), general auditing (950), <see cref="BackgroundTaskFlushModule"/> (1000) and
 /// <see cref="ResourceExpansionModule"/> (1010). That is where legacy's <c>ResourceEventHandlerMiddlewareBuilder</c> ran:
 /// after its save, background task runner and <c>ResourceExpandMiddleware</c> (Signature365 <c>8b40ecc961</c>,
@@ -58,6 +62,11 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
     /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
+        if (!IsCommand(context.Operation.TypeSymbol))
+        {
+            return;
+        }
+
         var castTypeName = GetResourceEventCastType(context.Operation.TypeSymbol);
         if (castTypeName is null)
         {
@@ -82,6 +91,20 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
         // try/catch, and activity event recording across every resource-event pipeline.
         context.WriteStatement(
             $"await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
+    }
+
+    /// <summary>
+    /// Whether the operation is a command, the only kind whose resource events legacy's
+    /// <c>ResourceEventHandlerMiddlewareBuilder</c> handled: it matched <c>operation.IsCommand</c> (Signature365
+    /// <c>8b40ecc961</c>, <c>ResourceEventHandlerMiddlewareBuilder.cs:12-15</c>), which is
+    /// <c>typeof(ICommand).IsAssignableFrom(OperationType)</c> (<c>ApiOperationDescriptor.cs:124</c>). A background task is
+    /// not one.
+    /// </summary>
+    private static bool IsCommand(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name is "ICommand"
+            && candidate.IsInNamespace("Blueprint", "Model"));
     }
 
     /// <summary>

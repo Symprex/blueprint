@@ -395,8 +395,8 @@ public sealed class BlueprintServiceBuilder
 
     /// <summary>
     /// Registers a resource event audit repository, which is handed every legacy <see cref="Blueprint.Http.ResourceEvent"/>
-    /// an operation raises unless the operation's type carries <see cref="Blueprint.Auditing.DoNotAuditAttribute"/>, as
-    /// legacy Blueprint's <c>ResourceEventHandler</c> handed it.
+    /// a command raises unless the command's type carries <see cref="Blueprint.Auditing.DoNotAuditAttribute"/>, as
+    /// legacy Blueprint's <c>ResourceEventHandler</c> handed it. A query's is not, as legacy's was not.
     /// </summary>
     /// <remarks>
     /// The repository is registered scoped and resolved from each operation's own services. The generated pipeline calls

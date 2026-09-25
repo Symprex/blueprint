@@ -13,9 +13,15 @@ Handler returns ResourceEvent<T>
   → ResourceEventSelfQueryModule (stage -5): resolve SelfQuery if Data is null
   → LinkGenerationModule (stage 0): populate $links.self on resource Data
   → ResourceExpansionModule (stage 1010): expand the event's Expandable<T> data
-  → ResourceEventAuditModule (stage 1020): stamp, make Href, extract EventId + ResourceId, invoke audit sink
+  → ResourceEventAuditModule (stage 1020, commands only): stamp, make Href, extract EventId + ResourceId, invoke audit sink
   → PipelineReturnModule: serialize envelope to HTTP response
 ```
+
+`ResourceEventAuditModule` activates for commands only, as legacy's `ResourceEventHandlerMiddlewareBuilder` matched
+`IsCommand` (Signature365 `8b40ecc961`, `ResourceEventHandlerMiddlewareBuilder.cs:12-15`). A query that returns a
+resource event, as Signature365's AdminPortal injection override queries return the one Subscriptions gave them, passes
+it on as its handler returned it: not stamped, no href made, and neither the audit sink nor the audit repository is given
+it.
 
 ### Key Types
 

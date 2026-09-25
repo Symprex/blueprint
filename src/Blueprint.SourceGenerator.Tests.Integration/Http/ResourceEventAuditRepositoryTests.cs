@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using System.Text.Json;
 using Blueprint.Auditing;
 using Blueprint.Http;
 using Blueprint.Model;
@@ -139,6 +140,35 @@ public sealed class ResourceEventAuditRepositoryTests
         host.ServerErrors.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task A_querys_resource_event_is_neither_stamped_nor_given_an_href_nor_audited()
+    {
+        // Legacy's ResourceEventHandlerMiddlewareBuilder matched commands only (Signature365 8b40ecc961,
+        // Blueprint.Http/Middleware/ResourceEventHandlerMiddlewareBuilder.cs:12-15, IsCommand being
+        // typeof(ICommand).IsAssignableFrom(OperationType), Blueprint/ApiOperationDescriptor.cs:124). So a query's event
+        // was never stamped (ResourceEventHandler.cs:38-39), given an href (:54-65) or audited (:72-77): AdminPortal's
+        // AdminPortalDisableInjectionOverrideCommand is an IQuery<ResourceEvent<...>>, and its generated pipeline has a
+        // LinkGeneratorMiddlewareBuilder step and no ResourceEventHandlerMiddlewareBuilder one
+        // (AdminPortalDisableInjectionOverrideCommandExecutorPipeline.cs:114-115). It passes on the event Subscriptions
+        // returned, with Subscriptions' href and correlation id.
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint
+            .AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>()
+            .AddResourceEventAuditSink<RecordingResourceEventAuditSink>());
+
+        using var body = JsonDocument.Parse(await host.GetAsync("api/audited-events/passed-on-widgets"));
+
+        records.Repository.Should().BeEmpty("legacy handed only a command's resource event to the repository");
+        records.SinkEventIds.Should().BeEmpty("a query's resource event is not audited at all");
+        body.RootElement.GetProperty("href").GetString().Should().Be(
+            PassOnAuditedWidgetQuery.UpstreamHref,
+            "legacy made no href for a query's event, so the one its handler returned is written");
+        body.RootElement.GetProperty("correlationId").GetString().Should().Be(
+            PassOnAuditedWidgetQuery.UpstreamCorrelationId,
+            "legacy did not stamp a query's event with the request's correlation id");
+        host.ServerErrors.Should().BeEmpty();
+    }
+
     /// <summary>What the repository and sink were given, copied out when they were called.</summary>
     public sealed class AuditRecords
     {
@@ -267,12 +297,25 @@ public sealed class ResourceEventAuditRepositoryTests
             return new AuditingHost(app, client, serverErrors);
         }
 
-        public async Task<string> PostAsync(string path)
+        public Task<string> PostAsync(string path)
         {
-            using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, path)
+            return this.SendAsync(System.Net.Http.HttpMethod.Post, path);
+        }
+
+        public Task<string> GetAsync(string path)
+        {
+            return this.SendAsync(System.Net.Http.HttpMethod.Get, path);
+        }
+
+        private async Task<string> SendAsync(System.Net.Http.HttpMethod method, string path)
+        {
+            using var request = new System.Net.Http.HttpRequestMessage(method, path);
+
+            if (method != System.Net.Http.HttpMethod.Get)
             {
-                Content = new System.Net.Http.StringContent("{}", Encoding.UTF8, "application/json"),
-            };
+                request.Content = new System.Net.Http.StringContent("{}", Encoding.UTF8, "application/json");
+            }
+
             request.Headers.Add("traceparent", $"00-{TraceId}-00f067aa0ba902b7-01");
 
             using var response = await this.Client.SendAsync(request);
@@ -348,6 +391,28 @@ public partial class CreateAuditedEmployeeCommand : ICommand<ResourceCreated<Alw
     {
         return new ResourceCreated<AlwaysExpandTestEmployee>(
             new AlwaysExpandTestEmployee { Department = new Expandable<DepartmentResource>("dept-audited") });
+    }
+}
+
+/// <summary>
+/// A query that passes on a legacy event another service returned, with that service's href and correlation id, as
+/// Signature365's AdminPortal injection override queries pass on Subscriptions' events.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/audited-events/passed-on-widgets")]
+public partial class PassOnAuditedWidgetQuery : IQuery<ResourceUpdated<HrefWidgetApiResource>>
+{
+    public const string UpstreamHref = "https://subscriptions.example.test/api/href-events/widgets/widget-9";
+
+    public const string UpstreamCorrelationId = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+
+    public static ResourceUpdated<HrefWidgetApiResource> Handle(PassOnAuditedWidgetQuery query)
+    {
+        return new ResourceUpdated<HrefWidgetApiResource>(new HrefWidgetApiResource { Id = "widget-9" })
+        {
+            Href = UpstreamHref,
+            CorrelationId = UpstreamCorrelationId,
+        };
     }
 }
 
