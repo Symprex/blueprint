@@ -17,8 +17,8 @@ public sealed class PlainTextResult : HttpResult
     /// Initializes a new instance of the <see cref="PlainTextResult"/> class with the given text content
     /// and a <c>200 OK</c> status code.
     /// </summary>
-    /// <param name="content">The plain-text content to write to the response body.</param>
-    public PlainTextResult(string content)
+    /// <param name="content">The plain-text content to write to the response body; <see langword="null"/> writes none.</param>
+    public PlainTextResult(string? content)
         : this(content, HttpStatusCode.OK)
     {
     }
@@ -27,18 +27,21 @@ public sealed class PlainTextResult : HttpResult
     /// Initializes a new instance of the <see cref="PlainTextResult"/> class with the given text content
     /// and HTTP status code.
     /// </summary>
-    /// <param name="content">The plain-text content to write to the response body.</param>
+    /// <param name="content">The plain-text content to write to the response body; <see langword="null"/> writes none.</param>
     /// <param name="statusCode">The HTTP status code for the response.</param>
-    public PlainTextResult(string content, HttpStatusCode statusCode)
+    /// <remarks>
+    /// No content is an empty body at the status, as legacy Blueprint wrote it: it kept the content as given and wrote it
+    /// through an <c>HttpResponseStreamWriter</c>, which writes nothing for <see langword="null"/> (Signature365
+    /// <c>8b40ecc961</c>, <c>Blueprint.Http/PlainTextResult.cs:33-37</c>, <c>:50-63</c>).
+    /// </remarks>
+    public PlainTextResult(string? content, HttpStatusCode statusCode)
         : base(statusCode)
     {
-        ArgumentNullException.ThrowIfNull(content);
-
-        this.Content = content;
+        this.Content = content ?? string.Empty;
     }
 
     /// <summary>
-    /// Gets the plain-text content that will be written to the response body.
+    /// Gets the plain-text content that will be written to the response body, empty when the result was made with none.
     /// </summary>
     public string Content { get; }
 

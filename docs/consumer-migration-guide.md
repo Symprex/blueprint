@@ -441,6 +441,10 @@ Available result types:
 | `StatusCodeResult.*` | Various | Bodyless status code responses |
 | `NotModifiedResult<T>` | 304 | Conditional request matched (via `ETagger`) |
 
+**Behaviour change for a `PlainTextResult` with no content (v1.0.3).** `new PlainTextResult(null)` is written as an
+empty body at the result's status, as legacy Blueprint wrote it; before v1.0.3 its constructor threw
+`ArgumentNullException`. Its `Content` is then empty. A `?? string.Empty` added only to avoid that throw can go.
+
 #### Response header extensions
 
 `OkResult` supports fluent response header configuration via extension methods:
