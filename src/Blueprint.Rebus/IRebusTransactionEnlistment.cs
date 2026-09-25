@@ -56,6 +56,12 @@ namespace Blueprint.Rebus;
 /// already saved, where nothing would ever write it: it must refuse it, or send it without the outbox.
 /// </para>
 /// <para>
+/// Blueprint checks for that mistake. Once a transaction it enlisted has run its commit callbacks, it asks the scope's
+/// unit of work, when that is an <see cref="Persistence.IUnitOfWorkSaveGuard"/> (Blueprint.Marten's is), whether work was
+/// queued on it since its save, and fails the transaction's completion if so (see
+/// <see cref="RebusTransactionEnlistment.EnlistAsync"/>).
+/// </para>
+/// <para>
 /// Register implementations in DI; they are resolved from the operation's or message's own scope.
 /// </para>
 /// </remarks>

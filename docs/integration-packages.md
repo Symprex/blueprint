@@ -138,6 +138,14 @@ session, it would never be written. Legacy had no such window, because it comple
 flushed and audited outside the scope (`AzureAdOauthReturnCommandExecutorPipeline.cs:133-149` at Signature365
 `8b40ecc961`).
 
+That is exactly where a direct port of legacy's `UseMartenSessionAsOutbox` goes wrong: its transport queued each
+message's outbox row on the session from a commit callback, which now runs after the save, so the rows were silently
+lost. The mistake is now loud. Once a transaction with an enlistment has run its commit callbacks,
+`RebusTransactionEnlistment` calls `IUnitOfWorkSaveGuard.ThrowIfChangedSinceSave()` on the scope's unit of work, and
+`MartenUnitOfWork` throws when anything (SQL from `QueueSqlCommand`, a stored document, an event) was queued on the
+session since its save. A generated pipeline then fails the operation. For a received message, the transport has
+already acknowledged it, so Rebus logs the failure and does not redeliver.
+
 `MartenUnitOfWork` makes its own scope `MartenScopeAccessor.Current` for the save, so the listeners also run for a
 plain handler's save, where no generated pipeline has set it.
 

@@ -25,8 +25,14 @@ namespace Blueprint.Marten;
 /// <see cref="DrainTriggerSql"/>, which does nothing, so that the drain runs and what it writes is saved. That is the one
 /// case in which this save opens a connection for a session with nothing to save.
 /// </para>
+/// <para>
+/// It is an <see cref="Persistence.IUnitOfWorkSaveGuard"/>: once it has saved, work queued on the session — documents
+/// stored, SQL queued with <see cref="IDocumentOperations.QueueSqlCommand"/>, events appended — would never be written,
+/// and <see cref="ThrowIfChangedSinceSave"/> says so. Marten has no hook that sees <c>QueueSqlCommand</c> when it is
+/// called, but the operation it queues is in <see cref="IDocumentSession.PendingChanges"/>, which is what is checked.
+/// </para>
 /// </remarks>
-public sealed class MartenUnitOfWork : Persistence.IUnitOfWork
+public sealed class MartenUnitOfWork : Persistence.IUnitOfWork, Persistence.IUnitOfWorkSaveGuard
 {
     /// <summary>
     /// The statement queued to make Marten run the listeners of a session with nothing else to save: an empty block, so
@@ -37,6 +43,8 @@ public sealed class MartenUnitOfWork : Persistence.IUnitOfWork
 
     private readonly IDocumentSession _session;
     private readonly IServiceProvider? _services;
+
+    private bool _saved;
 
     /// <summary>
     /// Initialises the unit of work with the Marten session for the current scope. The save leaves
@@ -81,6 +89,21 @@ public sealed class MartenUnitOfWork : Persistence.IUnitOfWork
         }
 
         await this._session.SaveChangesAsync(cancellationToken);
+
+        this._saved = true;
+    }
+
+    /// <inheritdoc />
+    public void ThrowIfChangedSinceSave()
+    {
+        if (this._saved && HasPendingWork(this._session))
+        {
+            throw new InvalidOperationException(
+                "Work was queued on the Marten session after it was saved, so it will never be written. An outbox that "
+                + "queues its rows when the Rebus transaction commits, as legacy's UseMartenSessionAsOutbox did, queues them "
+                + "after the save here: write them during the save instead, with a drain listener added through "
+                + "AddBlueprintOutboxListener, and refuse or send directly any message sent after it.");
+        }
     }
 
     /// <summary>
