@@ -82,9 +82,12 @@ public static class MartenServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This is the extension point for the listener that, during <c>SaveChangesAsync</c>, writes the messages sent in the
-    /// current Rebus transaction into the session being saved, so that they commit with the data: the Marten half of the
-    /// outbox whose Rebus half is an <c>IRebusTransactionEnlistment</c>. Marten runs listeners in
+    /// This is the extension point for the listener that, during <c>SaveChangesAsync</c>, writes the messages sent so far in
+    /// the current Rebus transaction into the session being saved, so that they commit with the data: the Marten half of
+    /// the outbox whose Rebus half is an <c>IRebusTransactionEnlistment</c>. A message sent after the save — by a generated
+    /// pipeline's message outbox commit, audit sink or background-task flush, or by a received message's later commit
+    /// callback — is not written, and the <c>IRebusTransactionEnlistment</c> documentation says what the outbox must do
+    /// with one. Marten runs listeners in
     /// <see cref="StoreOptions.Listeners"/> order, and <see cref="DomainEventDispatchingSessionListener"/> publishes the
     /// domain events during its own <c>BeforeSaveChangesAsync</c>, so an outbox listener must run after it: one that ran
     /// first would write none of them.

@@ -30,10 +30,30 @@ namespace Blueprint.Rebus;
 /// </description></item>
 /// </list>
 /// <para>
-/// In both, the save happens after every message has been sent and before Rebus sends anything, so an enlistment that
-/// has the outbox's messages written into the unit of work during the save — a Marten session listener registered with
-/// <c>AddBlueprintOutboxListener</c>, for example — commits data and messages atomically. An enlistment must not let
-/// messages be queued into a unit of work that has already saved: they would never be written.
+/// In both, the unit of work is saved after the handlers have returned and before Rebus sends anything, so every message
+/// the handlers sent is in the transaction when the save runs. An enlistment that has those messages written into the
+/// unit of work during the save — a Marten session listener added with <c>AddBlueprintOutboxListener</c>, for example —
+/// commits them atomically with the data.
+/// </para>
+/// <para>
+/// The save is not the last point at which a message can join the transaction, though:
+/// </para>
+/// <list type="bullet">
+/// <item><description>
+/// a generated pipeline commits the <see cref="Messaging.IMessageOutbox"/>, runs the audit sink and flushes the
+/// background tasks after the save and before it completes the scope, so a message any of them sends joins the
+/// transaction after the save. Legacy had no such window: it completed its scope before it saved its session, and
+/// flushed and audited outside the scope (legacy <c>AzureAdOauthReturnCommandExecutorPipeline.cs:133-149</c> at
+/// Signature365 <c>8b40ecc961</c>);
+/// </description></item>
+/// <item><description>
+/// for a received message, a commit callback that runs after the save — one an enlistment or a handler registered —
+/// runs after it, and a message it sends joins the transaction after the save too.
+/// </description></item>
+/// </list>
+/// <para>
+/// Such a message is not in the saved unit of work. An enlistment must not let it be queued into a unit of work that has
+/// already saved, where nothing would ever write it: it must refuse it, or send it without the outbox.
 /// </para>
 /// <para>
 /// Register implementations in DI; they are resolved from the operation's or message's own scope.

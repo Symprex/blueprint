@@ -125,10 +125,18 @@ Blueprint provides the two seams an outbox needs, and nothing else:
   `IHandleMessages<T>`, whose unit of work it saves from the transaction's first commit callback. Neither enlists when
   no `IUnitOfWork` is registered.
 - **`options.AddBlueprintOutboxListener(listener)`** (`Blueprint.Marten`) adds the consumer's drain listener, which
-  writes the transaction's messages into the session during `SaveChangesAsync`, after
+  writes the messages sent so far in the transaction into the session during `SaveChangesAsync`, after
   `DomainEventDispatchingSessionListener`, whose published domain events it must see. Adding it to
   `options.Listeners` directly, before `AddBlueprintMarten()`'s `ConfigureMarten` callback runs, puts it first and it
   drains nothing.
+
+The save does not close the transaction to new messages. A generated pipeline commits `IMessageOutbox`, runs the audit
+sink and flushes background tasks after the save and before it completes the Rebus scope, and a received message's
+later commit callbacks run after its save. A message sent from any of those joins the transaction after the drain has
+run, so it is not in the saved session. The outbox must refuse it, or send it without the outbox; queued into the saved
+session, it would never be written. Legacy had no such window, because it completed its scope before it saved and
+flushed and audited outside the scope (`AzureAdOauthReturnCommandExecutorPipeline.cs:133-149` at Signature365
+`8b40ecc961`).
 
 `MartenUnitOfWork` makes its own scope `MartenScopeAccessor.Current` for the save, so the listeners also run for a
 plain handler's save, where no generated pipeline has set it.
