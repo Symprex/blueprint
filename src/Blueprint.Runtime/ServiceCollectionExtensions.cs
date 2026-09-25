@@ -433,9 +433,13 @@ public sealed class BlueprintServiceBuilder
     /// </summary>
     /// <remarks>
     /// Also registers <see cref="Blueprint.Runtime.Tasks.RecurringTaskManager"/>, which a provider's periodic re-run (the
-    /// Hangfire provider's <c>{DefaultQueue}:Scheduler</c> job) resolves through the job activator. The provider removes
-    /// the jobs of every schedule the current set no longer contains, so call this only in the process that registers
-    /// every one of the app's recurring task schedulers.
+    /// Hangfire provider's <c>{DefaultQueue}:Scheduler</c> job) resolves through the job activator. Registering it here does
+    /// not decide where that re-run happens: the job runs in whichever process's Hangfire server listens to its queue, and
+    /// Hangfire.NetCore's activator builds the manager from that process's container even where it was never registered
+    /// (<c>ActivatorUtilities.GetServiceOrCreateInstance</c>), with that process's schedulers, possibly none. The provider
+    /// removes every job the current set no longer contains, so every process whose server listens to the default queue
+    /// must register the provider and every one of the app's recurring task schedulers; one with the provider and no
+    /// schedulers removes all of the app's recurring jobs.
     /// </remarks>
     /// <typeparam name="T">The <see cref="Blueprint.Tasks.IRecurringTaskProvider"/> implementation type.</typeparam>
     /// <returns>This builder for chaining.</returns>
