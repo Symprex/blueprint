@@ -20,7 +20,8 @@ namespace Blueprint.Rebus.Tests;
 /// handlers sent their messages in. If that transaction is <see cref="AmbientTransactionContext.Current"/> there, the
 /// drain can read it directly; if not, it needs the context the enlistment seam was given. And a domain event published
 /// during that save may be the transaction's first send, so a message first sent from a commit callback must still be
-/// sent.
+/// sent. The <see cref="RebusTransactionScope"/> a generated pipeline opens is different, and pinned here too: a message
+/// first sent from one of its commit callbacks is silently never sent.
 /// </remarks>
 public class RebusCommitAmbientContextTests
 {
@@ -85,6 +86,62 @@ public class RebusCommitAmbientContextTests
         received.Should().BeSameAs(followUp.Received, "a message sent from a commit callback must still leave the bus");
     }
 
+    [Fact]
+    public async Task A_message_first_sent_from_a_RebusTransactionScopes_commit_callback_is_not_sent()
+    {
+        // Unlike a received message's transaction (above), the RebusTransactionScope a generated pipeline opens runs the
+        // commit callbacks it holds when it completes and no others: a send made from one of them registers its own
+        // callback too late, and the message never leaves, with no error.
+        var probe = new ScopeProbeObservations();
+        var network = new InMemNetwork();
+
+        var services = new ServiceCollection();
+        services.AddSingleton(new BlueprintApp());
+        services.AddSingleton(new BlueprintRebusConfiguration());
+        services.AddSingleton(probe);
+        services.AddScoped<IHandleMessages<FollowUpMessage>, ScopeProbeFollowUpHandler>();
+        services.AddScoped<IHandleMessages<MarkerMessage>, ScopeProbeMarkerHandler>();
+        services.AddScoped<IHandleMessages<InScopeMessage>, ScopeProbeInScopeHandler>();
+
+        using var provider = services.BuildServiceProvider();
+        using var bus = Configure.With(new BlueprintApiActivator(provider))
+            .Transport(t => t.UseInMemoryTransport(network, "input"))
+            .Options(static o => o.RetryStrategy(maxDeliveryAttempts: 1))
+            .Start();
+
+        using (var scope = new RebusTransactionScope())
+        {
+            // Sent in the scope, so the scope has a send callback of its own: proves the scope does send.
+            await bus.SendLocal(new InScopeMessage());
+
+            scope.TransactionContext.OnCommit(async _ =>
+            {
+                try
+                {
+                    await bus.SendLocal(new FollowUpMessage());
+                    probe.CallbackSent = true;
+                }
+                catch (Exception exception)
+                {
+                    probe.CallbackError = exception;
+                }
+            });
+
+            await scope.CompleteAsync();
+        }
+
+        // Sent after the scope, outside any transaction: once it has arrived, a follow-up that was sent would have too.
+        await bus.SendLocal(new MarkerMessage());
+        await probe.WaitForAsync<MarkerMessage>(TimeSpan.FromSeconds(10));
+        await probe.WaitForAsync<InScopeMessage>(TimeSpan.FromSeconds(10));
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+
+        probe.CallbackError.Should().BeNull("the send from the commit callback is not refused");
+        probe.CallbackSent.Should().BeTrue("the commit callback ran and its send returned");
+        probe.HasReceived<FollowUpMessage>().Should().BeFalse(
+            "RebusTransactionScope ran only the commit callbacks it had when it completed, so the follow-up's send callback never ran");
+    }
+
     private static ServiceProvider BuildProvider(Observations observations)
     {
         var services = new ServiceCollection();
@@ -102,6 +159,74 @@ public class RebusCommitAmbientContextTests
 
     /// <summary>A message sent from inside the save, which the real bus serialises, so it must be public.</summary>
     public sealed class FollowUpMessage;
+
+    /// <summary>A message sent after the scope, to bound how long a message that was sent takes to arrive.</summary>
+    public sealed class MarkerMessage;
+
+    /// <summary>A message sent inside the scope before it completes.</summary>
+    public sealed class InScopeMessage;
+
+    private sealed class ScopeProbeObservations
+    {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<Type, TaskCompletionSource> _received = new();
+
+        public bool CallbackSent { get; set; }
+
+        public Exception? CallbackError { get; set; }
+
+        public void RecordReceived(Type messageType)
+        {
+            this.Arrival(messageType).TrySetResult();
+        }
+
+        public bool HasReceived<T>()
+        {
+            return this.Arrival(typeof(T)).Task.IsCompleted;
+        }
+
+        public async Task WaitForAsync<T>(TimeSpan timeout)
+        {
+            var arrival = this.Arrival(typeof(T)).Task;
+            (await Task.WhenAny(arrival, Task.Delay(timeout))).Should().BeSameAs(arrival, "{0} should arrive", typeof(T).Name);
+        }
+
+        private TaskCompletionSource Arrival(Type messageType)
+        {
+            return this._received.GetOrAdd(messageType, static _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        }
+    }
+
+    // Not one open generic handler: AddBlueprintRebusConsumer's assembly scan (RebusServiceCollectionExtensionsTests)
+    // cannot register an open generic implementation.
+    private sealed class ScopeProbeFollowUpHandler(ScopeProbeObservations observations) : IHandleMessages<FollowUpMessage>
+    {
+        public Task Handle(FollowUpMessage message)
+        {
+            observations.RecordReceived(typeof(FollowUpMessage));
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ScopeProbeMarkerHandler(ScopeProbeObservations observations) : IHandleMessages<MarkerMessage>
+    {
+        public Task Handle(MarkerMessage message)
+        {
+            observations.RecordReceived(typeof(MarkerMessage));
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ScopeProbeInScopeHandler(ScopeProbeObservations observations) : IHandleMessages<InScopeMessage>
+    {
+        public Task Handle(InScopeMessage message)
+        {
+            observations.RecordReceived(typeof(InScopeMessage));
+
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class FollowUpObservations
     {

@@ -151,6 +151,12 @@ already acknowledged it, so Rebus logs the failure and does not redeliver.
 `MartenUnitOfWork` makes its own scope `MartenScopeAccessor.Current` for the save, so the listeners also run for a
 plain handler's save, where no generated pipeline has set it.
 
+A limit nothing reaches today: on the `RebusTransactionScope` a generated pipeline opens, a message **first** sent from
+inside one of the scope's commit callbacks is silently never sent — Rebus 8.6's scope runs only the commit callbacks it
+holds when it completes, so the send's own callback never runs — whereas a received message's transaction does run it
+(both pinned by `RebusCommitAmbientContextTests`). An enlistment must not send from a commit callback it registers on a
+generated pipeline's transaction, or must send outside it.
+
 Two Marten 6.4.2 facts the drain depends on, pinned against a real PostgreSQL by `MartenSaveListenerPostgresTests`:
 
 - SQL a listener queues with `QueueSqlCommand` during `BeforeSaveChangesAsync` is executed in the same batch and

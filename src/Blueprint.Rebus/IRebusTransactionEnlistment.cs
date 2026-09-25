@@ -58,6 +58,14 @@ namespace Blueprint.Rebus;
 /// already saved, where nothing would ever write it: it must refuse it, or send it without the outbox.
 /// </para>
 /// <para>
+/// One more limit, which nothing in Blueprint reaches today: on the <c>RebusTransactionScope</c> a generated pipeline
+/// opens, a message first sent from inside one of the scope's commit callbacks is never sent, and nothing reports it.
+/// Rebus 8.6's scope runs only the commit callbacks it holds when it completes, so the send's own callback, registered
+/// while they run, never runs (pinned by <c>RebusCommitAmbientContextTests</c>). A received message's transaction, on the
+/// plain-handler path, does run such a callback. So an enlistment's commit callback on a generated pipeline's transaction
+/// must not send, or must send outside that transaction.
+/// </para>
+/// <para>
 /// Blueprint checks for that mistake. Once a transaction it enlisted has run its commit callbacks, it asks the scope's
 /// unit of work, when that is an <see cref="Persistence.IUnitOfWorkSaveGuard"/> (Blueprint.Marten's is), whether work was
 /// queued on it since its save, and fails the transaction's completion if so (see
