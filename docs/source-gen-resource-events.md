@@ -10,7 +10,7 @@ The current Blueprint resource event architecture is **already well-optimized** 
 
 ```
 Handler returns ResourceEvent<T>
-  → ResourceEventSelfQueryModule (stage -5): resolve SelfQuery if Data is null
+  → ResourceEventSelfQueryModule (stage -5, commands only): resolve SelfQuery if Data is null
   → ResourceExpansionModule (stage 1010): expand the event's Expandable<T> data
   → ResourceEventAuditModule (stage 1020, commands only): stamp, fill metadata, make Href, extract EventId + ResourceId, invoke audit sink
   → LinkGenerationModule (Cleanup, before the return): hand the result to the runtime link population, which links Data (every link, self included, absolute)
@@ -28,7 +28,9 @@ handler-returned data). In an app registered with `DisableHateoasLinks()` — a 
 `IsCommand` (Signature365 `8b40ecc961`, `ResourceEventHandlerMiddlewareBuilder.cs:12-15`). A query that returns a
 resource event, as Signature365's AdminPortal injection override queries return the one Subscriptions gave them, passes
 it on as its handler returned it: not stamped, no href made, and neither the audit sink nor the audit repository is given
-it.
+it. Nor is its self query run (legacy ran it inside the same handler, `ResourceEventHandler.cs:48-52`), for a legacy
+event or a `DeferredResourceEventResult<T>`: the event keeps the data its handler gave it. Data it hands on from another
+operation is still expanded, as legacy's `ResourceExpandMiddleware` matched every operation.
 
 A legacy `ResourceEvent`'s `Metadata` and `SecureData` begin empty, so every event is written with both, as legacy's were
 (`ResourceEvent.cs:140`, `:146`). For a command's event the module fills `Metadata` as legacy's `ResourceEventHandler`

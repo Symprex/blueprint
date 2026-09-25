@@ -98,6 +98,21 @@ public class ResourceEventExpansionIntegrationTests
     }
 
     [Fact]
+    public async Task When_an_outer_query_returns_an_event_an_inner_pipeline_loaded_by_its_self_query_then_the_outer_pipeline_expands_it()
+    {
+        // As above, for a query: legacy's ResourceExpandMiddleware matched every operation (ResourceExpandMiddleware.cs:21-24),
+        // queries included, although its ResourceEventHandler, which ran self queries, matched commands only
+        // (ResourceEventHandlerMiddlewareBuilder.cs:12-15).
+        var (context, pipeline, expander) = Create<HandOnAlwaysExpandEmployeeEventQuery>(new DefaultHttpContext());
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        var resourceEvent = result.Should().BeOfType<ResourceEvent<AlwaysExpandTestEmployee>>().Subject;
+        expander.Responses.Should().HaveCount(2, "the self query's pipeline expands its resource, and the outer query's pipeline the event it hands on");
+        expander.Responses[1].Should().BeSameAs(resourceEvent, "the second is the outer pipeline's, whose response is the event");
+    }
+
+    [Fact]
     public async Task When_a_union_declares_a_resource_event_and_a_type_derived_from_it_then_the_event_is_expanded_once()
     {
         // Legacy expanded the one declared response its handler's result was (ResourceExpandMiddleware.cs:55-62). A
@@ -224,6 +239,18 @@ public partial class UpdateExpandableEmployeeCommand : ICommand<ResourceEvent<Ex
 public partial class PassOnAlwaysExpandEmployeeEventCommand : ICommand<ResourceEvent<AlwaysExpandTestEmployee>>
 {
     public static async Task<ResourceEvent<AlwaysExpandTestEmployee>> HandleAsync(PassOnAlwaysExpandEmployeeEventCommand operation, ApiOperationContext context)
+    {
+        var executor = (BlueprintAppExecutor)context.ServiceProvider.GetService(typeof(BlueprintAppExecutor))!;
+        var inner = await executor.ExecuteAsync(context.CreateNested(new UpdateAlwaysExpandEmployeeViaSelfQueryCommand()));
+
+        return (ResourceEvent<AlwaysExpandTestEmployee>)inner;
+    }
+}
+
+/// <summary>A query that hands on the event a command's pipeline returned, whose data that pipeline's self query loaded.</summary>
+public partial class HandOnAlwaysExpandEmployeeEventQuery : IQuery<ResourceEvent<AlwaysExpandTestEmployee>>
+{
+    public static async Task<ResourceEvent<AlwaysExpandTestEmployee>> HandleAsync(HandOnAlwaysExpandEmployeeEventQuery operation, ApiOperationContext context)
     {
         var executor = (BlueprintAppExecutor)context.ServiceProvider.GetService(typeof(BlueprintAppExecutor))!;
         var inner = await executor.ExecuteAsync(context.CreateNested(new UpdateAlwaysExpandEmployeeViaSelfQueryCommand()));

@@ -1602,15 +1602,7 @@ public static class PipelineHelpers
         ILogger logger,
         string operationTypeName)
     {
-        // Data an event already has when this pipeline reaches it was not loaded by this pipeline's self query, even when
-        // another pipeline's was: an outer handler handing on the event an inner operation returned. Legacy's
-        // ResourceExpandMiddleware expanded such data in the outer pipeline, as it expanded any data the returned event had
-        // (Signature365 8b40ecc961, Common/Api/ResourceExpandMiddleware.cs:53-84), so it is no longer marked as the self
-        // query's.
-        if (handlerResult is ResourceEvent { IsDataFromSelfQuery: true, Data: not null } handedOn)
-        {
-            handedOn.IsDataFromSelfQuery = false;
-        }
+        MarkHandedOnResourceEventData(handlerResult);
 
         if (executor is null)
         {
@@ -1638,6 +1630,27 @@ public static class PipelineHelpers
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Marks the data of a returned <see cref="ResourceEvent"/> as not this pipeline's self query's, so the pipeline's
+    /// expansion expands it.
+    /// </summary>
+    /// <remarks>
+    /// Data an event already has when a pipeline reaches it was not loaded by that pipeline's self query, even when another
+    /// pipeline's was: an outer handler handing on the event an inner operation returned. Legacy's
+    /// <c>ResourceExpandMiddleware</c> expanded such data in the outer pipeline, as it expanded any data the returned event
+    /// had, in every operation (Signature365 <c>8b40ecc961</c>, <c>Common/Api/ResourceExpandMiddleware.cs:21-24</c>,
+    /// <c>:53-84</c>). A query's pipeline, which runs no self query, calls this on its own; a command's calls it through
+    /// <see cref="ResolveResourceEventSelfQueryAsync"/>.
+    /// </remarks>
+    /// <param name="handlerResult">The handler result.</param>
+    public static void MarkHandedOnResourceEventData(OperationResult handlerResult)
+    {
+        if (handlerResult is ResourceEvent { IsDataFromSelfQuery: true, Data: not null } handedOn)
+        {
+            handedOn.IsDataFromSelfQuery = false;
+        }
     }
 
     /// <summary>

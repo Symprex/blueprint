@@ -5,10 +5,11 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
-/// Contributes a PostExecution render step that resolves <c>ResourceEvent.SelfQuery</c> by
+/// Contributes a PostExecution render step that, for a command, resolves <c>ResourceEvent.SelfQuery</c> by
 /// executing the query through the generated pipeline when the handler returns a
 /// <c>ResourceEvent</c> with <c>Data == null</c> and <c>SelfQuery != null</c>, or a
-/// <c>DeferredResourceEventResult&lt;T&gt;</c> that carries a self-query for lazy resolution.
+/// <c>DeferredResourceEventResult&lt;T&gt;</c> that carries a self-query for lazy resolution. A query's self query is
+/// not run, as legacy ran none; its pipeline only marks data it hands on as its own to expand.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -62,6 +63,16 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
             new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
             requiredBy: PipelineStage.PostExecution);
 
+        // Legacy ran an event's self query in ResourceEventHandler (Signature365 8b40ecc961, ResourceEventHandler.cs:48-52),
+        // whose middleware matched commands only (ResourceEventHandlerMiddlewareBuilder.cs:12-15, `operation.IsCommand`). A
+        // query's event keeps the data its handler gave it, but data it hands on is still its own to expand, as legacy's
+        // ResourceExpandMiddleware matched every operation.
+        if (!IsCommand(context.Operation.TypeSymbol))
+        {
+            context.AddRenderStep(PipelineStage.PostExecution, RenderHandedOnDataMark);
+            return;
+        }
+
         context.RequireAsync();
         context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderSelfQueryResolution(ctx, operationTypeName));
     }
@@ -71,6 +82,25 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
         context.WriteBlankLine();
         context.WriteStatement(
             $"await ResolveResourceEventSelfQueryAsync(this.Executor, context, handlerResult, this.Logger, \"{operationTypeName}\").ConfigureAwait(false);");
+    }
+
+    private static void RenderHandedOnDataMark(PipelineRenderContext context)
+    {
+        context.WriteBlankLine();
+        context.WriteStatement("MarkHandedOnResourceEventData(handlerResult);");
+    }
+
+    /// <summary>
+    /// Whether the operation is a command, the only kind whose event's self query legacy ran: its
+    /// <c>ResourceEventHandlerMiddlewareBuilder</c> matched <c>operation.IsCommand</c> (Signature365 <c>8b40ecc961</c>,
+    /// <c>ResourceEventHandlerMiddlewareBuilder.cs:12-15</c>), which is <c>typeof(ICommand).IsAssignableFrom(OperationType)</c>
+    /// (<c>ApiOperationDescriptor.cs:124</c>). A background task is not one.
+    /// </summary>
+    private static bool IsCommand(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name is "ICommand"
+            && candidate.IsInNamespace("Blueprint", "Model"));
     }
 
     /// <summary>

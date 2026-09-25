@@ -144,6 +144,45 @@ public class ResourceEventSelfQueryModuleIntegrationTests
         deferred.CorrelationId.Should().Be(activity.Id);
     }
 
+    // Legacy loaded an event's data through its self query inside ResourceEventHandler (Signature365 8b40ecc961,
+    // Blueprint.Http/Middleware/ResourceEventHandler.cs:48-52), whose middleware matched commands only
+    // (ResourceEventHandlerMiddlewareBuilder.cs:12-15, `operation.IsCommand`, Blueprint/ApiOperationDescriptor.cs:124). So a
+    // query's event kept the data its handler gave it, none here, and its self query was never run.
+    [Fact]
+    public async Task When_a_query_returns_a_resource_event_with_a_self_query_then_the_self_query_is_not_run()
+    {
+        var (context, pipeline) = Create<UpdatedEventOnlyQuery>();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        var resourceEvent = result.Should().BeOfType<ResourceEvent<SelfQueryTestApiResource>>().Subject;
+        resourceEvent.Data.Should().BeNull("legacy ran a self query for a command's event only");
+        resourceEvent.SelfQuery.Should().BeOfType<GetSelfQueryTestResourceQuery>().Which.Id.Should().Be("test-42");
+    }
+
+    [Fact]
+    public async Task When_a_query_returns_a_deferred_resource_event_then_its_self_query_is_not_run()
+    {
+        // The deferred event is new-only; it follows the rule legacy gave every resource event (above).
+        var (context, pipeline) = Create<DeferredEventOnlyQuery>();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeAssignableTo<IDeferredResourceEventResult>()
+            .Which.ResolvedContent.Should().BeNull("a query's self query is not run");
+    }
+
+    private static (ApiOperationContext Context, IOperationExecutorPipeline Pipeline) Create<TOperation>()
+        where TOperation : IOperation
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var serviceProvider = new SelfQueryTestServiceProvider(app);
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        serviceProvider.Executor = executor;
+
+        return (new ApiOperationContext(serviceProvider, app, app.FindOperation(typeof(TOperation)), CancellationToken.None), executor.GetPipeline(typeof(TOperation)));
+    }
+
     /// <summary>
     /// Test service provider that supplies the executor for nested SelfQuery dispatch.
     /// Uses lazy resolution so the executor can be set after construction (breaking
@@ -272,6 +311,33 @@ public static partial class SelfQueryTestResourceEvents
     /// </summary>
     [ResourceEventReason(ChangeType.Created, "created")]
     public sealed partial record Created([ResourceEventSelfQuery] GetSelfQueryTestResourceQuery SelfQuery);
+}
+
+/// <summary>A query that returns an updated event carrying only its self query.</summary>
+public partial class UpdatedEventOnlyQuery : IQuery<ResourceEvent<SelfQueryTestApiResource>>
+{
+    /// <summary>Handles the query by returning an event with a self query and no data.</summary>
+    /// <param name="operation">The query instance.</param>
+    /// <returns>An updated resource event whose data is left to its self query.</returns>
+    public static ResourceEvent<SelfQueryTestApiResource> Handle(UpdatedEventOnlyQuery operation)
+    {
+        return new ResourceEvent<SelfQueryTestApiResource>(
+            ResourceEventChangeType.Updated,
+            "updated",
+            new GetSelfQueryTestResourceQuery { Id = "test-42" });
+    }
+}
+
+/// <summary>A query that returns a deferred resource event, whose content is left to its self query.</summary>
+public partial class DeferredEventOnlyQuery : IQuery<DeferredResourceEventResult<SelfQueryTestApiResource>>
+{
+    /// <summary>Handles the query by returning a deferred resource event with a self query.</summary>
+    /// <param name="operation">The query instance.</param>
+    /// <returns>A deferred resource event.</returns>
+    public static DeferredResourceEventResult<SelfQueryTestApiResource> Handle(DeferredEventOnlyQuery operation)
+    {
+        return new SelfQueryTestResourceEvents.Created(new GetSelfQueryTestResourceQuery { Id = "test-42" });
+    }
 }
 
 /// <summary>
