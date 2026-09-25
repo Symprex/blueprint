@@ -131,7 +131,6 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
             var jobId = JobIdPrefix + schedule.Name;
             registeredIds.Add(jobId);
 
-            var envelope = new BackgroundTaskEnvelope(schedule.BackgroundTask);
             var payload = JsonSerializer.Serialize(new HangfireTaskPayload
             {
                 TaskTypeName = schedule.BackgroundTask.GetType().AssemblyQualifiedName!,
@@ -140,7 +139,9 @@ public sealed class HangfireRecurringTaskProvider : IPeriodicRecurringTaskProvid
                     schedule.BackgroundTask.GetType()),
             });
 
-            var queue = schedule.Queue ?? envelope.GetQueueName() ?? this._defaultQueue;
+            // The schedule's queue, else the app's: legacy never routed a recurring job by the task's [Queue] (legacy
+            // Blueprint.Tasks.Hangfire/HangfireRecurringTaskProvider.cs:76), only an enqueued one.
+            var queue = schedule.Queue ?? this._defaultQueue;
 
             this._recurringJobManager.AddOrUpdate<HangfireBackgroundTaskExecutor>(
                 jobId,

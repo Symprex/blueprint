@@ -123,6 +123,27 @@ public class HangfireQueueRoutingTests
     }
 
     [Fact]
+    public async Task Recurring_job_for_a_task_with_a_queue_attribute_still_goes_to_the_apps_default_queue()
+    {
+        // Legacy routed a recurring job by its schedule's queue, else the default queue, and never read the task's
+        // [Queue] (legacy Blueprint.Tasks.Hangfire/HangfireRecurringTaskProvider.cs:76 at Signature365 8b40ecc961); only
+        // its enqueue path did (HangfireBackgroundTaskScheduleProvider.cs:80-93).
+        var job = await RegisterRecurringAsync(new RecurringTaskSchedule("nightly", new RoutedTask(), "0 2 * * *"));
+
+        job.Queue.Should().Be(AppQueue);
+    }
+
+    [Fact]
+    public async Task Recurring_job_whose_schedule_names_a_queue_goes_to_that_queue()
+    {
+        // The schedule's own queue comes first (legacy HangfireRecurringTaskProvider.cs:76).
+        var job = await RegisterRecurringAsync(
+            new RecurringTaskSchedule("nightly", new RoutedTask(), "0 2 * * *", TimeZoneInfo.Utc, queue: "nightly-jobs"));
+
+        job.Queue.Should().Be("nightly-jobs");
+    }
+
+    [Fact]
     public async Task Provider_resolved_through_AddBlueprintHangfire_uses_the_configured_default_queue()
     {
         var captured = new CapturedJob();
@@ -138,6 +159,24 @@ public class HangfireQueueRoutingTests
         await sut.EnqueueAsync(new BackgroundTaskEnvelope(new UnroutedTask()));
 
         captured.Job!.Queue.Should().Be(AppQueue, "the container must construct the provider with the app's task options");
+    }
+
+    private static async Task<Job> RegisterRecurringAsync(RecurringTaskSchedule schedule)
+    {
+        var manager = Substitute.For<IRecurringJobManager>();
+        var jobs = new Dictionary<string, Job>();
+        manager
+            .When(static m => m.AddOrUpdate(Arg.Any<string>(), Arg.Any<Job>(), Arg.Any<string>(), Arg.Any<RecurringJobOptions>()))
+            .Do(call => jobs[call.ArgAt<string>(0)] = call.ArgAt<Job>(1));
+
+        var sut = new HangfireRecurringTaskProvider(
+            manager,
+            Options.Create(new BlueprintTaskOptions { DefaultQueue = AppQueue }),
+            NullLogger<HangfireRecurringTaskProvider>.Instance);
+
+        await sut.RegisterSchedulesAsync([schedule]);
+
+        return jobs.Single(static pair => !pair.Key.EndsWith(":Scheduler", StringComparison.Ordinal)).Value;
     }
 
     private static IBackgroundJobClient CreateClient(CapturedJob captured)
