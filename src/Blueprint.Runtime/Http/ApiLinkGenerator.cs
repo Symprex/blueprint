@@ -32,6 +32,11 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
     internal string OriginalBaseUri => this._originalBaseUri;
 
     /// <summary>
+    /// Gets the app whose links this generator makes, which a cached generator must be reused only for.
+    /// </summary>
+    internal BlueprintApp App => this._app;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ApiLinkGenerator"/> class.
     /// </summary>
     /// <param name="app">The registered Blueprint app model.</param>

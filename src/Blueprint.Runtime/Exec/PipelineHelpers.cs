@@ -1870,7 +1870,9 @@ public static class PipelineHelpers
     /// Gets a link generator for the base URI the router set for the request, or <see langword="null"/> when the operation
     /// is not running in a request (<see cref="ApiOperationContext.BaseUri"/> is not set).
     /// </summary>
-    private static ApiLinkGenerator? GetRequestLinkGenerator(ApiOperationContext context)
+    /// <param name="context">The operation context, whose app and base URI the generator is for.</param>
+    /// <returns>The generator, or <see langword="null"/> outside a request.</returns>
+    internal static ApiLinkGenerator? GetRequestLinkGenerator(ApiOperationContext context)
     {
         if (context.BaseUri is null)
         {
@@ -1879,10 +1881,12 @@ public static class PipelineHelpers
 
         // Fast path: reuse the cached generator when the BaseUri reference hasn't changed
         // (the router middleware reuses the same string instance across requests).
-        // Eliminates ~40B allocation per request on the link-generation hot path.
+        // Eliminates ~40B allocation per request on the link-generation hot path. The cache is process-wide, so it is
+        // reused only for the app it was made for: two apps can share a base URI instance (the testing host gives every app
+        // the same one), and a generator's self links and operation URLs are its app's.
         var cached = _cachedApiLinkGenerator;
 
-        if (cached is not null && ReferenceEquals(cached.OriginalBaseUri, context.BaseUri))
+        if (cached is not null && ReferenceEquals(cached.OriginalBaseUri, context.BaseUri) && ReferenceEquals(cached.App, context.App))
         {
             return cached;
         }
