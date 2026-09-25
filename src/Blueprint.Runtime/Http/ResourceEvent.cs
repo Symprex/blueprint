@@ -143,23 +143,25 @@ public class ResourceEvent : OperationResult
     /// of useful information that can be stored free-form against an event.
     /// </summary>
     /// <remarks>
-    /// It may be persisted (for example for auditing). Lazy-initialized to avoid a ~200-byte dictionary allocation per event
-    /// when not used. The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
+    /// It may be persisted (for example for auditing). It begins empty, as legacy Blueprint's did (Signature365
+    /// <c>8b40ecc961</c>, <c>Blueprint.Http/ResourceEvent.cs:140</c>), so every event is written with it. For a command's
+    /// event the generated pipeline adds the user's and the request's metadata, as legacy's <c>ResourceEventHandler</c> did.
+    /// The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
     /// </remarks>
     [JsonInclude]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Dictionary<string, object>? Metadata { get; internal set; }
+    public Dictionary<string, object> Metadata { get; internal set; } = new Dictionary<string, object>();
 
     /// <summary>
     /// Gets a dictionary of security-related data that will NOT be persisted anywhere.
     /// </summary>
     /// <remarks>
-    /// Lazy-initialized to avoid a ~200-byte dictionary allocation per event when not used. The summary is legacy
-    /// Blueprint's, which the OpenAPI document describes the property with.
+    /// It begins empty, as legacy Blueprint's did (<c>ResourceEvent.cs:146</c>), so every event is written with it. The
+    /// summary is legacy Blueprint's, which the OpenAPI document describes the property with.
     /// </remarks>
     [JsonInclude]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Dictionary<string, object>? SecureData { get; internal set; }
+    public Dictionary<string, object> SecureData { get; internal set; } = new Dictionary<string, object>();
 
     /// <summary>
     /// Gets or sets the correlation id for this event, which can be used to tie it back to
@@ -203,7 +205,6 @@ public class ResourceEvent : OperationResult
     /// <returns>This <see cref="ResourceEvent"/> to support further chaining.</returns>
     public ResourceEvent WithMetadata(string key, object value)
     {
-        this.Metadata ??= new Dictionary<string, object>();
         this.Metadata[key] = value;
         return this;
     }
@@ -217,7 +218,6 @@ public class ResourceEvent : OperationResult
     /// <returns>This <see cref="ResourceEvent"/> to support further chaining.</returns>
     public ResourceEvent WithSecureData(string key, object value)
     {
-        this.SecureData ??= new Dictionary<string, object>();
         this.SecureData[key] = value;
         return this;
     }

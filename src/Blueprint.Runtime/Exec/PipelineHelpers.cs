@@ -1289,16 +1289,71 @@ public static class PipelineHelpers
     /// (a collection's, for a create). Signature365 stores the href with every audited event.
     /// </remarks>
     /// <summary>
-    /// Stamps a legacy <see cref="ResourceEvent"/> with the request's correlation id and the operation that raised it, as
-    /// legacy Blueprint's <c>ResourceEventHandler</c> stamped every event: whatever its change type, and whether or not it
-    /// has data, a self query or a self link. Signature365's audit stores both.
+    /// Stamps a legacy <see cref="ResourceEvent"/> with the request's correlation id and the operation that raised it, and
+    /// fills its <see cref="ResourceEvent.Metadata"/>, as legacy Blueprint's <c>ResourceEventHandler</c> did for every event:
+    /// whatever its change type, and whether or not it has data, a self query or a self link, or is audited. Signature365's
+    /// audit stores all three.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The metadata is filled in legacy's order, each entry through the dictionary's indexer, so an entry the handler added
+    /// keeps its place and takes the later value (Signature365 <c>8b40ecc961</c>, <c>ResourceEventHandler.cs:34-46</c>): the
+    /// user's authorisation context's; then the request's, as legacy's <c>HttpContextMetadataProvider</c>, the provider its
+    /// <c>AddHttp</c> registered, gave them (<c>HttpContextMetadataProvider.cs:18-25</c>); then every registered
+    /// <see cref="IContextMetadataProvider"/>'s, in the order they were registered. Signature365 registers no provider of its
+    /// own, so its events carry the user's metadata, <c>IpAddress</c> and <c>UserAgent</c>.
+    /// </para>
+    /// <para>
+    /// Not legacy: outside a request the request's metadata is left out. Legacy's provider threw there, failing, after its
+    /// save, a command whose changes were committed (<c>ApiOperationContextHttpExtensions.cs:45-53</c>). Likewise a
+    /// connection with no remote address, on which legacy threw a <see cref="NullReferenceException"/>
+    /// (<c>HttpRequestExtensions.cs:12</c>), is given the address a missing one gives (<see cref="ClientIpAddress"/>).
+    /// </para>
+    /// </remarks>
     private static void StampResourceEvent(ApiOperationContext context, OperationResult handlerResult)
     {
         if (handlerResult is ResourceEvent resourceEvent)
         {
+            context.UserAuthorisationContext?.PopulateMetadata(static (key, value, target) => target.Metadata[key] = value, resourceEvent);
+
             resourceEvent.CorrelationId = context.Activity?.Id;
             resourceEvent.Operation = context.Operation;
+
+            PopulateRequestMetadata(context.HttpContext, resourceEvent);
+
+            if (context.ServiceProvider.GetService(typeof(IEnumerable<IContextMetadataProvider>)) is IEnumerable<IContextMetadataProvider> metadataProviders)
+            {
+                foreach (var metadataProvider in metadataProviders)
+                {
+                    metadataProvider.PopulateMetadata(static (key, value, target) => target.Metadata[key] = value, resourceEvent);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds the request's metadata to a resource event as legacy's <c>HttpContextMetadataProvider</c> added it
+    /// (<c>HttpContextMetadataProvider.cs:18-25</c>): its client's <c>IpAddress</c> always, and its <c>UserAgent</c> when it
+    /// has the header. Nothing is added outside a request.
+    /// </summary>
+    private static void PopulateRequestMetadata(HttpContext? httpContext, ResourceEvent resourceEvent)
+    {
+        if (httpContext is null)
+        {
+            return;
+        }
+
+        var headers = httpContext.Request.Headers;
+
+        // Null when the connection has no remote address and every address the request was forwarded for is private; legacy
+        // stored whatever it was given.
+        resourceEvent.Metadata["IpAddress"] = ClientIpAddress.Get(
+            httpContext.Connection.RemoteIpAddress?.ToString(),
+            headers["X-Forwarded-For"].ToString())!;
+
+        if (headers.ContainsKey("User-Agent"))
+        {
+            resourceEvent.Metadata["UserAgent"] = headers["User-Agent"].ToString();
         }
     }
 

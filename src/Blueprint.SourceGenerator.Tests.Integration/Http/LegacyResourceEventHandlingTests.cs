@@ -96,7 +96,27 @@ public sealed class LegacyResourceEventHandlingTests
         resourceEvent.Operation.Should().BeSameAs(operation);
     }
 
-    private static async Task<ResourceEvent> ExecuteAsync(object operation, RecordingLogger logger, System.Diagnostics.Activity? activity = null)
+    [Fact]
+    public async Task Outside_a_request_an_events_metadata_is_its_users_alone_and_the_command_succeeds()
+    {
+        // Not legacy: its ResourceEventHandler filled the metadata from the user's context (ResourceEventHandler.cs:36)
+        // and then from HttpContextMetadataProvider, whose GetHttpContext threw for a context with no request
+        // (HttpContextMetadataProvider.cs:16, ApiOperationContextHttpExtensions.cs:45-53), failing, after its save, a
+        // command whose changes were committed. Here the request's IpAddress and UserAgent are left out instead.
+        var user = new MetadataUser();
+
+        var resourceEvent = await ExecuteAsync(new ReportHrefWidgetChangedCommand(), new RecordingLogger(), user: user);
+
+        resourceEvent.Metadata.Select(static m => (m.Key, m.Value)).Should().Equal(
+            [("Id", (object)"user-2"), ("TenantId", "tenant-2")],
+            "the user's context gave the event its metadata, and there was no request to give it more");
+    }
+
+    private static async Task<ResourceEvent> ExecuteAsync(
+        object operation,
+        RecordingLogger logger,
+        System.Diagnostics.Activity? activity = null,
+        Blueprint.Authorization.IUserAuthorisationContext? user = null)
     {
         var app = new IntegrationTestBlueprintApp();
         var serviceProvider = new LoggingServiceProvider(logger);
@@ -108,6 +128,7 @@ public sealed class LegacyResourceEventHandlingTests
         {
             Operation = operation,
             Activity = activity,
+            UserAuthorisationContext = user,
         };
 
         var result = await executor.GetPipeline(operation.GetType()).ExecuteAsync(context);
@@ -138,6 +159,30 @@ public sealed class LegacyResourceEventHandlingTests
             }
 
             return serviceType == typeof(ILogger<ResourceEvent>) ? logger : null;
+        }
+    }
+
+    /// <summary>A user whose metadata is Signature365's user's: its Id, then its TenantId.</summary>
+    private sealed class MetadataUser : Blueprint.Authorization.IUserAuthorisationContext
+    {
+        public bool IsActive => true;
+
+        public bool IsAnonymous => false;
+
+        public string Id => "user-2";
+
+        public string IdentityId => "user-2";
+
+        public string AccountId => "tenant-2";
+
+        public string Email => "user-2@example.test";
+
+        public string Name => "user-2";
+
+        public void PopulateMetadata(Action<string, object> add)
+        {
+            add("Id", this.Id);
+            add("TenantId", this.AccountId);
         }
     }
 

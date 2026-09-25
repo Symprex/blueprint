@@ -13,7 +13,7 @@ Handler returns ResourceEvent<T>
   → ResourceEventSelfQueryModule (stage -5): resolve SelfQuery if Data is null
   → LinkGenerationModule (stage 0): populate $links.self on resource Data
   → ResourceExpansionModule (stage 1010): expand the event's Expandable<T> data
-  → ResourceEventAuditModule (stage 1020, commands only): stamp, make Href, extract EventId + ResourceId, invoke audit sink
+  → ResourceEventAuditModule (stage 1020, commands only): stamp, fill metadata, make Href, extract EventId + ResourceId, invoke audit sink
   → PipelineReturnModule: serialize envelope to HTTP response
 ```
 
@@ -22,6 +22,13 @@ Handler returns ResourceEvent<T>
 resource event, as Signature365's AdminPortal injection override queries return the one Subscriptions gave them, passes
 it on as its handler returned it: not stamped, no href made, and neither the audit sink nor the audit repository is given
 it.
+
+A legacy `ResourceEvent`'s `Metadata` and `SecureData` begin empty, so every event is written with both, as legacy's were
+(`ResourceEvent.cs:140`, `:146`). For a command's event the module fills `Metadata` as legacy's `ResourceEventHandler`
+did (`ResourceEventHandler.cs:34-46`), each entry through the indexer: the user's authorisation context's entries, then
+the request's `IpAddress` (legacy's `GetClientIpAddress`, `HttpRequestExtensions.cs:16-98`) and, when the request has the
+header, `UserAgent`, then every registered `IContextMetadataProvider`'s. Signature365 stores the dictionary with every
+audited event (`EventMapper.cs:29`). Outside a request the request's entries are left out, where legacy threw.
 
 ### Key Types
 

@@ -15,6 +15,12 @@ namespace Blueprint.Model;
 /// for tenant context, another for correlation IDs, etc.
 /// </para>
 /// <para>
+/// The generated pipeline calls every registered provider for each legacy <c>ResourceEvent</c> a command raises, in the
+/// order they were registered, after the user's authorisation context and the request have added theirs, as legacy
+/// Blueprint's <c>ResourceEventHandler</c> called its providers. A value a provider adds under a key already present
+/// replaces the earlier one.
+/// </para>
+/// <para>
 /// Providers should be lightweight and avoid I/O — they are called synchronously on every
 /// resource event.
 /// </para>

@@ -169,6 +169,101 @@ public sealed class ResourceEventAuditRepositoryTests
         host.ServerErrors.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task A_commands_resource_event_carries_legacys_metadata_in_legacys_order_to_the_repository_and_the_wire()
+    {
+        // Legacy's ResourceEventHandler.HandleAsync (Signature365 8b40ecc961, Blueprint.Http/Middleware/
+        // ResourceEventHandler.cs) filled the event's Metadata, by indexer (:34), from:
+        // - the user's authorisation context (:36), as Signature365UserAuthorisationContext.PopulateMetadata adds Id then
+        //   TenantId (Common.Core/Authorisation/Signature365UserAuthorisationContext.cs:207-219);
+        // - then every IContextMetadataProvider (:41-46), the first of which is HttpContextMetadataProvider, registered by
+        //   AddHttp (Blueprint.Http/BlueprintApiBuilderExtensions.cs:80): IpAddress always, UserAgent only when the request
+        //   has one (HttpContextMetadataProvider.cs:18-25);
+        // - then any provider the app registered.
+        // Keys the handler added itself came first, as they were already in the dictionary, and a key the handler had
+        // added that the pipeline added again kept its place and took the pipeline's value, the indexer replacing it. The
+        // IpAddress is the first public address the request was forwarded for (HttpRequestExtensions.cs:12, :37-44).
+        // Signature365 stores the dictionary as JSON with the audited event (EventStore.Contract/Messages/EventMapper.cs:29),
+        // in this order.
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(records, static blueprint =>
+        {
+            blueprint.AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>();
+            blueprint.AddContextMetadataProvider<AppContextMetadataProvider>();
+            blueprint.Services.AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, MetadataUserContextFactory>();
+        });
+
+        using var body = JsonDocument.Parse(await host.PostAsync(
+            "api/audited-events/annotated-widgets",
+            (AuditingHost.TestUserHeader, "user-1"),
+            ("User-Agent", "audit-test/1.0"),
+            ("X-Forwarded-For", "10.0.0.5, 203.0.113.9")));
+
+        (string Key, string? Value)[] expected =
+        [
+            ("reason", "created-in-test"),
+            ("IpAddress", "203.0.113.9"),
+            ("Id", "user-1"),
+            ("TenantId", "tenant-1"),
+            ("UserAgent", "audit-test/1.0"),
+            ("app.key", "app-value"),
+        ];
+
+        records.Repository.Should().ContainSingle().Which.Metadata.Should().Equal(expected, "legacy filled metadata in this order before auditing");
+        body.RootElement.GetProperty("metadata").EnumerateObject()
+            .Select(static p => (p.Name, (string?)p.Value.ToString()))
+            .Should().Equal(expected, "legacy wrote the event it had filled, metadata and all");
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task An_anonymous_commands_resource_event_carries_only_the_requests_ip_address_as_metadata()
+    {
+        // Legacy loaded no user context for an anonymous caller, so ResourceEventHandler.cs:36's
+        // context.UserAuthorisationContext?.PopulateMetadata added nothing. HttpContextMetadataProvider added IpAddress
+        // always and UserAgent only when the request carried one (HttpContextMetadataProvider.cs:18-25); this one does not.
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint.AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>());
+
+        await host.PostAsync("api/audited-events/widgets");
+
+        records.Repository.Should().ContainSingle().Which.Metadata.Should().Equal(
+            [("IpAddress", "127.0.0.1")],
+            "an anonymous request with no User-Agent gave legacy's metadata its IpAddress alone");
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_do_not_audit_commands_resource_event_still_carries_legacys_metadata()
+    {
+        // Legacy filled the metadata (ResourceEventHandler.cs:34-46) before it looked for [DoNotAudit] (:72), so an event
+        // that was not audited was still written with it.
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint.AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>());
+
+        using var body = JsonDocument.Parse(await host.PostAsync("api/audited-events/unaudited-widgets"));
+
+        records.Repository.Should().BeEmpty();
+        body.RootElement.GetProperty("metadata").GetProperty("IpAddress").GetString().Should().Be("127.0.0.1");
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_querys_resource_event_is_given_no_metadata()
+    {
+        // Legacy's ResourceEventHandler, which filled the metadata, never ran for a query
+        // (ResourceEventHandlerMiddlewareBuilder.cs:12-15), and an event's metadata began empty (ResourceEvent.cs:140).
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint.AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>());
+
+        using var body = JsonDocument.Parse(await host.GetAsync("api/audited-events/passed-on-widgets"));
+
+        var metadata = body.RootElement.GetProperty("metadata");
+        metadata.ValueKind.Should().Be(JsonValueKind.Object);
+        metadata.EnumerateObject().Should().BeEmpty();
+        host.ServerErrors.Should().BeEmpty();
+    }
+
     /// <summary>What the repository and sink were given, copied out when they were called.</summary>
     public sealed class AuditRecords
     {
@@ -183,7 +278,14 @@ public sealed class ResourceEventAuditRepositoryTests
     /// <param name="Href">The event's href.</param>
     /// <param name="DataId">The id of the widget the event carries.</param>
     /// <param name="DepartmentName">The name of the department the employee the event carries belongs to, if expanded.</param>
-    public sealed record AuditRecord(Type? OperationType, string? CorrelationId, string? Href, string? DataId, string? DepartmentName);
+    /// <param name="Metadata">The event's metadata, in its dictionary's order, each value as its string.</param>
+    public sealed record AuditRecord(
+        Type? OperationType,
+        string? CorrelationId,
+        string? Href,
+        string? DataId,
+        string? DepartmentName,
+        IReadOnlyList<(string Key, string? Value)> Metadata);
 
     /// <summary>A repository, registered scoped as <c>AddResourceEventAuditRepository</c> registers it, that records what it is given.</summary>
     public sealed class RecordingResourceEventAuditRepository(AuditRecords records) : IResourceEventAuditRepository
@@ -200,9 +302,52 @@ public sealed class ResourceEventAuditRepositoryTests
                 resourceEvent.CorrelationId,
                 resourceEvent.Href,
                 (resourceEvent.Data as HrefWidgetApiResource)?.Id,
-                (resourceEvent.Data as AlwaysExpandTestEmployee)?.Department.Value?.Name));
+                (resourceEvent.Data as AlwaysExpandTestEmployee)?.Department.Value?.Name,
+                resourceEvent.Metadata.Select(static m => (m.Key, m.Value?.ToString())).ToArray()));
 
             return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>A provider the app registers, whose metadata legacy added after the request's own.</summary>
+    public sealed class AppContextMetadataProvider : IContextMetadataProvider
+    {
+        public void PopulateMetadata(Action<string, string> add)
+        {
+            add("app.key", "app-value");
+        }
+    }
+
+    /// <summary>Makes the user context of the caller <see cref="AuditingHost"/> authenticates.</summary>
+    public sealed class MetadataUserContextFactory : Blueprint.Authorization.IUserAuthorisationContextFactory
+    {
+        public Task<Blueprint.Authorization.IUserAuthorisationContext?> CreateContextAsync(System.Security.Claims.ClaimsIdentity identity, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<Blueprint.Authorization.IUserAuthorisationContext?>(new MetadataUserContext(identity.Name!));
+        }
+    }
+
+    /// <summary>A user whose metadata is Signature365's user's: its Id, then its TenantId.</summary>
+    public sealed class MetadataUserContext(string id) : Blueprint.Authorization.IUserAuthorisationContext
+    {
+        public bool IsActive => true;
+
+        public bool IsAnonymous => false;
+
+        public string Id => id;
+
+        public string IdentityId => id;
+
+        public string AccountId => "tenant-1";
+
+        public string Email => $"{id}@example.test";
+
+        public string Name => id;
+
+        public void PopulateMetadata(Action<string, object> add)
+        {
+            add("Id", this.Id);
+            add("TenantId", this.AccountId);
         }
     }
 
@@ -253,6 +398,9 @@ public sealed class ResourceEventAuditRepositoryTests
     /// <summary>The integration app registered and mapped as a consumer registers and maps it, served by Kestrel.</summary>
     private sealed class AuditingHost : IAsyncDisposable
     {
+        /// <summary>The header naming the user a request is authenticated as.</summary>
+        public const string TestUserHeader = "X-Test-User";
+
         private readonly WebApplication _app;
 
         private AuditingHost(WebApplication app, System.Net.Http.HttpClient client, ConcurrentQueue<Exception> serverErrors)
@@ -288,6 +436,20 @@ public sealed class ResourceEventAuditRepositoryTests
             builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(configure);
 
             var app = builder.Build();
+
+            // A request naming a user in TestUserHeader is authenticated as that user, as an authentication handler would.
+            app.Use(static (httpContext, next) =>
+            {
+                if (httpContext.Request.Headers.TryGetValue(TestUserHeader, out var userName))
+                {
+                    httpContext.User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+                        [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, userName.ToString())],
+                        authenticationType: "Test"));
+                }
+
+                return next(httpContext);
+            });
+
             app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
 
             await app.StartAsync();
@@ -297,17 +459,17 @@ public sealed class ResourceEventAuditRepositoryTests
             return new AuditingHost(app, client, serverErrors);
         }
 
-        public Task<string> PostAsync(string path)
+        public Task<string> PostAsync(string path, params (string Name, string Value)[] headers)
         {
-            return this.SendAsync(System.Net.Http.HttpMethod.Post, path);
+            return this.SendAsync(System.Net.Http.HttpMethod.Post, path, headers);
         }
 
         public Task<string> GetAsync(string path)
         {
-            return this.SendAsync(System.Net.Http.HttpMethod.Get, path);
+            return this.SendAsync(System.Net.Http.HttpMethod.Get, path, []);
         }
 
-        private async Task<string> SendAsync(System.Net.Http.HttpMethod method, string path)
+        private async Task<string> SendAsync(System.Net.Http.HttpMethod method, string path, (string Name, string Value)[] headers)
         {
             using var request = new System.Net.Http.HttpRequestMessage(method, path);
 
@@ -317,6 +479,11 @@ public sealed class ResourceEventAuditRepositoryTests
             }
 
             request.Headers.Add("traceparent", $"00-{TraceId}-00f067aa0ba902b7-01");
+
+            foreach (var (name, value) in headers)
+            {
+                request.Headers.TryAddWithoutValidation(name, value);
+            }
 
             using var response = await this.Client.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
@@ -378,6 +545,24 @@ public partial class CreateAuditedWidgetCommand : ICommand<ResourceCreated<HrefW
     public static ResourceCreated<HrefWidgetApiResource> Handle(CreateAuditedWidgetCommand command)
     {
         return new ResourceCreated<HrefWidgetApiResource>(new HrefWidgetApiResource { Id = "widget-7" });
+    }
+}
+
+/// <summary>
+/// Creates a widget, reporting it with a legacy created event to which the handler adds metadata of its own, one key of
+/// which the pipeline adds again.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/audited-events/annotated-widgets")]
+[HttpPost]
+public partial class CreateAnnotatedAuditedWidgetCommand : ICommand<ResourceCreated<HrefWidgetApiResource>>
+{
+    public static ResourceCreated<HrefWidgetApiResource> Handle(CreateAnnotatedAuditedWidgetCommand command)
+    {
+        var created = new ResourceCreated<HrefWidgetApiResource>(new HrefWidgetApiResource { Id = "widget-10" });
+        created.WithMetadata("reason", "created-in-test").WithMetadata("IpAddress", "set-by-handler");
+
+        return created;
     }
 }
 

@@ -97,8 +97,11 @@ public class ResourceEventJsonSerializationTests
     }
 
     [Fact]
-    public void ResourceEvent_without_optional_fields_omits_them()
+    public void ResourceEvent_without_metadata_or_secure_data_writes_both_as_empty_objects()
     {
+        // Legacy initialised both dictionaries (Signature365 8b40ecc961, Blueprint.Http/ResourceEvent.cs:140, :146) and its
+        // converter wrote each whenever it was not null (JsonConverterFactoryForResourceEventOfT.cs:112-122), so every
+        // event on the wire had both, empty or not (ResourceEventJsonTests.Can_serialise_to_JSON.verified.txt:19-26).
         var resource = new TestResource { Id = "res-4", Name = "Minimal" };
         var resourceEvent = new ResourceEvent(
             ResourceEventChangeType.Deleted,
@@ -109,8 +112,12 @@ public class ResourceEventJsonSerializationTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        Assert.False(root.TryGetProperty("metadata", out _), "metadata should be omitted when null");
-        Assert.False(root.TryGetProperty("secureData", out _), "secureData should be omitted when null");
+        Assert.True(root.TryGetProperty("metadata", out var metadata), "legacy always wrote metadata");
+        Assert.Equal(JsonValueKind.Object, metadata.ValueKind);
+        Assert.Empty(metadata.EnumerateObject());
+        Assert.True(root.TryGetProperty("secureData", out var secureData), "legacy always wrote secureData");
+        Assert.Equal(JsonValueKind.Object, secureData.ValueKind);
+        Assert.Empty(secureData.EnumerateObject());
     }
 
     private sealed class TestResource
