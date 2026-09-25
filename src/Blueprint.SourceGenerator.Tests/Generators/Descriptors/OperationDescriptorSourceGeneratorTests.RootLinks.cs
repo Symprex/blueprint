@@ -54,6 +54,29 @@ public class OperationDescriptorSourceGeneratorTestsRootLinkTests
     }
 
     [Fact]
+    public void When_operation_has_several_RootLinks_then_descriptor_records_each_under_its_own_Rel()
+    {
+        // Legacy's RootLinkAttribute allowed several (Signature365 8b40ecc961, Blueprint/RootLinkAttribute.cs:5,
+        // AllowMultiple = true), and its scanner built a link from each, with that attribute's own Rel
+        // (Blueprint/Configuration/OperationScanner.cs:294-298). The Rel is on the second, so pairing each URL with the
+        // first attribute's Rel would key both by the operation's name.
+        // language=csharp
+        var source = """
+                     [RootLink("/reports")]
+                     [RootLink("/reports/recent", Rel = "recent-reports")]
+                     public partial class ListReportsQuery : IOperation {}
+                     """;
+
+        var descriptor = DescriptorSource(source, "ListReportsQuery");
+
+        descriptor.Should().Contain("this.AddUrl(new global::Blueprint.Model.ApiOperationUrl(\"/reports\"));")
+            .And.Contain("this.AddUrl(new global::Blueprint.Model.ApiOperationUrl(\"/reports/recent\"));")
+            .And.Contain(RootLinksFeatureData
+                         + "new global::Blueprint.Model.OperationRootLink(\"ListReports\", \"/reports\"), "
+                         + "new global::Blueprint.Model.OperationRootLink(\"recent-reports\", \"/reports/recent\"))));");
+    }
+
+    [Fact]
     public void When_operation_has_no_root_link_then_descriptor_records_none()
     {
         // language=csharp

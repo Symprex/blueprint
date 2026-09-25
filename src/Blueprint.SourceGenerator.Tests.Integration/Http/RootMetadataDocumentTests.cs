@@ -92,6 +92,29 @@ public sealed class RootMetadataDocumentTests
     }
 
     [Fact]
+    public async Task When_an_operation_has_several_root_links_then_the_root_document_lists_each_and_each_routes()
+    {
+        // Legacy's RootLinkAttribute allowed several (Blueprint/RootLinkAttribute.cs:5, AllowMultiple = true); its scanner
+        // made a link of each, with that attribute's own Rel (OperationScanner.cs:294-298), the document listed every root
+        // link (RootMetadataOperation.cs:27-40), and every one was routed.
+        await using var host = await RootMetadataHost.StartAsync("api/");
+
+        var links = await host.GetRootLinksAsync("/api/");
+
+        links["RootMetadataReports"].Should().Be(host.AbsoluteUri("/api/root-metadata/reports"));
+        links["recent-reports"].Should().Be(host.AbsoluteUri("/api/root-metadata/reports/recent"));
+
+        foreach (var path in new[] { "/api/root-metadata/reports", "/api/root-metadata/reports/recent" })
+        {
+            using var response = await host.Client.GetAsync(path);
+            response.StatusCode.Should().Be(HttpStatusCode.OK, "{0} is one of the operation's routes", path);
+            (await response.Content.ReadAsStringAsync()).Should().Be("\"reports\"");
+        }
+
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task When_the_root_document_is_rendered_then_it_lists_neither_unexposed_operations_nor_resource_links()
     {
         // RootMetadataOperation.cs:29 skipped unexposed operations, its own "/" self link among them; resource links have a
@@ -318,6 +341,18 @@ public partial class RootMetadataExplicitRelQuery : IQuery<string>
     public static Task<string> HandleAsync(RootMetadataExplicitRelQuery query)
     {
         return Task.FromResult("deleted");
+    }
+}
+
+/// <summary>An operation with two root links, the second with a rel of its own.</summary>
+[AllowAnonymous]
+[RootLink("/root-metadata/reports")]
+[RootLink("/root-metadata/reports/recent", Rel = "recent-reports")]
+public partial class RootMetadataReportsQuery : IQuery<string>
+{
+    public static Task<string> HandleAsync(RootMetadataReportsQuery query)
+    {
+        return Task.FromResult("reports");
     }
 }
 

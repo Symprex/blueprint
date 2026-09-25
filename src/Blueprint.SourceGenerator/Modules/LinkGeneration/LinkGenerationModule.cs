@@ -376,56 +376,64 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         return $"static (obj) => obj switch {{ {resourceCase}, _ => null }}";
     }
 
+    /// <summary>
+    /// Registers every <c>[RootLink]</c> on the operation, each with its own <c>Rel</c>, as legacy's
+    /// <c>OperationScanner</c> made a link of every link attribute (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint/Configuration/OperationScanner.cs:294-298</c>; <c>RootLinkAttribute</c> is <c>AllowMultiple</c>).
+    /// </summary>
     private static void LookForRootLinks(DescriptorContributorContext context)
     {
         var operationType = context.GetOperationTypeSymbol();
-        var rootLinkAttribute = RootLinkAttributeDescriptor.Instance.ParseSingle(operationType);
 
-        if (rootLinkAttribute == null)
+        // ParseAll keeps the attributes' order and parses every RootLinkAttribute (its one constructor argument always
+        // matches), so the raw attribute at the same index is the one whose named Rel applies.
+        var rootLinkAttributes = RootLinkAttributeDescriptor.Instance.ParseAll(operationType).ToList();
+        var rawRootLinkAttributes = operationType.GetAttributes()
+            .Where(static a => a.AttributeClass?.Name == "RootLinkAttribute")
+            .ToList();
+        HashSet<string>? memberNames = null;
+
+        for (var index = 0; index < rootLinkAttributes.Count; index++)
         {
-            return;
-        }
+            var (_, locationInfo, url) = rootLinkAttributes[index].GetConstructorArgument(RootLinkAttributeDescriptor.UrlArgument);
 
-        var (_, locationInfo, url) = rootLinkAttribute.GetConstructorArgument(RootLinkAttributeDescriptor.UrlArgument);
-
-        if (string.IsNullOrWhiteSpace(url))
-        {
-            context.AddDiagnostic(
-                new DiagnosticInfo(
-                    _emptyRouteTemplateError,
-                    locationInfo,
-                    [operationType.Name]));
-
-            return;
-        }
-        if (url.Contains("{"))
-        {
-            var placeholders = _placeholderRegex.Matches(url);
-            HashSet<string>? memberNames = null;
-
-            foreach (var placeholder in placeholders.Cast<Match>())
+            if (string.IsNullOrWhiteSpace(url))
             {
-                var placeholderName = placeholder.Value.Trim('{', '}', '*');
-                memberNames ??= new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        _emptyRouteTemplateError,
+                        locationInfo,
+                        [operationType.Name]));
 
-                if (!memberNames.Contains(placeholderName))
+                continue;
+            }
+
+            if (url.Contains("{"))
+            {
+                var placeholders = _placeholderRegex.Matches(url);
+
+                foreach (var placeholder in placeholders.Cast<Match>())
                 {
-                    var argumentLocationInfo = locationInfo.WithSubRange(placeholder.Index + 2, placeholder.Length - 2);
-                    context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(operationType, placeholderName, argumentLocationInfo));
+                    var placeholderName = placeholder.Value.Trim('{', '}', '*');
+                    memberNames ??= new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
+
+                    if (!memberNames.Contains(placeholderName))
+                    {
+                        var argumentLocationInfo = locationInfo.WithSubRange(placeholder.Index + 2, placeholder.Length - 2);
+                        context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(operationType, placeholderName, argumentLocationInfo));
+                    }
                 }
             }
+
+            context.AddMetadata(new UrlRegistration(url, locationInfo));
+            context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
+
+            var rel = index < rawRootLinkAttributes.Count
+                ? rawRootLinkAttributes[index].NamedArguments.FirstOrDefault(static a => a.Key == "Rel").Value.Value as string
+                : null;
+
+            context.AddMetadata(CreateRootLinkRegistration(operationType, rel, url));
         }
-
-        var urlRegistration = new UrlRegistration(url, locationInfo);
-        context.AddMetadata(urlRegistration);
-        context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
-
-        // The same (first) [RootLink] ParseSingle read; its Rel is a named argument.
-        var rel = operationType.GetAttributes()
-            .FirstOrDefault(static a => a.AttributeClass?.Name == "RootLinkAttribute")?
-            .NamedArguments.FirstOrDefault(static a => a.Key == "Rel").Value.Value as string;
-
-        context.AddMetadata(CreateRootLinkRegistration(operationType, rel, url));
     }
 
     /// <summary>
