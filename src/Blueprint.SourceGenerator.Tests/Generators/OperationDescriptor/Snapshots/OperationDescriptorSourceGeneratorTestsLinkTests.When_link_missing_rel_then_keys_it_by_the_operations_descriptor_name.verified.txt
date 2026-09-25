@@ -26,7 +26,7 @@ namespace TestNamespace
                 : base(typeof(GetItemOperation), "GetItemOperation", "Source Generated")
             {
                 this.AddUrl(new global::Blueprint.Model.ApiOperationUrl("/items/{Id}"));
-                var link_0 = new global::Blueprint.Model.ApiOperationLink(this, "/items/{Id}", "/items/{Id}", "apiResourceWithProps", typeof(global::TestNamespace.ApiResourceWithProps));
+                var link_0 = new global::Blueprint.Model.ApiOperationLink(this, "/items/{Id}", "/items/{Id}", "GetItemOperation", typeof(global::TestNamespace.ApiResourceWithProps));
                 link_0.CompiledUrlBuilder = static (obj) => obj switch { global::TestNamespace.ApiResourceWithProps r when !(r.Id == null) => $"/items/{System.Uri.EscapeDataString(r.Id?.ToString() ?? "")}", string id => $"/items/{System.Uri.EscapeDataString(id)}", global::System.Guid g => $"/items/{g}", _ => null };
                 this.AddLink(link_0);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.RequiresAuthentication);

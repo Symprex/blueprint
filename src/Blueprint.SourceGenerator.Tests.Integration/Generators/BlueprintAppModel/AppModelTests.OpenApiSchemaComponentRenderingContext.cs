@@ -67,6 +67,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "PagedApiResourceOfLegacyShapeTenant",
             "ParameterTitlesApiResource",
             "ProblemDetails",
+            "RelLessLinkWireWidgetApiResource",
             "RequiredShapeApiResource",
             "RequiredShapeChild",
             "SampleWidgetApiResource",

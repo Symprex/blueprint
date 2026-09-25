@@ -67,7 +67,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPLG003 | Error | Resource type is not `ILinkableResource` |
 | BPLG004 | Warning | Ambiguous self-link declarations |
 | BPLG005 | Error | Empty route template |
-| BPLG006 | Error | Link missing Rel value (only when resource type cannot be resolved for inference) |
+| BPLG006 | — | Retired in v1.0.3: a `[Link]` without a `Rel` is no longer an error anywhere; it is keyed by its operation's descriptor name, as legacy Blueprint keyed it |
 
 ## Validation (BPV)
 

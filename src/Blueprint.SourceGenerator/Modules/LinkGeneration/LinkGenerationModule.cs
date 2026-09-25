@@ -68,14 +68,6 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor _linkMissingRelError = new(
-        id: "BPLG006",
-        title: "Link missing Rel value",
-        messageFormat: "The [Link] attribute on '{0}' must specify a non-empty Rel value. Use [SelfLink] for self-links or provide Rel = \"relName\".",
-        category: "OperationLinks",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
     private static readonly Regex _placeholderRegex = new(@"\{\*{0,2}[A-Za-z0-9]+\}", RegexOptions.Compiled);
     private static readonly Regex _mappedPlaceholderRegex = new(@"\{(?<catchAll>\*{0,2})(?<routeName>[A-Za-z0-9]+)(:(?<resourcePropName>.*?))?(\((?<format>.*)\))?\}", RegexOptions.Compiled);
 
@@ -437,14 +429,29 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     }
 
     /// <summary>
-    /// Records a root link under the key legacy Blueprint's root-metadata document gave it: <c>linkAttribute.Rel ??
-    /// descriptor.Name</c>, taken when the link was built and so before an app's conventions renamed the descriptor
-    /// (Signature365 <c>8b40ecc961</c>, <c>Blueprint/Configuration/OperationScanner.cs:294-303</c>), with the name legacy
-    /// gave the operation (<see cref="OperationNameHelpers.GetDescriptorName"/>).
+    /// Records a root link under the key legacy Blueprint's root-metadata document gave it (<see cref="GetDefaultRel"/>).
     /// </summary>
     private static RootLinkRegistration CreateRootLinkRegistration(INamedTypeSymbol operationType, string? rel, string url)
     {
-        return new RootLinkRegistration(rel ?? OperationNameHelpers.GetDescriptorName(operationType.Name), url);
+        return new RootLinkRegistration(rel ?? GetDefaultRel(operationType), url);
+    }
+
+    /// <summary>
+    /// Gives the key of a link whose attribute sets no <c>Rel</c>, root link or resource link alike, as legacy Blueprint
+    /// gave it: <c>linkAttribute.Rel ?? descriptor.Name</c>, taken when the link was built and so before an app's
+    /// conventions renamed the descriptor (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint/Configuration/OperationScanner.cs:294-303</c>), with the name legacy gave the operation
+    /// (<see cref="OperationNameHelpers.GetDescriptorName"/>). So an app's <c>[BlueprintAppOperationNames(Remove = ...)]</c>
+    /// renames the operation but not this key.
+    /// </summary>
+    /// <remarks>
+    /// The key is a resource's <c>$links</c> property and its <c>x-links</c> <c>rel</c>, which a consumer's client reads
+    /// (Signature365's Portal calls <c>DeleteGroupCommand</c> through the <c>DeleteGroup</c> link). Only a missing
+    /// <c>Rel</c> takes it: an empty one is kept as written, as legacy's <c>??</c> kept it.
+    /// </remarks>
+    private static string GetDefaultRel(INamedTypeSymbol operationType)
+    {
+        return OperationNameHelpers.GetDescriptorName(operationType.Name);
     }
 
     private static void LookForSelfLinks(DescriptorContributorContext context)
@@ -693,32 +700,12 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                 continue;
             }
 
-            // Non-null resourceType: infer Rel from resource type name when omitted
-            if (string.IsNullOrWhiteSpace(rel))
-            {
-                if (resourceTypeArg.Value is INamedTypeSymbol inferTarget && inferTarget.TypeKind != TypeKind.Error)
-                {
-                    rel = InferRelFromResourceType(inferTarget);
-                }
-                else
-                {
-                    var diagLocation = locationInfo ?? (operationType.Locations.FirstOrDefault() is { } fallbackLoc
-                        ? LocationInfo.CreateFrom(fallbackLoc) : null);
-
-                    context.AddDiagnostic(
-                        new DiagnosticInfo(
-                            _linkMissingRelError,
-                            diagLocation,
-                            [operationType.Name]));
-
-                    continue;
-                }
-            }
-
             if (resourceTypeArg.Value is not INamedTypeSymbol resourceTypeSymbol || resourceTypeSymbol.TypeKind == TypeKind.Error)
             {
                 continue;
             }
+
+            rel ??= GetDefaultRel(operationType);
 
             // Verify resource type implements ILinkableResource
             if (!resourceTypeSymbol.AllInterfaces.Any(static i => i.Name == "ILinkableResource"))
@@ -1050,33 +1037,5 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         context.WriteBlankLine();
         context.WriteStatement("// Populate full HATEOAS links (skip 304 Not Modified)");
         context.WriteStatement("await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);");
-    }
-
-    /// <summary>
-    /// Infers a rel name from a resource type symbol by stripping common suffixes
-    /// ("ApiResource", "Resource") and converting to camelCase.
-    /// For example: <c>TemplateApiResource</c> → <c>"template"</c>,
-    /// <c>GeneratedSignatureApiResource</c> → <c>"generatedSignature"</c>.
-    /// </summary>
-    private static string InferRelFromResourceType(INamedTypeSymbol resourceType)
-    {
-        var name = resourceType.Name;
-
-        if (name.EndsWith("ApiResource", StringComparison.Ordinal) && name.Length > "ApiResource".Length)
-        {
-            name = name.Substring(0, name.Length - "ApiResource".Length);
-        }
-        else if (name.EndsWith("Resource", StringComparison.Ordinal) && name.Length > "Resource".Length)
-        {
-            name = name.Substring(0, name.Length - "Resource".Length);
-        }
-
-        // camelCase: lowercase first char
-        if (name.Length > 0 && char.IsUpper(name[0]))
-        {
-            name = char.ToLowerInvariant(name[0]) + name.Substring(1);
-        }
-
-        return name;
     }
 }

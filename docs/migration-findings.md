@@ -729,7 +729,7 @@ The migration now fails early when auth metadata is wrong. `BPAU004` reports non
 The property-ownership diagnostics are important because they describe most migration mistakes precisely. `BPPO006` catches mixed ownership such as `[FromAuthContext]` plus `[FromBody]`, `BPPO009` flags claim-based auth mapping on non-string properties, `BPPO010` warns when auth and route ownership overlap, `BPPO011` points out TypeConverter-only binding paths that would be faster with `TryParse`, `BPPO012` fails unresolved route placeholders, and `BPPO013` warns about nullable route parameters that can never actually be omitted.
 
 ### HTTP and link diagnostics
-HTTP-shape conflicts are handled at compile time instead of by endpoint surprises. `BPOA002` reports conflicting HTTP method attributes, `BPLG001` and `BPLG006` validate link attributes and placeholder usage, and `BPLG007` now reports route collisions between different operations that claim the same route+method pair. That route-collision diagnostic aligns with the runtime endpoint-collision warning added during startup registration.
+HTTP-shape conflicts are handled at compile time instead of by endpoint surprises. `BPOA002` reports conflicting HTTP method attributes, `BPLG001` validates link attributes and placeholder usage, and `BPLG007` now reports route collisions between different operations that claim the same route+method pair. That route-collision diagnostic aligns with the runtime endpoint-collision warning added during startup registration.
 
 ### Validation, result, and serializer diagnostics
 The remaining migration-critical diagnostics cluster around operation definitions and serializer setup. `BPV012` warns about meaningless `[Required]` usage on non-nullable value types, `BPV013` highlights `IValidatableObject` participation, `BP001` / `BP002` / `BP005` / `BP104` / `BP108` cover invalid pipeline and result declarations, `BPP001` guards `[DoNotSaveChanges]`, `BP006` enforces serializer-context coverage for problem details, `BP009` catches duplicate descriptor names (as legacy named them: `Query`/`Command` removed anywhere, then cased), and `BP010` rejects unevaluable `ApiExceptionFactory` initializers.
@@ -744,7 +744,7 @@ The diagnostic story is backed by actual IDE help. `Blueprint.SourceGenerator.Co
 |---|---|
 | Authorization | `BPAU003`, `BPAU004`, `BPAU008` |
 | Property ownership | `BPPO006`, `BPPO009`, `BPPO010`, `BPPO011`, `BPPO012`, `BPPO013` |
-| HTTP / links | `BPOA002`, `BPLG001`, `BPLG006`, `BPLG007` |
+| HTTP / links | `BPOA002`, `BPLG001`, `BPLG007` |
 | Validation | `BPV012`, `BPV013` |
 | Result / serializer / naming | `BP001`, `BP002`, `BP005`, `BP006`, `BP009`, `BP010`, `BP104`, `BP108`, `BPP001` |
 

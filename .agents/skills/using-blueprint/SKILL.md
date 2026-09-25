@@ -198,6 +198,8 @@ Route patterns support `{PropertyName}` syntax. The placeholder binds to the ope
 [Link(typeof(TemplateApiResource), "/templates/{Id}/versions", Rel = "versions")]
 ```
 
+A `[Link]` without a `Rel` is keyed — in the resource's `$links` and in `x-links` — by its operation's own descriptor name, before any `[BlueprintAppOperationNames]` removal, as legacy Blueprint keyed it: `DeleteGroupCommand`'s link is `DeleteGroup`, and `GetUserVCardQuery`'s is `GetUservCard`. Two Rel-less links on one resource therefore have two keys.
+
 ### Compile-time diagnostics
 
 - **BPLG001** — Route placeholder `{X}` does not match any public property on the operation

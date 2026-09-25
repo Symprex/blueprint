@@ -58,7 +58,8 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.NativeEventGadget",
             "Blueprint.SourceGenerator.Tests.Integration.Http.MinLengthShapeApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.LinkWireWidgetApiResource",
-            "Blueprint.Model.ListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LinkWireWidgetApiResource>");
+            "Blueprint.Model.ListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LinkWireWidgetApiResource>",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.RelLessLinkWireWidgetApiResource");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))

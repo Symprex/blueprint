@@ -445,6 +445,13 @@ public partial class GetTemplateQuery : IQuery<OkResult<Template>>
 public partial class ListTemplatesQuery : IQuery<OkResult<TemplateList>> { }
 ```
 
+**Behaviour change for a `[Link]` without a `Rel` (v1.0.3).** Such a link is keyed — in the resource's `$links` and in
+`x-links` — by its operation's descriptor name, taken before any `[BlueprintAppOperationNames]` removal, exactly as legacy
+Blueprint keyed it: `DeleteGroupCommand`'s link on `GroupApiResource` is `$links.DeleteGroup`. Coming from legacy Blueprint
+nothing changes. Coming from v1.0.2 or earlier, the key moves from one made from the resource type (`$links.group`) to the
+operation's, and a second Rel-less link on the same resource, which v1.0.2 silently dropped, is written again. Regenerate
+clients from the new document. `BPLG006` is retired.
+
 Link generation is automatic when link metadata exists — no `AddHateoasLinks()` call needed, and `BPMIG002` removes one
 that is present.
 

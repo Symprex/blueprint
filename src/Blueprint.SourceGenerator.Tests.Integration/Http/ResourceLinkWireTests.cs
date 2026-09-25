@@ -175,6 +175,55 @@ public sealed class ResourceLinkWireTests
         host.ServerErrors.Should().BeEmpty();
     }
 
+    // Legacy keyed a [Link] without a Rel by its operation's descriptor name, taken when the link was built and so before
+    // an app's conventions renamed the descriptor: `linkAttribute.Rel ?? descriptor.Name` (Signature365 8b40ecc961,
+    // Blueprint/Configuration/OperationScanner.cs:294-303), the name cased by Blueprint/ApiOperationDescriptor.cs:50 and
+    // Utilities/StringExtensions.cs:65-120. So two such links on one resource had two keys: legacy's own test counted "2 +
+    // self" (Blueprint.Tests/ResourceEvents/Given_ResourceEvent_Data_Return.cs:99-100, fixtures :155-185). Signature365's
+    // committed documents show the same key in x-links: Portal's DeleteGroupCommand is "DeleteGroup"
+    // (Portal/Spec/openapi.json:26495), and Partners.Gateway's PartnersGatewayGetPartnerCountriesQuery is
+    // "PartnersGatewayGetPartnerCountries" beside the operationId "GetPartnerCountries" its convention made
+    // (Partners.Gateway/Spec/openapi.json:5443-5444). IntegrationTestBlueprintApp removes "Sample", as that convention did.
+    [Fact]
+    public async Task A_link_without_a_rel_is_keyed_by_its_operations_legacy_name_from_before_the_apps_removal()
+    {
+        await using var host = await LinkWireHost.StartAsync();
+
+        var raw = await host.SendAsync(System.Net.Http.HttpMethod.Get, "api/link-wire/rel-less-widgets/widget-6");
+        using var body = JsonDocument.Parse(raw);
+
+        body.RootElement.GetProperty("$links").EnumerateObject().Select(static link => (link.Name, link.Value.GetProperty("href").GetString()))
+            .Should().BeEquivalentTo(
+                [
+                    ("self", host.AbsoluteUri("api/link-wire/rel-less-widgets/widget-6")),
+                    ("DeleteSampleRelLessLinkWireWidget", host.AbsoluteUri("api/link-wire/rel-less-widgets/widget-6")),
+                    ("GetRelLessLinkWireWidgetvCard", host.AbsoluteUri("api/link-wire/rel-less-widgets/widget-6/vcard")),
+                ],
+                "legacy keyed each Rel-less link by its own operation's cased name, before the app removed \"Sample\"; the response was {0}",
+                raw);
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_link_without_a_rel_is_listed_in_x_links_by_its_legacy_name_beside_the_apps_operation_id()
+    {
+        // Legacy's x-links wrote `rel = l.Rel, operationId = descriptor.Name` (Blueprint.OpenApi/BlueprintLinkSchemaProcessor.cs:43-52),
+        // the rel from before the app's conventions and the operationId from after them.
+        await using var host = await LinkWireHost.StartAsync();
+
+        using var document = JsonDocument.Parse(await host.SendAsync(System.Net.Http.HttpMethod.Get, "api/.blueprint/openapi.json"));
+
+        document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("RelLessLinkWireWidgetApiResource")
+            .GetProperty("x-links").EnumerateArray()
+            .Select(static link => (link.GetProperty("rel").GetString(), link.GetProperty("operationId").GetString()))
+            .Should().BeEquivalentTo(
+            [
+                ("DeleteSampleRelLessLinkWireWidget", "DeleteRelLessLinkWireWidget"),
+                ("GetRelLessLinkWireWidgetvCard", "GetRelLessLinkWireWidgetvCard"),
+            ]);
+        host.ServerErrors.Should().BeEmpty();
+    }
+
     private static void AssertEmptyLinks(JsonElement resource)
     {
         resource.TryGetProperty("$links", out var links).Should().BeTrue("legacy always wrote the links dictionary; the resource was {0}", resource.GetRawText());
@@ -344,6 +393,55 @@ public partial class GetHandlerLinkedLinkWireWidgetQuery : IQuery<LinkWireWidget
         widget.AddLink("manual", new Link { Href = "https://elsewhere.example/widgets/" + query.Id });
 
         return widget;
+    }
+}
+
+/// <summary>A widget whose non-self links declare no <c>Rel</c>.</summary>
+public partial class RelLessLinkWireWidgetApiResource : ApiResource
+{
+    public string Id { get; init; } = "widget-6";
+}
+
+/// <summary>Gets a widget, the self link of <see cref="RelLessLinkWireWidgetApiResource"/>.</summary>
+[AllowAnonymous]
+[SelfLink(typeof(RelLessLinkWireWidgetApiResource), "/link-wire/rel-less-widgets/{Id}")]
+public partial class GetRelLessLinkWireWidgetQuery : IQuery<RelLessLinkWireWidgetApiResource>
+{
+    public string Id { get; set; } = null!;
+
+    public static RelLessLinkWireWidgetApiResource Handle(GetRelLessLinkWireWidgetQuery query)
+    {
+        return new RelLessLinkWireWidgetApiResource { Id = query.Id };
+    }
+}
+
+/// <summary>
+/// Deletes a widget through a link without a <c>Rel</c>, as Signature365's <c>DeleteGroupCommand</c> does. Its name holds
+/// the "Sample" <see cref="IntegrationTestBlueprintApp"/> removes, which legacy's rel kept.
+/// </summary>
+[AllowAnonymous]
+[Link(typeof(RelLessLinkWireWidgetApiResource), "/link-wire/rel-less-widgets/{Id}")]
+[HttpDelete]
+public partial class DeleteSampleRelLessLinkWireWidgetCommand : ICommand<RelLessLinkWireWidgetApiResource>
+{
+    public string Id { get; set; } = null!;
+
+    public static RelLessLinkWireWidgetApiResource Handle(DeleteSampleRelLessLinkWireWidgetCommand command)
+    {
+        return new RelLessLinkWireWidgetApiResource { Id = command.Id };
+    }
+}
+
+/// <summary>Gets a widget's vCard through a second link without a <c>Rel</c>, whose name legacy's casing folds.</summary>
+[AllowAnonymous]
+[Link(typeof(RelLessLinkWireWidgetApiResource), "/link-wire/rel-less-widgets/{Id}/vcard")]
+public partial class GetRelLessLinkWireWidgetVCardQuery : IQuery<string>
+{
+    public string Id { get; set; } = null!;
+
+    public static string Handle(GetRelLessLinkWireWidgetVCardQuery query)
+    {
+        return "BEGIN:VCARD";
     }
 }
 
