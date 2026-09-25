@@ -134,9 +134,11 @@ The save does not close the transaction to new messages. A generated pipeline co
 sink and flushes background tasks after the save and before it completes the Rebus scope, and a received message's
 later commit callbacks run after its save. A message sent from any of those joins the transaction after the drain has
 run, so it is not in the saved session. The outbox must refuse it, or send it without the outbox; queued into the saved
-session, it would never be written. Legacy had no such window, because it completed its scope before it saved and
-flushed and audited outside the scope (`AzureAdOauthReturnCommandExecutorPipeline.cs:133-149` at Signature365
-`8b40ecc961`).
+session, it would never be written. Legacy had no such window, because it completed its scope before it saved, and
+flushed and audited after it had completed the scope — still ambient, as its `using var` lasted to the end of the
+method, so a send there was refused rather than joining it (`AzureAdOauthReturnCommandExecutorPipeline.cs:117`,
+`:133-149` at Signature365 `8b40ecc961`; Rebus 8.6's `TransactionContext` throws, through `ThrowCompletedException`,
+when a completed context is given an action, as a transport's send gives it one).
 
 That is exactly where a direct port of legacy's `UseMartenSessionAsOutbox` goes wrong: its transport queued each
 message's outbox row on the session from a commit callback, which now runs after the save, so the rows were silently
