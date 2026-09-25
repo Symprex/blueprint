@@ -28,6 +28,21 @@ public class ResourceEventResult : OperationResult
     }
 
     /// <summary>
+    /// Initializes the result <c>BlueprintHttpClient</c> reads back from the envelope the HTTP host wrote for one. The
+    /// envelope carries the change type, event id and content but no resource id, so that is empty.
+    /// </summary>
+    /// <param name="changeType">The envelope's change type.</param>
+    /// <param name="eventId">The envelope's event id.</param>
+    /// <param name="content">The envelope's data.</param>
+    internal ResourceEventResult(ChangeType changeType, string eventId, object content)
+    {
+        this.ChangeType = changeType;
+        this.EventId = eventId;
+        this.ResourceId = string.Empty;
+        this.Content = content;
+    }
+
+    /// <summary>
     /// Gets the coarse mutation kind that the HTTP host uses to select the appropriate status code
     /// (201 Created, 200 OK, or 204 No Content).
     /// </summary>
@@ -39,7 +54,8 @@ public class ResourceEventResult : OperationResult
     public string EventId { get; }
 
     /// <summary>
-    /// Gets the stable resource identity associated with the event.
+    /// Gets the stable resource identity associated with the event. Empty on a result read back from an HTTP response,
+    /// whose envelope carries none.
     /// </summary>
     public string ResourceId { get; }
 
@@ -145,6 +161,18 @@ public class ResourceEventResult<T> : ResourceEventResult where T : notnull
     /// <param name="content">The resource-event payload.</param>
     public ResourceEventResult(ChangeType changeType, string eventId, string resourceId, T content)
         : base(changeType, eventId, resourceId, content)
+    {
+    }
+
+    /// <summary>
+    /// Initializes the result <c>BlueprintHttpClient</c> reads back from the envelope the HTTP host wrote for one, with an
+    /// empty resource id (see <see cref="ResourceEventResult(ChangeType, string, object)"/>).
+    /// </summary>
+    /// <param name="changeType">The envelope's change type.</param>
+    /// <param name="eventId">The envelope's event id.</param>
+    /// <param name="content">The envelope's data.</param>
+    internal ResourceEventResult(ChangeType changeType, string eventId, T content)
+        : base(changeType, eventId, (object)content)
     {
     }
 

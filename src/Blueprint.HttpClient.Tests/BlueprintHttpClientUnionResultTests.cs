@@ -315,6 +315,77 @@ public class BlueprintHttpClientUnionResultTests : IClassFixture<SampleAppFixtur
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*could be more than one*");
     }
 
+    // ResourceEventResult<T> is new-only (Signature365 declares none), so these rest on what this host writes: the event as
+    // its envelope ($object, eventId, changeType, created, resourceObject, href, data, and the dictionaries and correlation
+    // id when set) with a 201 when created and a 200 when updated, and a deleted one as an empty 204
+    // (HttpOperationResultExecutor.WriteResourceEventEnvelopeAsync, MapChangeTypeToStatusCode). The envelope carries no
+    // resource id.
+    [Theory]
+    [InlineData(ChangeType.Created)]
+    [InlineData(ChangeType.Updated)]
+    public async Task When_the_host_wrote_a_resource_event_result_member_then_returns_it_from_its_envelope(ChangeType changeType)
+    {
+        var written = new ResourceEventResult<TemplateApiResource>(changeType, "template.changed", "t-1", new TemplateApiResource("t-1", "Evented Template", "<p>x</p>", "x"))
+            .WithMetadata("source", "import")
+            .WithSecureData("token", "secret")
+            .WithChangedValue("name", "Old Name");
+        written.CorrelationId = "corr-1";
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(written);
+
+        var result = await client.SendAsync<Results<ResourceEventResult<TemplateApiResource>, NotFoundResult<TemplateVersionApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT1.Should().BeTrue();
+        result.AsT1.ChangeType.Should().Be(changeType);
+        result.AsT1.EventId.Should().Be("template.changed");
+        result.AsT1.ResourceId.Should().BeEmpty("the envelope carries no resource id");
+        result.AsT1.Content.Name.Should().Be("Evented Template");
+        result.AsT1.Metadata.Should().Equal(new Dictionary<string, object> { ["source"] = "import" });
+        result.AsT1.ChangedValues.Should().Equal(new Dictionary<string, object> { ["name"] = "Old Name" });
+        result.AsT1.SecureData.Should().Equal(new Dictionary<string, object> { ["token"] = "secret" });
+        result.AsT1.CorrelationId.Should().Be("corr-1");
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_a_deleted_resource_event_result_member_then_no_member_claims_its_empty_204()
+    {
+        // A deleted event is an empty 204, from which no content can be read; as for a resource event read alone, the client
+        // throws rather than make a result with no content.
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(
+            new ResourceEventResult<TemplateApiResource>(ChangeType.Deleted, "template.deleted", "t-1", new TemplateApiResource("t-1", "Gone", "<p>x</p>", "x")));
+
+        var act = () => client.SendAsync<Results<ResourceEventResult<TemplateApiResource>, NotFoundResult<TemplateVersionApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*matches none of the results*");
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_one_of_two_resource_event_results_of_distinct_resources_then_its_resource_object_says_which()
+    {
+        // Both are a 201 JSON body. The host writes the resourceObject as the content's type name (ApiResource.GetTypeName),
+        // so it tells them apart, as it does two legacy events.
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(
+            new ResourceEventResult<TemplateVersionApiResource>(ChangeType.Created, "template-version.created", "t-1", new TemplateVersionApiResource(3, DateTimeOffset.UnixEpoch, "t-1")));
+
+        var result = await client.SendAsync<Results<ResourceEventResult<TemplateApiResource>, ResourceEventResult<TemplateVersionApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT2.Should().BeTrue();
+        result.AsT2.Content.Version.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_a_resource_event_result_alone_then_returns_it_from_its_envelope()
+    {
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(
+            new ResourceEventResult<TemplateApiResource>(ChangeType.Created, "template.created", "t-1", new TemplateApiResource("t-1", "Evented Template", "<p>x</p>", "x")));
+
+        var result = await client.SendAsync<ResourceEventResult<TemplateApiResource>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.Should().NotBeNull();
+        result!.ChangeType.Should().Be(ChangeType.Created);
+        result.EventId.Should().Be("template.created");
+        result.Content.Name.Should().Be("Evented Template");
+    }
+
     private async Task<BlueprintHttpClient<SampleBlueprintApp>> CreateClientAnsweringAsTheHostWritesAsync(OperationResult written)
     {
         await using var services = new ServiceCollection()

@@ -1205,6 +1205,12 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             return (TResponse)(object)await ResourceEventReader.ReadAsync(typeof(TResponse), response.Content, this._jsonOptions, cancellationToken).ConfigureAwait(false);
         }
 
+        // A ResourceEventResult<T> is read from the envelope the host writes for it, which no constructor of it binds.
+        if (IsResourceEventResultType(typeof(TResponse)))
+        {
+            return (TResponse)await this.ReadResourceEventResultAsync(typeof(TResponse), response.Content, cancellationToken).ConfigureAwait(false);
+        }
+
         // JSON deserialization
         return await response.Content.ReadFromJsonAsync<TResponse>(this._jsonOptions, cancellationToken).ConfigureAwait(false);
     }
@@ -1218,13 +1224,14 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// With a body that is not JSON, the first
     /// <see cref="PlainTextResult"/> member claims it. With a JSON body, the one member the host writes as a JSON body of
     /// that status claims it: a plain type or a resource event at a 200, an <see cref="OkResult{T}"/>,
-    /// <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> at its own status, read as its content.
+    /// <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> at its own status, read as its content, a
+    /// <see cref="ResourceEventResult{T}"/> at a 201 or 200, read from its envelope.
     /// </summary>
     /// <remarks>
     /// When more than one member could be that JSON body, the body cannot say which one the host wrote, so rather than read
     /// it as whichever is declared first this throws, naming them: a runtime guard, as the union is the caller's choice of
-    /// response type and so is only known at the call. Legacy resource events of distinct resources are the exception: the
-    /// body's <c>resourceObject</c> says which.
+    /// response type and so is only known at the call. Resource events of distinct resources, legacy ones or
+    /// <see cref="ResourceEventResult{T}"/>s, are the exception: the body's <c>resourceObject</c> says which.
     /// </remarks>
     /// <param name="unionType">The closed <see cref="Results{T1, T2}"/> type.</param>
     /// <param name="response">The response.</param>
@@ -1244,9 +1251,9 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         {
             var candidates = memberTypes.Where(memberType => IsJsonMemberOfStatus(memberType, status)).ToArray();
 
-            if (candidates.Length > 1 && candidates.All(static c => typeof(ResourceEvent).IsAssignableFrom(c)))
+            if (candidates.Length > 1 && candidates.All(static c => GetEventResourceType(c) is not null))
             {
-                candidates = await SelectLegacyEventsOfResourceObjectAsync(candidates, response, cancellationToken).ConfigureAwait(false);
+                candidates = await SelectEventsOfResourceObjectAsync(candidates, response, cancellationToken).ConfigureAwait(false);
             }
 
             if (candidates.Length > 1)
@@ -1282,17 +1289,17 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     }
 
     /// <summary>
-    /// Narrows legacy resource events that could each be the body to those of the resource the body names. The host writes
-    /// a legacy event's <c>resourceObject</c> as its resource's type name (<see cref="ApiResource.GetTypeName"/>), fixed by
-    /// the event's type, where its <c>eventId</c> carries a sub-id its handler chose at run time. So two events of distinct
-    /// resources, which the generator accepts in one union, are told apart by it, as the OpenAPI document's discriminator
-    /// says.
+    /// Narrows resource events that could each be the body to those of the resource the body names. The host writes an
+    /// event's <c>resourceObject</c> as its resource's type name (<see cref="ApiResource.GetTypeName"/>), fixed by the
+    /// event's type, where a legacy event's <c>eventId</c> carries a sub-id its handler chose at run time and a
+    /// <see cref="ResourceEventResult{T}"/>'s is its handler's too. So two events of distinct resources, which the generator
+    /// accepts in one union, are told apart by it, as the OpenAPI document's discriminator says for legacy events.
     /// </summary>
-    /// <param name="candidates">The legacy event members that could be the body.</param>
+    /// <param name="candidates">The event members that could be the body: legacy events or <see cref="ResourceEventResult{T}"/>s.</param>
     /// <param name="response">The response, whose content is buffered so it can be read again.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The candidates of the resource the body names, or all of them when it names none.</returns>
-    private static async Task<Type[]> SelectLegacyEventsOfResourceObjectAsync(Type[] candidates, HttpResponseMessage response, CancellationToken cancellationToken)
+    private static async Task<Type[]> SelectEventsOfResourceObjectAsync(Type[] candidates, HttpResponseMessage response, CancellationToken cancellationToken)
     {
         // Read as bytes, which buffers the content without consuming the stream the member is read from afterwards.
         using var document = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
@@ -1306,7 +1313,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         var name = resourceObject.GetString();
         var matching = candidates
-            .Where(candidate => GetLegacyEventResourceType(candidate) is { } resourceType
+            .Where(candidate => GetEventResourceType(candidate) is { } resourceType
                                 && string.Equals(ApiResource.GetTypeName(resourceType), name, StringComparison.Ordinal))
             .ToArray();
 
@@ -1314,11 +1321,17 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     }
 
     /// <summary>
-    /// The resource type of a legacy <see cref="ResourceEvent{TResource}"/> member, or <see langword="null"/> for the
-    /// non-generic <see cref="ResourceEvent"/>.
+    /// The resource type of a legacy <see cref="ResourceEvent{TResource}"/> member or of a
+    /// <see cref="ResourceEventResult{T}"/> member, or <see langword="null"/> for any other member, the non-generic
+    /// <see cref="ResourceEvent"/> included.
     /// </summary>
-    private static Type? GetLegacyEventResourceType(Type eventType)
+    private static Type? GetEventResourceType(Type eventType)
     {
+        if (IsResourceEventResultType(eventType))
+        {
+            return eventType.GetGenericArguments()[0];
+        }
+
         for (var current = eventType; current is not null; current = current.BaseType)
         {
             if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(ResourceEvent<>))
@@ -1328,6 +1341,84 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> is a closed <see cref="ResourceEventResult{T}"/>, which the host writes as its
+    /// envelope.
+    /// </summary>
+    private static bool IsResourceEventResultType(Type type)
+    {
+        return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ResourceEventResult<>);
+    }
+
+    /// <summary>
+    /// Reads the envelope the host writes for a <see cref="ResourceEventResult{T}"/>
+    /// (<c>HttpOperationResultExecutor.WriteResourceEventEnvelopeAsync</c>) as <paramref name="resultType"/>: its
+    /// <c>changeType</c>, <c>eventId</c>, <c>data</c> as the content, the <c>metadata</c>, <c>secureData</c> and
+    /// <c>changedValues</c> the host writes when set, each read as a resource event's are
+    /// (<see cref="ResourceEventReader.ReadDictionary"/>), and the <c>correlationId</c>. The envelope carries no resource
+    /// id, so the result's is empty.
+    /// </summary>
+    /// <param name="resultType">A closed <see cref="ResourceEventResult{T}"/>.</param>
+    /// <param name="content">The response content.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result.</returns>
+    /// <exception cref="InvalidOperationException">When the body is not an envelope with a change type and data.</exception>
+    private async Task<object> ReadResourceEventResultAsync(Type resultType, HttpContent content, CancellationToken cancellationToken)
+    {
+        using var document = JsonDocument.Parse(await content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
+        var root = document.RootElement;
+
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("changeType", out var changeTypeElement)
+            || changeTypeElement.ValueKind != JsonValueKind.String
+            || !Enum.TryParse<ChangeType>(changeTypeElement.GetString(), out var changeType)
+            || !root.TryGetProperty("data", out var dataElement)
+            || dataElement.ValueKind == JsonValueKind.Null)
+        {
+            throw new InvalidOperationException($"The response is not the resource event envelope a {resultType} is written as.");
+        }
+
+        var eventId = root.TryGetProperty("eventId", out var eventIdElement) && eventIdElement.ValueKind == JsonValueKind.String
+            ? eventIdElement.GetString()!
+            : string.Empty;
+        var data = dataElement.Deserialize(resultType.GetGenericArguments()[0], this._jsonOptions)!;
+        var result = (ResourceEventResult)Activator.CreateInstance(
+            resultType,
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            args: [changeType, eventId, data],
+            culture: null)!;
+
+        foreach (var (key, value) in ReadEnvelopeDictionary(root, "metadata", this._jsonOptions))
+        {
+            result.WithMetadata(key, value);
+        }
+
+        foreach (var (key, value) in ReadEnvelopeDictionary(root, "secureData", this._jsonOptions))
+        {
+            result.WithSecureData(key, value);
+        }
+
+        foreach (var (key, value) in ReadEnvelopeDictionary(root, "changedValues", this._jsonOptions))
+        {
+            result.WithChangedValue(key, value);
+        }
+
+        if (root.TryGetProperty("correlationId", out var correlationIdElement) && correlationIdElement.ValueKind == JsonValueKind.String)
+        {
+            result.CorrelationId = correlationIdElement.GetString();
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, object> ReadEnvelopeDictionary(JsonElement root, string propertyName, JsonSerializerOptions options)
+    {
+        return root.TryGetProperty(propertyName, out var element) && ResourceEventReader.ReadDictionary(element, options) is { } dictionary
+            ? dictionary
+            : [];
     }
 
     /// <summary>
@@ -1418,8 +1509,9 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <summary>
     /// Whether the host writes a <paramref name="memberType"/> as a JSON body with <paramref name="status"/>: a type that is
     /// not an operation result, or a resource event, as a 200 only; an <see cref="OkResult{T}"/>,
-    /// <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> as its content with its own status. No other
-    /// operation result is read back from a body.
+    /// <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> as its content with its own status; a
+    /// <see cref="ResourceEventResult{T}"/> as its envelope with the 201 or 200 of a created or updated one (a deleted one is
+    /// an empty 204, which carries no content to read). No other operation result is read back from a body.
     /// </summary>
     /// <remarks>
     /// The host writes nothing else: a handler's plain value is sent as an <see cref="OkResult{T}"/>, and a resource event
@@ -1443,17 +1535,24 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         return (definition == typeof(OkResult<>) && status == (int)HttpStatusCode.OK)
                || (definition == typeof(CreatedResult<>) && status == (int)HttpStatusCode.Created)
-               || (definition == typeof(AcceptedResult<>) && status == (int)HttpStatusCode.Accepted);
+               || (definition == typeof(AcceptedResult<>) && status == (int)HttpStatusCode.Accepted)
+               || (definition == typeof(ResourceEventResult<>) && status is (int)HttpStatusCode.OK or (int)HttpStatusCode.Created);
     }
 
     /// <summary>
-    /// Reads the JSON body as <paramref name="memberType"/>, a semantic result as its content wrapped in it.
+    /// Reads the JSON body as <paramref name="memberType"/>: a resource event or <see cref="ResourceEventResult{T}"/> from
+    /// its envelope, another semantic result as its content wrapped in it.
     /// </summary>
     private async Task<object?> ReadJsonMemberAsync(Type memberType, HttpResponseMessage response, CancellationToken cancellationToken)
     {
         if (ResourceEventReader.CanRead(memberType))
         {
             return await ResourceEventReader.ReadAsync(memberType, response.Content, this._jsonOptions, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (IsResourceEventResultType(memberType))
+        {
+            return await this.ReadResourceEventResultAsync(memberType, response.Content, cancellationToken).ConfigureAwait(false);
         }
 
         if (!typeof(OperationResult).IsAssignableFrom(memberType) || typeof(ResourceEvent).IsAssignableFrom(memberType))
