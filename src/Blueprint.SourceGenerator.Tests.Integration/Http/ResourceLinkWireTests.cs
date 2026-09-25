@@ -120,6 +120,25 @@ public sealed class ResourceLinkWireTests
     }
 
     [Fact]
+    public async Task When_two_apps_in_one_process_each_have_their_own_service_provider_then_each_keeps_its_own_link_setting()
+    {
+        // Not legacy-derived: legacy's setting was which services each app's container was given (Blueprint.Http/
+        // BlueprintApiBuilderExtensions.cs:101-111). This one is held on the app, not in a static, so an app that disables links
+        // does not disable them for another app in the same process. Two apps registered in one service provider are not supported (BlueprintApp.HateoasLinksDisabled).
+        await using var withoutLinks = await LinkWireHost.StartAsync(static blueprint => blueprint.DisableHateoasLinks());
+        await using var withLinks = await LinkWireHost.StartAsync();
+
+        using var unlinked = JsonDocument.Parse(await withoutLinks.SendAsync(System.Net.Http.HttpMethod.Get, "api/link-wire/widgets/widget-1"));
+        using var linked = JsonDocument.Parse(await withLinks.SendAsync(System.Net.Http.HttpMethod.Get, "api/link-wire/widgets/widget-1"));
+
+        AssertEmptyLinks(unlinked.RootElement);
+        linked.RootElement.GetProperty("$links").GetProperty("self").GetProperty("href").GetString().Should().Be(
+            withLinks.AbsoluteUri("api/link-wire/widgets/widget-1"));
+        withoutLinks.ServerErrors.Should().BeEmpty();
+        withLinks.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task When_the_app_disables_links_then_a_commands_event_data_has_empty_links_and_the_event_keeps_its_href()
     {
         // The href never came from the data's links: ResourceEventHandler made it from the resource type's self link

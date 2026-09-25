@@ -530,6 +530,8 @@ services.AddBlueprintApi<MyBlueprintApp, MyBlueprintAppExecutor>(blueprint => bl
 
 No tool can do this for you, because the call to look for is absent. `DisableHateoasLinks()` applies to that app only,
 to every one of its pipelines (a resource event's self query included), and to every registered `IResourceLinkGenerator`.
+Register one app per service provider. A message Rebus delivers, and `IApiLinkGenerator`, use the provider's last
+registered `BlueprintApp`, so two apps in one provider do not each keep their own setting for those.
 It keeps links a handler adds itself, a resource event's `href`, the root-metadata document, the OpenAPI `x-links` and
 `IApiLinkGenerator`, as legacy did. A `201`'s `Location` header, taken from the created resource's `self` link, is then
 not written unless the handler adds that link.

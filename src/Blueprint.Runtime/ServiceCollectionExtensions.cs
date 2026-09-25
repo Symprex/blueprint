@@ -406,7 +406,8 @@ public sealed class BlueprintServiceBuilder
     /// no <c>Location</c>.
     /// </para>
     /// <para>
-    /// The setting belongs to the app registered by this <c>AddBlueprintApi</c> call.
+    /// The setting belongs to the app registered by this <c>AddBlueprintApi</c> call, one app per service provider (see
+    /// <see cref="BlueprintApp"/>'s <c>HateoasLinksDisabled</c>).
     /// </para>
     /// </remarks>
     /// <returns>This builder for chaining.</returns>

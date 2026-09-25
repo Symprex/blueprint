@@ -89,10 +89,16 @@ public class BlueprintApp
 
     /// <summary>
     /// Gets or sets a value indicating whether this app populates no HATEOAS links, set by
-    /// <c>BlueprintServiceBuilder.DisableHateoasLinks()</c> when the app is registered. Held on the app rather than in the
-    /// service provider so that two apps sharing a process keep their own setting, and so that every pipeline of the app,
-    /// nested ones included, sees the same setting through its context's app.
+    /// <c>BlueprintServiceBuilder.DisableHateoasLinks()</c> when the app is registered. It is held on the app rather than in
+    /// the service provider, so every pipeline of the app, nested ones included, sees the same setting through its
+    /// context's app. Two apps in one process, each registered in its own service provider, keep their own setting.
     /// </summary>
+    /// <remarks>
+    /// Two apps registered in the same service provider are not supported. An HTTP request is run with its own app,
+    /// <c>MapBlueprintApi</c>'s <c>TApp</c>. But <c>BlueprintApiActivator</c> runs a message Rebus delivers with the
+    /// provider's non-generic <see cref="BlueprintApp"/>, and the <c>IApiLinkGenerator</c> factory makes links with it.
+    /// That is the last app <c>AddBlueprintApi</c> registered.
+    /// </remarks>
     internal bool HateoasLinksDisabled { get; set; }
 
     /// <summary>
