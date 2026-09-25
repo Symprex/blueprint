@@ -139,7 +139,7 @@ namespace Blueprint.Generated
                 }
             }
 
-            await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, "CreateResourceCommand").ConfigureAwait(false);
+            await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, this.Logger, "CreateResourceCommand").ConfigureAwait(false);
 
             return handlerResult;
         }

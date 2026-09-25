@@ -103,7 +103,7 @@ namespace Blueprint.Generated
                 await global::Blueprint.Runtime.Expansion.ResourceExpansionRuntime.ExpandAsync(context, handlerResult, expansionContent_73410AEC?.Data?.AlwaysGroup, typeof(global::TestNamespace.GroupResource), false).ConfigureAwait(false);
             }
 
-            await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, "UpdateAddOnCommand").ConfigureAwait(false);
+            await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, this.Logger, "UpdateAddOnCommand").ConfigureAwait(false);
 
             return handlerResult;
         }

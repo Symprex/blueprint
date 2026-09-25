@@ -1166,7 +1166,7 @@ public static class PipelineHelpers
     /// has been expanded. The repository is called beside the sink, not through it, so registering either never displaces
     /// the other. Like the sink, it is best-effort: a repository that throws is recorded as a
     /// <c>blueprint.resource_event_audit.failed</c> activity event rather than failing an operation whose changes are
-    /// already saved.
+    /// already saved, and, through the overload given the pipeline's logger, logged at Error.
     /// </remarks>
     /// <param name="auditSink">The resource-event audit sink, or <c>null</c> if none is registered.</param>
     /// <param name="context">The operation context for the current pipeline execution.</param>
@@ -1179,14 +1179,38 @@ public static class PipelineHelpers
         OperationResult handlerResult,
         string operationTypeName)
     {
+        return ExecuteResourceEventAuditSinkAsync(auditSink, context, handlerResult, null, operationTypeName);
+    }
+
+    /// <inheritdoc cref="ExecuteResourceEventAuditSinkAsync(IResourceEventAuditSink?, ApiOperationContext, OperationResult, string)"/>
+    /// <remarks>
+    /// A repository that cannot be resolved, or whose <see cref="IResourceEventAuditRepository.AddAsync"/> throws, is also
+    /// logged at <see cref="LogLevel.Error"/> through <paramref name="logger"/>, the operation's pipeline logger, as legacy's
+    /// generated pipeline logged it: the exception escaped <c>ResourceEventHandler.HandleAsync</c> into the pipeline's catch,
+    /// which logged it as <c>UnhandledException</c> (Signature365 <c>8b40ecc961</c>, for example
+    /// <c>AdminPortalCloseTenantCommandExecutorPipeline.cs:141</c>, <c>:163-177</c>). The operation is not failed, which legacy
+    /// did.
+    /// </remarks>
+    /// <param name="auditSink">The resource-event audit sink, or <c>null</c> if none is registered.</param>
+    /// <param name="context">The operation context for the current pipeline execution.</param>
+    /// <param name="handlerResult">The handler result — only processed if it is a resource-event result type.</param>
+    /// <param name="logger">The operation's pipeline logger, which logs a failed audit repository; <c>null</c> logs nothing.</param>
+    /// <param name="operationTypeName">The operation type name for activity event tags.</param>
+    public static Task ExecuteResourceEventAuditSinkAsync(
+        IResourceEventAuditSink? auditSink,
+        ApiOperationContext context,
+        OperationResult handlerResult,
+        ILogger? logger,
+        string operationTypeName)
+    {
         // Always stamp a legacy ResourceEvent and populate its Href from the resource type's self link, even when no audit
         // sink is registered. This runs after the self query has been resolved, so Data is filled wherever it can be.
         StampResourceEvent(context, handlerResult);
         PopulateResourceEventHref(context, handlerResult);
 
-        if (TryGetResourceEventAuditRepository(context, handlerResult, operationTypeName, out var repository, out var resourceEvent))
+        if (TryGetResourceEventAuditRepository(context, handlerResult, logger, operationTypeName, out var repository, out var resourceEvent))
         {
-            return ExecuteResourceEventAuditRepositoryCoreAsync(auditSink, repository, resourceEvent, context, operationTypeName);
+            return ExecuteResourceEventAuditRepositoryCoreAsync(auditSink, repository, resourceEvent, context, logger, operationTypeName);
         }
 
         return auditSink != null
@@ -1201,11 +1225,13 @@ public static class PipelineHelpers
     /// (<c>GetAttributes&lt;DoNotAuditAttribute&gt;(false)</c>, <c>ResourceEventHandler.cs:72</c>).
     /// </summary>
     /// <remarks>
-    /// A repository that cannot be resolved, because its construction throws, is recorded as a failed resource-event audit
-    /// as one whose <see cref="IResourceEventAuditRepository.AddAsync"/> throws is, and the event is not audited.
+    /// A repository that cannot be resolved, because its construction throws, is recorded and logged as a failed
+    /// resource-event audit as one whose <see cref="IResourceEventAuditRepository.AddAsync"/> throws is, and the event is not
+    /// audited.
     /// </remarks>
     /// <param name="context">The operation context, whose services the repository is resolved from.</param>
     /// <param name="handlerResult">The handler result, audited only when it is a legacy <see cref="ResourceEvent"/>.</param>
+    /// <param name="logger">The operation's pipeline logger, or <c>null</c>.</param>
     /// <param name="operationTypeName">The operation type name for the failure's activity event tags.</param>
     /// <param name="repository">The repository, when the event is to be audited.</param>
     /// <param name="resourceEvent">The event, when it is to be audited.</param>
@@ -1213,6 +1239,7 @@ public static class PipelineHelpers
     private static bool TryGetResourceEventAuditRepository(
         ApiOperationContext context,
         OperationResult handlerResult,
+        ILogger? logger,
         string operationTypeName,
         [NotNullWhen(true)] out IResourceEventAuditRepository? repository,
         [NotNullWhen(true)] out ResourceEvent? resourceEvent)
@@ -1233,13 +1260,7 @@ public static class PipelineHelpers
         }
         catch (Exception resourceEventAuditException)
         {
-            RecordAuditFailureEvent(
-                context.Activity,
-                "blueprint.resource_event_audit.failed",
-                operationTypeName,
-                resourceEventAuditException,
-                resourceEvent.EventId,
-                resourceEvent.Data is IHaveResourceKey resourceKey ? resourceKey.ResourceKey ?? string.Empty : string.Empty);
+            RecordResourceEventAuditRepositoryFailure(context, resourceEvent, logger, operationTypeName, resourceEventAuditException);
         }
 
         return repository is not null;
@@ -1247,13 +1268,14 @@ public static class PipelineHelpers
 
     /// <summary>
     /// Records a legacy <see cref="ResourceEvent"/> with the sink, when one is registered, and then hands it to the
-    /// repository, recording a repository that throws as a failed resource-event audit rather than rethrowing.
+    /// repository, recording and logging a repository that throws as a failed resource-event audit rather than rethrowing.
     /// </summary>
     private static async Task ExecuteResourceEventAuditRepositoryCoreAsync(
         IResourceEventAuditSink? auditSink,
         IResourceEventAuditRepository repository,
         ResourceEvent resourceEvent,
         ApiOperationContext context,
+        ILogger? logger,
         string operationTypeName)
     {
         if (auditSink != null)
@@ -1267,13 +1289,34 @@ public static class PipelineHelpers
         }
         catch (Exception resourceEventAuditException)
         {
-            RecordAuditFailureEvent(
-                context.Activity,
-                "blueprint.resource_event_audit.failed",
-                operationTypeName,
-                resourceEventAuditException,
-                resourceEvent.EventId,
-                resourceEvent.Data is IHaveResourceKey resourceKey ? resourceKey.ResourceKey ?? string.Empty : string.Empty);
+            RecordResourceEventAuditRepositoryFailure(context, resourceEvent, logger, operationTypeName, resourceEventAuditException);
+        }
+    }
+
+    /// <summary>
+    /// Records an audit repository's failure as a <c>blueprint.resource_event_audit.failed</c> activity event and logs it at
+    /// <see cref="LogLevel.Error"/> through the operation's pipeline logger, with the event id, message and level legacy's
+    /// pipeline logged an escaped exception with (<c>_UnhandledException</c>, <c>EventId(5, "UnhandledException")</c>), so
+    /// whatever watched legacy's logs for it still sees it.
+    /// </summary>
+    private static void RecordResourceEventAuditRepositoryFailure(
+        ApiOperationContext context,
+        ResourceEvent resourceEvent,
+        ILogger? logger,
+        string operationTypeName,
+        Exception resourceEventAuditException)
+    {
+        RecordAuditFailureEvent(
+            context.Activity,
+            "blueprint.resource_event_audit.failed",
+            operationTypeName,
+            resourceEventAuditException,
+            resourceEvent.EventId,
+            resourceEvent.Data is IHaveResourceKey resourceKey ? resourceKey.ResourceKey ?? string.Empty : string.Empty);
+
+        if (logger is not null)
+        {
+            _logResourceEventAuditRepositoryFailed(logger, resourceEventAuditException.Message, resourceEventAuditException);
         }
     }
 
@@ -1497,6 +1540,15 @@ public static class PipelineHelpers
             LogLevel.Warning,
             new EventId(32, "ResourceEventHasNoSelfLink"),
             "No self link exists. Href property of the resource event of type {ResourceType} will not be populated");
+
+    // Legacy's generated pipeline's _UnhandledException, which logged an audit repository's failure when it escaped
+    // ResourceEventHandler.HandleAsync into the pipeline's catch (Signature365 8b40ecc961,
+    // AdminPortalCloseTenantCommandExecutorPipeline.cs:173).
+    private static readonly Action<ILogger, string, Exception?> _logResourceEventAuditRepositoryFailed =
+        LoggerMessage.Define<string>(
+            LogLevel.Error,
+            new EventId(5, "UnhandledException"),
+            "An unhandled exception has occurred with message {ExceptionMessage}");
 
     private static readonly Action<ILogger, string, string, Exception?> _logSelfQueryFailed =
         LoggerMessage.Define<string, string>(

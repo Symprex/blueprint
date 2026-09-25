@@ -357,7 +357,7 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 - `AddBlueprintApi<TApp, TExec>()` registers the app and executor singletons
 - `BlueprintServiceBuilder` exposes typed methods for all Blueprint infrastructure contracts
 - Scoped services (UoW, task scheduler) are registered scoped; singletons (audit, auth) as singletons
-- `AddResourceEventAuditRepository<T>()` registers legacy's `IResourceEventAuditRepository` (scoped). The generated pipeline hands it every legacy `ResourceEvent` a command without `[DoNotAudit]` raises (a query's is passed on untouched, as legacy did), last of the post-execution steps (stamped, with its href, data expanded), beside any resource-event audit sink and best-effort
+- `AddResourceEventAuditRepository<T>()` registers legacy's `IResourceEventAuditRepository` (scoped). The generated pipeline hands it every legacy `ResourceEvent` a command without `[DoNotAudit]` raises (a query's is passed on untouched, as legacy did), last of the post-execution steps (stamped, with its href, data expanded), beside any resource-event audit sink and best-effort (a repository that throws or cannot be constructed is logged at Error by the operation's pipeline logger; the operation still succeeds)
 - `ConfigureHttp` binds `BlueprintHttpOptions` for link generation base URI and error detail exposure
 
 ## ASP.NET Core infrastructure (consumer responsibility)

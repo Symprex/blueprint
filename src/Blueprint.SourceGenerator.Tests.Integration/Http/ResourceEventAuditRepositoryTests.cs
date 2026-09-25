@@ -106,12 +106,15 @@ public sealed class ResourceEventAuditRepositoryTests
     }
 
     [Fact]
-    public async Task A_repository_that_throws_does_not_fail_the_command_whose_changes_it_audits()
+    public async Task A_repository_that_throws_is_logged_as_an_error_by_the_pipeline_and_does_not_fail_the_command_whose_changes_it_audits()
     {
         // Not legacy: its handler let AddAsync's exception out (ResourceEventHandler.cs:76), failing, after the save, an
         // operation whose changes were already committed. Signature365's repository swallowed every exception itself
         // (EventStore.Contract/Domain/BusResourceEventAuditRepository.cs:86-101), so nothing it raised ever reached the
         // handler. The repository is called as the sink is, best-effort (IResourceEventAuditSink's remarks).
+        // As legacy, though, the failure is logged at Error by the operation's pipeline logger: legacy's escaped into the
+        // generated pipeline's catch, which logged it through its _logger, category "{Operation}ExecutorPipeline", as
+        // _UnhandledException (Signature365 8b40ecc961, AdminPortalCloseTenantCommandExecutorPipeline.cs:23-25, :163-177).
         var records = new AuditRecords();
         await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint
             .AddResourceEventAuditRepository<ThrowingResourceEventAuditRepository>()
@@ -121,13 +124,17 @@ public sealed class ResourceEventAuditRepositoryTests
 
         body.Should().Contain("widget-7", "the command's result is returned although its audit failed");
         records.SinkEventIds.Should().ContainSingle("the sink is still given the event");
-        host.ServerErrors.Should().BeEmpty();
+        var error = host.ServerErrors.Should().ContainSingle("the audit's failure is logged once").Subject;
+        error.Category.Should().Be("CreateAuditedWidgetCommandExecutorPipeline", "legacy logged it through the operation's pipeline logger");
+        error.Exception.Should().BeOfType<InvalidOperationException>().Which.Message.Should().Be("The audit store is unavailable.");
     }
 
     [Fact]
-    public async Task A_repository_that_cannot_be_constructed_does_not_fail_the_command_whose_changes_it_audits()
+    public async Task A_repository_that_cannot_be_constructed_is_logged_as_an_error_by_the_pipeline_and_does_not_fail_the_command_whose_changes_it_audits()
     {
-        // As a repository whose AddAsync throws (above): its failure is the audit's, not the saved operation's.
+        // As a repository whose AddAsync throws (above): its failure is the audit's, not the saved operation's. Legacy
+        // resolved the repository in the pipeline's try (GetRequiredService, AdminPortalCloseTenantCommandExecutorPipeline
+        // .cs:141), so its construction's failure was logged by the pipeline's catch too.
         var records = new AuditRecords();
         await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint
             .AddResourceEventAuditRepository<UnconstructableResourceEventAuditRepository>()
@@ -137,7 +144,9 @@ public sealed class ResourceEventAuditRepositoryTests
 
         body.Should().Contain("widget-7", "the command's result is returned although its audit repository could not be created");
         records.SinkEventIds.Should().ContainSingle("the sink is still given the event");
-        host.ServerErrors.Should().BeEmpty();
+        var error = host.ServerErrors.Should().ContainSingle("the audit's failure is logged once").Subject;
+        error.Category.Should().Be("CreateAuditedWidgetCommandExecutorPipeline", "legacy logged it through the operation's pipeline logger");
+        error.Exception.Should().BeOfType<InvalidOperationException>().Which.Message.Should().Be("The audit store's client could not be created.");
     }
 
     [Fact]
@@ -403,7 +412,7 @@ public sealed class ResourceEventAuditRepositoryTests
 
         private readonly WebApplication _app;
 
-        private AuditingHost(WebApplication app, System.Net.Http.HttpClient client, ConcurrentQueue<Exception> serverErrors)
+        private AuditingHost(WebApplication app, System.Net.Http.HttpClient client, ConcurrentQueue<ServerError> serverErrors)
         {
             this._app = app;
             this.Client = client;
@@ -412,11 +421,11 @@ public sealed class ResourceEventAuditRepositoryTests
 
         public System.Net.Http.HttpClient Client { get; }
 
-        public ConcurrentQueue<Exception> ServerErrors { get; }
+        public ConcurrentQueue<ServerError> ServerErrors { get; }
 
         public static async Task<AuditingHost> StartAsync(AuditRecords records, Action<BlueprintServiceBuilder> configure)
         {
-            var serverErrors = new ConcurrentQueue<Exception>();
+            var serverErrors = new ConcurrentQueue<ServerError>();
             var builder = WebApplication.CreateSlimBuilder();
 
             builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -488,7 +497,7 @@ public sealed class ResourceEventAuditRepositoryTests
             using var response = await this.Client.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
 
-            ((int)response.StatusCode).Should().BeInRange(200, 201, "the server raised: {0}", string.Join(" | ", this.ServerErrors.Select(static e => e.Message)));
+            ((int)response.StatusCode).Should().BeInRange(200, 201, "the server raised: {0}", string.Join(" | ", this.ServerErrors.Select(static e => e.Exception.Message)));
 
             return body;
         }
@@ -501,11 +510,16 @@ public sealed class ResourceEventAuditRepositoryTests
         }
     }
 
-    private sealed class ErrorRecordingLoggerProvider(ConcurrentQueue<Exception> errors) : ILoggerProvider
+    /// <summary>An entry logged at Error or above, with the category of the logger that logged it.</summary>
+    /// <param name="Category">The logger's category.</param>
+    /// <param name="Exception">The exception logged, or one carrying the message when none was.</param>
+    private sealed record ServerError(string Category, Exception Exception);
+
+    private sealed class ErrorRecordingLoggerProvider(ConcurrentQueue<ServerError> errors) : ILoggerProvider
     {
         public ILogger CreateLogger(string categoryName)
         {
-            return new ErrorRecordingLogger(errors);
+            return new ErrorRecordingLogger(categoryName, errors);
         }
 
         public void Dispose()
@@ -513,7 +527,7 @@ public sealed class ResourceEventAuditRepositoryTests
         }
     }
 
-    private sealed class ErrorRecordingLogger(ConcurrentQueue<Exception> errors) : ILogger
+    private sealed class ErrorRecordingLogger(string category, ConcurrentQueue<ServerError> errors) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull
@@ -530,7 +544,7 @@ public sealed class ResourceEventAuditRepositoryTests
         {
             if (logLevel >= LogLevel.Error)
             {
-                errors.Enqueue(exception ?? new InvalidOperationException(formatter(state, exception)));
+                errors.Enqueue(new ServerError(category, exception ?? new InvalidOperationException(formatter(state, exception))));
             }
         }
     }

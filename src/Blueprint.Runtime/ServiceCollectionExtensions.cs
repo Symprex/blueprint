@@ -403,7 +403,10 @@ public sealed class BlueprintServiceBuilder
     /// <see cref="Blueprint.Http.IResourceEventAuditRepository.AddAsync"/> last of its post-execution steps, once the event
     /// is stamped with its correlation id and operation, has its href and has its data expanded. It is called beside any
     /// <see cref="Blueprint.Auditing.IResourceEventAuditSink"/>, not in place of one, and best-effort: a repository that
-    /// throws does not fail the operation.
+    /// throws, or cannot be constructed, does not fail the operation, and is logged at Error by the operation's pipeline
+    /// logger, as legacy's generated pipeline logged it. An app that registers none audits nothing and is not told, as a
+    /// legacy app without <c>AddResourceEvents</c> was not: that call registered the repository with the pipeline step
+    /// that used it (Signature365 <c>8b40ecc961</c>, <c>BlueprintApiBuilderExtensions.cs:113-120</c>).
     /// </remarks>
     /// <typeparam name="T">The <see cref="Blueprint.Http.IResourceEventAuditRepository"/> implementation type.</typeparam>
     /// <returns>This builder for chaining.</returns>

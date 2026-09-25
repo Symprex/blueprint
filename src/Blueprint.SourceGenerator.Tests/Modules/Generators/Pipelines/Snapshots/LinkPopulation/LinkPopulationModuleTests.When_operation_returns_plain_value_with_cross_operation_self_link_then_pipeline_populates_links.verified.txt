@@ -246,7 +246,7 @@ namespace Blueprint.Generated
                 }
             }
 
-            await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, "UpdateWidgetCommand").ConfigureAwait(false);
+            await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, this.Logger, "UpdateWidgetCommand").ConfigureAwait(false);
 
             return handlerResult;
         }

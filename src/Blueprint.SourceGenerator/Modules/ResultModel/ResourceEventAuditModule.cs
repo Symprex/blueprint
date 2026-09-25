@@ -88,9 +88,10 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
         context.WriteBlankLine();
 
         // Delegate to shared helper — avoids duplicating the pattern match, null check,
-        // try/catch, and activity event recording across every resource-event pipeline.
+        // try/catch, and activity event recording across every resource-event pipeline. The pipeline's own logger logs a
+        // failed audit repository, as legacy's pipeline logged the exception that escaped into its catch.
         context.WriteStatement(
-            $"await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, this.Logger, \"{operationTypeName}\").ConfigureAwait(false);");
     }
 
     /// <summary>
