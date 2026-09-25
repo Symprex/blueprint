@@ -1116,6 +1116,12 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             return (TResponse)(object)text;
         }
 
+        // A resource event is read as legacy read one, not by constructor (ResourceEventReader).
+        if (ResourceEventReader.CanRead(typeof(TResponse)))
+        {
+            return (TResponse)(object)await ResourceEventReader.ReadAsync(typeof(TResponse), response.Content, this._jsonOptions, cancellationToken).ConfigureAwait(false);
+        }
+
         // JSON deserialization
         return await response.Content.ReadFromJsonAsync<TResponse>(this._jsonOptions, cancellationToken).ConfigureAwait(false);
     }
@@ -1269,6 +1275,11 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// </summary>
     private async Task<object?> ReadJsonMemberAsync(Type memberType, HttpResponseMessage response, CancellationToken cancellationToken)
     {
+        if (ResourceEventReader.CanRead(memberType))
+        {
+            return await ResourceEventReader.ReadAsync(memberType, response.Content, this._jsonOptions, cancellationToken).ConfigureAwait(false);
+        }
+
         if (!typeof(OperationResult).IsAssignableFrom(memberType) || typeof(ResourceEvent).IsAssignableFrom(memberType))
         {
             return await response.Content.ReadFromJsonAsync(memberType, this._jsonOptions, cancellationToken).ConfigureAwait(false);

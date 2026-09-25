@@ -568,6 +568,12 @@ BlueprintHttpClient now covers the S365 result surface that was duplicated acros
 ### ResourceEvent HTTP-client fix
 A real compatibility gap did exist for typed `ResourceEvent<T>` HTTP responses. Because the base `ResourceEvent.Data` property is `object?` and the typed `new TResource? Data` property is ignored during default STJ deserialization, the client could surface `JsonElement` instead of `TResource`. The fix is explicit envelope parsing in `SendResourceEventEnvelopeAsync<TResource>()`, which reconstructs a properly typed `ResourceEvent<TResource>` including `$object`, event metadata, and the typed `data` payload.
 
+`SendAsync<T>`/`CallAsync<T>` (and a `Results<,>` member) read every generic resource event type the host writes —
+`ResourceEvent<T>`, `ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>` — as legacy's
+`JsonConverterFactoryForResourceEventOfT` did (`ResourceEventReader`): an instance of the requested type with each wire
+property set by name, never through the subclasses' `eventSubId` constructor (which System.Text.Json cannot bind), and a
+dictionary's numbers, strings and booleans read as `int`, `string` and `bool`.
+
 ### Gateway patterns proven in S365
 The gateway architecture is not exotic and no longer needs to be treated as a risk area. The five confirmed gateway projects cover the main patterns the framework must support: plain forwarding, multi-service aggregation, fallback/error handling, file-upload forwarding, and response-header shaping such as cache control. `ProxyResult` is now a built-in `HttpResult` subtype for downstream pass-through responses, so gateway code does not need a private compatibility wrapper.
 
