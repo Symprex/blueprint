@@ -136,9 +136,16 @@ later commit callbacks run after its save. A message sent from any of those join
 run, so it is not in the saved session. The outbox must refuse it, or send it without the outbox; queued into the saved
 session, it would never be written. Legacy had no such window, because it completed its scope before it saved, and
 flushed and audited after it had completed the scope — still ambient, as its `using var` lasted to the end of the
-method, so a send there was refused rather than joining it (`AzureAdOauthReturnCommandExecutorPipeline.cs:117`,
-`:133-149` at Signature365 `8b40ecc961`; Rebus 8.6's `TransactionContext` throws, through `ThrowCompletedException`,
-when a completed context is given an action, as a transport's send gives it one).
+method (`AzureAdOauthReturnCommandExecutorPipeline.cs:117`, `:133-149` at Signature365 `8b40ecc961`). A send there
+joined nothing:
+
+- if it was the scope's first, the transport's `GetOrAdd` factory registered its commit callback on the completed
+  context, which Rebus 8.6 refuses (`TransactionContext.ThrowCompletedException`, wrapped in a
+  `RebusApplicationException`);
+- otherwise the queue already existed and had been sent, so the message was silently dropped.
+
+Legacy's transport sent that way (`Common/Rebus/Outbox/OutboxClientTransportDecorator.cs:39-43`, and Rebus's own
+`AbstractRebusTransport.Send` without an outbox connection). `RebusCommitAmbientContextTests` pins both.
 
 That is exactly where a direct port of legacy's `UseMartenSessionAsOutbox` goes wrong: its transport queued each
 message's outbox row on the session from a commit callback, which now runs after the save, so the rows were silently

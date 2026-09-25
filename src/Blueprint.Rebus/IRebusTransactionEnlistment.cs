@@ -43,10 +43,14 @@ namespace Blueprint.Rebus;
 /// a generated pipeline commits the <see cref="Messaging.IMessageOutbox"/>, runs the audit sink and flushes the
 /// background tasks after the save and before it completes the scope, so a message any of them sends joins the
 /// transaction after the save. Legacy had no such window: it completed its scope before it saved its session, and
-/// flushed and audited after it had completed the scope, which was still ambient until the method returned, so a send
-/// there was refused rather than joining it (legacy <c>AzureAdOauthReturnCommandExecutorPipeline.cs:117</c>,
-/// <c>:133-149</c> at Signature365 <c>8b40ecc961</c>; Rebus 8.6's <c>TransactionContext</c> throws, through
-/// <c>ThrowCompletedException</c>, when a completed context is given an action, as a transport's send gives it one);
+/// flushed and audited after it had completed the scope, which was still ambient until the method returned (legacy
+/// <c>AzureAdOauthReturnCommandExecutorPipeline.cs:117</c>, <c>:133-149</c> at Signature365 <c>8b40ecc961</c>). A send
+/// there joined nothing. If it was the scope's first, the transport's <c>GetOrAdd</c> factory registered its commit
+/// callback on the completed context, which Rebus 8.6 refuses (<c>TransactionContext.ThrowCompletedException</c>, wrapped
+/// in a <c>RebusApplicationException</c>). Otherwise the queue already existed and had been sent, so the message was
+/// silently dropped. Legacy's transport sent that way (<c>Common/Rebus/Outbox/OutboxClientTransportDecorator.cs:39-43</c>,
+/// and Rebus's own <c>AbstractRebusTransport.Send</c> without an outbox connection), and
+/// <c>RebusCommitAmbientContextTests</c> pins both;
 /// </description></item>
 /// <item><description>
 /// for a received message, a commit callback that runs after the save — one an enlistment or a handler registered —

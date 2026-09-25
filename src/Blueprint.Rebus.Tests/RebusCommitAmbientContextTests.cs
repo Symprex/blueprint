@@ -227,6 +227,57 @@ public class RebusCommitAmbientContextTests
             "the transport had already sent the transaction's queue, and registers no second callback for a later send");
     }
 
+    // Legacy's generated pipeline flushed background tasks and audited after it had completed its RebusTransactionScope,
+    // which stayed ambient to the end of the method (Signature365 8b40ecc961, AzureAdOauthReturnCommandExecutorPipeline.cs:117,
+    // :133-149). Its transport sent through the same GetOrAdd-then-OnCommit pattern (Common/Rebus/Outbox/
+    // OutboxClientTransportDecorator.cs:39-43, and Rebus 8.6's own AbstractRebusTransport.Send when there was no outbox
+    // connection), so what a send in that window did depended on whether the scope had sent before. These pin both.
+    [Fact]
+    public async Task A_first_send_in_a_RebusTransactionScope_after_it_completed_is_refused()
+    {
+        // The transport's GetOrAdd factory runs, and registers its commit callback on a completed context, which throws
+        // (TransactionContext.ThrowCompletedException), wrapped by GetOrAdd.
+        var probe = new ScopeProbeObservations();
+        using var provider = BuildScopeProbeProvider(probe);
+        using var bus = StartBus(provider, new InMemNetwork());
+
+        using (var scope = new RebusTransactionScope())
+        {
+            await scope.CompleteAsync();
+
+            var act = () => bus.SendLocal(new FollowUpMessage());
+
+            (await act.Should().ThrowAsync<global::Rebus.Exceptions.RebusApplicationException>())
+                .WithInnerException<InvalidOperationException>()
+                .WithMessage("Cannot add OnCommit action on a completed transaction context.");
+        }
+    }
+
+    [Fact]
+    public async Task A_send_in_a_RebusTransactionScope_after_it_completed_and_after_an_earlier_send_is_silently_not_sent()
+    {
+        // The queue already exists, so GetOrAdd returns it without registering anything, and the send joins a queue the
+        // completed scope has already sent.
+        var probe = new ScopeProbeObservations();
+        using var provider = BuildScopeProbeProvider(probe);
+        using var bus = StartBus(provider, new InMemNetwork());
+
+        using (var scope = new RebusTransactionScope())
+        {
+            await bus.SendLocal(new InScopeMessage());
+            await scope.CompleteAsync();
+
+            await SendFromCallbackAsync(bus, probe);
+        }
+
+        await probe.WaitForAsync<InScopeMessage>(TimeSpan.FromSeconds(10));
+        await WaitPastMarkerAsync(bus, probe);
+
+        probe.CallbackError.Should().BeNull("the send after completion is not refused");
+        probe.CallbackSent.Should().BeTrue("the send returned");
+        probe.HasReceived<FollowUpMessage>().Should().BeFalse("it joined a queue the completed scope had already sent");
+    }
+
     private static ServiceProvider BuildScopeProbeProvider(ScopeProbeObservations probe)
     {
         var services = new ServiceCollection();
