@@ -23,6 +23,8 @@
 - `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj`  
   Runs the integration tests for generated pipelines and sample-style consumption.
 
+- Tests that need a real PostgreSQL are `[PostgresFact]` (`src\Blueprint.Marten.Tests\Postgres\`). They run only when `BLUEPRINT_TEST_POSTGRES` holds a connection string, each in a schema of its own that it drops, and are reported as skipped otherwise, which is what CI does: it provides no database. To run them locally, point the variable at a disposable database, for example `$env:BLUEPRINT_TEST_POSTGRES = "Host=localhost;Port=5432;Database=blueprint_source_gen_tests;Username=...;Password=..."`.
+
 - Single-test examples:
   - `dotnet test .\src\Blueprint.SourceGenerator.Tests\Blueprint.SourceGenerator.Tests.csproj --filter "FullyQualifiedName~AppDataModelSourceGeneratorTests.When_not_partial_then_reports_diagnostic"`
   - `dotnet test .\src\Blueprint.SourceGenerator.CodeWriter.Tests\Blueprint.SourceGenerator.CodeWriter.Tests.csproj --filter "FullyQualifiedName~CodeWriterTests"`

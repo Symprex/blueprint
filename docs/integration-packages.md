@@ -141,6 +141,21 @@ flushed and audited outside the scope (`AzureAdOauthReturnCommandExecutorPipelin
 `MartenUnitOfWork` makes its own scope `MartenScopeAccessor.Current` for the save, so the listeners also run for a
 plain handler's save, where no generated pipeline has set it.
 
+Two Marten 6.4.2 facts the drain depends on, pinned against a real PostgreSQL by `MartenSaveListenerPostgresTests`:
+
+- SQL a listener queues with `QueueSqlCommand` during `BeforeSaveChangesAsync` is executed in the same batch and
+  transaction as the session's documents: they commit together and roll back together.
+- Marten runs **no** listener for a session with nothing to save. So for an operation that sends a message but writes
+  nothing, a drain would never run. `MartenUnitOfWork` closes that gap for a drain added with
+  `AddBlueprintOutboxListener`: when the session has nothing to save, it queues `DO $$BEGIN END$$` first, so that the
+  listeners run and what the drain writes is saved. It costs one round trip for such a save, and none where no such
+  drain is added. A drain attached any other way, such as only to a session's own listeners as legacy's
+  `UseMartenSessionAsOutbox` attached its listener, gets no such guarantee.
+
+Marten also creates a document type's storage before it runs the listeners, so a drain that stores a document type the
+session did not already hold needs that type's schema in place beforehand, as it is once a deployed app has applied
+its schema. SQL queued with `QueueSqlCommand` is unaffected.
+
 ### Multi-Tenancy Gap
 
 Blueprint.Rebus does **not** extract tenant context from message headers. S365 services that propagate tenant ID via Rebus headers should implement a custom `IBackgroundTaskContextProvider` or extract headers in a pipeline contribution.

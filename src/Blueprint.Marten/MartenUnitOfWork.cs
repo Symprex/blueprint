@@ -18,9 +18,23 @@ namespace Blueprint.Marten;
 /// <see cref="DomainEventDispatchingSessionListener"/> dispatches wherever the save is made from: a generated pipeline,
 /// which also sets it, or the commit of a plain Rebus handler's message, which does not.
 /// </para>
+/// <para>
+/// Marten 6 runs no session listener when a session has nothing to save: its <c>SaveChangesAsync</c> returns before the
+/// first <c>BeforeSaveChangesAsync</c>. So when the session has nothing to save but one of its listeners is an outbox drain
+/// added with <see cref="MartenServiceCollectionExtensions.AddBlueprintOutboxListener"/>, the save first queues
+/// <see cref="DrainTriggerSql"/>, which does nothing, so that the drain runs and what it writes is saved. That is the one
+/// case in which this save opens a connection for a session with nothing to save.
+/// </para>
 /// </remarks>
 public sealed class MartenUnitOfWork : Persistence.IUnitOfWork
 {
+    /// <summary>
+    /// The statement queued to make Marten run the listeners of a session with nothing else to save: an empty block, so
+    /// it returns no result set, as Marten expects of SQL queued with <see cref="IDocumentOperations.QueueSqlCommand"/>. A
+    /// statement that returned one would be read as the result of the next operation in the batch.
+    /// </summary>
+    internal const string DrainTriggerSql = "DO $$BEGIN END$$";
+
     private readonly IDocumentSession _session;
     private readonly IServiceProvider? _services;
 
@@ -59,6 +73,24 @@ public sealed class MartenUnitOfWork : Persistence.IUnitOfWork
             MartenScopeAccessor.Current = this._services;
         }
 
+        // Otherwise Marten would return before the drain ran, and an operation that sent but wrote nothing would lose its
+        // messages.
+        if (!HasPendingWork(this._session) && OutboxListenerRegistry.ContainsAny(this._session.Listeners))
+        {
+            this._session.QueueSqlCommand(DrainTriggerSql);
+        }
+
         await this._session.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets whether <paramref name="session"/> has operations or events queued, which is what makes Marten save it.
+    /// </summary>
+    private static bool HasPendingWork(IDocumentSession session)
+    {
+        var pendingChanges = session.PendingChanges;
+
+        return pendingChanges.Operations().Any()
+               || pendingChanges.Streams().Any(static stream => stream.Events.Count > 0);
     }
 }

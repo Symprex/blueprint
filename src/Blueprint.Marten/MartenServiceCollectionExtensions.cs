@@ -102,6 +102,15 @@ public static class MartenServiceCollectionExtensions
     /// <para>
     /// It is idempotent: each listener ends up in the list once.
     /// </para>
+    /// <para>
+    /// Marten 6 runs no listener for a session with nothing to save, so on its own a drain would never write the messages
+    /// of an operation that sent but wrote nothing. <see cref="MartenUnitOfWork"/> closes that gap for a listener added
+    /// here: when it saves a session with nothing to save and one of the session's listeners was added here, it queues a
+    /// statement that does nothing, so that Marten runs the listeners and saves what the drain writes. That costs one
+    /// round trip for such a save. A drain that was never passed to this method — one added only to a session's own
+    /// listeners, as legacy's per-session outbox listener was, or only to <see cref="StoreOptions.Listeners"/> — gets no
+    /// such guarantee, and must make sure the session has something to save itself.
+    /// </para>
     /// </remarks>
     /// <param name="options">The store options to add the listener to.</param>
     /// <param name="listener">The consumer's outbox listener.</param>
@@ -110,6 +119,8 @@ public static class MartenServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(listener);
+
+        OutboxListenerRegistry.Register(listener);
 
         options.AddBlueprintSessionListeners();
 
