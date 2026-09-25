@@ -185,6 +185,44 @@ public sealed class BlueprintHttpClientTests : IClassFixture<SampleAppFixture>
         ex.Which.Errors.Should().ContainKey("Name");
     }
 
+    // Legacy read a 422 as a ValidationProblemDetails (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:125-135),
+    // whose converter took the errors from the member named exactly "errors" (Blueprint.Http/ValidationProblemDetailsJsonConverter.cs:13,
+    // :30) into a dictionary it had made empty (:20-21), and threw a ValidationException of that dictionary whatever it held
+    // (:129-131), or, for a JSON null, a response_empty ApiException (:134).
+    [Theory]
+    [InlineData("""{"title":"Validation Failed","status":422,"Errors":{"Name":["Name is required."]}}""")]
+    [InlineData("""{"title":"Validation Failed","status":422,"ERRORS":{"Name":["Name is required."]}}""")]
+    [InlineData("""{"title":"Validation Failed","status":422,"detail":"Only a detail"}""")]
+    public async Task SendAsync_422_without_an_errors_member_of_that_exact_name_throws_a_validation_exception_with_no_errors(string body)
+    {
+        var client = this._fixture.CreateClient(new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/problem+json"),
+        }));
+
+        var act = () => client.SendAsync<TemplateApiResource>(new CreateTemplateCommand { HtmlSource = "<p>x</p>" });
+
+        var ex = await act.Should().ThrowAsync<ValidationException>();
+        ex.Which.Errors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SendAsync_422_whose_body_is_null_throws_a_response_empty_api_exception()
+    {
+        var client = this._fixture.CreateClient(new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+        {
+            Content = new StringContent("null", Encoding.UTF8, "application/problem+json"),
+        }));
+
+        var act = () => client.SendAsync<TemplateApiResource>(new CreateTemplateCommand { HtmlSource = "<p>x</p>" });
+
+        var ex = await act.Should().ThrowAsync<BlueprintApiException>();
+        ex.Which.Type.Should().Be("response_empty");
+        ex.Which.Title.Should().Be("Response deserialisation failed");
+        ex.Which.Detail.Should().Be("The validation error response could not be deserialised");
+        ex.Which.HttpStatus.Should().Be(502);
+    }
+
     [Fact]
     public async Task SendAsync_404_throws_blueprint_api_exception()
     {

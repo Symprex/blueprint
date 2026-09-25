@@ -1581,28 +1581,55 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         // 422 Unprocessable Entity → ValidationException with field errors
         if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
         {
-            throw this.ParseValidationException(body);
+            throw this.ParseValidationException(response, body);
         }
 
         throw this.CreateErrorResponseException(request, response, body);
     }
 
-    private ValidationException ParseValidationException(string body)
+    /// <summary>
+    /// Reads a 422 as legacy's client read one, as a <c>ValidationProblemDetails</c> (Signature365 <c>8b40ecc961</c>,
+    /// <c>Common.Core/Api/BlueprintHttpClient.cs:125-135</c>): the errors are the member named exactly <c>errors</c>, the
+    /// name the host writes (<c>Blueprint.Http/ValidationProblemDetailsJsonConverter.cs:13</c>, <c>:30</c>), read into a
+    /// dictionary that is empty without one (<c>:20-21</c>), and the exception is thrown with that dictionary whatever it
+    /// holds (<c>:129-131</c>). A JSON <c>null</c> is a <c>response_empty</c> problem (<c>:134</c>).
+    /// </summary>
+    /// <param name="response">The 422 response.</param>
+    /// <param name="body">The response body.</param>
+    /// <returns>The exception to throw.</returns>
+    private Exception ParseValidationException(HttpResponseMessage response, string body)
     {
         try
         {
-            var problemDetails = JsonSerializer.Deserialize<ValidationProblemDetailsDto>(body, this._jsonOptions);
-
-            if (problemDetails?.Errors is { Count: > 0 })
+            // The client's own reading options apply, as ReadProblemDetails applies them.
+            using var document = JsonDocument.Parse(body, new JsonDocumentOptions
             {
-                return new ValidationException(problemDetails.Errors);
+                AllowTrailingCommas = this._jsonOptions.AllowTrailingCommas,
+                CommentHandling = this._jsonOptions.ReadCommentHandling == JsonCommentHandling.Disallow ? JsonCommentHandling.Disallow : JsonCommentHandling.Skip,
+                MaxDepth = this._jsonOptions.MaxDepth,
+            });
+            var root = document.RootElement;
+
+            if (root.ValueKind == JsonValueKind.Null)
+            {
+                return new BlueprintApiException(
+                    new BlueprintApiException.ApiProblem(
+                        "Response deserialisation failed",
+                        "response_empty",
+                        "The validation error response could not be deserialised",
+                        (int)HttpStatusCode.BadGateway),
+                    response.StatusCode,
+                    body,
+                    innerException: null);
             }
 
-            return new ValidationException(
-                new Dictionary<string, string[]>
-                {
-                    [string.Empty] = [problemDetails?.Detail ?? "Validation failed."],
-                });
+            var errors = root.ValueKind == JsonValueKind.Object
+                         && root.TryGetProperty("errors", out var errorsElement)
+                         && errorsElement.Deserialize<Dictionary<string, string[]>>(this._jsonOptions) is { } readErrors
+                ? readErrors
+                : [];
+
+            return new ValidationException(errors);
         }
         catch (JsonException)
         {
@@ -1635,22 +1662,6 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         public string? Instance { get; set; }
 
         public Dictionary<string, JsonElement>? Extensions { get; set; }
-    }
-
-    /// <summary>
-    /// Internal DTO for deserializing RFC 9457 / RFC 7807 validation problem details responses.
-    /// </summary>
-    private sealed class ValidationProblemDetailsDto
-    {
-        public string? Type { get; set; }
-
-        public string? Title { get; set; }
-
-        public string? Detail { get; set; }
-
-        public int? Status { get; set; }
-
-        public Dictionary<string, string[]>? Errors { get; set; }
     }
 }
 
