@@ -119,7 +119,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     [Fact]
     public async Task When_get_template_returns_200_then_response_includes_object_type_and_self_link()
     {
-        var endpoints = CreateEndpoints();
+        var endpoints = CreateEndpointsWithLinkGeneration();
         endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
 
         var endpoint = FindEndpoint(endpoints, "api/templates/{Id}", "GET");
@@ -204,7 +204,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
     [Fact]
     public async Task When_create_template_with_valid_body_then_returns_201_with_resource_event_envelope()
     {
-        var endpoints = CreateEndpoints();
+        var endpoints = CreateEndpointsWithLinkGeneration();
         endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
 
         var endpoint = FindEndpoint(endpoints, "api/templates", "POST");
@@ -2657,6 +2657,28 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddScoped<SampleMartenUnitOfWork>()
             .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddScoped<Blueprint.Http.ETagger>();
+
+        return new TestEndpointRouteBuilder(services.BuildServiceProvider());
+    }
+
+    /// <summary>
+    /// The endpoints <see cref="CreateEndpoints"/> makes, with the link services <c>AddBlueprintApi</c> registers: the default
+    /// resource link generator, which makes every link, <c>self</c> included, and an authoriser that shows every link.
+    /// </summary>
+    private static TestEndpointRouteBuilder CreateEndpointsWithLinkGeneration()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddHttpContextAccessor()
+            .AddSingleton<TemplateStore>()
+            .AddSingleton<SampleBlueprintApp>()
+            .AddSingleton<SampleBlueprintAppExecutor>()
+            .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
+            .AddScoped<SampleMartenUnitOfWork>()
+            .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
+            .AddScoped<Blueprint.Http.ETagger>()
+            .AddScoped<Blueprint.Http.IResourceLinkGenerator, Blueprint.Http.EntityOperationResourceLinkGenerator>()
+            .AddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, AllowAllApiAuthoriserAggregator>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }

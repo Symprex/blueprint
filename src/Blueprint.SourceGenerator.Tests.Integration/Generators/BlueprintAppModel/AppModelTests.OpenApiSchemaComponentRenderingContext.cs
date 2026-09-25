@@ -57,6 +57,8 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "LegacyShapeRun",
             "LegacyShapeTenantApiResource",
             "LinkTestApiResource",
+            "LinkWireWidgetApiResource",
+            "ListApiResourceOfLinkWireWidget",
             "LocationResource",
             "MappedLinkApiResource",
             "MinLengthShapeApiResource",

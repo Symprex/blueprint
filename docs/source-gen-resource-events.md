@@ -11,7 +11,7 @@ The current Blueprint resource event architecture is **already well-optimized** 
 ```
 Handler returns ResourceEvent<T>
   → ResourceEventSelfQueryModule (stage -5): resolve SelfQuery if Data is null
-  → LinkGenerationModule (stage 0): populate $links.self on resource Data
+  → LinkGenerationModule (stage 0): hand the result to the runtime link population, which links Data (every link, self included, absolute)
   → ResourceExpansionModule (stage 1010): expand the event's Expandable<T> data
   → ResourceEventAuditModule (stage 1020, commands only): stamp, fill metadata, make Href, extract EventId + ResourceId, invoke audit sink
   → PipelineReturnModule: serialize envelope to HTTP response

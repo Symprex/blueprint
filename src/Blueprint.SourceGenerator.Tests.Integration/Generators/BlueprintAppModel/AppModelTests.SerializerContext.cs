@@ -61,7 +61,9 @@ public class AppModelSerializerContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.ParameterTitlesApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.XmlDocShape",
             "Blueprint.SourceGenerator.Tests.Integration.Http.NativeEventGadget",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.MinLengthShapeApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.MinLengthShapeApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LinkWireWidgetApiResource",
+            "Blueprint.Model.ListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LinkWireWidgetApiResource>");
     }
 
     [Fact]
@@ -119,6 +121,8 @@ public class AppModelSerializerContextTests
             typeof(Http.ParameterTitlesApiResource),
             typeof(Http.XmlDocShape),
             typeof(Http.NativeEventGadget),
-            typeof(Http.MinLengthShapeApiResource));
+            typeof(Http.MinLengthShapeApiResource),
+            typeof(Http.LinkWireWidgetApiResource),
+            typeof(Blueprint.Model.ListApiResource<Http.LinkWireWidgetApiResource>));
     }
 }

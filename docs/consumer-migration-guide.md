@@ -868,7 +868,7 @@ This section documents what has been optimized and what remains runtime by desig
 | Authorization checks (`CanShowLinkAsync`) | Depend on current user's claims and context |
 | `IApiAuthoriser` / `IOperationAuthoriser` | Business-rule authorizers are DI-resolved by design |
 | `ResourceKeyTemplateExpander` | Resource key expansion depends on runtime data and the current principal/context |
-| HATEOAS link population (non-self) | Auth-gated link visibility requires runtime user context |
+| HATEOAS link population (self included, as legacy made it) | Auth-gated link visibility requires runtime user context; every link is absolute under the request's base URI |
 | `IUnitOfWork.SaveChangesAsync` | Database persistence is inherently runtime |
 | `IMessageOutbox.CommitAsync` | Message bus interaction is runtime |
 | `IAuditSink.RecordAsync` | Audit recording targets runtime sinks |

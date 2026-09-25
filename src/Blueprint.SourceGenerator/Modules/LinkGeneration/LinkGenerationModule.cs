@@ -10,7 +10,7 @@ namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
 /// A module that will configure URLs and links for operations (descriptor-level),
-/// and populate $links.self on returned resources at PostExecution (pipeline-level).
+/// and hand every HTTP operation's result to the runtime link population at PostExecution (pipeline-level).
 /// </summary>
 public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitializationContributor, IDescriptorContributor, IEnabledHostContributor, IPipelineContributor
 {
@@ -97,6 +97,16 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Every HTTP-exposed operation's result is handed to the runtime link population, whatever its declared result, as
+    /// legacy's <c>LinkGeneratorMiddlewareBuilder</c> matched every operation (Signature365 <c>8b40ecc961</c>,
+    /// <c>LinkGeneratorMiddlewareBuilder.cs:17-20</c>) and its <c>LinkGeneratorHandler</c> decided at run time what to link:
+    /// a returned resource, a resource event's data whatever the event's subclass, and every item of a collection. Every
+    /// link, <c>self</c> included, is made there, by the registered <c>IResourceLinkGenerator</c>s, as legacy made it: absolute
+    /// under the request's base URI, its placeholders escaped, and shown only when the user may see it
+    /// (<c>EntityOperationResourceLinkGenerator.cs:59-108</c>). The generated pipeline no longer adds a <c>self</c> link of its
+    /// own, which was relative, unescaped and never authorised.
+    /// </remarks>
     public void ContributeToPipeline(PipelineContributorContext context)
     {
         var handler = context.Handler;
@@ -105,22 +115,33 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             return;
         }
 
-        var resourceBinding = ResolveLinkableResourceType(context, handler);
-        if (resourceBinding is null)
+        if (ResolveLinkableResourceType(context, handler) is { } resourceType)
+        {
+            ReportAmbiguousSelfLinks(context, resourceType);
+        }
+
+        if (!HttpHostExposureHelper.HasHttpHostExposure(context.Operation.TypeSymbol))
         {
             return;
         }
 
-        var selfLinks = context.FindSelfLinksForResourceType(resourceBinding.ResourceType);
-        if (selfLinks.Count == 0)
-        {
-            return;
-        }
+        // Require the handler result variable from Execution stage
+        context.RequireVariable(
+            new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
+            PipelineStage.PostExecution);
 
-        // Warn when multiple distinct URL templates target the same resource type with Rel="self"
-        // (custom-Rel links like "updateFields" are action links and don't conflict)
+        context.RequireAsync();
+        context.AddRenderStep(PipelineStage.PostExecution, RenderFullHateoasLinkPopulation);
+    }
+
+    /// <summary>
+    /// Warns when multiple distinct URL templates target the same resource type with <c>Rel="self"</c> (custom-Rel links
+    /// like <c>updateFields</c> are action links and don't conflict).
+    /// </summary>
+    private static void ReportAmbiguousSelfLinks(PipelineContributorContext context, INamedTypeSymbol resourceType)
+    {
         var distinctSelfUrlSet = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var link in selfLinks)
+        foreach (var link in context.FindSelfLinksForResourceType(resourceType))
         {
             if (string.Equals(link.Rel, "self", StringComparison.Ordinal))
             {
@@ -133,20 +154,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             context.AddDiagnostic(new DiagnosticInfo(
                 _ambiguousSelfLinkError,
                 context.Operation.TypeSymbol.Locations.FirstOrDefault(),
-                new EquatableList<string>([resourceBinding.ResourceType.Name, string.Join(", ", distinctSelfUrlSet.Select(static u => $"'{u}'"))])));
+                new EquatableList<string>([resourceType.Name, string.Join(", ", distinctSelfUrlSet.Select(static u => $"'{u}'"))])));
         }
-
-        // Require the handler result variable from Execution stage
-        context.RequireVariable(
-            new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
-            PipelineStage.PostExecution);
-
-        context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, renderContext =>
-        {
-            RenderLinkPopulation(renderContext, resourceBinding, selfLinks);
-            RenderFullHateoasLinkPopulation(renderContext);
-        });
     }
 
     // Normalise away the parameter names, so that we can compare URLs with different property names (as utimately they are
@@ -855,7 +864,10 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             [placeholderName, namedType.Name]);
     }
 
-    private static LinkableResourceBinding? ResolveLinkableResourceType(PipelineContributorContext context, OperationHandlerModel handler)
+    /// <summary>
+    /// Finds the linkable resource type the operation declares it returns, for the ambiguous self link diagnostic.
+    /// </summary>
+    private static INamedTypeSymbol? ResolveLinkableResourceType(PipelineContributorContext context, OperationHandlerModel handler)
     {
         var linkableResourceInterface = context.FindTypeByMetadataName("Blueprint.Model.ILinkableResource");
         if (linkableResourceInterface is null)
@@ -869,13 +881,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             return null;
         }
 
-        if (!resourceType.AllInterfaces.Contains(linkableResourceInterface, SymbolEqualityComparer.Default))
-        {
-            return null;
-        }
-
-        var (contentAccess, guardType) = GetContentAccessInfo(context, handler);
-        return new LinkableResourceBinding(resourceType, contentAccess, guardType);
+        return resourceType.AllInterfaces.Contains(linkableResourceInterface, SymbolEqualityComparer.Default)
+            ? resourceType
+            : null;
     }
 
     private static INamedTypeSymbol? ExtractContentResourceType(PipelineContributorContext context, OperationHandlerModel handler)
@@ -978,136 +986,6 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         return null;
     }
 
-    private static (string ContentAccess, string GuardTypeName) GetContentAccessInfo(PipelineContributorContext context, OperationHandlerModel handler)
-    {
-        if (OperationResultContractHelper.GetDeclaredOperationResultType(context.Operation.TypeSymbol) is not INamedTypeSymbol declaredResultType)
-        {
-            return ("((Blueprint.Runtime.Exec.OkResult)handlerResult).Content", "Blueprint.Runtime.Exec.OkResult");
-        }
-
-        var resourceEventResultGeneric = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ResourceEventResult`1");
-        if (resourceEventResultGeneric is not null
-            && declaredResultType.IsGenericType
-            && SymbolEqualityComparer.Default.Equals(declaredResultType.OriginalDefinition, resourceEventResultGeneric))
-        {
-            var resourceTypeName = declaredResultType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var fullResultTypeName = declaredResultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            return ($"(({fullResultTypeName})handlerResult).Content", fullResultTypeName);
-        }
-
-        // DeferredResourceEventResult<T> — content accessed via .ResolvedContent (populated by SelfQuery module)
-        var deferredResourceEventResultGeneric = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.DeferredResourceEventResult`1");
-        if (deferredResourceEventResultGeneric is not null
-            && declaredResultType.IsGenericType
-            && SymbolEqualityComparer.Default.Equals(declaredResultType.OriginalDefinition, deferredResourceEventResultGeneric))
-        {
-            return ("((Blueprint.Runtime.Exec.IDeferredResourceEventResult)handlerResult).ResolvedContent", "Blueprint.Runtime.Exec.IDeferredResourceEventResult");
-        }
-
-        // Legacy ResourceEvent<T> — content is accessed via .Data, not .Content
-        var legacyResourceEventGeneric = context.FindTypeByMetadataName("Blueprint.Http.ResourceEvent`1");
-        if (legacyResourceEventGeneric is not null
-            && declaredResultType.IsGenericType
-            && SymbolEqualityComparer.Default.Equals(declaredResultType.OriginalDefinition, legacyResourceEventGeneric))
-        {
-            var fullResultTypeName = declaredResultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            return ($"(({fullResultTypeName})handlerResult).Data", fullResultTypeName);
-        }
-
-        var okResultGeneric = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.OkResult`1");
-        if (okResultGeneric is not null
-            && declaredResultType.IsGenericType
-            && SymbolEqualityComparer.Default.Equals(declaredResultType.OriginalDefinition, okResultGeneric))
-        {
-            var resourceTypeName = declaredResultType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var fullResultTypeName = declaredResultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            return ($"(({fullResultTypeName})handlerResult).Content", fullResultTypeName);
-        }
-
-        // Union case: look for first content-bearing member
-        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredResultType, out var unionMembers))
-        {
-            foreach (var member in unionMembers)
-            {
-                if (member is not INamedTypeSymbol namedMember)
-                {
-                    continue;
-                }
-
-                if (resourceEventResultGeneric is not null
-                    && namedMember.IsGenericType
-                    && SymbolEqualityComparer.Default.Equals(namedMember.OriginalDefinition, resourceEventResultGeneric))
-                {
-                    var resourceTypeName = namedMember.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var fullResultTypeName = namedMember.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    return ($"(({fullResultTypeName})handlerResult).Content", fullResultTypeName);
-                }
-
-                if (deferredResourceEventResultGeneric is not null
-                    && namedMember.IsGenericType
-                    && SymbolEqualityComparer.Default.Equals(namedMember.OriginalDefinition, deferredResourceEventResultGeneric))
-                {
-                    return ("((Blueprint.Runtime.Exec.IDeferredResourceEventResult)handlerResult).ResolvedContent", "Blueprint.Runtime.Exec.IDeferredResourceEventResult");
-                }
-
-                if (legacyResourceEventGeneric is not null
-                    && namedMember.IsGenericType
-                    && SymbolEqualityComparer.Default.Equals(namedMember.OriginalDefinition, legacyResourceEventGeneric))
-                {
-                    var fullResultTypeName = namedMember.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    return ($"(({fullResultTypeName})handlerResult).Data", fullResultTypeName);
-                }
-
-                if (okResultGeneric is not null
-                    && namedMember.IsGenericType
-                    && SymbolEqualityComparer.Default.Equals(namedMember.OriginalDefinition, okResultGeneric))
-                {
-                    var resourceTypeName = namedMember.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var fullResultTypeName = namedMember.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    return ($"(({fullResultTypeName})handlerResult).Content", fullResultTypeName);
-                }
-            }
-        }
-
-        // Fallback: non-generic OkResult
-        return ("((Blueprint.Runtime.Exec.OkResult)handlerResult).Content", "Blueprint.Runtime.Exec.OkResult");
-    }
-
-    private static void RenderLinkPopulation(
-        PipelineRenderContext context,
-        LinkableResourceBinding binding,
-        IReadOnlyList<SelfLinkBindingInfo> selfLinks)
-    {
-        var resourceTypeName = binding.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-        context.WriteBlankLine();
-        context.WriteStatement("// Populate HATEOAS links (self + action rels) on the returned resource (skip 304 Not Modified)");
-        context.If(
-            $"handlerResult is {binding.GuardTypeName} and not global::Blueprint.Runtime.Exec.INotModifiedResult",
-            branch =>
-            {
-                // Content may be null (e.g. ResourceEvent.Data when SelfQuery resolution fails),
-                // so guard against NRE before accessing the resource's link surface.
-                branch.DeclareVariable("linkableResource", $"({resourceTypeName}){binding.ContentAccessExpression}");
-                branch.If("linkableResource is not null", innerBranch =>
-                {
-                    // Deduplicate by (Rel, URL) pair: multiple operations may declare [SelfLink] for the
-                    // same resource type with the same URL and rel, but we only emit AddLink once per unique pair.
-                    var emittedLinks = new HashSet<(string Rel, string Url)>();
-                    foreach (var selfLink in selfLinks)
-                    {
-                        if (!emittedLinks.Add((selfLink.Rel, selfLink.UrlTemplate)))
-                        {
-                            continue;
-                        }
-
-                        var hrefExpression = BuildHrefInterpolation(selfLink.UrlTemplate);
-                        innerBranch.WriteStatement($"linkableResource.AddLink(\"{selfLink.Rel}\", new global::Blueprint.Model.Link {{ Href = {hrefExpression} }});");
-                    }
-                });
-            });
-    }
-
     /// <summary>
     /// Generates a single call to <c>PipelineHelpers.PopulateHateoasLinksAsync</c> which resolves
     /// <c>IApiLinkGenerator</c> and <c>IResourceLinkGenerator</c> from DI and calls
@@ -1120,31 +998,6 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         context.WriteStatement("// Populate full HATEOAS links (skip 304 Not Modified)");
         context.WriteStatement("await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);");
     }
-
-    private static string BuildHrefInterpolation(string urlTemplate)
-    {
-        var placeholders = _mappedPlaceholderRegex.Matches(urlTemplate);
-        if (placeholders.Count == 0)
-        {
-            return $"\"{urlTemplate}\"";
-        }
-
-        var interpolated = _mappedPlaceholderRegex.Replace(
-            urlTemplate,
-            match =>
-            {
-                var routeName = match.Groups["routeName"].Value;
-                var resourcePropName = match.Groups["resourcePropName"]?.Value;
-
-                // Use the resource property name if provided, otherwise use the route name
-                var propName = string.IsNullOrEmpty(resourcePropName) ? routeName : resourcePropName;
-                return $"{{linkableResource.{propName}}}";
-            });
-
-        return $"$\"{interpolated}\"";
-    }
-
-    private sealed record LinkableResourceBinding(INamedTypeSymbol ResourceType, string ContentAccessExpression, string GuardTypeName);
 
     /// <summary>
     /// Infers a rel name from a resource type symbol by stripping common suffixes
