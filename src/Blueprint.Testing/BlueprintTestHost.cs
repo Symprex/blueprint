@@ -118,7 +118,33 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
 
         configure?.Invoke(testContext);
 
-        return await this.Executor.ExecuteAsync(context);
+        // As a real request's context is the accessor's for as long as the request runs, and as legacy Signature365's
+        // ApiFixture gave every HTTP operation (one HttpHost supported: a link attribute, Signature365 8b40ecc961,
+        // Blueprint.Http/HttpHost.cs:47-50) an HTTP context through ConfigureHttp (TestHelpers/ApiFixture.cs:270-279),
+        // with a loopback remote address, set on the scope's accessor (Blueprint.Testing/ApiOperationContextSetup.cs:46,
+        // :61). A dependency reading the accessor, such as an audit repository reading its user, then sees the executing
+        // user. An operation that is not an HTTP one was given no HTTP context there, so its accessor stays empty.
+        var accessor = descriptor.Urls.Count > 0
+            ? scope.ServiceProvider.GetService<IHttpContextAccessor>()
+            : null;
+
+        if (accessor is null)
+        {
+            return await this.Executor.ExecuteAsync(context);
+        }
+
+        httpContext.Connection.RemoteIpAddress ??= System.Net.IPAddress.Loopback;
+        accessor.HttpContext = httpContext;
+
+        try
+        {
+            return await this.Executor.ExecuteAsync(context);
+        }
+        finally
+        {
+            // As ASP.NET Core clears it when a request ends.
+            accessor.HttpContext = null;
+        }
     }
 
     /// <summary>
