@@ -103,4 +103,4 @@ S365 didn't need a codemod — the generator automatically discovers resource re
 - State-based checker discovery in generator → ✅ Implemented via `PopulateResourceCheckers()` scan of `ILinkVisibilityAuthoriser` implementations
 - Compile-time diagnostics for resource consistency → BPLG003 (non-linkable resource), BPLG004 (ambiguous self-link)
 - Resource graph API endpoint → Not yet implemented (optional runtime enrichment)
-- Per-request link population optimization → ✅ Per-request link auth cache (commit `3ab7edb7`)
+- Per-request link population optimization → ~~Per-request link auth cache (commit `3ab7edb7`)~~ withdrawn in v1.0.3: an authoriser may decide by the resource, and legacy asked it for every one, so only `AppliesTo` is cached, per aggregator instance
