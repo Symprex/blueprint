@@ -32,7 +32,9 @@ public class AppModelOpenApiOutputRenderingContextTests
         doc.RootElement.GetProperty("paths").TryGetProperty("/openapi/http-response-metadata", out var pathItem).Should().BeTrue();
 
         pathItem.TryGetProperty("get", out var operation).Should().BeTrue();
-        operation.GetProperty("operationId").GetString().Should().Be("HttpResponseMetadataQueryOp");
+
+        // Legacy removed "Query" anywhere in the type name (ApiOperationDescriptor.cs:50, S365 8b40ecc961).
+        operation.GetProperty("operationId").GetString().Should().Be("HttpResponseMetadataOp");
     }
 
     [Fact]

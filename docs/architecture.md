@@ -55,9 +55,17 @@ declared serializer-context type, and both the typed and string-backed `JsonSeri
 generated registration constructor. That gives later OpenAPI coverage-validation and schema slices a consumer-owned JSON
 metadata seam without routing through runtime host options first.
 
+Each generated descriptor is named exactly as legacy Blueprint named it
+(`Type.Name.Replace("Query", "").Replace("Command", "").ToPascalCase()`): both words are removed wherever they occur,
+and legacy's casing then folds acronyms, so `GetSentEmailQuery` is `GetSentEmail` but `GenerateVCardQuery` is
+`GeneratevCard`, `GetInvoicesV2Query` is `GetInvoicesv2` and `GetHTMLPreviewQuery` is `GethtmlPreview`. The name is baked
+into the descriptor by `OperationNameHelpers.GetDescriptorName`, which `BP009` also uses, so the collision check sees the
+names the app registers. A type named only `Query`, `Command` or `QueryCommand`, which legacy left with an empty name,
+keeps its own name.
+
 App roots may also declare `[BlueprintAppOperationNames(Remove = "Portal")]`, which removes every ordinal occurrence of
-that text from the name of each operation the app hosts, after `Query`/`Command` suffix stripping — so
-`PortalResetActiveUsersCommand` is named `ResetActiveUsers`. It replaces legacy Blueprint's per-app
+that text from the name of each operation the app hosts, after that naming — so `PortalResetActiveUsersCommand` is named
+`ResetActiveUsers`, and `Remove = "VCard"` leaves `GetvCardSettings` alone. It replaces legacy Blueprint's per-app
 `IOperationScannerConvention` and keeps its semantics. The rename cannot live in the descriptor, because descriptors are
 generated with the operation, often in a contract assembly that cannot see which app hosts it, and one operation can be
 hosted by several apps. Instead the registration constructor emits `this.Register(ApplyOperationNameTransform(Operation.Configure()))`:

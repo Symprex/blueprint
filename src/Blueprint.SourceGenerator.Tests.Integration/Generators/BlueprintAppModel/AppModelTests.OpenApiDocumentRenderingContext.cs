@@ -44,7 +44,9 @@ public class AppModelOpenApiDocumentRenderingContextTests
         path.Methods.Select(static method => method.HttpMethod).Should().Equal("GET");
 
         var operation = path.Methods[0].Operations.Single();
-        operation.OperationName.Should().Be("HttpResponseMetadataQueryOp");
+
+        // Legacy removed "Query" anywhere in the type name (ApiOperationDescriptor.cs:50, S365 8b40ecc961).
+        operation.OperationName.Should().Be("HttpResponseMetadataOp");
         operation.Responses.Select(static response => response.StatusCode).Should().Equal(200, 422, 500);
     }
 

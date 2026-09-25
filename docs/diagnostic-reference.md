@@ -16,7 +16,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BP006 | Error | Serializer context is missing required response body coverage |
 | BP007 | Error | App is missing a serializer context declaration |
 | BP008 | Error | Serializer-covered body type uses unsupported OpenAPI validation shape |
-| BP009 | Error | Duplicate descriptor name after Query/Command suffix stripping |
+| BP009 | Error | Duplicate descriptor name once Query/Command is removed and the name is cased |
 | BP010 | Warning | Non-evaluable ApiExceptionFactory initializer |
 | BP011 | Error | Duplicate or empty descriptor name after the app's `[BlueprintAppOperationNames]` removal |
 

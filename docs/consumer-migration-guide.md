@@ -81,6 +81,15 @@ public partial class MyBlueprintApp : BlueprintApp { }
 
 The `partial` keyword is required — the source generator emits the `Register()` method, operation descriptors, and executor code into the other part of this class.
 
+**Behaviour change for operation names (v1.0.3).** Descriptor names — and so OpenAPI `operationId`s, request-body schema
+keys, `x-links` and anything reading `ApiOperationDescriptor.Name`, such as an authorisation manifest — are now formed
+exactly as legacy Blueprint formed them: `Query` and then `Command` are removed wherever they occur in the type name (not
+only as a suffix), and legacy's PascalCasing then folds acronyms. Coming from legacy Blueprint nothing changes. Coming
+from v1.0.2 or earlier, any operation whose name has adjacent capitals, a capital before a digit, or `Query`/`Command`
+mid-name is renamed: `GenerateVCardQuery` `GenerateVCard` → `GeneratevCard`, `GetInvoicesV2Query` `GetInvoicesV2` →
+`GetInvoicesv2`, `GetHTMLPreviewQuery` `GetHTMLPreview` → `GethtmlPreview`, `ExportCommandSample` `ExportCommandSample` →
+`ExportSample`. Regenerate clients from the new document, and rename an operation if `BP009` reports a new collision.
+
 ### 3. Generator wiring
 
 Reference the source generator as an analyzer in your app project:

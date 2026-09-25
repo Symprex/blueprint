@@ -86,7 +86,7 @@ public sealed partial class AppDataModelSourceGenerator
             {
                 registrations.Add(operation.ToDisplayString());
 
-                var strippedName = OperationNameHelpers.StripOperationSuffix(operation.Name);
+                var strippedName = OperationNameHelpers.GetDescriptorName(operation.Name);
                 if (!strippedNameToOperations.TryGetValue(strippedName, out var operationNames))
                 {
                     operationNames = new List<string>();

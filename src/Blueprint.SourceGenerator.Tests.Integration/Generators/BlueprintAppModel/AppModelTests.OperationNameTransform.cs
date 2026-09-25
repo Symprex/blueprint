@@ -20,6 +20,7 @@ public class AppModelOperationNameTransformTests
 {
     private const string WidgetPath = "/operation-names/sample-widgets/{Id}";
     private const string WidgetCopiesPath = "/operation-names/sample-widgets/{Id}/copies";
+    private const string VCardPath = "/operation-names/vcards/generate";
 
     [Fact]
     public void When_app_removes_substring_then_registered_descriptor_is_named_without_it()
@@ -38,12 +39,37 @@ public class AppModelOperationNameTransformTests
     }
 
     [Fact]
-    public void When_removal_exposes_a_Command_suffix_then_it_is_kept_because_suffix_stripping_ran_first()
+    public void When_Command_occurs_inside_a_name_then_it_is_replaced_before_the_removal_runs()
     {
         var app = new IntegrationTestBlueprintApp();
 
-        // Legacy stripped "ExportCommandSample" (no suffix to strip) and only then removed "Sample".
-        app.FindOperation(typeof(ExportCommandSample)).Name.Should().Be("ExportCommand");
+        // Legacy replaced "Command" anywhere in the type name (ApiOperationDescriptor.cs:50, S365 8b40ecc961), so
+        // "ExportCommandSample" was "ExportSample", and only then did the app's convention remove "Sample"
+        // (OperationScanner.cs:286-303).
+        app.FindOperation(typeof(ExportCommandSample)).Name.Should().Be("Export");
+    }
+
+    [Fact]
+    public void When_operation_name_has_an_acronym_then_its_descriptor_is_cased_as_legacy_did()
+    {
+        // Legacy StringExtensions.ToPascalCase lower-cased a capital not followed by a lower-case letter
+        // (StringExtensions.cs:100-117), so "GenerateVCard" became "GeneratevCard" (ApiOperationDescriptor.cs:50).
+        GenerateVCardQuery.Configure().Name.Should().Be("GeneratevCard");
+        new IntegrationTestBlueprintApp().FindOperation(typeof(GenerateVCardQuery)).Name.Should().Be("GeneratevCard");
+    }
+
+    [Fact]
+    public void When_openapi_document_is_rendered_then_operation_id_carries_the_legacy_casing()
+    {
+        // S365's Portal gates its vCard route on the operationId legacy rendered (getvCardConfiguration).
+        RenderDocument().RootElement
+            .GetProperty("paths")
+            .GetProperty(VCardPath)
+            .GetProperty("get")
+            .GetProperty("operationId")
+            .GetString()
+            .Should()
+            .Be("GeneratevCard");
     }
 
     [Fact]
@@ -244,8 +270,8 @@ public partial class SampleCopySampleWidgetCommand : ICommand<SampleWidgetApiRes
 }
 
 /// <summary>
-/// Has no <c>Query</c>/<c>Command</c> suffix until "Sample" is removed, pinning that the removal runs after suffix
-/// stripping, as legacy did.
+/// Contains <c>Command</c> in the middle of its name, pinning that it is replaced wherever it occurs and before the app
+/// removes "Sample", as legacy did.
 /// </summary>
 [AllowAnonymous]
 [RootLink("/operation-names/export-command-sample")]
@@ -254,5 +280,16 @@ public partial class ExportCommandSample : IQuery<string>
     public static Task<string> HandleAsync(ExportCommandSample query)
     {
         return Task.FromResult("exported");
+    }
+}
+
+/// <summary>Named <c>GeneratevCard</c> by legacy's casing, as S365's VCard operations were.</summary>
+[AllowAnonymous]
+[RootLink("/operation-names/vcards/generate")]
+public partial class GenerateVCardQuery : IQuery<string>
+{
+    public static Task<string> HandleAsync(GenerateVCardQuery query)
+    {
+        return Task.FromResult("BEGIN:VCARD");
     }
 }

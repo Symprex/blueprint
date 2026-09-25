@@ -214,12 +214,12 @@ Claim-building helpers such as `AuthenticateAsTenantAdministrator`, user-signup/
 ## OpenAPI / TypeScript
 
 ### OpenAPI shape: what must match
-The migration gate is not NSwag compatibility; it is raw OpenAPI JSON compatibility with S365’s custom Handlebars generators. The good news is that the critical shape already matches: `operationId` strips `Query`/`Command` suffixes just like S365, tags come from the last namespace segment, `x-links` uses `{ rel, operationId, method }`, `x-enumNames` is emitted, request and response bodies use `$ref` to component schemas, and nullable properties stay in OpenAPI 3.0-style `nullable: true` form.
+The migration gate is not NSwag compatibility; it is raw OpenAPI JSON compatibility with S365’s custom Handlebars generators. The good news is that the critical shape already matches: `operationId` is formed as legacy formed it (`Query`/`Command` removed anywhere, then legacy's acronym-folding PascalCasing, so `GetVCardConfigurationQuery` is `GetvCardConfiguration`), tags come from the last namespace segment, `x-links` uses `{ rel, operationId, method }`, `x-enumNames` is emitted, request and response bodies use `$ref` to component schemas, and nullable properties stay in OpenAPI 3.0-style `nullable: true` form.
 
 | Aspect | Legacy S365 / NSwag | Blueprint source-gen | Migration note |
 |--------|---------------------|----------------------|----------------|
 | OpenAPI version | `3.0.0` | `3.0.4` by default | Set `OpenApiVersion = "3.0.0"` if tooling demands it |
-| `operationId` | Class name without `Query`/`Command` | Same | Required by TS generator |
+| `operationId` | Class name without `Query`/`Command`, legacy-PascalCased (`GetvCardConfiguration`) | Same | Required by TS generator and S365's route guards |
 | Tags | Last namespace segment | Same | Verified against AdminPortal and Portal tag inventories |
 | `x-links` | Present on schemas | Same structure | Required for HATEOAS client methods |
 | Enum metadata | `x-enumNames` | `x-enumNames` + `x-enum-varnames` | Superset |
@@ -726,7 +726,7 @@ The property-ownership diagnostics are important because they describe most migr
 HTTP-shape conflicts are handled at compile time instead of by endpoint surprises. `BPOA002` reports conflicting HTTP method attributes, `BPLG001` and `BPLG006` validate link attributes and placeholder usage, and `BPLG007` now reports route collisions between different operations that claim the same route+method pair. That route-collision diagnostic aligns with the runtime endpoint-collision warning added during startup registration.
 
 ### Validation, result, and serializer diagnostics
-The remaining migration-critical diagnostics cluster around operation definitions and serializer setup. `BPV012` warns about meaningless `[Required]` usage on non-nullable value types, `BPV013` highlights `IValidatableObject` participation, `BP001` / `BP002` / `BP005` / `BP104` / `BP108` cover invalid pipeline and result declarations, `BPP001` guards `[DoNotSaveChanges]`, `BP006` enforces serializer-context coverage for problem details, `BP009` catches duplicate descriptor names after suffix stripping, and `BP010` rejects unevaluable `ApiExceptionFactory` initializers.
+The remaining migration-critical diagnostics cluster around operation definitions and serializer setup. `BPV012` warns about meaningless `[Required]` usage on non-nullable value types, `BPV013` highlights `IValidatableObject` participation, `BP001` / `BP002` / `BP005` / `BP104` / `BP108` cover invalid pipeline and result declarations, `BPP001` guards `[DoNotSaveChanges]`, `BP006` enforces serializer-context coverage for problem details, `BP009` catches duplicate descriptor names (as legacy named them: `Query`/`Command` removed anywhere, then cased), and `BP010` rejects unevaluable `ApiExceptionFactory` initializers.
 
 ### `ApiExceptionFactory` moved to compile time
 The `ApiExceptionFactory` work deserves to stay visible because it is a concrete migration win. `ApiExceptionFactoryModule` now scans operation fields at compile time, extracts status-code metadata from enum/int/cast initializers, projects those responses into OpenAPI, and raises `BP010` when it cannot evaluate an initializer safely. That replaces the old runtime reflection convention and directly benefits the handful of S365 operations that use `ApiExceptionFactory` patterns.
@@ -752,7 +752,7 @@ The best way to read the diagnostics section is that Blueprint now prefers compi
 | Mixed property ownership sources | `BPPO006` / `BPPO010` |
 | Route placeholder mismatch | `BPPO012` / `BPLG001` |
 | TypeConverter-only binding path | `BPPO011` |
-| Duplicate operation names after suffix stripping | `BP009` |
+| Duplicate operation names once `Query`/`Command` is removed and the name cased | `BP009` |
 | Missing problem-details serializer metadata | `BP006` |
 | Invalid `ApiExceptionFactory` initializer | `BP010` |
 | Route/method collisions | `BPLG007` |

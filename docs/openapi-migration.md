@@ -21,13 +21,17 @@ The new Blueprint pre-renders the OpenAPI document at startup and serves it as a
 
 | Aspect | Legacy Blueprint | Blueprint Source-Gen |
 |---|---|---|
-| Format | Class name with `Query`/`Command` stripped | Class name with `Query`/`Command` stripped (same) |
-| Example | `GetTemplate` (from `GetTemplateQuery`) | `GetTemplate` (from `GetTemplateQuery`) |
+| Format | Class name with `Query`/`Command` removed, then PascalCased | The same |
+| Example | `GetTemplate` (from `GetTemplateQuery`), `GeneratevCard` (from `GenerateVCardQuery`) | The same |
 
-Operation IDs are derived from the operation class name with trailing `Query` and `Command`
-suffixes removed. This matches legacy Blueprint convention and ensures TypeScript client
-generation compatibility. Operation types that do not end in `Query` or `Command` keep
-their full name as the operationId.
+Operation IDs are derived exactly as legacy Blueprint derived them
+(`ApiOperationDescriptor`: `Name.Replace("Query", "").Replace("Command", "").ToPascalCase()`): both words are removed
+wherever they occur in the class name, and legacy's `ToPascalCase` then lower-cases every capital after the first
+character that is not followed by a lower-case letter (except an `A` or `I` after a lower-case letter), so acronyms fold —
+`GetVCardConfigurationQuery` is `GetvCardConfiguration`, `GetItemsETagQuery` is `GetItemseTag`, `GetHTMLPreviewQuery` is
+`GethtmlPreview`. S365's
+generated TypeScript clients and route guards use those exact names. A type named only `Query` or `Command` keeps its
+name rather than legacy's empty one.
 
 ### 2. Path Conventions
 

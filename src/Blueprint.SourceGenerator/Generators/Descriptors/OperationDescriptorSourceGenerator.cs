@@ -224,7 +224,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
 
         // The keys do not matter, they are not used when generating the base call
         baseParameters.Add("type", "typeof(" + plan.Operation.TypeName + ")");
-        baseParameters.Add("name", "\"" + OperationNameHelpers.StripOperationSuffix(plan.Operation.TypeName) + "\"");
+        baseParameters.Add("name", "\"" + OperationNameHelpers.GetDescriptorName(plan.Operation.TypeName) + "\"");
         baseParameters.Add("where", "\"Source Generated\"");
 
         return codeBuilder.Build();

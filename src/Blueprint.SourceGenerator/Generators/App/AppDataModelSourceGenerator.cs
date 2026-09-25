@@ -72,12 +72,12 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
 
     private static readonly DiagnosticDescriptor _duplicateStrippedDescriptorNameRule = new(
         id: "BP009",
-        title: "Duplicate descriptor name after Query/Command suffix stripping",
-        messageFormat: "Operations {0} produce the same descriptor name '{1}' after stripping Query/Command suffixes. Rename one of them to avoid an OpenAPI operationId collision.",
+        title: "Duplicate descriptor name once Query/Command is removed and the name is cased",
+        messageFormat: "Operations {0} produce the same descriptor name '{1}' once 'Query' and 'Command' are removed and the name is cased. Rename one of them to avoid an OpenAPI operationId collision.",
         category: "AppDataModelSourceGenerator",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Blueprint strips 'Query' and 'Command' suffixes from operation type names to produce descriptor names that flow through to OpenAPI operationId values. When two operations produce the same stripped name (e.g. FooQuery and FooCommand both become Foo), the collision must be resolved by renaming one of the operations.");
+        description: "Blueprint names an operation as legacy Blueprint did: 'Query' and then 'Command' are removed wherever they occur in the type name, and the result is PascalCased with acronyms folded (GenerateVCardQuery becomes GeneratevCard). The name flows through to OpenAPI operationId values. When two operations produce the same name (e.g. FooQuery and FooCommand both become Foo, and GetVCardQuery and GetvCardCommand both become GetvCard), the collision must be resolved by renaming one of the operations.");
 
     private static readonly DiagnosticDescriptor _duplicateRemovedDescriptorNameRule = new(
         id: "BP011",
@@ -86,7 +86,7 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         category: "AppDataModelSourceGenerator",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "[BlueprintAppOperationNames(Remove = ...)] removes text from the descriptor name of every operation the app hosts, after Query/Command suffix stripping. When that gives two operations the same name, their OpenAPI operationIds, request-body schema keys and link operation names collide, so the collision must be resolved by renaming an operation or changing the removal.");
+        description: "[BlueprintAppOperationNames(Remove = ...)] removes text from the descriptor name of every operation the app hosts, once Query/Command has been removed and the name cased. When that gives two operations the same name, their OpenAPI operationIds, request-body schema keys and link operation names collide, so the collision must be resolved by renaming an operation or changing the removal.");
 
     // BP011's second form: a removal that leaves a name empty is the degenerate case of the same misconfiguration.
     private static readonly DiagnosticDescriptor _emptyRemovedDescriptorNameRule = new(
@@ -96,7 +96,7 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         category: "AppDataModelSourceGenerator",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "[BlueprintAppOperationNames(Remove = ...)] removes text from the descriptor name of every operation the app hosts, after Query/Command suffix stripping. When that removes the whole name, the operation has an empty OpenAPI operationId and request-body schema key, so the operation must be renamed or the removal changed.");
+        description: "[BlueprintAppOperationNames(Remove = ...)] removes text from the descriptor name of every operation the app hosts, once Query/Command has been removed and the name cased. When that removes the whole name, the operation has an empty OpenAPI operationId and request-body schema key, so the operation must be renamed or the removal changed.");
 
     private static readonly DiagnosticDescriptor _crossOperationRouteCollisionRule = new(
         id: "BPLG007",
