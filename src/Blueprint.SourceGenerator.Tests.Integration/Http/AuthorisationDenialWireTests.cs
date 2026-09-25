@@ -123,6 +123,22 @@ public sealed class AuthorisationDenialWireTests
     }
 
     [Fact]
+    public async Task An_anonymous_caller_of_an_operation_with_an_activity_is_refused_with_its_trace_id()
+    {
+        // Legacy's anonymous refusal was an UnhandledExceptionOperationResult like any other denial, so it carried the
+        // traceId too (UnhandledExceptionOperationResultExecutor.cs:35-38): the fixed body is only the no-activity case.
+        await using var host = await DenialHost.StartAsync(withLogging: true);
+
+        var (status, body) = await host.GetAsync("allow", user: null);
+
+        status.Should().Be(401);
+        using var document = JsonDocument.Parse(body);
+        document.RootElement.EnumerateObject().Select(static p => p.Name).Should().Equal("type", "title", "status", "traceId");
+        document.RootElement.GetProperty("title").GetString().Should().Be("Access denied. Anonymous access is not allowed.");
+        document.RootElement.GetProperty("traceId").GetString().Should().Be(DenialHost.TraceId);
+    }
+
+    [Fact]
     public async Task An_allowed_operation_is_not_denied()
     {
         await using var host = await DenialHost.StartAsync(withLogging: false);
