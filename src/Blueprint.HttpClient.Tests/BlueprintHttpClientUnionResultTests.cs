@@ -5,6 +5,7 @@ using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.Runtime.Http;
+using Blueprint.SourceGenerator.Sample;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
 using FluentAssertions;
 
@@ -204,5 +205,67 @@ public class BlueprintHttpClientUnionResultTests : IClassFixture<SampleAppFixtur
 
         result.IsT1.Should().BeTrue();
         result.AsT1.Should().BeSameAs(NoResultOperationResult.Instance);
+    }
+
+    // KeyOnlyResourceEventResult and HttpAcceptedResult are new-only (Signature365 declares neither), so these rest on what
+    // this host writes, not on legacy: each response below is the one HttpOperationResultExecutor writes for the member.
+    [Fact]
+    public async Task When_the_host_wrote_an_accepted_member_without_a_body_then_returns_it()
+    {
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(new HttpAcceptedResult());
+
+        var result = await client.SendAsync<Results<OkResult<TemplateApiResource>, HttpAcceptedResult>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT2.Should().BeTrue();
+        result.AsT2.Should().BeOfType<HttpAcceptedResult>();
+    }
+
+    [Theory]
+    [InlineData(ChangeType.Created)]
+    [InlineData(ChangeType.Updated)]
+    [InlineData(ChangeType.Deleted)]
+    public async Task When_the_host_wrote_a_key_only_resource_event_member_then_returns_it_with_its_change_type(ChangeType changeType)
+    {
+        // The host writes one as an empty 201, 200 or 204 by its change type; the body carries neither id, so neither is read.
+        var client = await this.CreateClientAnsweringAsTheHostWritesAsync(new KeyOnlyResourceEventResult(changeType, "template.changed", "t-1"));
+
+        var result = await client.SendAsync<Results<OkResult<TemplateApiResource>, KeyOnlyResourceEventResult>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT2.Should().BeTrue();
+        result.AsT2.ChangeType.Should().Be(changeType);
+        result.AsT2.EventId.Should().BeEmpty("an empty response carries no event id");
+        result.AsT2.ResourceId.Should().BeEmpty("an empty response carries no resource id");
+    }
+
+    private async Task<BlueprintHttpClient<SampleBlueprintApp>> CreateClientAnsweringAsTheHostWritesAsync(OperationResult written)
+    {
+        await using var services = new ServiceCollection()
+            .AddLogging()
+            .AddBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>()
+            .BuildServiceProvider();
+        var app = services.GetRequiredService<SampleBlueprintApp>();
+        var context = new ApiOperationContext(services, app, app.FindOperation(typeof(ArchiveTemplateCommand)), CancellationToken.None);
+        var httpContext = new DefaultHttpContext { RequestServices = services };
+        using var body = new MemoryStream();
+        httpContext.Response.Body = body;
+
+        (await new HttpOperationResultExecutor().TryExecuteAsync(httpContext, context, written)).Should().BeTrue();
+
+        var status = (HttpStatusCode)httpContext.Response.StatusCode;
+        var contentType = httpContext.Response.ContentType;
+        var bytes = body.ToArray();
+
+        return this._fixture.CreateClient(new FakeHttpHandler(_ =>
+        {
+            var response = new HttpResponseMessage(status);
+
+            if (contentType is not null || bytes.Length > 0)
+            {
+                response.Content = new ByteArrayContent(bytes);
+                response.Content.Headers.ContentType = contentType is null ? null : MediaTypeHeaderValue.Parse(contentType);
+            }
+
+            return response;
+        }));
     }
 }

@@ -1129,8 +1129,10 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <summary>
     /// Reads a successful response as the member of the <see cref="Results{T1, T2}"/> the host wrote. With no body, the
     /// first <see cref="StatusCodeResult"/> member whose status it is claims it: a nested status result by its own status,
-    /// the base type by the nested result of the response's status; as do an <see cref="HttpNoContentResult"/> a 204 and a
-    /// <see cref="NoResultOperationResult"/> a 200, which the host writes without a body. With a body that is not JSON, the first
+    /// the base type by the nested result of the response's status; as do an <see cref="HttpNoContentResult"/> a 204, a
+    /// <see cref="NoResultOperationResult"/> a 200, an <see cref="HttpAcceptedResult"/> a 202 and a
+    /// <see cref="KeyOnlyResourceEventResult"/> the 201, 200 or 204 of its change type, which the host writes without a body.
+    /// With a body that is not JSON, the first
     /// <see cref="PlainTextResult"/> member claims it. With a JSON body, the one member the host writes as a JSON body of
     /// that status claims it: a plain type or a resource event at any success status, an <see cref="OkResult{T}"/>,
     /// <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> at its own status, read as its content.
@@ -1197,6 +1199,23 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
                     member = NoResultOperationResult.Instance;
                 }
             }
+            else if (memberType == typeof(HttpAcceptedResult))
+            {
+                // The host writes one as an empty 202 with no content type.
+                if (mediaType is null && status == (int)HttpStatusCode.Accepted)
+                {
+                    member = new HttpAcceptedResult();
+                }
+            }
+            else if (memberType == typeof(KeyOnlyResourceEventResult))
+            {
+                // The host writes one as an empty 201, 200 or 204 with no content type, the status chosen by its change
+                // type, and writes nothing else of it.
+                if (mediaType is null && TryGetKeyOnlyChangeType(status, out var changeType))
+                {
+                    member = new KeyOnlyResourceEventResult(changeType);
+                }
+            }
             else if (memberType == typeof(PlainTextResult))
             {
                 if (mediaType is not null)
@@ -1214,6 +1233,24 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The change type a <see cref="KeyOnlyResourceEventResult"/> the host wrote with <paramref name="status"/> had: the host
+    /// sends a created one as a 201, an updated one as a 200 and a deleted one as a 204
+    /// (<c>HttpOperationResultExecutor.MapChangeTypeToStatusCode</c>).
+    /// </summary>
+    private static bool TryGetKeyOnlyChangeType(int status, out ChangeType changeType)
+    {
+        (var found, changeType) = status switch
+        {
+            (int)HttpStatusCode.Created => (true, ChangeType.Created),
+            (int)HttpStatusCode.OK => (true, ChangeType.Updated),
+            (int)HttpStatusCode.NoContent => (true, ChangeType.Deleted),
+            _ => (false, default(ChangeType)),
+        };
+
+        return found;
     }
 
     /// <summary>
