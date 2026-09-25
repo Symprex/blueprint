@@ -1562,7 +1562,10 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         response.StatusCode.Should().Be(StatusCodes.Status403Forbidden,
             "user with mismatched account_id should be blocked by tenant isolation");
         response.ContentType.Should().StartWith("application/problem+json");
-        response.Body.Should().Contain("Forbidden");
+
+        // The authoriser's message as the title of legacy's ForbiddenException, and never its reason, which names the tenant
+        // (Signature365 8b40ecc961, Authorisation/AuthorisationMiddlewareBuilder.cs:40-46; Errors/ForbiddenException.cs:14-18).
+        response.Body.Should().Be("""{"type":"unauthorized","title":"tenant-isolation","status":403}""");
     }
 
     [Fact]

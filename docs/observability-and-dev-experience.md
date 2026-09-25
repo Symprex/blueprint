@@ -98,12 +98,17 @@ All error responses use [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) `appl
 | Status | Result type | Body | Detail source |
 |--------|------------|------|---------------|
 | 400 | `BindingFailureResult` | `ProblemDetails` | Binding failure reason (e.g. "Invalid route parameter 'id'") |
-| 401 | `UnauthenticatedResult` | `ProblemDetails` | Fixed: "Authentication is required to access this resource." |
-| 403 | `ForbiddenResult` | `ProblemDetails` | Fixed: "You do not have permission to access this resource." |
+| 401 | `UnauthenticatedResult` | `ProblemDetails` | As legacy Blueprint wrote it: type `security_failure`; title the denying authoriser's `Message`, or "Access denied. Anonymous access is not allowed." for an anonymous caller; no detail |
+| 403 | `ForbiddenResult` | `ProblemDetails` | From an authoriser, as legacy wrote it: type `unauthorized`, title the authoriser's `Message`, no detail (its `Reason` is logged, never written). From a resource authorization provider: fixed "You do not have permission to access this resource." |
 | 415 | `UnsupportedMediaTypeResult` | `ProblemDetails` | Fixed: "The request content type is not supported. Expected 'application/json'." |
 | 422 | `ValidationFailedResult` | `ValidationProblemDetails` | Per-member validation errors from DataAnnotations / IValidatableObject |
 | 500 | `UnhandledExceptionResult` | `ProblemDetails` | Generic message unless `ExposeExceptionDetailsInErrorResponses` is true |
 | 4xx | `UnhandledExceptionResult` (via `ApiException`) | `ProblemDetails` | Exception message (intentionally developer-authored) |
+
+A 401, or an authoriser's 403, also carries a `traceId` extension (the operation activity's trace id) when the operation has
+an activity, as legacy's did, and an authoriser's denial is logged at Information under `Blueprint.Authorisation.AuthorisationMiddlewareBuilder`
+("Permission check failed. reason={0} authoriser={1}"). A denial whose failure type is not `Authorisation`, a default
+`ExecutionAllowed`'s included, is a 401, as legacy made it.
 
 ### Exception detail control
 

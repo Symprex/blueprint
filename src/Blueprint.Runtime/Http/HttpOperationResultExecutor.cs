@@ -22,6 +22,13 @@ public class HttpOperationResultExecutor
     private const string ProblemJsonContentType = "application/problem+json; charset=utf-8";
     private const string PlainTextContentType = "text/plain; charset=utf-8";
 
+    // The problem types and anonymous title legacy Blueprint's authorisation denials were written with (Signature365
+    // 8b40ecc961: Errors/UnauthorizedException.cs:16, Errors/ForbiddenException.cs:15,
+    // Authorisation/AuthorisationMiddlewareBuilder.cs:16).
+    private const string SecurityFailureProblemType = "security_failure";
+    private const string AuthorisationFailureProblemType = "unauthorized";
+    private const string AnonymousAccessDeniedTitle = "Access denied. Anonymous access is not allowed.";
+
     // Cached empty options for the rare case where no app-owned serializer context exists.
     private static readonly JsonSerializerOptions _emptyFallbackOptions = new();
 
@@ -30,9 +37,8 @@ public class HttpOperationResultExecutor
     private static readonly MvcProblemDetails _unauthorizedProblem = new()
     {
         Status = StatusCodes.Status401Unauthorized,
-        Title = "Unauthorized",
-        Type = "https://tools.ietf.org/html/rfc7235#section-3.1",
-        Detail = "Authentication is required to access this resource.",
+        Title = AnonymousAccessDeniedTitle,
+        Type = SecurityFailureProblemType,
     };
 
     private static readonly MvcProblemDetails _forbiddenProblem = new()
@@ -54,8 +60,9 @@ public class HttpOperationResultExecutor
     // Pre-serialized byte representations of the static error responses above.
     // Writing pre-serialized bytes eliminates per-request JSON serialization, buffer rental,
     // and Content-Length computation for the three most common error types.
+    // An anonymous caller's, as legacy wrote it when the operation had no activity (see WriteDenialAndReturnTrue).
     private static readonly byte[] _unauthorizedProblemBytes = System.Text.Encoding.UTF8.GetBytes(
-        """{"type":"https://tools.ietf.org/html/rfc7235#section-3.1","title":"Unauthorized","status":401,"detail":"Authentication is required to access this resource."}""");
+        """{"type":"security_failure","title":"Access denied. Anonymous access is not allowed.","status":401}""");
 
     private static readonly byte[] _forbiddenProblemBytes = System.Text.Encoding.UTF8.GetBytes(
         """{"type":"https://tools.ietf.org/html/rfc7231#section-6.5.3","title":"Forbidden","status":403,"detail":"You do not have permission to access this resource."}""");
@@ -131,12 +138,16 @@ public class HttpOperationResultExecutor
                 return _trueTask;
 
             // Pre-serialized static error responses — Body.WriteAsync often completes synchronously.
-            case UnauthenticatedResult:
-                httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                httpContext.Response.ContentType = ProblemJsonContentType;
-                httpContext.Response.ContentLength = _unauthorizedProblemBytes.Length;
-                return WritePreserializedAndReturnTrue(httpContext, _unauthorizedProblemBytes);
+            case UnauthenticatedResult { Failure: { } authenticationFailure }:
+                return WriteDenialAndReturnTrue(httpContext, operationContext, StatusCodes.Status401Unauthorized, SecurityFailureProblemType, authenticationFailure.Message, preserialized: null);
 
+            case UnauthenticatedResult:
+                return WriteDenialAndReturnTrue(httpContext, operationContext, StatusCodes.Status401Unauthorized, SecurityFailureProblemType, AnonymousAccessDeniedTitle, _unauthorizedProblemBytes);
+
+            case ForbiddenResult { Failure: { } authorisationFailure }:
+                return WriteDenialAndReturnTrue(httpContext, operationContext, StatusCodes.Status403Forbidden, AuthorisationFailureProblemType, authorisationFailure.Message, preserialized: null);
+
+            // A denial with no authoriser's detail, a resource authorization provider's, which legacy did not have.
             case ForbiddenResult:
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
                 httpContext.Response.ContentType = ProblemJsonContentType;
@@ -216,6 +227,72 @@ public class HttpOperationResultExecutor
     {
         await writeTask.ConfigureAwait(false);
         return true;
+    }
+
+    /// <summary>
+    /// Writes an authorisation denial as legacy Blueprint wrote the <c>UnauthorizedException</c> or
+    /// <c>ForbiddenException</c> its <c>AuthorisationMiddlewareBuilder</c> threw for one: the exception's type, title and
+    /// status, in that order, a null title left out, and a <c>traceId</c> extension when the operation has an activity
+    /// (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/UnhandledExceptionOperationResultExecutor.cs:35-58</c>,
+    /// <c>ProblemDetailsJsonConverter.cs:107-139</c>). Legacy's exception carried no detail on this path, so a denial's
+    /// reason is never written.
+    /// </summary>
+    /// <param name="httpContext">The HTTP context.</param>
+    /// <param name="operationContext">The operation's context, whose activity gives the trace id.</param>
+    /// <param name="status">The response status.</param>
+    /// <param name="type">The problem's type.</param>
+    /// <param name="title">The problem's title, the denial's message.</param>
+    /// <param name="preserialized">The body written when there is no activity, if it is fixed.</param>
+    /// <returns><see langword="true"/> when the body has been written.</returns>
+    private static Task<bool> WriteDenialAndReturnTrue(HttpContext httpContext, ApiOperationContext operationContext, int status, string type, string? title, byte[]? preserialized)
+    {
+        httpContext.Response.StatusCode = status;
+        httpContext.Response.ContentType = ProblemJsonContentType;
+
+        var activity = operationContext.Activity;
+
+        if (activity is null && preserialized is not null)
+        {
+            httpContext.Response.ContentLength = preserialized.Length;
+            return WritePreserializedAndReturnTrue(httpContext, preserialized);
+        }
+
+        var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+        buffer.Clear();
+
+        var writer = _threadLocalWriter;
+        if (writer is null)
+        {
+            writer = new Utf8JsonWriter(buffer);
+            _threadLocalWriter = writer;
+        }
+        else
+        {
+            writer.Reset(buffer);
+        }
+
+        writer.WriteStartObject();
+        writer.WriteString(_propType, type);
+
+        if (title is not null)
+        {
+            writer.WriteString(_propTitle, title);
+        }
+
+        writer.WriteNumber(_propStatus, status);
+
+        if (activity is not null)
+        {
+            writer.WriteString(_propTraceId, activity.TraceId.ToString());
+        }
+
+        writer.WriteEndObject();
+        writer.Flush();
+
+        httpContext.Response.ContentLength = buffer.WrittenCount;
+
+        var writeTask = WriteThreadBufferAsync(httpContext, buffer);
+        return writeTask.IsCompletedSuccessfully ? _trueTask : AwaitPreserializedWrite(writeTask);
     }
 
     /// <summary>
@@ -449,6 +526,12 @@ public class HttpOperationResultExecutor
     private static readonly JsonEncodedText _propChangedValues = JsonEncodedText.Encode("changedValues");
     private static readonly JsonEncodedText _propCorrelationId = JsonEncodedText.Encode("correlationId");
     private static readonly JsonEncodedText _valEvent = JsonEncodedText.Encode("event");
+
+    // Pre-encoded problem member names for an authorisation denial (WriteDenialAndReturnTrue).
+    private static readonly JsonEncodedText _propType = JsonEncodedText.Encode("type");
+    private static readonly JsonEncodedText _propTitle = JsonEncodedText.Encode("title");
+    private static readonly JsonEncodedText _propStatus = JsonEncodedText.Encode("status");
+    private static readonly JsonEncodedText _propTraceId = JsonEncodedText.Encode("traceId");
 
     /// <summary>
     /// Writes a <see cref="ResourceEventResult"/> as an event envelope directly via <see cref="Utf8JsonWriter"/>,

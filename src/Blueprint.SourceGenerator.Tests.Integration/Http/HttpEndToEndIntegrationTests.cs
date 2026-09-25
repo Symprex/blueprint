@@ -50,7 +50,10 @@ public class HttpEndToEndIntegrationTests
 
         response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
         response.ContentType.Should().StartWith("application/problem+json");
-        response.Body.Should().Contain("Unauthorized");
+
+        // Legacy's anonymous refusal, UnauthorizedException("Access denied. Anonymous access is not allowed.") (Signature365
+        // 8b40ecc961, Authorisation/AuthorisationMiddlewareBuilder.cs:16, :75-79; Errors/UnauthorizedException.cs:15-18).
+        response.Body.Should().Be("""{"type":"security_failure","title":"Access denied. Anonymous access is not allowed.","status":401}""");
     }
 
     [Fact]

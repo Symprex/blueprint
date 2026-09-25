@@ -889,9 +889,7 @@ public static class PipelineHelpers
 
                 if (!result.IsAllowed)
                 {
-                    return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                        ? UnauthenticatedResult.Instance
-                        : ForbiddenResult.Instance;
+                    return CreateAuthoriserDenial(context, authoriser, result);
                 }
             }
         }
@@ -907,14 +905,38 @@ public static class PipelineHelpers
 
                 if (!result.IsAllowed)
                 {
-                    return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                        ? UnauthenticatedResult.Instance
-                        : ForbiddenResult.Instance;
+                    return CreateAuthoriserDenial(context, authoriser, result);
                 }
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The result an authoriser's denial is, carrying the denial, as legacy Blueprint's
+    /// <c>AuthorisationMiddlewareBuilder.EnforceAsync</c> made it (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint/Authorisation/AuthorisationMiddlewareBuilder.cs:24-50</c>): a <see cref="ForbiddenResult"/> for an
+    /// <see cref="Authorization.ExecutionAllowedFailureType.Authorisation"/> failure, and an
+    /// <see cref="UnauthenticatedResult"/> for any other, a default result's included. It is logged first, as legacy
+    /// logged it: the only place the denial's reason goes.
+    /// </summary>
+    /// <param name="context">The operation's context.</param>
+    /// <param name="authoriser">The authoriser that denied it.</param>
+    /// <param name="result">The authoriser's denial.</param>
+    /// <returns>The denial's result.</returns>
+    private static OperationResult CreateAuthoriserDenial(ApiOperationContext context, object authoriser, Authorization.ExecutionAllowed result)
+    {
+        var logger = (context.ServiceProvider.GetService(typeof(ILoggerFactory)) as ILoggerFactory)?.CreateLogger(_permissionCheckLoggerCategory);
+
+        if (logger?.IsEnabled(LogLevel.Information) == true)
+        {
+            _logPermissionCheckFailed(logger, result.Reason, authoriser.GetType().Name, null);
+        }
+
+        return result.FailureType == Authorization.ExecutionAllowedFailureType.Authorisation
+            ? new ForbiddenResult(result)
+            : new UnauthenticatedResult(result);
     }
 
     /// <summary>
@@ -971,10 +993,7 @@ public static class PipelineHelpers
             var result = task.GetAwaiter().GetResult();
             if (!result.IsAllowed)
             {
-                return new ValueTask<OperationResult?>(
-                    result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                        ? UnauthenticatedResult.Instance
-                        : ForbiddenResult.Instance);
+                return new ValueTask<OperationResult?>(CreateAuthoriserDenial(context, apiAuthorisers[i], result));
             }
         }
 
@@ -991,10 +1010,7 @@ public static class PipelineHelpers
             var result = task.GetAwaiter().GetResult();
             if (!result.IsAllowed)
             {
-                return new ValueTask<OperationResult?>(
-                    result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                        ? UnauthenticatedResult.Instance
-                        : ForbiddenResult.Instance);
+                return new ValueTask<OperationResult?>(CreateAuthoriserDenial(context, operationAuthorisers[i], result));
             }
         }
 
@@ -1017,9 +1033,7 @@ public static class PipelineHelpers
         var pendingResult = await pendingTask.ConfigureAwait(false);
         if (!pendingResult.IsAllowed)
         {
-            return pendingResult.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                ? UnauthenticatedResult.Instance
-                : ForbiddenResult.Instance;
+            return CreateAuthoriserDenial(context, isApiPhase ? apiAuthorisers[startIndex] : operationAuthorisers[startIndex], pendingResult);
         }
 
         if (isApiPhase)
@@ -1032,9 +1046,7 @@ public static class PipelineHelpers
 
                 if (!result.IsAllowed)
                 {
-                    return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                        ? UnauthenticatedResult.Instance
-                        : ForbiddenResult.Instance;
+                    return CreateAuthoriserDenial(context, apiAuthorisers[i], result);
                 }
             }
 
@@ -1046,9 +1058,7 @@ public static class PipelineHelpers
 
                 if (!result.IsAllowed)
                 {
-                    return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                        ? UnauthenticatedResult.Instance
-                        : ForbiddenResult.Instance;
+                    return CreateAuthoriserDenial(context, operationAuthorisers[i], result);
                 }
             }
         }
@@ -1062,9 +1072,7 @@ public static class PipelineHelpers
 
                 if (!result.IsAllowed)
                 {
-                    return result.FailureType == Authorization.ExecutionAllowedFailureType.Authentication
-                        ? UnauthenticatedResult.Instance
-                        : ForbiddenResult.Instance;
+                    return CreateAuthoriserDenial(context, operationAuthorisers[i], result);
                 }
             }
         }
@@ -1561,6 +1569,16 @@ public static class PipelineHelpers
             LogLevel.Error,
             new EventId(5, "UnhandledException"),
             "An unhandled exception has occurred with message {ExceptionMessage}");
+
+    // Legacy logged every denial through ILogger<AuthorisationMiddlewareBuilder> before throwing (Signature365 8b40ecc961,
+    // Blueprint/Authorisation/AuthorisationMiddlewareBuilder.cs:26, :31-38), its reason's only outlet.
+    private static readonly string _permissionCheckLoggerCategory = "Blueprint.Authorisation.AuthorisationMiddlewareBuilder";
+
+    private static readonly Action<ILogger, string, string, Exception?> _logPermissionCheckFailed =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Information,
+            default,
+            "Permission check failed. reason={0} authoriser={1}");
 
     // Legacy's pipeline logged an escaped non-5xx ApiException as _NonException instead (Signature365 8b40ecc961,
     // AdminPortalCloseTenantCommandExecutorPipeline.cs:15, :165-169).
