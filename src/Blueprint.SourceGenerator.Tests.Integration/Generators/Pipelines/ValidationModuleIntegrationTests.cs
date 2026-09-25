@@ -735,7 +735,9 @@ public class ValidationModuleIntegrationTests
         RequiredItemsIfValidationOperation.HandlerCallCount.Should().Be(0);
         var validationResult = ((ValidationFailedResult)result).ValidationResults.Should().ContainSingle().Subject;
         validationResult.MemberNames.Should().Contain(nameof(RequiredItemsIfValidationOperation.Roles));
-        validationResult.ErrorMessage.Should().Be("The Roles field must contain at least one item if Enabled field is True.");
+
+        // Legacy's text (Signature365 8b40ecc961, Blueprint/Validation/RequiredItemsIfAttribute.cs:24, :34).
+        validationResult.ErrorMessage.Should().Be("The Roles field must contain at least one non-empty item if Enabled field is True.");
     }
 
     [Fact]

@@ -559,10 +559,12 @@ public class ValidationAttributeTests
         }
 
         [Fact]
-        public void Error_message_mentions_at_least_one_item()
+        public void Error_message_is_legacys()
         {
+            // Signature365 8b40ecc961, Blueprint/Validation/RequiredItemsIfAttribute.cs:24, :34, formatted with the display name
+            // by ValidationAttribute.FormatErrorMessage. Blank items fail too (:98), hence "non-empty".
             var msg = new RequiredItemsIfAttribute(nameof(TestModel.RestrictFormats), true).FormatErrorMessage("Formats");
-            msg.Should().Contain("Formats").And.Contain("at least one item");
+            msg.Should().Be("The Formats field must contain at least one non-empty item if RestrictFormats field is True.");
         }
     }
 
