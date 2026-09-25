@@ -202,9 +202,28 @@ public class HandlerExecutionModuleIntegrationTests
         RealBlueprintApiOperationsQueryHandler.LastCancellationToken.Should().Be(CancellationToken.None);
         RealBlueprintApiOperationsQueryHandler.LastLogger.Should().NotBeNull();
 
-        // Identity should fall back to AnonymousUserAuthorisationContext when no auth context is set
-        RealBlueprintApiOperationsQueryHandler.LastIdentity.Should().NotBeNull();
-        RealBlueprintApiOperationsQueryHandler.LastIdentity.Should().BeSameAs(AnonymousUserAuthorisationContext.Instance);
+        // Legacy injected the context's user as it was, null without an authenticated one: the handler's
+        // Identity = context.UserAuthorisationContext (Signature365 8b40ecc961, Portal
+        // GetMicrosoft365AddOnQueryExecutorPipeline.cs:123), which the UserContextLoader set only for an authenticated
+        // identity (:48-54). Signature365's anonymous signup relies on it, recording no creator.
+        RealBlueprintApiOperationsQueryHandler.LastIdentity.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task When_the_context_has_a_user_then_the_handlers_Identity_is_that_user()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var pipeline = executor.GetPipeline(typeof(RealBlueprintApiOperationsQuery));
+        var context = CreateContext(app, RealBlueprintApiOperationsQuery.Configure(), new RealBlueprintApiOperationsQuery { Input = "real-base" });
+        var user = NSubstitute.Substitute.For<IUserAuthorisationContext>();
+        context.UserAuthorisationContext = user;
+
+        RealBlueprintApiOperationsQueryHandler.Reset();
+
+        await pipeline.ExecuteAsync(context);
+
+        RealBlueprintApiOperationsQueryHandler.LastIdentity.Should().BeSameAs(user);
     }
 
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor, object operation, IServiceProvider? serviceProvider = null)

@@ -382,8 +382,11 @@ public static class HandlerDiscovery
         {
             "ApiOperationContext" when type.IsInNamespace("Blueprint", "Runtime", "Exec")
                 => "context",
+
+            // The context's user as it is, null without an authenticated one, as legacy set a handler's Identity
+            // (Signature365 8b40ecc961, e.g. Portal GetMicrosoft365AddOnQueryExecutorPipeline.cs:123).
             "IUserAuthorisationContext" when type.IsInNamespace("Blueprint", "Authorization")
-                => "context.UserAuthorisationContext ?? Blueprint.Authorization.AnonymousUserAuthorisationContext.Instance",
+                => "context.UserAuthorisationContext!",
             "CancellationToken" when type.IsInNamespace("System", "Threading")
                 => "context.OperationCancelled",
             "ILogger" when type.IsInNamespace("Microsoft", "Extensions", "Logging")

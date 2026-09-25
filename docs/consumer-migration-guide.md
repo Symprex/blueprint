@@ -284,6 +284,11 @@ carries the denial as `Failure`. Coming from legacy Blueprint nothing changes. C
 "Forbidden" bodies are gone, and a denial whose failure type is not `Authorisation` (a `default` `ExecutionAllowed`
 included) is a 401 where it was a 403.
 
+**Behaviour change for a handler's `Identity` (v1.0.3).** A handler property of type `IUserAuthorisationContext`
+(`BlueprintApiOperations.Identity`, or a consumer base class's) is given the operation's user as it is:
+`null` when there is no authenticated user, as legacy Blueprint gave it. Coming from legacy Blueprint nothing changes.
+Coming from v1.0.2, it was `AnonymousUserAuthorisationContext.Instance`: empty ids and the name `Anonymous`.
+
 **Behaviour change for form-level validation errors (v1.0.3).** A validation failure that names no member — an
 `IValidatableObject` result without member names, `new ValidationException(message)`, or
 `ValidationFailures.AddFailure(new ValidationResult(message))` — is keyed `form` in a 422's `errors`, and

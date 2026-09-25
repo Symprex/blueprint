@@ -44,7 +44,7 @@ namespace Blueprint.Generated
             var testQueryHandler = new global::TestNamespace.TestQueryHandler();
 
             testQueryHandler.Context = context;
-            testQueryHandler.Identity = context.UserAuthorisationContext ?? Blueprint.Authorization.AnonymousUserAuthorisationContext.Instance;
+            testQueryHandler.Identity = context.UserAuthorisationContext!;
             testQueryHandler.Logger = this.Logger;
             testQueryHandler.CancellationToken = context.OperationCancelled;
 

@@ -48,8 +48,8 @@ public abstract class BlueprintApiOperations
 
     /// <summary>
     /// Gets or sets the user authorization context for the current request. Injected by the
-    /// generated pipeline; falls back to <see cref="AnonymousUserAuthorisationContext"/> for
-    /// unauthenticated or non-HTTP operations.
+    /// generated pipeline, and <see langword="null"/> when the operation has no authenticated user (an
+    /// unauthenticated caller, a background task), as legacy Blueprint's handler <c>Identity</c> was.
     /// </summary>
     public IUserAuthorisationContext Identity { get; set; } = null!;
 
