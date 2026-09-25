@@ -11,11 +11,16 @@ The current Blueprint resource event architecture is **already well-optimized** 
 ```
 Handler returns ResourceEvent<T>
   → ResourceEventSelfQueryModule (stage -5): resolve SelfQuery if Data is null
-  → LinkGenerationModule (stage 0): hand the result to the runtime link population, which links Data (every link, self included, absolute)
   → ResourceExpansionModule (stage 1010): expand the event's Expandable<T> data
   → ResourceEventAuditModule (stage 1020, commands only): stamp, fill metadata, make Href, extract EventId + ResourceId, invoke audit sink
+  → LinkGenerationModule (Cleanup, before the return): hand the result to the runtime link population, which links Data (every link, self included, absolute)
   → PipelineReturnModule: serialize envelope to HTTP response
 ```
+
+Links are added after the audit, as legacy's `LinkGeneratorMiddlewareBuilder` ran after its
+`ResourceEventHandlerMiddlewareBuilder` (`AdminPortalCloseTenantCommandExecutorPipeline.cs:140-149`): the audited data
+carries only the links its handler, or its self query's own pipeline, gave it (Signature365 stored `"$links":{}` for
+handler-returned data).
 
 `ResourceEventAuditModule` activates for commands only, as legacy's `ResourceEventHandlerMiddlewareBuilder` matched
 `IsCommand` (Signature365 `8b40ecc961`, `ResourceEventHandlerMiddlewareBuilder.cs:12-15`). A query that returns a

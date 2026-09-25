@@ -125,13 +125,16 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             return;
         }
 
-        // Require the handler result variable from Execution stage
+        // Links are added last, after every post-execution step and so after the resource-event audit, just before the
+        // return: legacy's LinkGeneratorMiddlewareBuilder ran after its ResourceEventHandlerMiddlewareBuilder (Signature365
+        // 8b40ecc961, AdminPortalCloseTenantCommandExecutorPipeline.cs:140-149), so the data Signature365 audited carried
+        // only the links its handler, or its self query's own pipeline, had given it.
         context.RequireVariable(
             new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
-            PipelineStage.PostExecution);
+            PipelineStage.Cleanup);
 
         context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, RenderFullHateoasLinkPopulation);
+        context.AddRenderStep(PipelineStage.Cleanup, RenderFullHateoasLinkPopulation);
     }
 
     /// <summary>

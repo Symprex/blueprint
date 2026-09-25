@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class CreateResourceCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceEventAuditModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceEventAuditModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal CreateResourceCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "CreateResourceCommand", pipelineServices)
@@ -102,9 +102,6 @@ namespace Blueprint.Generated
 
             var handlerResult = await global::TestNamespace.CreateResourceCommand.HandleAsync(operation).ConfigureAwait(false);
 
-            // Populate full HATEOAS links (skip 304 Not Modified)
-            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
-
             if (handlerResult.WasSuccessful)
             {
 
@@ -130,6 +127,9 @@ namespace Blueprint.Generated
             }
 
             await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, this.Logger, "CreateResourceCommand").ConfigureAwait(false);
+
+            // Populate full HATEOAS links (skip 304 Not Modified)
+            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
 
             return handlerResult;
         }

@@ -258,6 +258,43 @@ public sealed class ResourceEventAuditRepositoryTests
     }
 
     [Fact]
+    public async Task A_commands_resource_event_is_audited_before_its_data_is_linked()
+    {
+        // Legacy's generated pipeline ran ResourceEventHandler, which audited the event (ResourceEventHandler.cs:72-77),
+        // before LinkGeneratorHandler.AddLinksAsync linked its data (Signature365 8b40ecc961,
+        // AdminPortalCloseTenantCommandExecutorPipeline.cs:140-146). So the data Signature365 stored had the links its
+        // handler gave it, none here: "$links":{} (EventStore.Tests/Handlers/ResourceEventCreatedEventHandlerTests.cs:70).
+        // The response, written after, carried them.
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint.AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>());
+
+        using var body = JsonDocument.Parse(await host.PostAsync("api/audited-events/widgets"));
+
+        records.Repository.Should().ContainSingle().Which.DataLinkRels.Should().BeEmpty("legacy audited the event before it linked the event's data");
+        body.RootElement.GetProperty("data").GetProperty("$links").GetProperty("self").GetProperty("href").GetString().Should().Be(
+            new Uri(host.Client.BaseAddress!, "api/href-events/widgets/widget-7").AbsoluteUri,
+            "legacy linked the data after auditing it, before writing it");
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_commands_resource_event_whose_data_its_self_query_loaded_is_audited_with_the_links_that_query_gave_it()
+    {
+        // Legacy loaded the data through the self query's nested pipeline (ResourceEventHandler.cs:49-52, :113-125), which
+        // linked its own result (LinkGeneratorMiddlewareBuilder.cs:14, SupportsNestedExecution), before the outer event
+        // was audited. So data a self query loaded was audited with its links.
+        var records = new AuditRecords();
+        await using var host = await AuditingHost.StartAsync(records, static blueprint => blueprint.AddResourceEventAuditRepository<RecordingResourceEventAuditRepository>());
+
+        await host.PutAsync("api/audited-events/widgets/widget-11");
+
+        records.Repository.Should().ContainSingle().Which.DataLinkRels.Should().Equal(
+            ["self"],
+            "the self query's own pipeline linked the widget it loaded before the event was audited");
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_querys_resource_event_is_given_no_metadata()
     {
         // Legacy's ResourceEventHandler, which filled the metadata, never ran for a query
@@ -288,13 +325,15 @@ public sealed class ResourceEventAuditRepositoryTests
     /// <param name="DataId">The id of the widget the event carries.</param>
     /// <param name="DepartmentName">The name of the department the employee the event carries belongs to, if expanded.</param>
     /// <param name="Metadata">The event's metadata, in its dictionary's order, each value as its string.</param>
+    /// <param name="DataLinkRels">The rels of the links the event's data carried when it was audited.</param>
     public sealed record AuditRecord(
         Type? OperationType,
         string? CorrelationId,
         string? Href,
         string? DataId,
         string? DepartmentName,
-        IReadOnlyList<(string Key, string? Value)> Metadata);
+        IReadOnlyList<(string Key, string? Value)> Metadata,
+        IReadOnlyList<string> DataLinkRels);
 
     /// <summary>A repository, registered scoped as <c>AddResourceEventAuditRepository</c> registers it, that records what it is given.</summary>
     public sealed class RecordingResourceEventAuditRepository(AuditRecords records) : IResourceEventAuditRepository
@@ -312,7 +351,8 @@ public sealed class ResourceEventAuditRepositoryTests
                 resourceEvent.Href,
                 (resourceEvent.Data as HrefWidgetApiResource)?.Id,
                 (resourceEvent.Data as AlwaysExpandTestEmployee)?.Department.Value?.Name,
-                resourceEvent.Metadata.Select(static m => (m.Key, m.Value?.ToString())).ToArray()));
+                resourceEvent.Metadata.Select(static m => (m.Key, m.Value?.ToString())).ToArray(),
+                (resourceEvent.Data as ILinkableResource)?.Links.Keys.ToArray() ?? []));
 
             return Task.CompletedTask;
         }
@@ -478,6 +518,11 @@ public sealed class ResourceEventAuditRepositoryTests
             return this.SendAsync(System.Net.Http.HttpMethod.Get, path, []);
         }
 
+        public Task<string> PutAsync(string path)
+        {
+            return this.SendAsync(System.Net.Http.HttpMethod.Put, path, []);
+        }
+
         private async Task<string> SendAsync(System.Net.Http.HttpMethod method, string path, (string Name, string Value)[] headers)
         {
             using var request = new System.Net.Http.HttpRequestMessage(method, path);
@@ -577,6 +622,20 @@ public partial class CreateAnnotatedAuditedWidgetCommand : ICommand<ResourceCrea
         created.WithMetadata("reason", "created-in-test").WithMetadata("IpAddress", "set-by-handler");
 
         return created;
+    }
+}
+
+/// <summary>Updates a widget, reporting it with a legacy updated event that names the widget by its self query.</summary>
+[AllowAnonymous]
+[RootLink("/audited-events/widgets/{Id}")]
+[HttpPut]
+public partial class UpdateAuditedWidgetCommand : ICommand<ResourceUpdated<HrefWidgetApiResource>>
+{
+    public string Id { get; set; } = null!;
+
+    public static ResourceUpdated<HrefWidgetApiResource> Handle(UpdateAuditedWidgetCommand command)
+    {
+        return new ResourceUpdated<HrefWidgetApiResource>(new GetHrefWidgetQuery { Id = command.Id });
     }
 }
 
