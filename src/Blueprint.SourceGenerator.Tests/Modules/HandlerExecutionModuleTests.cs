@@ -279,4 +279,101 @@ public class HandlerExecutionModuleTests
         pipelineSource.Should().Contain("context.UserPrincipal!");
         pipelineSource.Should().NotContain("GetRequiredService<System.Security.Claims.ClaimsPrincipal>");
     }
+
+    // Not legacy-derived: legacy compiled its pipelines at run time. A handler's service parameter is named by its author,
+    // so the local the pipeline resolves it into must not take a name the pipeline itself declares: its `context`
+    // parameter, its `operation`, `httpContext`, `applicablePopulators` and `handlerResult` locals, an instance handler's
+    // own local, a keyword, or another parameter's that differs only in case.
+    [Theory]
+    [InlineData("context")]
+    [InlineData("operation")]
+    [InlineData("httpContext")]
+    [InlineData("applicablePopulators")]
+    [InlineData("handlerResult")]
+    [InlineData("@event")]
+    public void When_handler_service_parameter_is_named_like_a_pipeline_local_then_pipeline_compiles(string parameterName)
+    {
+        var source = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public interface IGreeter
+                {
+                    string Greet(string name);
+                }
+
+                [AllowAnonymous]
+                [RootLink("/test/collisions/{Name}")]
+                public partial class CollidingParameterQuery : IQuery<string>
+                {
+                    public string Name { get; set; }
+
+                    public static Task<string> InvokeAsync(CollidingParameterQuery query, IGreeter {{parameterName}})
+                    {
+                        return Task.FromResult({{parameterName}}.Greet(query.Name));
+                    }
+                }
+            }
+            """;
+
+        var result = CompilePipelines(source);
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_instance_handler_parameters_are_named_like_its_local_or_differ_only_in_case_then_pipeline_compiles()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public interface IGreeter
+                {
+                    string Greet(string name);
+                }
+
+                public partial class GreetCommand : ICommand<string>
+                {
+                    public string Name { get; set; }
+                }
+
+                public class GreetCommandHandler
+                {
+                    public Task<string> HandleAsync(GreetCommand operation, IGreeter greetCommandHandler, IGreeter Greeter, IGreeter greeter)
+                    {
+                        return Task.FromResult(greetCommandHandler.Greet(operation.Name) + Greeter.Greet(operation.Name) + greeter.Greet(operation.Name));
+                    }
+                }
+            }
+            """;
+
+        var result = CompilePipelines(source);
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
+    private static MultiGeneratorGenerationResult CompilePipelines(string source)
+    {
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        return TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+    }
 }

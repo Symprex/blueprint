@@ -41,11 +41,11 @@ namespace Blueprint.Generated
             {
                 await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            var repository = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.IRepository>(context.ServiceProvider);
+            var _handlerArg_repository = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.IRepository>(context.ServiceProvider);
 
             var testCommandHandler = new global::TestNamespace.TestCommandHandler();
 
-            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<bool>(await testCommandHandler.HandleAsync(operation, repository).ConfigureAwait(false));
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<bool>(await testCommandHandler.HandleAsync(operation, _handlerArg_repository).ConfigureAwait(false));
 
 
             if (this.HasUnitOfWork)

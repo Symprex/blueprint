@@ -44,10 +44,10 @@ namespace Blueprint.Generated
             {
                 await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            var service = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.IMyService>(context.ServiceProvider);
-            var logger = this._cached_ILogger_TestNamespace_TestQuery;
+            var _handlerArg_service = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestNamespace.IMyService>(context.ServiceProvider);
+            var _handlerArg_logger = this._cached_ILogger_TestNamespace_TestQuery;
 
-            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.TestQuery.InvokeAsync(service, logger).ConfigureAwait(false));
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.TestQuery.InvokeAsync(_handlerArg_service, _handlerArg_logger).ConfigureAwait(false));
 
 
             if (this.AuditSink != null)
