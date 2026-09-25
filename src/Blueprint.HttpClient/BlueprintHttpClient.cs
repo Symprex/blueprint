@@ -1082,59 +1082,146 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     }
 
     /// <summary>
-    /// Reads a successful response as the member of the <see cref="Results{T1, T2}"/> the host wrote, trying the members
-    /// in declaration order: a <see cref="StatusCodeResult"/> when the status is its own and there is no body, a
-    /// <see cref="PlainTextResult"/> when the body is not JSON, and any other type, other than an operation result the
-    /// client cannot read back, when it is.
+    /// Reads a successful response as the member of the <see cref="Results{T1, T2}"/> the host wrote. With no body, the
+    /// first <see cref="StatusCodeResult"/> member whose status it is claims it: a nested status result by its own status,
+    /// the base type by the nested result of the response's status. With a body that is not JSON, the first
+    /// <see cref="PlainTextResult"/> member claims it. With a JSON body, the one member the host writes as a JSON body of
+    /// that status claims it: a plain type or a resource event at any success status, an <see cref="OkResult{T}"/>,
+    /// <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> at its own status, read as its content.
     /// </summary>
+    /// <remarks>
+    /// When more than one member could be that JSON body, the body cannot say which one the host wrote, so rather than read
+    /// it as whichever is declared first this throws, naming them: a runtime guard, as the union is the caller's choice of
+    /// response type and so is only known at the call.
+    /// </remarks>
     /// <param name="unionType">The closed <see cref="Results{T1, T2}"/> type.</param>
     /// <param name="response">The response.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The union holding the member read, or <see langword="null"/> when the response is none of them.</returns>
+    /// <exception cref="InvalidOperationException">More than one member could be the JSON body the host wrote.</exception>
     private async Task<object?> ReadUnionMemberAsync(Type unionType, HttpResponseMessage response, CancellationToken cancellationToken)
     {
         var mediaType = response.Content.Headers.ContentType?.MediaType;
         var isJson = mediaType is not null
                      && (mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase)
                          || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase));
+        var status = (int)response.StatusCode;
+        var memberTypes = unionType.GetGenericArguments();
 
-        foreach (var memberType in unionType.GetGenericArguments())
+        if (isJson)
+        {
+            var candidates = memberTypes.Where(memberType => IsJsonMemberOfStatus(memberType, status)).ToArray();
+
+            if (candidates.Length > 1)
+            {
+                throw new InvalidOperationException(
+                    $"The response ({status}, {mediaType}) could be more than one of the results {unionType} declares " +
+                    $"({string.Join(", ", candidates.Select(static c => c.ToString()))}), so which the host wrote cannot be told.");
+            }
+
+            return candidates.Length == 1
+                ? ToUnion(unionType, candidates[0], await this.ReadJsonMemberAsync(candidates[0], response, cancellationToken).ConfigureAwait(false))
+                : null;
+        }
+
+        foreach (var memberType in memberTypes)
         {
             object? member = null;
 
             if (typeof(StatusCodeResult).IsAssignableFrom(memberType))
             {
-                if (mediaType is null
-                    && memberType.GetField(nameof(StatusCodeResult.Accepted.Instance), BindingFlags.Public | BindingFlags.Static)?.GetValue(null) is StatusCodeResult singleton
-                    && singleton.StatusCode == (int)response.StatusCode)
+                if (mediaType is null && FindStatusCodeResult(memberType, status) is { } statusCodeResult)
                 {
-                    member = singleton;
+                    member = statusCodeResult;
                 }
             }
             else if (memberType == typeof(PlainTextResult))
             {
-                if (mediaType is not null && !isJson)
+                if (mediaType is not null)
                 {
                     var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
                     member = new PlainTextResult(text, response.StatusCode) { ContentType = mediaType };
                 }
             }
-            else if (isJson && !typeof(OperationResult).IsAssignableFrom(memberType))
-            {
-                member = await response.Content.ReadFromJsonAsync(memberType, this._jsonOptions, cancellationToken).ConfigureAwait(false);
-            }
 
             if (member is not null)
             {
-                // The union's constructor is private: its implicit conversion from the member is how a value is made.
-                var conversion = unionType.GetMethod("op_Implicit", BindingFlags.Public | BindingFlags.Static, [memberType])!;
-
-                return conversion.Invoke(null, [member])!;
+                return ToUnion(unionType, memberType, member);
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Makes the union holding <paramref name="member"/>: the union's constructor is private, so its implicit conversion
+    /// from the member is how a value is made.
+    /// </summary>
+    private static object? ToUnion(Type unionType, Type memberType, object? member)
+    {
+        return member is null
+            ? null
+            : unionType.GetMethod("op_Implicit", BindingFlags.Public | BindingFlags.Static, [memberType])!.Invoke(null, [member]);
+    }
+
+    /// <summary>
+    /// The <see cref="StatusCodeResult"/> a body-less response of <paramref name="status"/> is, as <paramref name="memberType"/>:
+    /// a nested status result's own singleton when the status is its own, or, for the base type, the singleton of whichever
+    /// nested result's status it is, as legacy's client made a <c>StatusCodeResult</c> of any status (Signature365
+    /// <c>8b40ecc961</c>, <c>Common.Core/Api/BlueprintHttpClient.cs:223-226</c>).
+    /// </summary>
+    private static StatusCodeResult? FindStatusCodeResult(Type memberType, int status)
+    {
+        var candidates = memberType == typeof(StatusCodeResult)
+            ? typeof(StatusCodeResult).GetNestedTypes(BindingFlags.Public).Where(static t => typeof(StatusCodeResult).IsAssignableFrom(t))
+            : [memberType];
+
+        return candidates
+            .Select(static t => t.GetField(nameof(StatusCodeResult.Accepted.Instance), BindingFlags.Public | BindingFlags.Static)?.GetValue(null))
+            .OfType<StatusCodeResult>()
+            .FirstOrDefault(singleton => singleton.StatusCode == status);
+    }
+
+    /// <summary>
+    /// Whether the host writes a <paramref name="memberType"/> as a JSON body with <paramref name="status"/>: a type that is
+    /// not an operation result, or a resource event, as a 200 or any other success status the caller reads it from; an
+    /// <see cref="OkResult{T}"/>, <see cref="CreatedResult{T}"/> or <see cref="AcceptedResult{T}"/> as its content with its
+    /// own status. No other operation result is read back from a body.
+    /// </summary>
+    private static bool IsJsonMemberOfStatus(Type memberType, int status)
+    {
+        if (typeof(ResourceEvent).IsAssignableFrom(memberType) || !typeof(OperationResult).IsAssignableFrom(memberType))
+        {
+            return true;
+        }
+
+        if (!memberType.IsGenericType)
+        {
+            return false;
+        }
+
+        var definition = memberType.GetGenericTypeDefinition();
+
+        return (definition == typeof(OkResult<>) && status == (int)HttpStatusCode.OK)
+               || (definition == typeof(CreatedResult<>) && status == (int)HttpStatusCode.Created)
+               || (definition == typeof(AcceptedResult<>) && status == (int)HttpStatusCode.Accepted);
+    }
+
+    /// <summary>
+    /// Reads the JSON body as <paramref name="memberType"/>, a semantic result as its content wrapped in it.
+    /// </summary>
+    private async Task<object?> ReadJsonMemberAsync(Type memberType, HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (!typeof(OperationResult).IsAssignableFrom(memberType) || typeof(ResourceEvent).IsAssignableFrom(memberType))
+        {
+            return await response.Content.ReadFromJsonAsync(memberType, this._jsonOptions, cancellationToken).ConfigureAwait(false);
+        }
+
+        var contentType = memberType.GetGenericArguments()[0];
+        var content = await response.Content.ReadFromJsonAsync(contentType, this._jsonOptions, cancellationToken).ConfigureAwait(false);
+
+        return content is null ? null : Activator.CreateInstance(memberType, content);
     }
 
     private async Task EnsureSuccessOrThrowAsync(

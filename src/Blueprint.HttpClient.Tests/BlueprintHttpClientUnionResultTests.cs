@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
@@ -19,6 +20,8 @@ namespace Blueprint.HttpClient.Tests;
 /// </remarks>
 public class BlueprintHttpClientUnionResultTests : IClassFixture<SampleAppFixture>
 {
+    private const string TemplateJson = """{"id":"t-1","name":"Found Template","htmlSource":"<p>x</p>","plainTextSource":"x","isArchived":false}""";
+
     private readonly SampleAppFixture _fixture;
 
     public BlueprintHttpClientUnionResultTests(SampleAppFixture fixture)
@@ -110,5 +113,70 @@ public class BlueprintHttpClientUnionResultTests : IClassFixture<SampleAppFixtur
         var act = () => client.SendAsync<Results<StatusCodeResult.Accepted, PlainTextResult>>(new ArchiveTemplateCommand { Id = "t-1" });
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*matches none of*");
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_a_resource_event_member_then_deserialises_it()
+    {
+        // The host writes a legacy resource event as a 200 JSON envelope (HttpOperationResultExecutor). Here it is an
+        // OperationResult; legacy's was a plain object its client read from any JSON body (Signature365 8b40ecc961,
+        // Common.Core/Api/BlueprintHttpClient.cs:199-211).
+        var client = this._fixture.CreateClient(new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                "{\"$object\":\"event\",\"eventId\":\"template.created\",\"changeType\":\"Created\",\"resourceObject\":\"template\",\"data\":" + TemplateJson + "}",
+                new MediaTypeHeaderValue("application/json")),
+        }));
+
+        var result = await client.SendAsync<Results<StatusCodeResult.Accepted, ResourceEvent<TemplateApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT2.Should().BeTrue();
+        result.AsT2.EventId.Should().Be("template.created");
+        result.AsT2.Data!.Name.Should().Be("Found Template");
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_a_status_only_response_for_the_base_status_code_member_then_returns_that_status()
+    {
+        // Legacy's client made a StatusCodeResult of the response's status for a response that was neither JSON nor text
+        // (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:223-226). The base type is abstract here, so it is
+        // the status's own result.
+        var client = this._fixture.CreateClient(new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.Accepted)));
+
+        var result = await client.SendAsync<Results<StatusCodeResult, PlainTextResult>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT1.Should().BeTrue();
+        result.AsT1.StatusCode.Should().Be(202);
+        result.AsT1.Should().BeSameAs(StatusCodeResult.Accepted.Instance);
+    }
+
+    [Fact]
+    public async Task When_the_host_wrote_an_ok_member_then_deserialises_its_content()
+    {
+        // The host writes an OkResult<T> as its content, a 200 JSON body; the Sample's GetTemplateQuery is such a union.
+        var client = this._fixture.CreateClient(new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(TemplateJson, new MediaTypeHeaderValue("application/json")),
+        }));
+
+        var result = await client.SendAsync<Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.IsT1.Should().BeTrue();
+        result.AsT1.Content.Name.Should().Be("Found Template");
+    }
+
+    [Fact]
+    public async Task When_two_members_could_be_the_json_the_host_wrote_then_throws()
+    {
+        // Both members are written as a 200 JSON body, so the body cannot say which one the host wrote: reading it as the
+        // first would silently hide a contract no response can satisfy.
+        var client = this._fixture.CreateClient(new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(TemplateJson, new MediaTypeHeaderValue("application/json")),
+        }));
+
+        var act = () => client.SendAsync<Results<TemplateApiResource, OkResult<TemplateApiResource>>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*more than one*");
     }
 }
