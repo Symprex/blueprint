@@ -193,11 +193,12 @@ public class TenantIsolationIntegrationTests
     }
 
     [Fact]
-    public async Task When_parsable_struct_TenantId_query_string_ignored_accessor_wins()
+    public async Task When_parsable_struct_TenantId_is_in_the_query_string_then_it_is_bound_and_the_accessor_does_not_replace_it()
     {
-        // TenantId is classified as AuthContext by PropertyOwnershipModule when tenancy is
-        // enabled, so it is never bound from the query string. The accessor value (from JWT
-        // claims via ITenantResolver) always wins — preventing tenant spoofing via URL.
+        // Legacy bound a GET's TenantId from its query string like any other property (Signature365 8b40ecc961,
+        // Portal/Internal/Generated/Blueprint/GetMicrosoft365AddOnQueryExecutorPipeline.cs:41-43), and SetTenantMiddleware
+        // left it alone once set, so that the authorisers saw the tenant the caller asked for and could refuse it
+        // (Common/Api/SetTenantMiddleware.cs:60-62, :68).
         var tenantAccessor = new TestTenantAccessor();
         var tenantResolver = new TestTenantResolver();
 
@@ -218,7 +219,6 @@ public class TenantIsolationIntegrationTests
             principal,
             serviceProvider);
 
-        // Set query string value — this should be ignored because TenantId is auth-owned
         ((DefaultHttpContext)context.HttpContext!).Request.QueryString = new QueryString("?tenantId=tenant-from-query");
 
         ParsableTenantOverviewQuery.Reset();
@@ -226,9 +226,7 @@ public class TenantIsolationIntegrationTests
         var result = await pipeline.ExecuteAsync(context);
 
         result.Should().BeOfType<OkResult<string>>();
-
-        // Accessor value wins — query string is ignored for TenantId (security: prevents spoofing)
-        ((OkResult<string>)result).Content.Should().Be("overview-tenant-99");
+        ((OkResult<string>)result).Content.Should().Be("overview-tenant-from-query");
         ParsableTenantOverviewQuery.HandlerCallCount.Should().Be(1);
     }
 

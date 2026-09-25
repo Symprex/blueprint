@@ -258,6 +258,16 @@ public sealed class TenantIsolationAuthoriser : IOperationAuthoriser
 blueprint.AddOperationAuthoriser<TenantIsolationAuthoriser>();
 ```
 
+**Behaviour change for a `TenantId` (v1.0.3).** An operation's `TenantId` is bound from the request — route, query
+string or body — like any other property, and appears in the OpenAPI document where the request carries it. `TenantModule`
+fills it from the caller's tenant only when the caller is authenticated and the request left it unset; a tenant the
+caller names is what the authorisers see, so an authoriser such as the one above is what stops a caller using another
+tenant's. For a type-converter `TenantId` (such as Signature365's `ApiId`), an authenticated caller with no tenant that
+leaves it unset has the converter called with null, as legacy's `ApiId.Hydrate(null)` was. Mark a `TenantId`
+`[FromAuthContext]` to take it from the caller's claims alone. Coming from legacy Blueprint nothing changes. Coming from
+v1.0.2, a non-route `TenantId` was never read from the request, was left out of the OpenAPI document, and was filled from
+the caller's tenant whether or not the caller was authenticated.
+
 For authorisers that need **both** execution and link visibility, implement `IApiAuthoriser` (which extends both `IOperationAuthoriser` and `ILinkVisibilityAuthoriser`):
 
 ```csharp

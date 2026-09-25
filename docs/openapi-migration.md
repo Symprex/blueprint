@@ -462,13 +462,14 @@ instead: that changes only the rendered `operationId` and leaves every other rea
 Resource schema names keep the prefix, and `BP011` fails the build if the removal gives two operations
 the same name or leaves one with an empty name.
 
-### TenantId Auto-Exclusion
+### TenantId
 
-S365 uses a `ConfigureOperation` callback to remove `TenantId` from OpenAPI parameters for
-authenticated operations. Blueprint source-gen handles this automatically via the tenant
-convention — when `ITenantAccessor` and `ITenantResolver` are in the compilation, `TenantId`
-properties are treated as `AuthContext`-sourced and excluded from OpenAPI. No manual
-configuration needed.
+A `TenantId` is bound from the request like any other property, so it is published where the request
+carries it: a path parameter when the route has `{TenantId}`, a query parameter of a GET, a body
+property otherwise — as legacy Blueprint published it. S365's Portal removed it from its document for
+operations that do not allow anonymous access, with a `ConfigureOperation` callback; port that as a
+processor passed to `configureOpenApiOperations` (see the consumer migration guide). A `TenantId`
+marked `[FromAuthContext]` is not read from the request and is not published.
 
 ### Security Scheme
 

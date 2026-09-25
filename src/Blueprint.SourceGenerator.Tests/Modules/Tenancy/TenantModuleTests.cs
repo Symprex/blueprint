@@ -466,7 +466,7 @@ public class TenantModuleTests
     }
 
     [Fact]
-    public void When_TenantId_not_in_route_then_descriptor_excludes_from_openapi()
+    public void When_TenantId_not_in_route_then_descriptor_binds_it_from_the_body()
     {
         const string source = """
             using Blueprint;
@@ -506,13 +506,10 @@ public class TenantModuleTests
         var descriptorSources = result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator));
         var descriptorSource = string.Join("\n", descriptorSources.Select(static s => s.SourceText));
 
-        // TenantId should be marked as AuthContext (excluded from OpenAPI) because tenancy is
-        // enabled and TenantId is not route-bound or explicitly bound via HTTP attribute.
-        descriptorSource.Should().Contain("PropertyBindingSource.AuthContext");
-        descriptorSource.Should().Contain("\"TenantId\"");
-
-        // Name should still be body-bound
-        descriptorSource.Should().Contain("PropertyBindingSource.Body");
+        // Legacy bound a command's TenantId from its body like any other property, and SetTenantMiddleware filled it only
+        // when that left it unset (Signature365 8b40ecc961, Common/Api/SetTenantMiddleware.cs:60-68).
+        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationPropertyBindingEntry(\"TenantId\", global::Blueprint.Model.PropertyBindingSource.Body, \"tenantId\"");
+        descriptorSource.Should().NotContain("PropertyBindingSource.AuthContext");
     }
 
     [Fact]

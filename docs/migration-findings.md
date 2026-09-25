@@ -12,8 +12,8 @@
 | Scope-pair provider | ✅ Done | `ScopePairClaimAuthorizationProvider` now matches S365 (`"::"`, CRUD hierarchy, ignored scopes, `allowWhenNoScopeClaims`) |
 | Claims-based auth removal | ✅ Done | Legacy claims-only authorization layer was removed; resource-based auth is the only path |
 | First-class tenancy | ✅ Done | `TenantModule` replaces runtime tenant population at compile time |
-| TenantId OpenAPI exclusion | ✅ Done | `TenantIdConventionHelper` classifies auto-populated `TenantId` as `AuthContext` and removes it from params/body |
-| Tenant spoofing prevention | ✅ Done | Query/body cannot override claim-derived `TenantId` unless route-owned or explicitly bound |
+| TenantId binding | ✅ Done | A `TenantId` is bound from the request and published like any other property, as legacy did; `[FromAuthContext]` takes it from the claims alone |
+| Caller-named tenant | ✅ Done | `TenantModule` fills `TenantId` only for an authenticated caller who left it unset (legacy `SetTenantMiddleware.cs:60-74`); refusing another tenant is the authorisers' job, as it was |
 | Testing host/executor parity | ✅ Verified | `BlueprintTestHost.ExecuteAsync()` maps 1:1 to S365 `TestApiOperationExecutor.ExecuteAsync()` |
 | Fixture/factory compatibility shims | ✅ Done | `BlueprintTestFixture`, factory, auth, bus, task, and Marten helpers cover S365-style test APIs |
 | OpenAPI base shape | ✅ Verified | `operationId`, tags, `x-links`, enum metadata, request/response `$ref`, and error schemas match S365 expectations |
@@ -154,7 +154,7 @@ The deeper audits all reached the same practical conclusion even when they used 
 S365’s legacy `SetTenantMiddleware` did four things: read the tenant claim, set the ambient tenant accessor, enrich Serilog diagnostic context, and populate `operation.TenantId` when possible. The compile-time `TenantModule` now replaces the first, second, and fourth pieces without reflection. Serilog enrichment is intentionally left as ordinary ASP.NET Core middleware because it is logging infrastructure, not operation-planning logic.
 
 ### Tenant ownership rules and spoofing prevention
-`TenantIdConventionHelper` is now shared between `TenantModule` and `PropertyOwnershipModule`, so auto-populated `TenantId` is treated as `AuthContext` consistently in both the pipeline and OpenAPI projection. When tenancy is enabled, properties named exactly `TenantId` are excluded from query/body ownership, kept out of OpenAPI inputs, and populated from the ambient tenant accessor unless the route owns the property or an explicit HTTP binding attribute says otherwise. That change also closed the spoofing hole where a query string could previously try to override the claim-derived tenant.
+A `TenantId` is bound from the request (route, query string or body) and published in the OpenAPI document like any other property, as legacy Blueprint bound it. `TenantModule` then fills it from the ambient tenant only when the caller is authenticated and the request left it unset, as S365's `SetTenantMiddleware` did (8b40ecc961, `Common/Api/SetTenantMiddleware.cs:60-74`): "we will NOT override any existing data because we want the auth system to ensure correct responses if the user does not have access to the tenant". A caller-named tenant is therefore refused by the authorisers, not ignored. Up to v1.0.2 a non-route `TenantId` was classified `AuthContext` and never read from the request, which broke callers that name a tenant (the Admin Portal asking the Portal about a tenant); v1.0.3 restores legacy's binding. `[FromAuthContext]` still takes a `TenantId` from the claims alone.
 
 ### Binding support for real S365 types
 Tenant auto-population is no longer limited to `string`. The generated code now supports `string`, `IParsable<T>`, `TryParse`, and `[TypeConverter]` types, which matters because S365 commonly uses `ApiId` for `TenantId`. A minimal resolver is enough for the migration:

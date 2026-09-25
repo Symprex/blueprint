@@ -17,6 +17,12 @@ namespace Blueprint.SourceGenerator.Modules.Tenancy;
 /// assignment that populates the property from the accessor — no reflection at runtime.
 /// </para>
 /// <para>
+/// The property is bound from the request first, like any other (<c>PropertyOwnershipModule</c>), and is filled only
+/// when the caller is authenticated and the request left it unset, as legacy's <c>SetTenantMiddleware</c> did. A tenant
+/// the caller names is therefore what the operation's authorisers see and must refuse if the caller may not use it. An
+/// operation whose <c>TenantId</c> must come from the caller's claims alone marks it <c>[FromAuthContext]</c>.
+/// </para>
+/// <para>
 /// Supported property types: <c>string</c>, any type implementing <c>IParsable&lt;T&gt;</c>
 /// (e.g. S365's <c>ApiId</c>), any type with a conventional <c>static TryParse</c> method,
 /// and types decorated with <c>[TypeConverter]</c>.
@@ -92,12 +98,14 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
             "    ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal);");
         context.WriteStatement("}");
 
-        // If the operation has a TenantId property, assign directly (no reflection).
+        // If the operation has a TenantId property, assign directly (no reflection). Legacy's SetTenantMiddleware
+        // (Signature365 8b40ecc961, Common/Api/SetTenantMiddleware.cs:60-74) filled it for an authenticated caller only,
+        // and only when the request had left it unset, so that a tenant the caller named reached the authorisers.
         if (tenantIdInfo is not null)
         {
             context.WriteBlankLine();
             context.If(
-                "this.TenantAccessor != null",
+                "this.TenantAccessor != null && context.UserPrincipal?.Identity?.IsAuthenticated == true",
                 ctx =>
                 {
                     RenderTenantIdAssignment(ctx, tenantIdInfo);
@@ -157,7 +165,11 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
 
             case TenantIdKind.TypeConverterOnly:
                 {
-                    // For TypeConverter-only types: use exception-based conversion with a try/catch guard.
+                    // For TypeConverter-only types: use exception-based conversion with a try/catch guard. The converter
+                    // is given the caller's tenant even when there is none, as legacy's ApiId.Hydrate(currentTenant) was
+                    // (SetTenantMiddleware.cs:68): Signature365's ApiId converter throws ArgumentOutOfRangeException for it
+                    // (Common.Core/Data/ApiId.cs:116-126), which is not caught, so an authenticated caller with no tenant
+                    // that names none fails as it did. A converter that cannot convert null throws NotSupportedException.
                     var fqType = info.TypeSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     var defaultCheck = info.IsNullable
                         ? "!operation.TenantId.HasValue"
@@ -166,13 +178,13 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
                             : "operation.TenantId == null";
 
                     ctx.If(
-                        $"{accessorCurrent} != null && {defaultCheck}",
+                        defaultCheck,
                         innerCtx =>
                         {
                             innerCtx.WriteStatement("try");
                             innerCtx.WriteStatement("{");
                             innerCtx.WriteStatement(
-                                $"    operation.TenantId = ({fqType})System.ComponentModel.TypeDescriptor.GetConverter(typeof({fqType})).ConvertFromInvariantString({accessorCurrent})!;");
+                                $"    operation.TenantId = ({fqType})System.ComponentModel.TypeDescriptor.GetConverter(typeof({fqType})).ConvertFromInvariantString({accessorCurrent}!)!;");
                             innerCtx.WriteStatement("}");
                             innerCtx.WriteStatement("catch (System.NotSupportedException) { }");
                         });
