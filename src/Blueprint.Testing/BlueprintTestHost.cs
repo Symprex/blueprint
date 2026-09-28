@@ -445,8 +445,6 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
 
     // Route-owned (RoutePlaceholderSyntax, R97/R111): the bound name is whatever is before a `:` (alternate resource
     // property) or `(` (legacy format specifier) — either, both or neither.
-    // Route-owned (RoutePlaceholderSyntax, R97/R111): the bound name is whatever is before a `:` (alternate resource
-    // property) or `(` (legacy format specifier) — either, both or neither.
     private static readonly Regex RouteParameterRegex = new(@"\{\*{0,2}([A-Za-z0-9_]+)(?:[:(][^}]*)?\}", RegexOptions.Compiled);
 
     /// <summary>

@@ -69,7 +69,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         isEnabledByDefault: true);
 
     private static readonly Regex _placeholderRegex = new(@"\{\*{0,2}[A-Za-z0-9]+\}", RegexOptions.Compiled);
-    private static readonly Regex _mappedPlaceholderRegex = new(@"\{(?<catchAll>\*{0,2})(?<routeName>[A-Za-z0-9]+)(:(?<resourcePropName>.*?))?(\((?<format>.*)\))?\}", RegexOptions.Compiled);
+
+    // routeName allows '_' (unlike _placeholderRegex above, which only ever matches a bare, unmapped {Name}/{*Name}):
+    // legacy's own placeholder parser took the property name as-is before any ':' or '(' (Signature365 8b40ecc961,
+    // Blueprint/ApiOperationLink.cs:29, propName = ".*?", unrestricted), so a property named e.g. User_Id worked in a
+    // mapped placeholder there. RoutePlaceholderSyntax (R97) already allows '_' for the same reason; this pattern is
+    // kept separate rather than unified with it because it also parses the ':alternate'/'(format)' suffixes
+    // RoutePlaceholderSyntax deliberately strips instead of capturing.
+    private static readonly Regex _mappedPlaceholderRegex = new(@"\{(?<catchAll>\*{0,2})(?<routeName>[A-Za-z0-9_]+)(:(?<resourcePropName>.*?))?(\((?<format>.*)\))?\}", RegexOptions.Compiled);
 
     /// <inheritdoc/>
     public void RegisterMarkerAttributes(IncrementalGeneratorPostInitializationContext initializationContext)
