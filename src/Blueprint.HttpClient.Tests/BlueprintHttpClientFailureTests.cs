@@ -245,8 +245,8 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
     [Fact]
     public async Task When_a_server_error_problem_writes_instance_in_another_casing_then_it_is_not_carried()
     {
-        // Legacy carried it as an extension (above) on a 5xx too; like the stack trace it names the remote end's internals,
-        // so it is dropped from a server error, as the instance member and the stack trace are.
+        // Not legacy-derived (R2): legacy carried it as an extension (above) on a 5xx too. Like the stack trace it names the
+        // remote end's internals, so it is dropped from a server error, as the instance member and the stack trace are.
         var client = this.CreateClient(
             HttpStatusCode.InternalServerError,
             $$"""{"type":"upstream_error","title":"Upstream service failed","status":500,"Instance":"https://{{InternalHost}}/templates/t-1","traceId":"0af7651916cd43dd8448eb211c80319c"}""",
