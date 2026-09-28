@@ -98,8 +98,10 @@ case is `{ resourceObject, data }`, and a union whose resources share a type nam
 `BlueprintHttpClient` reads such a union by the same property.
 
 The runtime model now follows that same serializer contract end to end: `Blueprint.Model.ApiResource` and
-`Blueprint.Model.Link` rely only on `System.Text.Json` attributes, so `$object`, `$links`, `$partial`, and null-link
-omission behavior no longer depend on leftover `Newtonsoft.Json` annotations in `Blueprint.Runtime.Model`.
+`Blueprint.Model.Link` rely only on `System.Text.Json` attributes, so `$object`, `$links` and `$partial` no longer depend on
+leftover `Newtonsoft.Json` annotations in `Blueprint.Runtime.Model`. A link without a type is written with
+`"type":null`, as legacy wrote it: legacy's only ignore on `Link.Type` was Newtonsoft's, and its output was
+`System.Text.Json` with no `DefaultIgnoreCondition`.
 
 `OpenApiSchemaProjectionContext` now also fails fast when a covered serializer-backed body type uses cross-property
 validation attributes that the current local property-constraint model cannot represent, including

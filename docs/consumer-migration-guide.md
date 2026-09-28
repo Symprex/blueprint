@@ -517,6 +517,12 @@ nothing changes. Coming from v1.0.2 or earlier, the key moves from one made from
 operation's, and a second Rel-less link on the same resource, which v1.0.2 silently dropped, is written again. Regenerate
 clients from the new document. `BPLG006` is retired.
 
+**Behaviour change for a link without a type (v1.0.3).** A link whose `Type` is null is written with `"type":null`:
+`{"href":"...","type":null}`. This covers a resource's own links, those of a resource event's data (and so what an audit
+stores), and the root-metadata document's. Legacy Blueprint wrote them that way. Coming from legacy nothing changes.
+Coming from v1.0.2 or earlier, each such link gains the member, which the OpenAPI document already described as
+nullable and not required.
+
 Link generation is automatic when link metadata exists — no `AddHateoasLinks()` call needed, and `BPMIG002` removes one
 that is present.
 

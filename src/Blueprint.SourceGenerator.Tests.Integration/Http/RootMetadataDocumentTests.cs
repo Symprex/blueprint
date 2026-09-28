@@ -92,6 +92,31 @@ public sealed class RootMetadataDocumentTests
     }
 
     [Fact]
+    public async Task When_the_root_document_is_rendered_then_each_root_link_is_written_with_a_null_type_as_legacy_wrote_it()
+    {
+        // RootMetadataOperation made each root link with its Href alone (RootMetadataOperation.cs:31-38), and legacy's
+        // Link.Type had only a Newtonsoft ignore (Blueprint/Link.cs:19-23) under System.Text.Json output with no
+        // DefaultIgnoreCondition (BlueprintJsonOptions.cs:22-45; BlueprintHttpOptionsSetup.cs:20-22), so it was written null.
+        await using var host = await RootMetadataHost.StartAsync("api/");
+
+        using var response = await host.Client.GetAsync("/api/");
+        var raw = await response.Content.ReadAsStringAsync();
+
+        raw.Should().Contain($$"""
+            "bulk-delete":{"href":"{{host.AbsoluteUri("/api/root-metadata/bulk-delete")}}","type":null}
+            """);
+
+        using var body = JsonDocument.Parse(raw);
+        foreach (var link in body.RootElement.GetProperty("$links").EnumerateObject())
+        {
+            link.Value.EnumerateObject().Select(static p => p.Name).Should().Equal(["href", "type"], "root link {0}", link.Name);
+            link.Value.GetProperty("type").ValueKind.Should().Be(JsonValueKind.Null, "root link {0}", link.Name);
+        }
+
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task When_an_operation_has_several_root_links_then_the_root_document_lists_each_and_each_routes()
     {
         // Legacy's RootLinkAttribute allowed several (Blueprint/RootLinkAttribute.cs:5, AllowMultiple = true); its scanner

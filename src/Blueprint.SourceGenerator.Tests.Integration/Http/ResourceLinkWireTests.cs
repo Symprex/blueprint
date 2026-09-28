@@ -69,6 +69,44 @@ public sealed class ResourceLinkWireTests
         host.ServerErrors.Should().BeEmpty();
     }
 
+    // Legacy's Link.Type carried only a Newtonsoft ignore (Signature365 8b40ecc961, Blueprint/Link.cs:19-23), and its HTTP
+    // output was System.Text.Json with BlueprintJsonOptions (Blueprint.Http/BlueprintHttpOptionsSetup.cs:20-22;
+    // Formatters/SystemTextJsonResultOutputFormatter.cs:64), which set no DefaultIgnoreCondition (BlueprintJsonOptions.cs:22-45);
+    // no Signature365 app changed either. EntityOperationResourceLinkGenerator made each resource link with its Href alone
+    // (EntityOperationResourceLinkGenerator.cs:104-107). So every such link was written {"href":...,"type":null}, as a
+    // program built from those two files verbatim writes it.
+    [Fact]
+    public async Task A_querys_resource_links_without_a_type_are_written_with_a_null_type_as_legacy_wrote_them()
+    {
+        await using var host = await LinkWireHost.StartAsync();
+
+        var raw = await host.SendAsync(System.Net.Http.HttpMethod.Get, "api/link-wire/widgets/widget-1");
+
+        raw.Should().Contain($$"""
+            "self":{"href":"{{host.AbsoluteUri("api/link-wire/widgets/widget-1")}}","type":null}
+            """);
+        raw.Should().Contain($$"""
+            "archive":{"href":"{{host.AbsoluteUri("api/link-wire/widgets/widget-1/archive")}}","type":null}
+            """);
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_commands_resource_event_data_links_without_a_type_are_written_with_a_null_type_as_legacy_wrote_them()
+    {
+        // The event's data was linked by the same generator (LinkGeneratorHandler.cs:17-21, :39-42) and written by the same
+        // serializer.
+        await using var host = await LinkWireHost.StartAsync();
+
+        var raw = await host.SendAsync(System.Net.Http.HttpMethod.Post, "api/link-wire/widgets");
+        using var body = JsonDocument.Parse(raw);
+
+        var self = body.RootElement.GetProperty("data").GetProperty("$links").GetProperty("self");
+        self.EnumerateObject().Select(static p => p.Name).Should().Equal(["href", "type"], "the response was {0}", raw);
+        self.GetProperty("type").ValueKind.Should().Be(JsonValueKind.Null);
+        host.ServerErrors.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task A_list_querys_items_are_written_with_every_link_absolute_self_included()
     {
