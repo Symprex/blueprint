@@ -111,7 +111,8 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
                         compilation,
                         executionPlanResult,
                         handler,
-                        sharedOperationLookup);
+                        sharedOperationLookup,
+                        compilationModel.TenantIdTypeName);
                     pipelinePlanResult.ReportDiagnostics(spc);
 
                     if (pipelinePlanResult.Value is null)
@@ -190,10 +191,17 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
     /// <summary>
     /// Model representing basic info about a BlueprintApp.
     /// </summary>
+    /// <param name="AppTypeName">The simple name of the BlueprintApp type.</param>
+    /// <param name="AppNamespace">The namespace of the BlueprintApp.</param>
+    /// <param name="AppType">The BlueprintApp type.</param>
+    /// <param name="TenantIdTypeName">
+    /// The fully qualified name of the app's <c>[BlueprintAppTenancy(TenantIdType = ...)]</c>, or <see langword="null"/>.
+    /// </param>
     private sealed record AppInfo(
         string AppTypeName,
         string AppNamespace,
-        INamedTypeSymbol AppType) : IEquatable<AppInfo>
+        INamedTypeSymbol AppType,
+        string? TenantIdTypeName) : IEquatable<AppInfo>
     {
         public bool Equals(AppInfo? other)
         {
@@ -203,7 +211,8 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
                 ? true
                 : this.AppTypeName == other.AppTypeName &&
                    this.AppNamespace == other.AppNamespace &&
-                   SymbolEqualityComparer.Default.Equals(this.AppType, other.AppType);
+                   SymbolEqualityComparer.Default.Equals(this.AppType, other.AppType) &&
+                   this.TenantIdTypeName == other.TenantIdTypeName;
         }
 
         public override int GetHashCode()
@@ -211,7 +220,8 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
             return System.HashCode.Combine(
                 this.AppTypeName,
                 this.AppNamespace,
-                SymbolEqualityComparer.Default.GetHashCode(this.AppType));
+                SymbolEqualityComparer.Default.GetHashCode(this.AppType),
+                this.TenantIdTypeName);
         }
     }
 

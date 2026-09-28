@@ -15,10 +15,16 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescri
 /// The app removes "Sample" from the name of every operation it hosts, which <c>AppModelOperationNameTransformTests</c>
 /// proves through. Any fixture operation whose name contains "Sample" is renamed by this app; name one otherwise
 /// unless the rename is the point.
+/// <para>
+/// It has only a <see cref="BoundTenantId"/> or <c>BoundTenantId?</c> <c>TenantId</c> filled from the caller's tenant, as
+/// Signature365's apps have only an <c>ApiId</c> one, which <c>TenantIdBindingWireTests</c> proves through. A
+/// <c>TenantId</c> of any other type is bound from the request but never filled.
+/// </para>
 /// </remarks>
 [BlueprintAppScan]
 [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(IntegrationTestAppJsonContext))]
 [BlueprintAppOperationNames(Remove = "Sample")]
+[BlueprintAppTenancy(TenantIdType = typeof(BoundTenantId))]
 public partial class IntegrationTestBlueprintApp : BlueprintApp;
 
 /// <summary>

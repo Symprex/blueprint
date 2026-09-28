@@ -190,6 +190,55 @@ public sealed class TenantIdBindingWireTests
     }
 
     [Fact]
+    public async Task A_string_TenantId_a_querys_query_string_leaves_out_is_not_filled_by_an_app_that_fills_only_its_TenantId_type()
+    {
+        // The app declares [BlueprintAppTenancy(TenantIdType = typeof(BoundTenantId))], as Signature365's apps declare
+        // ApiId. Legacy filled only an ApiId or ApiId? TenantId (SetTenantMiddleware.cs:65), so a string one the request
+        // left out stayed null: Signature365's GenerateSignatureCommand and IdentityServer TenantUsers operations.
+        await using var host = await TenantHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("tenant-binding/string-queries", Caller.Authenticated(CallerTenant));
+
+        status.Should().Be(200);
+        body.Should().Be("\"tenant=(unset)\"");
+    }
+
+    [Fact]
+    public async Task A_string_TenantId_in_a_querys_query_string_is_bound_by_an_app_that_fills_only_its_TenantId_type()
+    {
+        await using var host = await TenantHost.StartAsync();
+
+        var (status, body) = await host.GetAsync($"tenant-binding/string-queries?tenantId={NamedTenant}", Caller.Authenticated(CallerTenant));
+
+        status.Should().Be(200);
+        body.Should().Be($"\"tenant={NamedTenant}\"");
+    }
+
+    [Fact]
+    public async Task A_nullable_TenantId_of_the_apps_TenantId_type_a_querys_query_string_leaves_out_is_filled_from_the_callers_tenant()
+    {
+        // Legacy filled an ApiId? as it filled an ApiId (SetTenantMiddleware.cs:65, GetNonNullableType()).
+        await using var host = await TenantHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("tenant-binding/nullable-queries", Caller.Authenticated(CallerTenant));
+
+        status.Should().Be(200);
+        body.Should().Be($"\"tenant={CallerTenant}\"");
+    }
+
+    [Fact]
+    public async Task An_init_only_TenantId_a_querys_query_string_leaves_out_is_not_filled()
+    {
+        // Legacy skipped an init-only TenantId (SetTenantMiddleware.cs:65, :77-90).
+        await using var host = await TenantHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("tenant-binding/init-only-queries", Caller.Authenticated(CallerTenant));
+
+        status.Should().Be(200);
+        body.Should().Be("\"tenant=(unset)\"");
+    }
+
+    [Fact]
     public async Task A_client_sending_an_operation_whose_only_property_is_TenantId_is_answered_for_the_tenant_it_named()
     {
         // The Admin Portal answers AdminPortalGetMicrosoft365AddOnQuery by sending the Portal a GetMicrosoft365AddOnQuery with
@@ -609,6 +658,44 @@ public partial class BindTenantIdAnonymousCommand : ICommand<string>
     public static string Handle(BindTenantIdAnonymousCommand command)
     {
         return TenantBindingHandlers.Describe(command.TenantId);
+    }
+}
+
+/// <summary>
+/// A query with a string <c>TenantId</c>, which is not the app's <c>TenantIdType</c>: bound from the request, never filled.
+/// </summary>
+[RootLink("/tenant-binding/string-queries")]
+public partial class GetStringTenantIdQuery : IQuery<string>
+{
+    public string? TenantId { get; set; }
+
+    public static string Handle(GetStringTenantIdQuery query)
+    {
+        return TenantBindingHandlers.Describe(query.TenantId);
+    }
+}
+
+/// <summary>A query with a nullable <see cref="BoundTenantId"/> <c>TenantId</c>, the app's <c>TenantIdType</c>.</summary>
+[RootLink("/tenant-binding/nullable-queries")]
+public partial class GetNullableBoundTenantIdQuery : IQuery<string>
+{
+    public BoundTenantId? TenantId { get; set; }
+
+    public static string Handle(GetNullableBoundTenantIdQuery query)
+    {
+        return TenantBindingHandlers.Describe(query.TenantId?.Value);
+    }
+}
+
+/// <summary>A query with an init-only <see cref="BoundTenantId"/> <c>TenantId</c>.</summary>
+[RootLink("/tenant-binding/init-only-queries")]
+public partial class GetInitOnlyBoundTenantIdQuery : IQuery<string>
+{
+    public BoundTenantId TenantId { get; init; }
+
+    public static string Handle(GetInitOnlyBoundTenantIdQuery query)
+    {
+        return TenantBindingHandlers.Describe(query.TenantId.Value);
     }
 }
 

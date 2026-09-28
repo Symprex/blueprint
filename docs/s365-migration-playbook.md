@@ -1804,7 +1804,7 @@ Blueprint's `TenantModule` replaces `SetTenantMiddleware` entirely with compile-
 
 1. **Detects `TenantId` property** at compile time on each operation
 2. **Generates direct assignment** — no reflection, no property populator loop
-3. **Supports multiple types**: `string`, `IParsable<T>` (e.g. `ApiId`), `[TypeConverter]`
+3. **Supports multiple types**: `string`, `IParsable<T>`, `TryParse`, `[TypeConverter]` (e.g. `ApiId`); `[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]` on the app root fills only an `ApiId` or `ApiId?`, as `SetTenantMiddleware` did, and an init-only `TenantId` is never filled
 4. **Guards against route-bound override**: Only populates if property is default-valued
 5. **Sets OpenTelemetry tag** `enduser.tenant_id` (replaces Serilog enrichment)
 6. **Calls `ITenantResolver.ResolveTenantId(ClaimsPrincipal)`** for claim extraction
@@ -1822,7 +1822,13 @@ public class Signature365TenantResolver : ITenantResolver
 // 2. Register in DI (Blueprint registration handles ITenantAccessor automatically)
 blueprint.AddTenantResolver<Signature365TenantResolver>();
 
-// 3. Delete SetTenantMiddleware — it is no longer needed
+// 3. On each app root that ran SetTenantMiddleware, fill only an ApiId or ApiId? TenantId, as it did; a string
+//    TenantId the request leaves out then stays null, as it did
+[BlueprintAppScan]
+[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]
+public partial class PortalBlueprintApp : BlueprintApp;
+
+// 4. Delete SetTenantMiddleware — it is no longer needed
 ```
 
 ### What Changes

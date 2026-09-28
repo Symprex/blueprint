@@ -57,7 +57,10 @@ public partial class OperationExecutorPipelineSourceGenerator
         var model = new PipelineCompilationModel(
             appInfo.AppTypeName,
             appInfo.AppNamespace,
-            EquatableList<OperationHandlerModel>.TakeOwnership(handlers));
+            EquatableList<OperationHandlerModel>.TakeOwnership(handlers))
+        {
+            TenantIdTypeName = appInfo.TenantIdTypeName,
+        };
 
         // Return success with any warnings
         return diagnostics.Count > 0

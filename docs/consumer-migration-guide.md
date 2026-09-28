@@ -30,7 +30,7 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `ICommand` / `IQuery` | Same interfaces | No change |
 | `ValidationException` | `ValidationFailedResult` (no-exception fast path) | Transparent |
 | `IAuditSink` | Same interface, registered via `BlueprintServiceBuilder` | No change |
-| `SetTenantMiddleware` | `TenantModule` (compile-time) via `ITenantResolver` + `ITenantAccessor` DI registration | Registration change |
+| `SetTenantMiddleware` | `TenantModule` (compile-time) via `ITenantResolver` + `ITenantAccessor` DI registration, and `[BlueprintAppTenancy(TenantIdType = ...)]` on the app root to fill only legacy's `TenantId` type | Registration change |
 | `StartRebusTransactionScope` | `IMessageOutbox` via `AddMessageOutbox<T>()` | Consumer rewrite |
 | `SaveMartenChanges` middleware | `IUnitOfWork` via `AddUnitOfWork<T>()` | Registration change |
 | `IUnitOfWork` middleware | Built-in `UnitOfWorkModule` via `AddUnitOfWork<T>()` | No change |
@@ -267,6 +267,26 @@ leaves it unset has the converter called with null, as legacy's `ApiId.Hydrate(n
 `[FromAuthContext]` to take it from the caller's claims alone. Coming from legacy Blueprint nothing changes. Coming from
 v1.0.2, a non-route `TenantId` was never read from the request, was left out of the OpenAPI document, and was filled from
 the caller's tenant whether or not the caller was authenticated.
+
+**Behaviour change for which `TenantId` is filled (v1.0.3).** Only a `TenantId` with a public setter that is not `init` is
+filled; an init-only one, or one whose setter is not public, is never filled, as legacy's `SetTenantMiddleware` skipped an
+init-only one. An app root can also restrict filling to one type:
+
+```csharp
+[BlueprintAppScan]
+[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]
+public partial class PortalBlueprintApp : BlueprintApp;
+```
+
+With `TenantIdType` set, only a `TenantId` of that type or its `Nullable<T>` is filled, an unset non-nullable one
+included; a `TenantId` of any other type, such as a `string`, is bound from the request and otherwise left as the request
+left it. Without it, a `string`, `IParsable<T>`, `TryParse` or `[TypeConverter]` `TenantId` is filled. Coming from legacy
+Blueprint, set `TenantIdType = typeof(ApiId)` on every app root that ran `SetTenantMiddleware`: legacy filled only an
+`ApiId` or `ApiId?`, so a `string` `TenantId` the request left out stayed null. A `[FromAuthContext]` `TenantId` without
+a `ClaimType` is filled by the same rule, so in an app that declares another type it is never set: give it a `ClaimType`,
+or the app's type. Coming from v1.0.2, every supported type was filled whatever the app, and an init-only `TenantId`
+outside the route failed the build in its generated pipeline (CS8852), as did one with a private setter on an operation
+with no HTTP binding (CS0272).
 
 For authorisers that need **both** execution and link visibility, implement `IApiAuthoriser` (which extends both `IOperationAuthoriser` and `ILinkVisibilityAuthoriser`):
 

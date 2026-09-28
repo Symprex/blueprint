@@ -573,7 +573,8 @@ public sealed class BlueprintServiceBuilder
     /// <para>
     /// The generated pipeline's <c>TenantModule</c> calls the resolver during the Population stage,
     /// sets the accessor, and directly assigns <c>TenantId</c> properties on operations that have one
-    /// — all without runtime reflection.
+    /// — all without runtime reflection. An app root with <c>[BlueprintAppTenancy(TenantIdType = ...)]</c> has only a
+    /// <c>TenantId</c> of that type assigned.
     /// </para>
     /// </summary>
     /// <typeparam name="TAccessor">The <see cref="Blueprint.Tenancy.ITenantAccessor"/> implementation type.

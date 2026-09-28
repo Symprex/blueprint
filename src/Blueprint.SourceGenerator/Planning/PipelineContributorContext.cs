@@ -16,6 +16,7 @@ public readonly struct PipelineContributorContext
     private readonly PipelinePlan _plan;
     private readonly IOperationLookup _operationLookup;
     private readonly OperationHandlerModel? _handler;
+    private readonly string? _tenantIdTypeName;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PipelineContributorContext"/> class.
@@ -31,12 +32,36 @@ public readonly struct PipelineContributorContext
         PipelinePlan plan,
         IOperationLookup operationLookup,
         OperationHandlerModel? handler = null)
+        : this(contributorId, operation, plan, operationLookup, handler, tenantIdTypeName: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PipelineContributorContext"/> class for an operation hosted by an app
+    /// that declares its <c>TenantId</c> type.
+    /// </summary>
+    /// <param name="contributorId">The active contributor identifier.</param>
+    /// <param name="operation">The current operation.</param>
+    /// <param name="plan">The pipeline plan under construction.</param>
+    /// <param name="operationLookup">A lookup for related operations.</param>
+    /// <param name="handler">The discovered handler metadata when available.</param>
+    /// <param name="tenantIdTypeName">
+    /// The fully qualified name of the app's <c>[BlueprintAppTenancy(TenantIdType = ...)]</c>, or <see langword="null"/>.
+    /// </param>
+    public PipelineContributorContext(
+        string contributorId,
+        OperationModel operation,
+        PipelinePlan plan,
+        IOperationLookup operationLookup,
+        OperationHandlerModel? handler,
+        string? tenantIdTypeName)
     {
         this._contributorId = contributorId;
         this._operation = operation;
         this._plan = plan;
         this._operationLookup = operationLookup;
         this._handler = handler;
+        this._tenantIdTypeName = tenantIdTypeName;
     }
 
     /// <summary>
@@ -48,6 +73,13 @@ public readonly struct PipelineContributorContext
     /// Gets the discovered handler metadata when available.
     /// </summary>
     public OperationHandlerModel? Handler => this._handler;
+
+    /// <summary>
+    /// Gets the fully qualified name (<see cref="SymbolDisplayFormat.FullyQualifiedFormat"/>, a <c>Nullable&lt;T&gt;</c>
+    /// given as its <c>T</c>) of the only <c>TenantId</c> type the hosting app has filled from the caller's tenant, from
+    /// its <c>[BlueprintAppTenancy(TenantIdType = ...)]</c>, or <see langword="null"/> when it declares none.
+    /// </summary>
+    public string? TenantIdTypeName => this._tenantIdTypeName;
 
     /// <summary>
     /// Adds a render step for the active contributor.

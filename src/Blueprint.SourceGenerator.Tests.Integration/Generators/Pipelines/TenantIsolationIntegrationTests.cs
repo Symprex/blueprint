@@ -161,8 +161,11 @@ public class TenantIsolationIntegrationTests
     }
 
     [Fact]
-    public async Task When_parsable_struct_TenantId_not_in_route_and_accessor_has_value_then_populated_from_accessor()
+    public async Task When_parsable_struct_TenantId_is_not_the_apps_TenantIdType_and_the_request_leaves_it_unset_then_it_is_not_filled()
     {
+        // IntegrationTestBlueprintApp fills only a BoundTenantId TenantId, as Signature365's apps fill only an ApiId one:
+        // legacy's SetTenantMiddleware filled no other type (Signature365 8b40ecc961, Common/Api/SetTenantMiddleware.cs:65).
+        // TenantModuleTests prove an app that declares no TenantIdType has a parsable TenantId filled.
         var tenantAccessor = new TestTenantAccessor();
         var tenantResolver = new TestTenantResolver();
 
@@ -188,7 +191,8 @@ public class TenantIsolationIntegrationTests
         var result = await pipeline.ExecuteAsync(context);
 
         result.Should().BeOfType<OkResult<string>>();
-        ((OkResult<string>)result).Content.Should().Be("overview-tenant-42");
+        ((OkResult<string>)result).Content.Should().Be("overview-");
+        tenantAccessor.Current.Should().Be("tenant-42", "the tenant is still resolved; only the property is not filled");
         ParsableTenantOverviewQuery.HandlerCallCount.Should().Be(1);
     }
 
@@ -485,9 +489,9 @@ public readonly struct ParsableTenantId : IParsable<ParsableTenantId>, IEquatabl
 }
 
 /// <summary>
-/// Proves TenantModule auto-populates a non-string <c>ParsableTenantId TenantId</c> from
-/// <see cref="Blueprint.Tenancy.ITenantAccessor"/> when TenantId is NOT in the route template.
-/// Mirrors the 165 S365 operations where <c>ApiId TenantId</c> comes from JWT claims.
+/// An operation with a non-string <c>ParsableTenantId TenantId</c> that is not in the route template. It is bound from
+/// the request, but, not being the app's <c>TenantIdType</c>, never filled from
+/// <see cref="Blueprint.Tenancy.ITenantAccessor"/>.
 /// </summary>
 [MustBeAuthenticated]
 [RootLink("/overview")]
