@@ -17,7 +17,11 @@ namespace Blueprint.SourceGenerator.Modules.HttpClient;
 /// </summary>
 public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
-    private static readonly Regex _placeholderRegex = new(@"\{(?<star>\*{1,2})?(?<name>[^:}]+)(?::(?<constraint>[^}]+))?\}", RegexOptions.Compiled);
+    // Route-owned (RoutePlaceholderSyntax, R97/R111): the bound name is whatever is before a `:` (alternate resource
+    // property) or `(` (legacy format specifier) — either, or both, or neither. The old regex here only excluded `:`, so
+    // a `{Name(format)}` placeholder's whole "Name(format)" was taken as the property name and never matched, leaving the
+    // literal placeholder unsubstituted in the built URL.
+    private static readonly Regex _placeholderRegex = RoutePlaceholderSyntax.Placeholder;
 
     /// <inheritdoc />
     public string ModuleId => nameof(HttpClientRequestBuilderModule);
@@ -61,7 +65,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         var placeholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (Match match in _placeholderRegex.Matches(urlTemplate))
         {
-            placeholders.Add(match.Groups["name"].Value);
+            placeholders.Add(match.Groups[1].Value);
         }
 
         // Collect all public instance properties from the operation
@@ -168,8 +172,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
         foreach (Match match in _placeholderRegex.Matches(urlTemplate))
         {
-            var name = match.Groups["name"].Value;
-            var isCatchAll = match.Groups["star"].Success;
+            var name = match.Groups[1].Value;
+
+            // RoutePlaceholderSyntax.Placeholder has no separate "star" group (the `\*{0,2}` is inline, uncaptured), so a
+            // catch-all is read off the placeholder's own text instead.
+            var isCatchAll = match.Value.Length > 1 && match.Value[1] == '*';
 
             if (!propertyLookup.TryGetValue(name, out var prop))
             {

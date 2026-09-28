@@ -719,11 +719,12 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
                 placeholder = placeholder[1..];
             }
 
-            // Strip format specifier
-            var colon = placeholder.IndexOf(':');
-            if (colon >= 0)
+            // Strip a resource-property alternate name (":") or a legacy format specifier ("(") — route-owned,
+            // RoutePlaceholderSyntax, R97/R111.
+            var separator = placeholder.IndexOfAny(':', '(');
+            if (separator >= 0)
             {
-                placeholder = placeholder[..colon];
+                placeholder = placeholder[..separator];
             }
 
             names.Add(placeholder.ToString());
@@ -820,13 +821,14 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
             var placeholder = result.Substring(openBrace + 1, closeBrace - openBrace - 1);
 
-            // Strip catch-all prefix and format specifier
+            // Strip catch-all prefix and a resource-property alternate name (":") or legacy format specifier ("(") —
+            // route-owned, RoutePlaceholderSyntax, R97/R111.
             var isCatchAll = placeholder.StartsWith('*');
             var propertyName = placeholder.TrimStart('*');
-            var colonIndex = propertyName.IndexOf(':');
-            if (colonIndex >= 0)
+            var separatorIndex = propertyName.IndexOfAny(':', '(');
+            if (separatorIndex >= 0)
             {
-                propertyName = propertyName[..colonIndex];
+                propertyName = propertyName[..separatorIndex];
             }
 
             var properties = _propertyCache.GetOrAdd(

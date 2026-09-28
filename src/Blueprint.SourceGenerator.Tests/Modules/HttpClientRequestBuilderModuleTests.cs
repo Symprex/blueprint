@@ -311,6 +311,60 @@ public class HttpClientRequestBuilderModuleTests
         source.Should().NotContain("typed.Reason");
     }
 
+    [Fact]
+    public void When_route_placeholder_has_a_legacy_format_specifier_then_its_property_is_still_bound()
+    {
+        // R111: {Name(format)} is route-owned via RoutePlaceholderSyntax (R97) — the bound name is whatever is before a
+        // `:` or `(`. The old regex here only excluded `:`, so "Id(N)" was taken whole as the property name, matched no
+        // property, and the placeholder was left in the built URL literally.
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id(N)}")]
+            public partial class GetFormattedWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetFormattedWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetFormattedWidgetQuery");
+        source.Should().Contain("CompiledHttpRequestFeatureData");
+        source.Should().Contain("typed.Id is null");
+        source.Should().Contain("EscapeDataString(typed.Id)");
+    }
+
+    [Fact]
+    public void When_route_has_a_catch_all_placeholder_then_its_property_is_not_url_escaped()
+    {
+        // R111: isCatchAll is now read off the placeholder's own text (RoutePlaceholderSyntax.Placeholder has no
+        // separate "star" group), not a regex group — guards that derivation.
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/files/{*FolderPath}")]
+            public partial class GetFileQuery : IQuery<string>
+            {
+                public string FolderPath { get; set; }
+
+                public static Task<string> HandleAsync(GetFileQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetFileQuery");
+        source.Should().Contain("typed.FolderPath");
+        source.Should().NotContain("EscapeDataString(typed.FolderPath");
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(

@@ -296,4 +296,43 @@ public sealed class QueryStringSerializationTests
 
         return captured!.RequestUri!.Query;
     }
+
+    // ──────────────────────────────────────────────
+    //  R111: {Name(format)} route placeholders (ExtractPlaceholderNames :717, SubstitutePlaceholders :820)
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task A_route_placeholder_with_a_legacy_format_specifier_is_bound_from_the_route_and_excluded_from_the_query_string()
+    {
+        // {Name(format)} is route-owned via RoutePlaceholderSyntax (R97) — the bound name is whatever is before a `:` or
+        // `(`. These two reflection-based parsers only stripped `:`, so "Q(f)" was taken whole as the property name: the
+        // URL kept the literal placeholder unsubstituted (SubstitutePlaceholders returned null for the whole template,
+        // so ResolveUrl fell through to no URL at all), and "Q" was not recognised as route-owned by
+        // AppendQueryStringFallback, so it would also have been added to the query string.
+        var descriptor = new ApiOperationDescriptor(typeof(StringQueryOperation), nameof(StringQueryOperation), "test");
+        descriptor.AddUrl(new ApiOperationUrl("/x/{Q(f)}"));
+        descriptor.SetFeatureData(new OperationHttpMethodMetadataFeatureData(ImmutableArray.Create("GET")));
+
+        var app = new BlueprintApp();
+        app.Register(descriptor);
+
+        HttpRequestMessage? captured = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            captured = req;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            };
+        });
+
+        var httpClient = new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri("https://localhost") };
+        var client = new BlueprintHttpClient<BlueprintApp>(httpClient, app);
+
+        await client.SendAsync<System.Text.Json.JsonElement>(new StringQueryOperation { Q = "abc" });
+
+        captured.Should().NotBeNull();
+        captured!.RequestUri!.AbsolutePath.Should().Be("/x/abc");
+        captured.RequestUri.Query.Should().NotContain("Q=");
+    }
 }
