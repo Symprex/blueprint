@@ -84,6 +84,22 @@ public sealed class DeleteBodyWireTests
         body.Should().Be("\"id=folder-1;force=False\"");
     }
 
+    [Theory]
+    [InlineData("PATCH", "e2e/templates/stray-1", "id:stray-1|description:")]
+    [InlineData("PUT", "e2e/settings/stray-1", "id:stray-1|value:")]
+    public async Task A_PATCH_or_PUT_with_a_stray_non_JSON_content_type_is_bound_from_its_route_alone(string method, string url, string expectedBody)
+    {
+        // R116: legacy's silent ignore is not only DELETE/HEAD/OPTIONS (R108) — POST/PUT/PATCH too, for the same reason
+        // (HttpBodyMessagePopulationSource.cs:80-86 at Signature365 8b40ecc961): no parser selected, no error, the
+        // operation left as it was.
+        await using var host = await DeleteBodyHost.StartAsync();
+
+        var (status, body) = await host.SendWithStrayContentTypeAsync(new HttpMethod(method), url);
+
+        status.Should().Be(200);
+        body.Should().Be($"\"{expectedBody}\"");
+    }
+
     [Fact]
     public async Task A_DELETEs_query_string_is_not_read_for_a_property_its_body_owns()
     {
@@ -170,6 +186,21 @@ public sealed class DeleteBodyWireTests
             using var request = new HttpRequestMessage(HttpMethod.Delete, url)
             {
                 Content = new StringContent(string.Empty, Encoding.UTF8, "text/plain"),
+            };
+
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            using var response = await this.Client.SendAsync(request);
+
+            return ((int)response.StatusCode, await response.Content.ReadAsStringAsync());
+        }
+
+        /// <summary>Sends a request of <paramref name="method"/> with a stray, non-JSON Content-Type header and a non-empty body.</summary>
+        public async Task<(int Status, string Body)> SendWithStrayContentTypeAsync(HttpMethod method, string url)
+        {
+            using var request = new HttpRequestMessage(method, url)
+            {
+                Content = new StringContent("not json", Encoding.UTF8, "text/plain"),
             };
 
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));

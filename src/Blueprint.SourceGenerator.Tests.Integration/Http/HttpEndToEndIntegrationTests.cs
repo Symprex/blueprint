@@ -108,8 +108,12 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
-    public async Task When_POST_with_non_json_content_type_then_returns_415()
+    public async Task When_POST_with_non_json_content_type_then_the_body_is_ignored_and_it_runs()
     {
+        // R116: legacy read the body of every non-GET method through whichever IBodyParser.CanRead matched the content
+        // type, and silently left the operation unpopulated when none did, for POST/PUT/PATCH alike, not only
+        // DELETE/HEAD/OPTIONS (R108) (Signature365 8b40ecc961, HttpBodyMessagePopulationSource.cs:80-86). No 415 anywhere
+        // in that path.
         var endpoints = CreateEndpoints();
         endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
 
@@ -123,9 +127,8 @@ public class HttpEndToEndIntegrationTests
             context.Request.Body = new MemoryStream("hello"u8.ToArray());
         });
 
-        response.StatusCode.Should().Be(StatusCodes.Status415UnsupportedMediaType);
-        response.ContentType.Should().StartWith("application/problem+json");
-        response.Body.Should().Contain("Unsupported Media Type");
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Be("\"created:\"");
     }
 
     [Fact]
@@ -1348,8 +1351,11 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
-    public async Task When_POST_with_wrong_content_type_then_returns_415()
+    public async Task When_POST_with_wrong_content_type_then_the_body_is_ignored_and_required_fields_fail_validation()
     {
+        // R116: the same silent-ignore as the items endpoint above; this operation has required fields the body would
+        // have populated, so ignoring it fails validation exactly as an empty body does
+        // (When_POST_with_empty_body_on_required_fields_then_returns_422, same route), not a 415.
         var endpoints = CreateEndpoints();
         endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
 
@@ -1363,7 +1369,7 @@ public class HttpEndToEndIntegrationTests
             context.Request.Body = new MemoryStream("<r/>"u8.ToArray());
         });
 
-        response.StatusCode.Should().Be(StatusCodes.Status415UnsupportedMediaType);
+        response.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
     }
 
     [Fact]

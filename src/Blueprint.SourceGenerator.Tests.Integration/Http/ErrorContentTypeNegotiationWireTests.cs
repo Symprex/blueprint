@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Text;
 using Blueprint.Authorization;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
@@ -43,6 +42,10 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 /// </remarks>
 public sealed class ErrorContentTypeNegotiationWireTests
 {
+    // R116: a stray non-JSON content type on the wire no longer 415s for any method — legacy silently ignored the body,
+    // for every non-GET method alike — so "unsupported-media-type-415" no longer has a wire route that produces one; its
+    // content negotiation is proven directly against the executor instead, in
+    // UnsupportedMediaTypeResult_negotiates_content_type_like_other_errors below.
     public static TheoryData<string> Errors => new(
         "denial-401",
         "denial-403",
@@ -50,7 +53,6 @@ public sealed class ErrorContentTypeNegotiationWireTests
         "binding-400",
         "api-exception-404",
         "unhandled-500",
-        "unsupported-media-type-415",
         "unwritable-result-500");
 
     [Theory]
@@ -158,6 +160,40 @@ public sealed class ErrorContentTypeNegotiationWireTests
 
         written.Should().BeTrue();
         httpContext.Response.ContentType.Should().Be("text/json");
+    }
+
+    [Theory]
+    [InlineData(null, "application/json")]
+    [InlineData("application/problem+json", "application/problem+json")]
+    public async Task UnsupportedMediaTypeResult_negotiates_content_type_like_other_errors(string? accept, string expected)
+    {
+        // R116 removed the only production path that wrote UnsupportedMediaTypeResult over the wire (a stray non-JSON
+        // request content type no longer 415s, for any method). The type itself is unchanged and still a legitimate
+        // OperationResult a handler could return, so its negotiation is proven directly against the executor, as
+        // Accept_header_lines_are_taken_in_descending_quality_across_lines above proves UnhandledExceptionResult's.
+        var app = new IntegrationTestBlueprintApp();
+        var descriptor = app.FindOperation(typeof(GetErrorContentTypeQuery))!;
+        var httpContext = new DefaultHttpContext();
+        if (accept is not null)
+        {
+            httpContext.Request.Headers.Accept = new StringValues(accept);
+        }
+
+        httpContext.Response.Body = new MemoryStream();
+        var context = new ApiOperationContext(new ServiceCollection().BuildServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            HttpContext = httpContext,
+        };
+
+        var written = await new HttpOperationResultExecutor().TryExecuteAsync(
+            httpContext,
+            context,
+            UnsupportedMediaTypeResult.Instance,
+            new BlueprintHttpOptions { NegotiateErrorContentType = true });
+
+        written.Should().BeTrue();
+        httpContext.Response.StatusCode.Should().Be(415);
+        httpContext.Response.ContentType.Should().Be(expected);
     }
 
     private static int ExpectedStatus(string error)
@@ -276,10 +312,6 @@ public sealed class ErrorContentTypeNegotiationWireTests
             {
                 "validation-422" => new(System.Net.Http.HttpMethod.Get, "error-content-types/validation-422"),
                 "binding-400" => new(System.Net.Http.HttpMethod.Get, "error-content-types/binding-400?required=x&count=not-a-number"),
-                "unsupported-media-type-415" => new(System.Net.Http.HttpMethod.Post, "error-content-types")
-                {
-                    Content = new System.Net.Http.StringContent("name=x", Encoding.UTF8, "text/plain"),
-                },
                 "unwritable-result-500" => new(System.Net.Http.HttpMethod.Get, "error-content-types/unwritable"),
                 _ => new(System.Net.Http.HttpMethod.Get, $"error-content-types/{error}?required=x"),
             };

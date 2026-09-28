@@ -396,9 +396,9 @@ public static class PipelineHelpers
     /// delegate for complex-type deserialization (e.g. NodaTime converters). May be <c>null</c>.
     /// </param>
     /// <returns>
-    /// <c>null</c> when the body was read and populated successfully (or was empty/absent),
-    /// or an <see cref="OperationResult"/> representing the failure (unsupported media type,
-    /// invalid JSON, etc.).
+    /// <c>null</c> when the body was read and populated successfully, or was empty/absent, or carried a content type no
+    /// parser could read (legacy left the operation unpopulated in that case too, for every method); or an
+    /// <see cref="OperationResult"/> representing a binding failure (invalid JSON, etc.).
     /// </returns>
     public static Task<OperationResult?> ReadJsonBodyAsync<TOperation>(
         HttpContext httpContext,
@@ -413,23 +413,15 @@ public static class PipelineHelpers
             return Task.FromResult<OperationResult?>(null);
         }
 
-        // Content-type guard: reject non-JSON bodies early. Legacy read the body of every non-GET method through
-        // whichever IBodyParser.CanRead matched the content type, and silently left the operation unpopulated (no
-        // error) when none did (Signature365 8b40ecc961, HttpBodyMessagePopulationSource.cs:80-86) -- for every method
-        // alike, POST/PUT included. R98 made DELETE/HEAD/OPTIONS body methods too, so a request for one of them that
-        // carries only a stray, non-JSON Content-Type header (a proxy or client default, often with no data at all)
-        // now reaches this guard and is 415'd where legacy silently ignored it. Matched here for exactly the methods
-        // R98 newly made body methods; POST/PUT/PATCH keep this guard unchanged -- reproducing legacy's full
-        // uniformity for those too is out of this fix's scope (see R108 in REVIEW-FIXES.md).
+        // Content-type guard: a non-JSON content type is a body no IBodyParser could read. Legacy read the body of every
+        // non-GET method through whichever IBodyParser.CanRead matched the content type, and silently left the operation
+        // unpopulated (no error, no 415 anywhere in that path) when none did, for every method alike (Signature365
+        // 8b40ecc961, HttpBodyMessagePopulationSource.cs:80-86). R108 matched that for DELETE/HEAD/OPTIONS; POST/PUT/PATCH
+        // still 415'd here. Match legacy's uniformity for those too: skip silently for every method this is reached for.
         if (httpContext.Request.ContentType is not null &&
             !httpContext.Request.ContentType.Contains("json", StringComparison.OrdinalIgnoreCase))
         {
-            if (IsLegacyBodyTolerantMethod(httpContext.Request.Method))
-            {
-                return Task.FromResult<OperationResult?>(null);
-            }
-
-            return Task.FromResult<OperationResult?>(UnsupportedMediaTypeResult.Instance);
+            return Task.FromResult<OperationResult?>(null);
         }
 
         // Fast path: Content-Length is known — rent a pooled buffer and read directly.
@@ -484,18 +476,6 @@ public static class PipelineHelpers
 
         // Slow path: chunked transfer or unknown Content-Length — use MemoryStream
         return ReadJsonBodyChunkedAsync(httpContext, cancellationToken, operation, populate, jsonOptions);
-    }
-
-    /// <summary>
-    /// Returns whether <paramref name="method"/> is one of the HTTP methods R98 newly made a body method
-    /// (<c>PropertyOwnershipModule.IsBodyMethod</c>, any method but GET): DELETE, HEAD or OPTIONS. POST/PUT/PATCH
-    /// already read a body before that change and keep this guard's existing 415 for a non-JSON content type.
-    /// </summary>
-    private static bool IsLegacyBodyTolerantMethod(string method)
-    {
-        return string.Equals(method, "DELETE", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(method, "HEAD", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

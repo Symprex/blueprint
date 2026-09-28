@@ -790,13 +790,14 @@ Blueprint did: it read the body of every request but a GET, and the query string
 is bound from its route alone, as before. `[FromBody]` on a DELETE property now compiles; BPPO004 applies to a GET only.
 A caller that sent a DELETE's properties in the query string must send them in the body.
 
-Making DELETE (and HEAD, OPTIONS) body methods brings them under the same non-JSON-content-type check a POST or PUT
-already had: a request whose `Content-Type` is set but is not JSON gets a 415, even with no body to read. For DELETE,
-HEAD and OPTIONS that check is relaxed to match legacy, which never rejected a body it could not parse for any
-non-GET method — it silently left the operation unpopulated. A body-less DELETE that nonetheless carries a stray,
-non-JSON `Content-Type` (a proxy or client default) is bound from its route alone, not 415'd. POST and PUT keep the
-415 unchanged; legacy's full behaviour (silently ignoring an unparseable body on every method, POST and PUT included)
-is not reproduced there.
+**Behaviour change (v1.0.3).** A request whose `Content-Type` is set but is not JSON no longer gets a 415 for any
+method: the operation's body properties are simply left unpopulated, as legacy Blueprint did for every request but a
+GET — it never rejected a body it could not parse; it silently left the operation as it was
+(`HttpBodyMessagePopulationSource.cs:80-86`). A body-less DELETE, HEAD or OPTIONS that nonetheless carries a stray,
+non-JSON `Content-Type` (a proxy or client default) is bound from its route alone, not 415'd, as before v1.0.3
+brought DELETE/HEAD/OPTIONS under the same check as POST/PUT/PATCH. POST, PUT and PATCH now match too: a stray or
+wrong content type on one of those leaves the operation's body properties unset rather than short-circuiting to a
+415 — if those properties are required, validation reports them missing instead.
 
 ## Development-time inspection
 
