@@ -582,14 +582,16 @@ public sealed partial class AppDataModelSourceGenerator
     }
 
     /// <summary>
-    /// Returns <see langword="true"/> for an operation declared in this compilation without <c>partial</c> and without a
-    /// <c>static Configure()</c> of its own or inherited: the descriptor generator reports BP005 for it and emits no
-    /// <c>Configure()</c>, so registering it would add a second error, a missing <c>Configure()</c> in the generated
-    /// registration, that points away from the real one. BP005 still fails the build.
+    /// Returns <see langword="true"/> for an operation class declared in this compilation without <c>partial</c> and
+    /// without a <c>static Configure()</c> of its own or inherited: the descriptor generator reports BP005 for it and
+    /// emits no <c>Configure()</c>, so registering it would add a second error, a missing <c>Configure()</c> in the
+    /// generated registration, that points away from the real one. BP005 still fails the build.
     /// </summary>
     /// <remarks>
-    /// An operation from a referenced assembly is always registered: it has the <c>Configure()</c> its own build
-    /// generated, and if it has none the registration's compile error is the only sign of that.
+    /// Only a type BP005 reports is left out, so the build always fails for it. BP005 reports a class declaration with a
+    /// base list, as <c>OperationDescriptorSourceGenerator</c> selects them, and not a record. An operation from a
+    /// referenced assembly is always registered: it has the <c>Configure()</c> its own build generated, and if it has
+    /// none the registration's compile error is the only sign of that. So is a record.
     /// </remarks>
     private static bool IsNonPartialOwnOperationWithoutConfigure(INamedTypeSymbol type, IAssemblySymbol compilationAssembly)
     {
@@ -598,12 +600,23 @@ public sealed partial class AppDataModelSourceGenerator
             return false;
         }
 
+        var reportedByBp005 = false;
+
         foreach (var reference in type.DeclaringSyntaxReferences)
         {
-            if (reference.GetSyntax() is TypeDeclarationSyntax declaration && declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
+            var declaration = reference.GetSyntax();
+
+            if (declaration is TypeDeclarationSyntax typeDeclaration && typeDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword))
             {
                 return false;
             }
+
+            reportedByBp005 |= declaration is ClassDeclarationSyntax { BaseList: not null };
+        }
+
+        if (!reportedByBp005)
+        {
+            return false;
         }
 
         for (var current = type; current is not null; current = current.BaseType)

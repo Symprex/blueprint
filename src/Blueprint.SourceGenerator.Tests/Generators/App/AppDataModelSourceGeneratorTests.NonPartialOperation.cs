@@ -151,6 +151,43 @@ public class AppDataModelSourceGeneratorTests_NonPartialOperation
             .Should().Equal("CS0117");
     }
 
+    [Fact]
+    public void When_a_non_partial_record_operation_has_no_Configure_then_it_is_still_registered_and_the_build_says_so()
+    {
+        // BP005 reports a class declaration only, so a record would have no error at all if it were left out: it would
+        // drop out of the app silently. It stays in, and the registration's missing Configure() is the error.
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            [
+                TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+                TestHelpers.CreateTrackedGenerator<AppDataModelSourceGenerator>(),
+            ],
+            [
+                """
+                using Blueprint.Model;
+                using Blueprint.Model.Attributes;
+
+                namespace TestNamespace
+                {
+                    public record RecordQuery : IQuery<string>;
+
+                    [BlueprintAppScan]
+                    public partial class TestBlueprintApp : BlueprintApp
+                    {
+                    }
+                }
+                """,
+            ],
+            ["Input0.cs"]);
+
+        result.Diagnostics
+            .Where(static d => d.Severity == DiagnosticSeverity.Error)
+            .Select(static d => d.Id)
+            .Should().Equal("CS0117");
+
+        var registration = string.Join("\n", result.GetGeneratedSources(nameof(AppDataModelSourceGenerator)).Select(static s => s.SourceText));
+        registration.Should().Contain("TestNamespace.RecordQuery.Configure()");
+    }
+
     private static MultiGeneratorGenerationResult CompileBothGenerators()
     {
         return TestHelpers.CompileWithTrackedGenerators(
