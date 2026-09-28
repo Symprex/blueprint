@@ -19,6 +19,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
 
         schemaContext.Schemas.Select(static schema => schema.BodyTypeName).Should().Equal(
             "AlwaysExpandTestEmployee",
+            "ArrayEnumParameterInvoiceApiResource",
             "CatchAllFolderApiResource",
             "CollisionHolderApiResource",
             "CollisionItem",

@@ -19,6 +19,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
 
         componentContext.Components.Select(static component => component.BodyTypeName).Should().Equal(
             "AlwaysExpandTestEmployee",
+            "ArrayEnumParameterInvoiceApiResource",
             "CatchAllFolderApiResource",
             "CollisionHolderApiResource",
             "CollisionItem",

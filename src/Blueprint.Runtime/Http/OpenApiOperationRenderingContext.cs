@@ -283,7 +283,7 @@ public sealed record OpenApiOperationRenderingContext(
             var isNullable = entry.IsNullable && !(isLegacyRule && constraints.IsRequired);
             var description = GetPropertyDescription(clrProperty, entry.PropertyName, docData, isBodyProperty: entry.Source == PropertyBindingSource.Body);
             var enumValues = GetEnumValues(clrProperty);
-            var enumSchemaRef = GetEnumSchemaRef(clrProperty, naming);
+            var enumSchemaRef = GetEnumSchemaRef(clrProperty, naming, schemaNamesByType);
 
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
             var effectiveFormat = constraints.Format ?? schemaFormat;
@@ -304,11 +304,13 @@ public sealed record OpenApiOperationRenderingContext(
             // Resolve array element schema for collection-typed query/header/cookie parameters
             string? paramItemsType = null;
             string? paramItemsFormat = null;
+            var paramItemsEnumValues = ImmutableArray<string>.Empty;
             if (schemaType == "array" && clrProperty is not null)
             {
-                var (itemsType, itemsFormat, _, _, _, _) = ResolveCollectionSchema(clrProperty, schemaNamesByType);
+                var (itemsType, itemsFormat, _, itemsEnumValues, _, _, _) = ResolveCollectionSchema(clrProperty, schemaNamesByType);
                 paramItemsType = itemsType;
                 paramItemsFormat = itemsFormat;
+                paramItemsEnumValues = itemsEnumValues;
             }
 
             switch (entry.Source)
@@ -364,6 +366,7 @@ public sealed record OpenApiOperationRenderingContext(
                         SchemaTitle = schemaTitle,
                         ItemsType = paramItemsType,
                         ItemsFormat = paramItemsFormat,
+                        ItemsEnumValues = paramItemsEnumValues,
                     });
                     break;
 
@@ -418,7 +421,7 @@ public sealed record OpenApiOperationRenderingContext(
                     break;
 
                 case PropertyBindingSource.Body:
-                    var (bodyItemsType, bodyItemsFormat, bodyItemsSchemaRef, bodyAdditionalType, bodyAdditionalFormat, bodyAdditionalSchemaRef) = ResolveCollectionSchema(clrProperty, schemaNamesByType);
+                    var (bodyItemsType, bodyItemsFormat, bodyItemsSchemaRef, _, bodyAdditionalType, bodyAdditionalFormat, bodyAdditionalSchemaRef) = ResolveCollectionSchema(clrProperty, schemaNamesByType);
 
                     // Legacy documented a dictionary's open value as any value, and a value as nullable when its
                     // annotation said so.
@@ -659,7 +662,7 @@ public sealed record OpenApiOperationRenderingContext(
     /// when the property is not an enum. This name is used as the component schema key for <c>$ref</c>-based enum
     /// rendering in OpenAPI.
     /// </summary>
-    private static string? GetEnumSchemaRef(System.Reflection.PropertyInfo? property, OpenApiSchemaNaming naming)
+    private static string? GetEnumSchemaRef(System.Reflection.PropertyInfo? property, OpenApiSchemaNaming naming, FrozenDictionary<Type, string> schemaNamesByType)
     {
         if (property is null)
         {
@@ -668,7 +671,16 @@ public sealed record OpenApiOperationRenderingContext(
 
         var propertyType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
 
-        return propertyType.IsEnum ? OpenApiSchemaNames.Format(propertyType, naming) : null;
+        if (!propertyType.IsEnum)
+        {
+            return null;
+        }
+
+        // Prefer the name the schema projection's SchemaNamer already assigned this enum (shared collision-counter pool
+        // with every object type): a query/route parameter enum also used in a body or response must reference the same
+        // component, told apart from another type of the same simple name the same way. One reached nowhere else falls
+        // back to the bare formatted name.
+        return schemaNamesByType.TryGetValue(propertyType, out var assignedName) ? assignedName : OpenApiSchemaNames.Format(propertyType, naming);
     }
 
     /// <summary>
@@ -677,13 +689,13 @@ public sealed record OpenApiOperationRenderingContext(
     /// </summary>
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
-    private static (string? ItemsType, string? ItemsFormat, string? ItemsSchemaRef, string? AdditionalPropertiesType, string? AdditionalPropertiesFormat, string? AdditionalPropertiesSchemaRef) ResolveCollectionSchema(
+    private static (string? ItemsType, string? ItemsFormat, string? ItemsSchemaRef, ImmutableArray<string> ItemsEnumValues, string? AdditionalPropertiesType, string? AdditionalPropertiesFormat, string? AdditionalPropertiesSchemaRef) ResolveCollectionSchema(
         System.Reflection.PropertyInfo? property,
         FrozenDictionary<Type, string> schemaNamesByType)
     {
         if (property is null)
         {
-            return (null, null, null, null, null, null);
+            return (null, null, null, ImmutableArray<string>.Empty, null, null, null);
         }
 
         var propertyType = property.PropertyType;
@@ -691,7 +703,7 @@ public sealed record OpenApiOperationRenderingContext(
         // string implements IEnumerable<char> — skip it to avoid emitting a spurious items schema.
         if (propertyType == typeof(string))
         {
-            return (null, null, null, null, null, null);
+            return (null, null, null, ImmutableArray<string>.Empty, null, null, null);
         }
 
         // Check for a dictionary first (dictionaries also implement IEnumerable). An open value is any value, which legacy
@@ -701,13 +713,13 @@ public sealed record OpenApiOperationRenderingContext(
         {
             if (OpenApiDictionaryValues.IsAnyValue(valueType))
             {
-                return (null, null, null, null, null, null);
+                return (null, null, null, ImmutableArray<string>.Empty, null, null, null);
             }
 
             var (additionalType, additionalFormat) = MapClrTypeToOpenApiSchema(valueType);
 
             // A complex value type with a component of its own is referenced; any other stays an inline object.
-            return (null, null, null, additionalType, additionalFormat, additionalType == "object" ? FindSchemaName(valueType, schemaNamesByType) : null);
+            return (null, null, null, ImmutableArray<string>.Empty, additionalType, additionalFormat, additionalType == "object" ? FindSchemaName(valueType, schemaNamesByType) : null);
         }
 
         // Check for IEnumerable<T>.
@@ -718,11 +730,20 @@ public sealed record OpenApiOperationRenderingContext(
             var elementType = enumInterface.GetGenericArguments()[0];
             var (itemType, itemFormat) = MapClrTypeToOpenApiSchema(elementType);
 
+            // An enum element carries no component of its own here (unlike a body property's items — R30a): legacy's
+            // NJsonSchema still carried a collection query parameter's enum member names, however oddly nested (a
+            // path-local "definitions" block), so this renders them inline on "items" rather than losing them to a bare
+            // {"type":"string"}.
+            var underlyingElementType = Nullable.GetUnderlyingType(elementType) ?? elementType;
+            var itemsEnumValues = underlyingElementType.IsEnum
+                ? Enum.GetNames(underlyingElementType).ToImmutableArray()
+                : ImmutableArray<string>.Empty;
+
             // A complex element type with a component of its own is referenced; any other stays an inline object.
-            return (itemType, itemFormat, itemType == "object" ? FindSchemaName(elementType, schemaNamesByType) : null, null, null, null);
+            return (itemType, itemFormat, itemType == "object" ? FindSchemaName(elementType, schemaNamesByType) : null, itemsEnumValues, null, null, null);
         }
 
-        return (null, null, null, null, null, null);
+        return (null, null, null, ImmutableArray<string>.Empty, null, null, null);
     }
 
     /// <summary>

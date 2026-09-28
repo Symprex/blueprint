@@ -47,6 +47,30 @@ public sealed class CollisionKindApiResource
     public string? OnlyOnKindResource { get; init; }
 }
 
+/// <summary>Holds the first of two enums named <c>CollisionStatus</c>, a distinct simple-name clash between two enums
+/// rather than between an enum and the object its formatter maps to it (<see cref="CollisionKind"/>).</summary>
+public static class CollisionStatusOne
+{
+    /// <summary>The first of two enums named <c>CollisionStatus</c>.</summary>
+    public enum CollisionStatus
+    {
+        Draft,
+        Live,
+    }
+}
+
+/// <summary>Holds the second of two enums named <c>CollisionStatus</c>.</summary>
+public static class CollisionStatusTwo
+{
+    /// <summary>The second of two enums named <c>CollisionStatus</c>, with a value set of its own.</summary>
+    public enum CollisionStatus
+    {
+        Archived,
+        Active,
+        Pending,
+    }
+}
+
 /// <summary>Reaches every colliding item — directly, through a collection's items and a dictionary's values.</summary>
 /// <remarks>Declared in alphabetical order, so the order legacy walked them in is the order the document writes them in.</remarks>
 public sealed class CollisionHolderApiResource
@@ -64,6 +88,10 @@ public sealed class CollisionHolderApiResource
     public CollisionKind Foxtrot { get; init; }
 
     public CollisionKindApiResource Golf { get; init; } = new();
+
+    public CollisionStatusOne.CollisionStatus Hotel { get; init; }
+
+    public CollisionStatusTwo.CollisionStatus India { get; init; }
 }
 
 /// <summary>The "...ApiResource" twin of <see cref="CollisionPortal.CollisionMatch"/>, reached by the earlier operation.</summary>

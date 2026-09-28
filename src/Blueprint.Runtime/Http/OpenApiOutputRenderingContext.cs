@@ -578,6 +578,11 @@ public sealed record OpenApiOutputRenderingContext(
                     writer.WriteString("format", parameter.ItemsFormat);
                 }
 
+                if (!parameter.ItemsEnumValues.IsDefaultOrEmpty)
+                {
+                    WriteEnumValues(writer, parameter.ItemsEnumValues);
+                }
+
                 writer.WriteEndObject();
             }
 

@@ -142,12 +142,30 @@ public sealed record OpenApiSchemaProjectionContext(
             }
         }
 
-        foreach (var nestedType in CollectNestedObjectTypes(projectedTypesByName.Values.ToList(), GetRequestBodyPropertyTypes(document), serializerContext))
+        var (nestedObjectTypes, reachedEnumTypes) = CollectNestedObjectTypes(projectedTypesByName.Values.ToList(), GetRequestBodyPropertyTypes(document), serializerContext);
+
+        foreach (var nestedType in nestedObjectTypes)
         {
             projectedTypesByName.TryAdd(namer.NameOf(nestedType), nestedType);
         }
 
-        var schemaNamesByType = projectedTypesByName.ToFrozenDictionary(static pair => pair.Value, static pair => pair.Key);
+        var schemaNamesByTypeBuilder = new Dictionary<Type, string>();
+
+        foreach (var (name, type) in projectedTypesByName)
+        {
+            schemaNamesByTypeBuilder[type] = name;
+        }
+
+        // An enum's schema name is drawn from the same namer, and so the same collision-counter pool, as every object
+        // type's: two distinct enum CLR types of one simple name (e.g. two apps' own AuthEnforcementType) must be told
+        // apart the way legacy's NJsonSchema told any two same-named types apart, not silently collapsed onto the first
+        // one's values — which a raw, unrouted OpenApiSchemaNames.Format call for every enum property did.
+        foreach (var enumType in reachedEnumTypes)
+        {
+            schemaNamesByTypeBuilder.TryAdd(enumType, namer.NameOf(enumType));
+        }
+
+        var schemaNamesByType = schemaNamesByTypeBuilder.ToFrozenDictionary();
 
         var schemaBuilder = ImmutableArray.CreateBuilder<OpenApiSchemaModel>();
 
@@ -195,20 +213,22 @@ public sealed record OpenApiSchemaProjectionContext(
     /// <summary>
     /// Walks the object graph the serializer context describes, from the properties of <paramref name="rootTypes"/> and
     /// from <paramref name="requestBodyPropertyTypes"/>, and returns every object type reached that is not already a
-    /// root: those need components of their own.
+    /// root (those need components of their own) alongside every enum type reached (those need a schema name of their
+    /// own from the same collision-counter pool as an object's).
     /// </summary>
     /// <remarks>
     /// Only what the serializer context has metadata for is followed, and only an object-shaped type (not a primitive,
     /// an enum, a collection, a dictionary or a type written by a converter, such as a strongly typed id) becomes a
     /// component. <see cref="Blueprint.Model.Link"/> is excluded because the document always carries it as a well-known component.
     /// </remarks>
-    private static List<Type> CollectNestedObjectTypes(
+    private static (List<Type> NestedObjectTypes, List<Type> EnumTypes) CollectNestedObjectTypes(
         IReadOnlyCollection<Type> rootTypes,
         IEnumerable<Type> requestBodyPropertyTypes,
         JsonSerializerContext serializerContext)
     {
         var visited = new HashSet<Type>(rootTypes);
         var nested = new List<Type>();
+        var enums = new List<Type>();
 
         foreach (var rootType in rootTypes)
         {
@@ -223,7 +243,7 @@ public sealed record OpenApiSchemaProjectionContext(
             Visit(requestBodyPropertyType);
         }
 
-        return nested;
+        return (nested, enums);
 
         void Visit(Type type)
         {
@@ -231,6 +251,12 @@ public sealed record OpenApiSchemaProjectionContext(
 
             if (!visited.Add(type))
             {
+                return;
+            }
+
+            if (type.IsEnum)
+            {
+                enums.Add(type);
                 return;
             }
 
@@ -625,7 +651,7 @@ public sealed record OpenApiSchemaProjectionContext(
         }
 
         var format = MapFormatFromValidationAttributes(validationAttributes) ?? MapFormat(property.PropertyType);
-        var (enumValues, enumSchemaName) = MapEnumValues(property.PropertyType, naming);
+        var (enumValues, enumSchemaName) = MapEnumValues(property.PropertyType, naming, schemaNamesByType);
         var enumDescription = enumSchemaName is null ? null : GetTypeDescription(Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType);
         var description = GetPropertyDescription(property);
         var obsoleteAttr = property.AttributeProvider is MemberInfo deprecatedMember
@@ -1008,7 +1034,10 @@ public sealed record OpenApiSchemaProjectionContext(
         "Trimming",
         "IL2067",
         Justification = "Enum types used in STJ-serializable operations are preserved by the generated serializer context.")]
-    private static (ImmutableArray<string> Values, string? SchemaName) MapEnumValues(Type propertyType, OpenApiSchemaNaming naming)
+    private static (ImmutableArray<string> Values, string? SchemaName) MapEnumValues(
+        Type propertyType,
+        OpenApiSchemaNaming naming,
+        FrozenDictionary<Type, string> schemaNamesByType)
     {
         var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
 
@@ -1017,7 +1046,15 @@ public sealed record OpenApiSchemaProjectionContext(
             return (ImmutableArray<string>.Empty, null);
         }
 
-        return (Enum.GetNames(underlying).ToImmutableArray(), OpenApiSchemaNames.Format(underlying, naming));
+        // The projection's own walk already named every enum it reached through the same SchemaNamer as every object
+        // type, so two distinct enums of one simple name are told apart (X, X2) rather than collapsed onto the first
+        // one's schema — an enum this walk did not reach (a query/route parameter's, with no body/response use) falls
+        // back to the bare formatted name, as before.
+        var schemaName = schemaNamesByType.TryGetValue(underlying, out var assignedName)
+            ? assignedName
+            : OpenApiSchemaNames.Format(underlying, naming);
+
+        return (Enum.GetNames(underlying).ToImmutableArray(), schemaName);
     }
 
     /// <summary>

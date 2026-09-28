@@ -74,6 +74,13 @@ public sealed record OpenApiParameterModel(
     public string? ItemsFormat { get; init; }
 
     /// <summary>
+    /// Gets the enum member names when the parameter is an array whose items are an enum, or empty when its items are
+    /// not an enum. Rendered inline on the items sub-schema, as legacy's NJsonSchema still carried the member names for
+    /// a collection query parameter's items, however oddly it nested them (a path-local <c>definitions</c> block).
+    /// </summary>
+    public ImmutableArray<string> ItemsEnumValues { get; init; } = ImmutableArray<string>.Empty;
+
+    /// <summary>
     /// Gets the title of the parameter's schema before the schema name formatter is applied, or <see langword="null"/> for
     /// none: under <see cref="OpenApiSchemaNaming.Legacy"/>, the legacy name of the parameter's type, as legacy titled it.
     /// </summary>

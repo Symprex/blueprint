@@ -85,6 +85,18 @@ public class OpenApiSchemaNameCollisionTests
     }
 
     [Fact]
+    public void Two_distinct_enums_of_one_simple_name_each_get_a_component_with_its_own_values()
+    {
+        using var document = RenderAsSignature365();
+        var holder = Component(document, "CollisionHolder").GetProperty("properties");
+
+        Component(document, "CollisionStatus").GetProperty("enum").EnumerateArray().Select(static value => value.GetString()).Should().Equal("Draft", "Live");
+        Component(document, "CollisionStatus2").GetProperty("enum").EnumerateArray().Select(static value => value.GetString()).Should().Equal("Archived", "Active", "Pending");
+        RefsIn(holder.GetProperty("Hotel")).Should().Equal(Schemas + "CollisionStatus");
+        RefsIn(holder.GetProperty("India")).Should().Equal(Schemas + "CollisionStatus2");
+    }
+
+    [Fact]
     public void Under_the_default_naming_two_types_of_one_simple_name_each_get_a_component()
     {
         using var document = Render(new OpenApiInfoOptions());
