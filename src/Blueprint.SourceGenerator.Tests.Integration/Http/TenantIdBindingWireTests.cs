@@ -269,6 +269,45 @@ public sealed class TenantIdBindingWireTests
     }
 
     [Fact]
+    public async Task A_TenantId_routed_through_its_placeholder_link_of_a_multi_link_operation_is_bound_from_the_path()
+    {
+        await using var host = await TenantHost.StartAsync();
+
+        var (status, body) = await host.GetAsync($"tenant-binding/multi-link/tenants/{NamedTenant}", Caller.Authenticated(CallerTenant));
+
+        status.Should().Be(200);
+        body.Should().Be($"\"tenant={NamedTenant}\"");
+    }
+
+    [Fact]
+    public async Task R102_A_named_tenant_reaching_TenantId_through_the_placeholder_less_link_of_a_multi_link_operation_is_not_overwritten_by_the_callers_tenant()
+    {
+        // R102: MultiLinkTenantIdQuery's second link carries no {TenantId} placeholder, so legacy's "every link"
+        // ownership rule (HttpRouteMessagePopulationSource.cs:33-40, cited above) leaves TenantId to the query string
+        // too. The caller's own tenant is different (CallerTenant); if the fallback did not run, TenantModule would see
+        // TenantId still unset and fill CallerTenant instead of the tenant the request actually named.
+        await using var host = await TenantHost.StartAsync();
+
+        var (status, body) = await host.GetAsync($"tenant-binding/multi-link/fallback?tenantId={NamedTenant}", Caller.Authenticated(CallerTenant));
+
+        status.Should().Be(200);
+        body.Should().Be($"\"tenant={NamedTenant}\"");
+    }
+
+    [Fact]
+    public async Task R102_The_placeholder_less_link_of_a_multi_link_operation_with_no_tenant_named_still_fills_the_callers_tenant()
+    {
+        // The query fallback leaves TenantId unset when the request supplies none, so TenantModule's own fill-when-unset
+        // rule is unaffected by R102's change.
+        await using var host = await TenantHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("tenant-binding/multi-link/fallback", Caller.Authenticated(CallerTenant));
+
+        status.Should().Be(200);
+        body.Should().Be($"\"tenant={CallerTenant}\"");
+    }
+
+    [Fact]
     public async Task An_authenticated_caller_naming_another_tenant_in_the_body_is_refused_and_the_handler_does_not_run()
     {
         // R100: TenantIdBindingWireTests' other cases prove binding leaves a caller-named tenant alone (legacy's
@@ -781,6 +820,22 @@ public partial class GetAnonymousTenantIdQuery : IQuery<string>
     public BoundTenantId TenantId { get; set; }
 
     public static string Handle(GetAnonymousTenantIdQuery query)
+    {
+        return TenantBindingHandlers.Describe(query.TenantId.Value);
+    }
+}
+
+/// <summary>
+/// A query with two links: one carrying the <c>TenantId</c> placeholder, one that leaves it out entirely — R102's
+/// scenario, proven end to end rather than only through <c>TenantModuleTests</c>.
+/// </summary>
+[RootLink("/tenant-binding/multi-link/tenants/{TenantId}")]
+[RootLink("/tenant-binding/multi-link/fallback", Rel = "multi-link-tenant-fallback")]
+public partial class MultiLinkTenantIdQuery : IQuery<string>
+{
+    public BoundTenantId TenantId { get; set; }
+
+    public static string Handle(MultiLinkTenantIdQuery query)
     {
         return TenantBindingHandlers.Describe(query.TenantId.Value);
     }

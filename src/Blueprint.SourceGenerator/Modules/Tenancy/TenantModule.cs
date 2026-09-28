@@ -308,20 +308,40 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
     /// A legacy <c>{TenantId:ResourceProperty}</c> placeholder binds <c>TenantId</c> from the route too
     /// (<see cref="RoutePlaceholderSyntax"/>), so it counts, as it does for <c>PropertyOwnershipModule</c>.
     /// </remarks>
+    /// <summary>
+    /// Returns whether <c>TenantId</c> is exclusively route-owned — a placeholder in <em>every</em> one of the
+    /// operation's route templates, legacy's "every link" ownership rule
+    /// (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/MessagePopulation/HttpRouteMessagePopulationSource.cs:33-40</c>).
+    /// A <c>TenantId</c> that is a placeholder in only some links is bound from the route when present and falls back to
+    /// the query string or body otherwise (<c>PropertyOwnershipModule</c>'s own "every link" handling); this module's
+    /// fill-when-unset guard still applies to it when neither source sets it, as legacy's own unconditional
+    /// <c>SetTenantMiddleware</c> fill did.
+    /// </summary>
     private static bool IsTenantIdInRouteTemplate(INamedTypeSymbol operationType)
     {
+        var sawAny = false;
+
         foreach (var url in HttpHostExposureHelper.GetAllRouteTemplates(operationType))
         {
+            sawAny = true;
+            var hasPlaceholder = false;
+
             foreach (Match match in PlaceholderRegex.Matches(url))
             {
                 if (string.Equals(match.Groups[1].Value, TenantIdPropertyName, StringComparison.Ordinal))
                 {
-                    return true;
+                    hasPlaceholder = true;
+                    break;
                 }
+            }
+
+            if (!hasPlaceholder)
+            {
+                return false;
             }
         }
 
-        return false;
+        return sawAny;
     }
 
     /// <summary>

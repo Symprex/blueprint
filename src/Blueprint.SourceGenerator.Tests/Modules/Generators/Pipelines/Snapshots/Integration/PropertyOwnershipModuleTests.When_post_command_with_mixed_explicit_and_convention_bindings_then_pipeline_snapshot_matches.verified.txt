@@ -67,16 +67,17 @@ namespace Blueprint.Generated
                     return _bodyResult;
                 }
 
-                if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
-                {
-                    operation.OrgSlug = routeStr_OrgSlug;
-                }
-
                 var _qv_SearchFilter = httpContext.Request.Query["q"];
                 if (_qv_SearchFilter.Count > 0)
                 {
                     operation.SearchFilter = _qv_SearchFilter[0];
                 }
+
+                if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
+                {
+                    operation.OrgSlug = routeStr_OrgSlug;
+                }
+
                 var _hv_TenantId = httpContext.Request.Headers["X-Tenant-Id"];
                 if (_hv_TenantId.Count > 0)
                 {

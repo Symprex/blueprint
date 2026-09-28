@@ -758,11 +758,22 @@ blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
 Property populators run at the Authentication stage, after user context is loaded but before validation and authorization.
 
 **Behaviour change for absent route values (v1.0.3).** When a route property's value is not in the request's route
-values, the operation keeps the value it already has, whatever the property's type. This is what legacy Blueprint did.
-It is what happens when an operation is executed in process with a fresh `HttpContext`, as an `ApiFixture` or a CLI
-executes one. Before v1.0.3 that was only true of `string` and `[TypeConverter]` properties: a typed one (`int`, `Guid`,
-…) was a binding failure, so an in-process caller had to fill `HttpContext.Request.RouteValues` itself. It no longer
-has to. A route value that is present but cannot be parsed is still a binding failure.
+values, and the property is a placeholder in *every* one of the operation's route templates, the operation keeps the
+value it already has, whatever the property's type. This is what legacy Blueprint did. It is what happens when an
+operation is executed in process with a fresh `HttpContext`, as an `ApiFixture` or a CLI executes one. Before v1.0.3
+that was only true of `string` and `[TypeConverter]` properties: a typed one (`int`, `Guid`, …) was a binding failure,
+so an in-process caller had to fill `HttpContext.Request.RouteValues` itself. It no longer has to. A route value that
+is present but cannot be parsed is still a binding failure.
+
+**Behaviour change for a placeholder in only some of an operation's links (v1.0.3).** A property that is a route
+placeholder in some of the operation's links but not all of them is not exclusively route-owned: through a link that
+carries the placeholder it still binds from the route, but through one that leaves it out it now falls back to the
+query string (a GET) or the body (any other method) instead of keeping its type's default (`0`, `Guid.Empty`, an unset
+`TenantId`, …). This is what legacy Blueprint did — its route source only ever owned a placeholder property
+exclusively when every link carried it; otherwise the query/body source read it too, and ran first, so a route value
+present for the matched link still won. Before v1.0.3 the property was left at its default through a placeholder-less
+link and the operation still ran, silently answering for the wrong (or no) value. `TenantId` is filled from the
+caller's tenant only when neither the route nor the fallback sets it, as before.
 
 **Behaviour change for alternate-named route placeholders (v1.0.3).** A `[SelfLink]` or `[Link]` placeholder that names
 an alternate resource property, `{UserTenantId:TenantId}`, binds the operation's `UserTenantId` from the path, as

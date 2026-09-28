@@ -61,11 +61,6 @@ namespace Blueprint.Generated
 
             if (!context.IsNested)
             {
-                if (httpContext.Request.RouteValues["Id"] is string routeStr_Id)
-                {
-                    operation.Id = routeStr_Id;
-                }
-
                 var _qv_Filter = httpContext.Request.Query["filter"];
                 if (_qv_Filter.Count > 0)
                 {
@@ -88,6 +83,11 @@ namespace Blueprint.Generated
                 if (_arr_TagIds != null)
                 {
                     operation.TagIds = _arr_TagIds;
+                }
+
+                if (httpContext.Request.RouteValues["Id"] is string routeStr_Id)
+                {
+                    operation.Id = routeStr_Id;
                 }
             }
 

@@ -62,20 +62,6 @@ namespace Blueprint.Generated
 
             if (!context.IsNested)
             {
-                if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
-                {
-                    operation.OrgSlug = routeStr_OrgSlug;
-                }
-                if (httpContext.Request.RouteValues.ContainsKey("CategoryId"))
-                {
-                    var _routeErr_CategoryId = BindRouteValue(httpContext.Request.RouteValues, "CategoryId", out var _parsed_CategoryId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-                    if (_routeErr_CategoryId != null)
-                    {
-                        return _routeErr_CategoryId;
-                    }
-                    operation.CategoryId = _parsed_CategoryId;
-                }
-
                 var _qv_Term = httpContext.Request.Query["term"];
                 if (_qv_Term.Count > 0)
                 {
@@ -184,6 +170,20 @@ namespace Blueprint.Generated
                 if (_arr_CategoryIds != null)
                 {
                     operation.CategoryIds = _arr_CategoryIds;
+                }
+
+                if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
+                {
+                    operation.OrgSlug = routeStr_OrgSlug;
+                }
+                if (httpContext.Request.RouteValues.ContainsKey("CategoryId"))
+                {
+                    var _routeErr_CategoryId = BindRouteValue(httpContext.Request.RouteValues, "CategoryId", out var _parsed_CategoryId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                    if (_routeErr_CategoryId != null)
+                    {
+                        return _routeErr_CategoryId;
+                    }
+                    operation.CategoryId = _parsed_CategoryId;
                 }
             }
 
