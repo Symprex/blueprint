@@ -1164,6 +1164,13 @@ client read it: as a result the host writes as an empty 204 (`HttpNoContentResul
 understand the response of calling …"). Coming from legacy Blueprint nothing changes. Coming from v1.0.2, where a 204
 returned `default`, a caller that checked for `null` after a 204 must declare a result that can hold one.
 
+**Behaviour change for a JSON `null` success body (v1.0.3).** A success response whose JSON body reads as `null` (a
+`null` body for a reference type, a nullable value type or a resource event) throws a `BlueprintApiException` with
+legacy Blueprint's `response_empty` problem: title "Response deserialisation failed", detail "The response could not be
+deserialised", status 502. Its `StatusCode` and `ResponseBody` are the response's own. This is what legacy's client did.
+A `JsonElement` is still the `null` element. Coming from v1.0.2, where such a body returned `null`, a caller that checked
+for `null` must catch the exception instead.
+
 ### Hangfire (background task scheduling)
 
 Blueprint provides the `Blueprint.Tasks.Hangfire` package with ready-to-use implementations:

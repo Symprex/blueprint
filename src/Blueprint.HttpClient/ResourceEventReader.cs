@@ -55,10 +55,33 @@ internal static class ResourceEventReader
         JsonSerializerOptions options,
         CancellationToken cancellationToken)
     {
+        return await ReadOrNullAsync(eventType, content, options, cancellationToken).ConfigureAwait(false)
+            ?? throw new JsonException("Unexpected end when reading JSON.");
+    }
+
+    /// <summary>
+    /// Reads the response body as <paramref name="eventType"/>, or as <see langword="null"/> when it is a JSON <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Legacy's converter did not handle null (<c>Blueprint.Http/JsonConverterFactoryForResourceEventOfT.cs:39</c>,
+    /// <c>:53-58</c>), so System.Text.Json did not call it for a <c>null</c> token, and legacy's read of one was
+    /// <see langword="null"/>.
+    /// </remarks>
+    /// <param name="eventType">A type <see cref="CanRead"/> accepts.</param>
+    /// <param name="content">The response content.</param>
+    /// <param name="options">The options the event's data and dictionaries' nested values are read with.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The event, or <see langword="null"/> for a JSON <c>null</c>.</returns>
+    internal static async Task<ResourceEvent?> ReadOrNullAsync(
+        Type eventType,
+        HttpContent content,
+        JsonSerializerOptions options,
+        CancellationToken cancellationToken)
+    {
         await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return Read(eventType, document.RootElement, options);
+        return document.RootElement.ValueKind == JsonValueKind.Null ? null : Read(eventType, document.RootElement, options);
     }
 
     /// <summary>

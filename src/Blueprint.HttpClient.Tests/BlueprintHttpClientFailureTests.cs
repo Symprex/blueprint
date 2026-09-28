@@ -289,6 +289,43 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         exception.Detail.Should().Be("The error response could not be deserialised");
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.OK)]
+    [InlineData(HttpStatusCode.Created)]
+    public async Task When_a_success_response_is_json_null_then_throws_response_empty_as_legacy_did(HttpStatusCode status)
+    {
+        // Legacy read a JSON success body as the response type and, when that read was null, threw its response_empty
+        // ApiException (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:21-24, :199-208).
+        var client = this.CreateClient(status, "null", "application/json");
+
+        var act = () => client.SendAsync<TemplateApiResource>(new GetTemplateQuery { Id = "t-1" });
+
+        AssertResponseEmpty((await act.Should().ThrowAsync<BlueprintApiException>()).Which, status);
+    }
+
+    [Fact]
+    public async Task When_a_success_response_is_json_null_for_a_resource_event_then_throws_response_empty_as_legacy_did()
+    {
+        // Legacy's resource-event converter does not handle null (Blueprint.Http/JsonConverterFactoryForResourceEventOfT.cs:39,
+        // :53-58, no HandleNull), so System.Text.Json did not call it for a null token and the read was null: the same throw.
+        var client = this.CreateClient(HttpStatusCode.OK, "null", "application/json");
+
+        var act = () => client.SendAsync<Blueprint.Http.ResourceEvent<TemplateApiResource>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        AssertResponseEmpty((await act.Should().ThrowAsync<BlueprintApiException>()).Which, HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task When_a_success_response_is_json_null_for_a_JsonElement_then_it_is_the_null_element_as_legacy_read_it()
+    {
+        // A JsonElement is a struct: legacy's null check (:205) never matched one, so it was returned.
+        var client = this.CreateClient(HttpStatusCode.OK, "null", "application/json");
+
+        var element = await client.SendAsync<JsonElement>(new GetTemplateQuery { Id = "t-1" });
+
+        element.ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
     [Fact]
     public async Task Failure_is_still_a_BlueprintApiException_with_the_response_status_and_body()
     {
@@ -302,6 +339,17 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         exception.StatusCode.Should().Be(HttpStatusCode.NotFound);
         exception.ResponseBody.Should().Be(body);
         exception.Should().BeAssignableTo<ApiException>().Which.Detail.Should().Be("No such template.");
+    }
+
+    /// <summary>Asserts legacy's <c>_noResponseFactory.Create("The response could not be deserialised")</c> (:21-24, :207).</summary>
+    private static void AssertResponseEmpty(BlueprintApiException exception, HttpStatusCode responseStatus)
+    {
+        exception.Title.Should().Be("Response deserialisation failed");
+        exception.Type.Should().Be("response_empty");
+        exception.HttpStatus.Should().Be(502);
+        exception.Detail.Should().Be("The response could not be deserialised");
+        exception.StatusCode.Should().Be(responseStatus, "the response's own status is still carried");
+        exception.ResponseBody.Should().Be("null");
     }
 
     private BlueprintHttpClient<SampleBlueprintApp> CreateClient(HttpStatusCode status, string body, string mediaType, string baseAddress = "https://localhost")

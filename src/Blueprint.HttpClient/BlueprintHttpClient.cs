@@ -1204,10 +1204,14 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             return (TResponse)(object)text;
         }
 
-        // A resource event is read as legacy read one, not by constructor (ResourceEventReader).
+        // A resource event is read as legacy read one, not by constructor (ResourceEventReader). A JSON null is no event.
         if (ResourceEventReader.CanRead(typeof(TResponse)))
         {
-            return (TResponse)(object)await ResourceEventReader.ReadAsync(typeof(TResponse), response.Content, this._jsonOptions, cancellationToken).ConfigureAwait(false);
+            var resourceEvent = await ResourceEventReader.ReadOrNullAsync(typeof(TResponse), response.Content, this._jsonOptions, cancellationToken).ConfigureAwait(false);
+
+            return resourceEvent is null
+                ? throw await CreateResponseEmptyExceptionAsync(response, cancellationToken).ConfigureAwait(false)
+                : (TResponse)(object)resourceEvent;
         }
 
         // A ResourceEventResult<T> is read from the envelope the host writes for it, which no constructor of it binds.
@@ -1216,8 +1220,35 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             return (TResponse)await this.ReadResourceEventResultAsync(typeof(TResponse), response.Content, cancellationToken).ConfigureAwait(false);
         }
 
-        // JSON deserialization
-        return await response.Content.ReadFromJsonAsync<TResponse>(this._jsonOptions, cancellationToken).ConfigureAwait(false);
+        // JSON deserialization. A read that is null (a JSON null, for a type that can hold one) is legacy's response_empty
+        // failure, not a null result.
+        var value = await response.Content.ReadFromJsonAsync<TResponse>(this._jsonOptions, cancellationToken).ConfigureAwait(false);
+
+        if (value is null)
+        {
+            throw await CreateResponseEmptyExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Creates the exception legacy's client threw when a success response's JSON read was <see langword="null"/>: its
+    /// <c>response_empty</c> problem, "Response deserialisation failed", "The response could not be deserialised", 502
+    /// (Signature365 <c>8b40ecc961</c>, <c>Common.Core/Api/BlueprintHttpClient.cs:21-24</c>, <c>:203-208</c>). It carries
+    /// the response's own status and body as every failure here does.
+    /// </summary>
+    private static async Task<BlueprintApiException> CreateResponseEmptyExceptionAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        return new BlueprintApiException(
+            new BlueprintApiException.ApiProblem(
+                "Response deserialisation failed",
+                "response_empty",
+                "The response could not be deserialised",
+                (int)HttpStatusCode.BadGateway),
+            response.StatusCode,
+            await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false),
+            innerException: null);
     }
 
     /// <summary>
