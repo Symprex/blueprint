@@ -32,32 +32,7 @@ public class HttpOperationResultExecutor
     // Cached empty options for the rare case where no app-owned serializer context exists.
     private static readonly JsonSerializerOptions _emptyFallbackOptions = new();
 
-    // Pre-built ProblemDetails for fixed error responses, avoiding per-request allocation.
-    // These are safe to share because JsonSerializer reads but does not mutate them.
-    private static readonly MvcProblemDetails _unauthorizedProblem = new()
-    {
-        Status = StatusCodes.Status401Unauthorized,
-        Title = AnonymousAccessDeniedTitle,
-        Type = SecurityFailureProblemType,
-    };
-
-    private static readonly MvcProblemDetails _forbiddenProblem = new()
-    {
-        Status = StatusCodes.Status403Forbidden,
-        Title = "Forbidden",
-        Type = "https://tools.ietf.org/html/rfc7231#section-6.5.3",
-        Detail = "You do not have permission to access this resource.",
-    };
-
-    private static readonly MvcProblemDetails _unsupportedMediaTypeProblem = new()
-    {
-        Status = StatusCodes.Status415UnsupportedMediaType,
-        Title = "Unsupported Media Type",
-        Type = "https://tools.ietf.org/html/rfc7231#section-6.5.13",
-        Detail = "The request content type is not supported. Expected 'application/json'.",
-    };
-
-    // Pre-serialized byte representations of the static error responses above.
+    // Pre-serialized bodies of the fixed error responses, the only copy of each.
     // Writing pre-serialized bytes eliminates per-request JSON serialization, buffer rental,
     // and Content-Length computation for the three most common error types.
     // An anonymous caller's, as legacy wrote it when the operation had no activity (see WriteDenialAndReturnTrue).
