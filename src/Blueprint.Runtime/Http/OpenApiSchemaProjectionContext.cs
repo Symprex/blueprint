@@ -595,6 +595,17 @@ public sealed record OpenApiSchemaProjectionContext(
         var maximum = GetMaximum(validationAttributes);
         var isNullable = IsNullableProperty(property, nullabilityContext);
 
+        // Legacy's NJsonSchema reflected a closed generic's property from its *open* generic definition (e.g.
+        // Expandable<T>.Value), whose CLR type is the type parameter T itself rather than the closed argument — and its
+        // nullable-reference-type annotation on an unconstrained type parameter did not carry a resolvable nullability, so
+        // legacy documented the property as non-nullable however the closed instantiation reads (Signature365 8b40ecc961
+        // Portal document, ExpandableOfAzureAdGroup.value: oneOf without "nullable"). A Default consumer still wants the
+        // instantiation's real nullability, so this only overrides under the legacy naming option.
+        if (naming == OpenApiSchemaNaming.Legacy && IsGenericTypeParameterProperty(bodyType, property.Name))
+        {
+            isNullable = false;
+        }
+
         // Legacy's Newtonsoft.Json contract knew nothing of the C# required keyword, which System.Text.Json counts as
         // required, so under the legacy rule the serializer's own requirement carries over only from [JsonRequired].
         var isRequired = requiredProperties == OpenApiRequiredProperties.NonNullable
@@ -1091,6 +1102,32 @@ public sealed record OpenApiSchemaProjectionContext(
         // When no CLR property info is available, default to non-nullable to match the OpenAPI 3.0
         // convention that properties without "nullable: true" are non-nullable.
         return false;
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="propertyName"/>, on the *open* generic type definition of
+    /// <paramref name="bodyType"/> (e.g. <c>Expandable&lt;&gt;</c> for a closed <c>Expandable&lt;AzureAdGroup&gt;</c>),
+    /// is itself declared as a generic type parameter (e.g. <c>T? Value</c>) rather than a concrete or constructed type.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="PropertyInfo.PropertyType"/> on a closed generic's property is always the closed argument
+    /// (<c>AzureAdGroup</c>), never the parameter itself, so this must be checked on the open definition's own property.
+    /// </remarks>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "The open generic type definition of a covered closed generic body type is preserved alongside it.")]
+    private static bool IsGenericTypeParameterProperty(Type bodyType, string propertyName)
+    {
+        if (!bodyType.IsGenericType || bodyType.IsGenericTypeDefinition)
+        {
+            return false;
+        }
+
+        var definitionProperty = bodyType.GetGenericTypeDefinition()
+            .GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+
+        return definitionProperty?.PropertyType.IsGenericParameter == true;
     }
 
     private static int? GetMinLength(IEnumerable<ValidationAttribute> validationAttributes)
