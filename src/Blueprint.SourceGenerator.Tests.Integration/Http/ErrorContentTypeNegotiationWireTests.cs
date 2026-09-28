@@ -98,6 +98,21 @@ public sealed class ErrorContentTypeNegotiationWireTests
     }
 
     [Fact]
+    public async Task An_accept_value_that_throws_something_other_than_format_or_overflow_is_still_skipped()
+    {
+        // "application/json; q=" throws ArgumentOutOfRangeException from MediaType.CreateMediaTypeSegmentWithQuality (an
+        // empty parameter value), not FormatException or OverflowException. Legacy's AcceptHeaderParser.TryParseValue
+        // caught everything (AcceptHeaderParser.cs:87-95 at Signature365 8b40ecc961) and skipped the unparseable value,
+        // same as any other unparseable one — it did not crash the request.
+        await using var host = await ErrorHost.StartAsync(negotiate: true);
+
+        var (status, contentType) = await host.SendAsync("validation-422", "application/json; q=");
+
+        status.Should().Be(422);
+        contentType.Should().Be("application/json");
+    }
+
+    [Fact]
     public async Task The_body_is_still_the_problem_it_was()
     {
         await using var host = await ErrorHost.StartAsync(negotiate: true);

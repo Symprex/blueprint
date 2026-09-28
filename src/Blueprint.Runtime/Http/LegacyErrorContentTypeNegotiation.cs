@@ -139,13 +139,12 @@ internal static class LegacyErrorContentTypeNegotiation
             result = MediaType.CreateMediaTypeSegmentWithQuality(value, currentIndex);
             length = result.MediaType.HasValue ? result.MediaType.Length : 0;
         }
-        catch (FormatException)
+        catch
         {
-            result = default;
-            length = 0;
-        }
-        catch (OverflowException)
-        {
+            // Legacy's catch was bare (AcceptHeaderParser.cs:87-95 at Signature365 8b40ecc961): "we are not capable of
+            // parsing" every browser-sent malformation the same way, not just the FormatException/OverflowException a
+            // malformed number gives. An empty parameter value (e.g. "application/json; q=") throws
+            // ArgumentOutOfRangeException from MediaType.CreateMediaTypeSegmentWithQuality, not either of those two.
             result = default;
             length = 0;
         }
