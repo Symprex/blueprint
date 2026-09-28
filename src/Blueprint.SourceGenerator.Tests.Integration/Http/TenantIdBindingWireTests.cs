@@ -315,9 +315,10 @@ public sealed class TenantIdBindingWireTests
         bodyComponent.GetProperty("properties").EnumerateObject().Select(static p => p.Name).Should().Contain("tenantId");
 
         // Not legacy-derived (parameter casing, R101): legacy named a GET's query parameter by the raw property name
-        // (OpenApiDocumentBuilder.cs:150, `property.Name`), so it would have written "TenantId" here too. This document
-        // was rendered with default OpenApiInfoOptions, and the framework's default for a query parameter's name is
-        // camel-case, matching the wire's JSON casing rather than legacy's; the opt-in
+        // (OpenApiDocumentBuilder.cs:150, `property.Name`), so it would have written "TenantId" here, and for the
+        // add-on query below, too. This document was rendered with default OpenApiInfoOptions, and the framework's
+        // default for a query parameter's name is camel-case — the name the framework's typed client sends
+        // (OpenApiParameterNamingTests.cs's own wording) — rather than legacy's; the opt-in
         // `QueryParameterNaming = OpenApiParameterNaming.PropertyName` reproduces legacy's "TenantId" exactly
         // (OpenApiParameterNamingTests.Query_parameters_can_be_named_by_their_property_as_legacy_named_them). A route
         // placeholder is unaffected either way — it keeps its own literal casing, "TenantId" below.
@@ -331,6 +332,8 @@ public sealed class TenantIdBindingWireTests
             .Select(static p => p.GetProperty("in").GetString())
             .Should().Equal("path");
 
+        // Not legacy-derived (parameter casing, R101): see the comment above — same default, same "TenantId" if
+        // rendered with QueryParameterNaming.PropertyName.
         var addOnParameter = Parameter(paths, "/tenant-binding/add-ons/microsoft365", "tenantId");
         addOnParameter.GetProperty("in").GetString().Should().Be("query");
         addOnParameter.GetProperty("required").GetBoolean().Should().BeTrue("the property is [Required]");
