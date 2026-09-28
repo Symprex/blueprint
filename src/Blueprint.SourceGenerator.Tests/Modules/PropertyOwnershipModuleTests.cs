@@ -467,8 +467,11 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
-    public void When_delete_command_has_unowned_properties_then_they_are_query_owned()
+    public void When_delete_command_has_unowned_properties_then_they_are_body_owned()
     {
+        // Legacy read the body of every request but a GET (Signature365 8b40ecc961,
+        // Blueprint.Http/MessagePopulation/HttpBodyMessagePopulationSource.cs:145-147) and the query string of a GET alone
+        // (BlueprintApiBuilderExtensions.cs:68-73).
         var result = CompileDescriptor(
             """
             [global::Blueprint.Model.Attributes.HttpDelete]
@@ -492,9 +495,9 @@ public class PropertyOwnershipModuleTests
             .FirstOrDefault(static s => s.Contains("DeleteItemCommandDescriptor") || s.Contains("OperationPropertyOwnershipFeatureData"));
 
         descriptorSource.Should().NotBeNull();
-        descriptorSource!.Should().Contain("PropertyBindingSource.Route");
-        descriptorSource.Should().Contain("PropertyBindingSource.Query");
-        descriptorSource.Should().NotContain("PropertyBindingSource.Body");
+        descriptorSource!.Should().Contain("new global::Blueprint.Model.OperationPropertyBindingEntry(\"Id\", global::Blueprint.Model.PropertyBindingSource.Route, \"Id\"");
+        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationPropertyBindingEntry(\"Force\", global::Blueprint.Model.PropertyBindingSource.Body, \"force\"");
+        descriptorSource.Should().NotContain("PropertyBindingSource.Query");
     }
 
     // ===== [FromX] attribute override tests =====
@@ -701,6 +704,33 @@ public class PropertyOwnershipModuleTests
 
         result.Diagnostics.Select(static d => d.Id)
             .Should().Contain("BPPO004");
+    }
+
+    [Fact]
+    public void When_FromBody_on_delete_operation_then_it_is_body_owned_without_BPPO004()
+    {
+        // A DELETE's body was read as any non-GET's was (HttpBodyMessagePopulationSource.cs:145-147).
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.HttpDelete]
+            [global::Blueprint.Model.Attributes.RootLink("/messages/bulk-delete")]
+            public partial class DeleteMessagesCommand : ICommand<string>
+            {
+                [global::Blueprint.Model.Attributes.FromBody]
+                public string[] Ids { get; set; }
+
+                public static Task<string> HandleAsync(DeleteMessagesCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = string.Join("\n", result.Output.Select(static t => t.ToString()));
+
+        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationPropertyBindingEntry(\"Ids\", global::Blueprint.Model.PropertyBindingSource.Body, \"ids\"");
     }
 
     [Fact]

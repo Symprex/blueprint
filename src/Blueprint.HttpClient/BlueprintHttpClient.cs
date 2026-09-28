@@ -465,6 +465,11 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         var httpMethod = ResolveHttpMethod(descriptor);
 
+        // A GET carries the operation's other properties as a query string and every other method, a DELETE included, as
+        // its JSON body, as legacy's client sent them (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:79,
+        // :88-91) and as the host reads them.
+        var isGet = httpMethod == HttpMethod.Get;
+
         // Prefer source-generated URL builder (zero reflection) when available
         string url;
         if (descriptor.TryGetFeatureData<CompiledHttpRequestFeatureData>(out var compiled))
@@ -474,7 +479,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
                     $"Compiled URL builder returned null for '{operationType.FullName}'. " +
                     $"A required route parameter is likely null.");
 
-            if ((httpMethod == HttpMethod.Get || httpMethod == HttpMethod.Delete) && compiled.AppendQueryString is not null)
+            if (isGet && compiled.AppendQueryString is not null)
             {
                 url = compiled.AppendQueryString(operation, url);
             }
@@ -483,7 +488,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         {
             url = ResolveUrl(descriptor, operation);
 
-            if (httpMethod == HttpMethod.Get || httpMethod == HttpMethod.Delete)
+            if (isGet)
             {
                 url = AppendQueryString(url, descriptor, operation);
             }
@@ -500,7 +505,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         var request = new HttpRequestMessage(httpMethod, url);
 
         // For methods that carry a body, serialize the operation as JSON
-        if (httpMethod != HttpMethod.Get && httpMethod != HttpMethod.Delete)
+        if (!isGet)
         {
             request.Content = JsonContent.Create(operation, operationType, options: this._jsonOptions);
         }

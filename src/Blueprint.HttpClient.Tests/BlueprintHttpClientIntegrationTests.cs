@@ -122,6 +122,34 @@ public sealed class BlueprintHttpClientTests : IClassFixture<SampleAppFixture>
         captured.RequestUri!.PathAndQuery.Should().Contain("/templates/t-99");
     }
 
+    [Fact]
+    public async Task SendAsync_delete_command_sends_the_operation_as_its_JSON_body_and_no_query_string()
+    {
+        // Legacy's client built a DELETE's URL without the query string it gave a GET, and sent every method but GET its
+        // operation as a JSON body (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:79, :88-91). A host reads
+        // a DELETE's body as it reads any non-GET's (Blueprint.Http/MessagePopulation/HttpBodyMessagePopulationSource.cs:147).
+        string? pathAndQuery = null;
+        string? mediaType = null;
+        string? body = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            pathAndQuery = req.RequestUri!.PathAndQuery;
+            mediaType = req.Content?.Headers.ContentType?.MediaType;
+            body = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+
+        var client = this._fixture.CreateClient(handler);
+
+        await client.SendAsync(new ArchiveTemplateCommand { Id = "t-99" });
+
+        pathAndQuery.Should().Be("/templates/t-99");
+        mediaType.Should().Be("application/json");
+        body.Should().NotBeNull();
+        using var document = JsonDocument.Parse(body!);
+        document.RootElement.GetProperty("id").GetString().Should().Be("t-99");
+    }
+
     // Legacy's client read a body only when it was JSON or text; a response with neither, a 204 among them, it read as a
     // StatusCodeResult of the response's status when the response type could hold one, and threw
     // InvalidOperationException("Could not understand the response of calling {operation}: {url}") for any other

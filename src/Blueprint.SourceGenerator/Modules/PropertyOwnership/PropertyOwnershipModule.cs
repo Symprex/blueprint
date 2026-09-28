@@ -398,30 +398,31 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             && candidate.Name == "ICommand");
     }
 
+    /// <summary>
+    /// Returns true when the operation answers any method but GET, whose unowned properties therefore come from the body.
+    /// </summary>
+    /// <remarks>
+    /// Legacy Blueprint read the body of every request but a GET (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint.Http/MessagePopulation/HttpBodyMessagePopulationSource.cs:145-147</c>), a DELETE's included, and the
+    /// query string of a GET alone (<c>BlueprintApiBuilderExtensions.cs:68-73</c>).
+    /// </remarks>
     private static bool IsBodyMethod(string[] httpMethods)
     {
-        return httpMethods.Any(static m =>
-            string.Equals(m, "POST", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(m, "PUT", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(m, "PATCH", StringComparison.OrdinalIgnoreCase));
+        return httpMethods.Any(static m => !string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsQueryMethod(string[] httpMethods)
     {
-        return httpMethods.Any(static m =>
-            string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(m, "DELETE", StringComparison.OrdinalIgnoreCase));
+        return httpMethods.Any(static m => string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
-    /// Returns true when the operation is exclusively GET and/or DELETE — used for BPPO004 validation
-    /// of explicit [FromBody], which is semantically invalid on these methods.
+    /// Returns true when the operation is exclusively GET — used for BPPO004 validation
+    /// of explicit [FromBody], which is semantically invalid on this method.
     /// </summary>
-    private static bool IsGetOrDeleteMethod(string[] httpMethods)
+    private static bool IsGetOnlyMethod(string[] httpMethods)
     {
-        return httpMethods.Length > 0 && httpMethods.All(static m =>
-            string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(m, "DELETE", StringComparison.OrdinalIgnoreCase));
+        return httpMethods.Length > 0 && httpMethods.All(static m => string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -437,7 +438,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         List<DiagnosticInfo>? diagnostics)
     {
         var entries = new List<PropertyOwnershipEntry>();
-        var isGetOrDelete = IsGetOrDeleteMethod(httpMethods);
+        var isGetOnly = IsGetOnlyMethod(httpMethods);
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var member in operationType.GetAllMembers().OfType<IPropertySymbol>())
@@ -560,7 +561,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 }
                 else if (fromBody != null)
                 {
-                    HandleExplicitFromBody(member, operationType, httpMethods, isGetOrDelete, entries, diagnostics, isInitOnly);
+                    HandleExplicitFromBody(member, operationType, httpMethods, isGetOnly, entries, diagnostics, isInitOnly);
                 }
                 else if (fromHeader != null)
                 {
@@ -732,16 +733,16 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         IPropertySymbol member,
         INamedTypeSymbol operationType,
         string[] httpMethods,
-        bool isGetOrDelete,
+        bool isGetOnly,
         List<PropertyOwnershipEntry> entries,
         List<DiagnosticInfo>? diagnostics,
         bool isInitOnly)
     {
-        if (isGetOrDelete)
+        if (isGetOnly)
         {
             var methodList = string.Join("/", httpMethods.Distinct(StringComparer.OrdinalIgnoreCase));
             diagnostics?.Add(CreatePropertyDiagnostic(
-                PropertyOwnershipDiagnosticDescriptors.ExplicitBodyOnGetOrDelete,
+                PropertyOwnershipDiagnosticDescriptors.ExplicitBodyOnGet,
                 member,
                 operationType,
                 methodList));

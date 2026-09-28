@@ -42,13 +42,13 @@ internal static class PropertyOwnershipDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPPO004: An explicit [FromBody] attribute is applied to a property on a GET or DELETE operation.
-    /// GET/DELETE operations should not have request bodies.
+    /// BPPO004: An explicit [FromBody] attribute is applied to a property on a GET operation, whose body is never read.
+    /// Every other method's body is, a DELETE's included, as legacy Blueprint read it.
     /// </summary>
-    public static readonly DiagnosticDescriptor ExplicitBodyOnGetOrDelete = new(
+    public static readonly DiagnosticDescriptor ExplicitBodyOnGet = new(
         id: "BPPO004",
-        title: "[FromBody] on GET/DELETE operation",
-        messageFormat: "Property '{0}' on operation '{1}' has [FromBody] but the operation uses {2}. GET/DELETE operations should not have a request body.",
+        title: "[FromBody] on GET operation",
+        messageFormat: "Property '{0}' on operation '{1}' has [FromBody] but the operation uses {2}. A GET operation's request body is not read.",
         category: "PropertyOwnership",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

@@ -56,16 +56,19 @@ public class AppModelOpenApiParameterProjectionTests
     }
 
     [Fact]
-    public void When_delete_with_route_and_query_then_operation_has_both_parameter_kinds()
+    public void When_delete_with_route_and_other_properties_then_operation_has_a_path_parameter_and_a_request_body()
     {
+        // Legacy's document gave a non-GET's properties as its request body, not as parameters (Signature365 8b40ecc961,
+        // Blueprint.OpenApi/OpenApiDocumentBuilder.cs:134-137, :159-175).
         var app = new IntegrationTestBlueprintApp();
         var operationContext = BuildOperationContext(app);
 
         var operation = FindOperation<DeleteItemPopulationCommand>(operationContext);
 
         operation.Parameters.Should().Contain(static p => p.Name == "Id" && p.In == "path");
-        operation.Parameters.Should().Contain(static p => p.Name == "force" && p.In == "query" && p.SchemaType == "boolean");
-        operation.RequestBody.Should().BeNull("DELETE operations should not have a request body");
+        operation.Parameters.Should().NotContain(static p => p.Name == "force");
+        operation.RequestBody.Should().NotBeNull();
+        operation.RequestBody!.Properties.Should().ContainSingle(static p => p.Name == "force" && p.SchemaType == "boolean");
     }
 
     [Fact]

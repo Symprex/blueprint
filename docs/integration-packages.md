@@ -299,8 +299,8 @@ public class MyHandler
 1. Resolves `ApiOperationDescriptor` for the operation type
 2. Extracts HTTP method (Query→GET, Command→POST) and URL pattern
 3. Substitutes `{PropertyName}` tokens in URL from operation properties
-4. For GET/DELETE: remaining properties → query string
-5. For POST/PUT/PATCH: operation serialized as JSON body
+4. For GET: remaining properties → query string
+5. For every other method (POST/PUT/PATCH/DELETE): operation serialized as JSON body, as legacy Blueprint's client sent it
 6. Response: 2xx → deserialize, 422 → `ValidationException`, other → `BlueprintApiException`
 
 For a `Results<T1, T2>` response type the client reads the member the host wrote, trying them in order: a

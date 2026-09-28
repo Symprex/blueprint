@@ -119,7 +119,7 @@ These attributes inspect an item count, so they only make sense on a collection 
 | BPPO001 | Error | Unsupported route property type |
 | BPPO002 | Warning | Body-owned properties on GET/DELETE operation |
 | BPPO003 | Error | Unsupported query property type |
-| BPPO004 | Error | `[FromBody]` on GET/DELETE operation |
+| BPPO004 | Error | `[FromBody]` on GET operation |
 | BPPO005 | Error | `[FromRoute]` without matching route placeholder |
 | BPPO006 | Error | Conflicting `[FromX]` binding attributes |
 | BPPO007 | Error | Unsupported header/cookie property type |

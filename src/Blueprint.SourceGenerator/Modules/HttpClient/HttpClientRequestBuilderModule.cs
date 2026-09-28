@@ -94,11 +94,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             }
         }
 
-        // Determine if this operation uses query string parameters (GET and DELETE carry
-        // non-URL properties as query string rather than body)
+        // Determine if this operation uses query string parameters: a GET carries its non-URL properties as a query string,
+        // every other method (a DELETE included) as its body, as legacy's client sent them (Signature365 8b40ecc961,
+        // Common.Core/Api/BlueprintHttpClient.cs:79, :88-91).
         var isQueryMethod = context.GetMetadata<OperationHttpMethodMetadataRegistration>()
-            .Any(static m => m.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase)
-                || m.HttpMethod.Equals("DELETE", StringComparison.OrdinalIgnoreCase));
+            .Any(static m => m.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase));
 
         context.AddRenderStep(codeWriter =>
         {
@@ -118,8 +118,8 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // Build the URL builder lambda
         var urlBuilderLambda = BuildUrlBuilderLambda(operationFqn, urlTemplate, placeholders, properties);
 
-        // Build the query string builder lambda for methods that carry non-URL properties
-        // as query string rather than body (GET and DELETE)
+        // Build the query string builder lambda for a GET, which carries its non-URL properties
+        // as a query string rather than a body
         var queryStringLambda = isQueryMethod
             ? BuildQueryStringLambda(operationFqn, placeholders, properties, queryBindingNames)
             : null;
@@ -247,7 +247,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     {
         // When ownership metadata is available, use it as the source of truth for which
         // properties are query params. When not available (e.g. no HTTP exposure analysis),
-        // fall back to the previous heuristic: non-placeholder properties on GET/DELETE.
+        // fall back to the previous heuristic: non-placeholder properties on a GET.
         List<IPropertySymbol> queryProperties;
         if (queryBindingNames.Count > 0)
         {

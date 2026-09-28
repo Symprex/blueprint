@@ -279,8 +279,10 @@ public class HttpClientRequestBuilderModuleTests
     }
 
     [Fact]
-    public void When_delete_command_with_non_url_params_then_emits_query_string_builder()
+    public void When_delete_command_with_non_url_params_then_no_query_string_builder()
     {
+        // Legacy's client added the other properties as a query string for a GET alone and sent every other method's
+        // operation as its JSON body (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:79, :88-91).
         var result = CompileDescriptor(
             """
             [global::Blueprint.Model.Attributes.HttpDelete]
@@ -303,10 +305,10 @@ public class HttpClientRequestBuilderModuleTests
         var source = GetDescriptorSource(result, "DeleteWidgetCommand");
         source.Should().Contain("CompiledHttpRequestFeatureData");
 
-        // DELETE should build query strings for non-URL properties (like GET does)
-        source.Should().Contain("typed.Permanent");
-        source.Should().Contain("typed.Reason");
-        source.Should().Contain("sep = '&'");
+        // A DELETE's non-URL properties go in its body, as a POST's do.
+        source.Should().Contain(", null)");
+        source.Should().NotContain("typed.Permanent");
+        source.Should().NotContain("typed.Reason");
     }
 
     private static GenerationResult CompileDescriptor(string source)

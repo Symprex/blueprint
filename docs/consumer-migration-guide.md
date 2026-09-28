@@ -743,6 +743,13 @@ and the URL the generated client sent, carried it in the path. `[FromRoute]` on 
 BPPO005), and the OpenAPI document publishes it as a path parameter. A root link's URL is still routed as declared, so a
 colon there is ASP.NET's inline constraint syntax.
 
+**Behaviour change for a DELETE (v1.0.3).** A DELETE's properties that are not in its route are read from its JSON body,
+as a POST's are, and no longer from its query string. `BlueprintHttpClient` sends a DELETE's operation as its JSON body
+with no query string, and the OpenAPI document describes those properties as its request body. This is what legacy
+Blueprint did: it read the body of every request but a GET, and the query string of a GET alone. A DELETE with no body
+is bound from its route alone, as before. `[FromBody]` on a DELETE property now compiles; BPPO004 applies to a GET only.
+A caller that sent a DELETE's properties in the query string must send them in the body.
+
 ## Development-time inspection
 
 Blueprint exposes development-only endpoints for inspecting the generated API surface:
