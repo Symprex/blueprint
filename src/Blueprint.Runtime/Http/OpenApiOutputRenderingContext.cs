@@ -265,8 +265,15 @@ public sealed record OpenApiOutputRenderingContext(
         // A parameter's title is a schema name, passed through the consumer's formatter as legacy's schema name generator
         // passed it, but not a component key: no counter, no sanitising.
         var parameterTitleFormatter = infoOptions.SchemaNaming == OpenApiSchemaNaming.Legacy ? infoOptions.SchemaNameFormatter : null;
+
+        // Legacy's NJsonSchema-based generator never wrote a schema component's "title" and Newtonsoft's contract
+        // resolution never tracked "readOnly" (checked against every Signature365 8b40ecc961 app's committed
+        // Spec/openapi.json: zero of either, across all 21 documents) — omit both only under Legacy naming; a Default
+        // consumer keeps them, since they are real facts legacy simply had no means to describe.
+        var omitLegacyExtras = infoOptions.SchemaNaming == OpenApiSchemaNaming.Legacy;
+
         WritePaths(writer, document.Paths, LegacyOperationIds.Assign(document), allRequireAuth, effectiveSchemes, ComponentKeyOf, parameterTitleFormatter);
-        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, ComponentKeyOf, DescribeComponentSources(document));
+        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, ComponentKeyOf, DescribeComponentSources(document), omitLegacyExtras);
         WriteDocumentTags(writer, document.Paths);
 
         if (allRequireAuth && effectiveSchemes.Count > 0)
@@ -1379,7 +1386,8 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
         List<OpenApiSecurityScheme> securitySchemes,
         Func<string, string>? schemaNameFormatter,
-        IReadOnlyDictionary<string, string> componentSources)
+        IReadOnlyDictionary<string, string> componentSources,
+        bool omitLegacyExtras)
     {
         if (schemaComponents.IsEmpty && securitySchemes.Count == 0)
         {
@@ -1412,7 +1420,7 @@ public sealed record OpenApiOutputRenderingContext(
                     sourcesByKey,
                     SanitiseSchemaKey(processed.BodyTypeName, schemaNameFormatter),
                     componentSources.GetValueOrDefault(processed.BodyTypeName, processed.BodyTypeName));
-                WriteSchemaComponent(writer, processed, schemaNameFormatter);
+                WriteSchemaComponent(writer, processed, schemaNameFormatter, omitLegacyExtras);
             }
 
             // Emit the well-known "Link" schema for HATEOAS $links dictionary values.
@@ -1635,7 +1643,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject(); // Link
     }
 
-    private static void WriteSchemaComponent(Utf8JsonWriter writer, OpenApiSchemaComponentModel component, Func<string, string>? schemaNameFormatter)
+    private static void WriteSchemaComponent(Utf8JsonWriter writer, OpenApiSchemaComponentModel component, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(SanitiseSchemaKey(component.BodyTypeName, schemaNameFormatter));
         writer.WriteStartObject();
@@ -1657,10 +1665,14 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         // Prefer an explicit [DisplayName] title; fall back to the simplified CLR type name
-        // (which correctly handles generics via the "Of" convention).
-        var shortTitle = component.Title ?? SimplifyClrTypeName(component.BodyTypeName);
+        // (which correctly handles generics via the "Of" convention). Legacy's NJsonSchema never wrote a component's
+        // title at all, so this is omitted under Legacy naming.
+        if (!omitLegacyExtras)
+        {
+            var shortTitle = component.Title ?? SimplifyClrTypeName(component.BodyTypeName);
 
-        writer.WriteString("title", shortTitle);
+            writer.WriteString("title", shortTitle);
+        }
 
         if (component.Description is not null)
         {
@@ -1692,7 +1704,7 @@ public sealed record OpenApiOutputRenderingContext(
 
             foreach (var property in component.Properties)
             {
-                WriteSchemaProperty(writer, property, schemaNameFormatter);
+                WriteSchemaProperty(writer, property, schemaNameFormatter, omitLegacyExtras);
             }
 
             writer.WriteEndObject();
@@ -1979,7 +1991,7 @@ public sealed record OpenApiOutputRenderingContext(
         return processedComponent;
     }
 
-    private static void WriteSchemaProperty(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property, Func<string, string>? schemaNameFormatter)
+    private static void WriteSchemaProperty(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(property.Name);
         writer.WriteStartObject();
@@ -2209,7 +2221,9 @@ public sealed record OpenApiOutputRenderingContext(
             }
         }
 
-        if (property.IsReadOnly)
+        // Legacy's Newtonsoft-based contract resolution never tracked a property's absent setter, so it never wrote
+        // readOnly; omitted under Legacy naming to match.
+        if (property.IsReadOnly && !omitLegacyExtras)
         {
             writer.WriteBoolean("readOnly", true);
         }
