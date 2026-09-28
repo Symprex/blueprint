@@ -100,6 +100,38 @@ public sealed class DeleteBodyWireTests
         body.Should().Be($"\"{expectedBody}\"");
     }
 
+    [Theory]
+    [InlineData("application/x-www-form-urlencoded")]
+    [InlineData("multipart/form-data; boundary=----stray")]
+    public async Task A_POST_with_a_form_content_type_returns_415(string contentType)
+    {
+        // R117: legacy registered FormBodyParser by default (Signature365 8b40ecc961,
+        // Blueprint.Http/BlueprintHttpOptionsSetup.cs:25) for exactly these two media types
+        // (Formatters/FormBodyParser.cs:29-30) and bound form fields/IFormFile from them. This framework has no form
+        // binding, so a form POST must not silently reach the handler with its properties unset (R116's silent ignore
+        // covers every other non-JSON type, not these two).
+        await using var host = await DeleteBodyHost.StartAsync();
+
+        var (status, _) = await host.SendWithContentTypeAsync(HttpMethod.Post, "e2e/items", contentType);
+
+        status.Should().Be(415);
+    }
+
+    [Theory]
+    [InlineData("application/x-www-form-urlencoded")]
+    [InlineData("multipart/form-data; boundary=----stray")]
+    public async Task A_DELETE_with_a_form_content_type_returns_415(string contentType)
+    {
+        // Legacy's FormBodyParser applied to any non-GET method, DELETE included (no method check in
+        // HttpBodyMessagePopulationSource.cs), so a DELETE with one of these content types 415s too, even without a
+        // body of its own.
+        await using var host = await DeleteBodyHost.StartAsync();
+
+        var (status, _) = await host.SendWithContentTypeAsync(HttpMethod.Delete, "delete-body/folders/folder-1", contentType);
+
+        status.Should().Be(415);
+    }
+
     [Fact]
     public async Task A_DELETEs_query_string_is_not_read_for_a_property_its_body_owns()
     {
@@ -181,27 +213,25 @@ public sealed class DeleteBodyWireTests
         }
 
         /// <summary>Sends a DELETE with an empty body but a stray, non-JSON Content-Type header (no data to read).</summary>
-        public async Task<(int Status, string Body)> DeleteWithStrayContentTypeAsync(string url)
+        public Task<(int Status, string Body)> DeleteWithStrayContentTypeAsync(string url)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Delete, url)
-            {
-                Content = new StringContent(string.Empty, Encoding.UTF8, "text/plain"),
-            };
-
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-            using var response = await this.Client.SendAsync(request);
-
-            return ((int)response.StatusCode, await response.Content.ReadAsStringAsync());
+            return this.SendWithContentTypeAsync(HttpMethod.Delete, url, "text/plain", body: string.Empty);
         }
 
         /// <summary>Sends a request of <paramref name="method"/> with a stray, non-JSON Content-Type header and a non-empty body.</summary>
-        public async Task<(int Status, string Body)> SendWithStrayContentTypeAsync(HttpMethod method, string url)
+        public Task<(int Status, string Body)> SendWithStrayContentTypeAsync(HttpMethod method, string url)
+        {
+            return this.SendWithContentTypeAsync(method, url, "text/plain", body: "not json");
+        }
+
+        /// <summary>Sends a request of <paramref name="method"/> carrying exactly <paramref name="contentType"/> as its Content-Type header.</summary>
+        public async Task<(int Status, string Body)> SendWithContentTypeAsync(HttpMethod method, string url, string contentType, string body = "")
         {
             using var request = new HttpRequestMessage(method, url)
             {
-                Content = new StringContent("not json", Encoding.UTF8, "text/plain"),
+                Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body)),
             };
+            request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
 
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 

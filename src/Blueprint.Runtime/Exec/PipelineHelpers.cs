@@ -397,8 +397,11 @@ public static class PipelineHelpers
     /// </param>
     /// <returns>
     /// <c>null</c> when the body was read and populated successfully, or was empty/absent, or carried a content type no
-    /// parser could read (legacy left the operation unpopulated in that case too, for every method); or an
-    /// <see cref="OperationResult"/> representing a binding failure (invalid JSON, etc.).
+    /// parser could read (legacy left the operation unpopulated in that case too, for every method); an
+    /// <see cref="UnsupportedMediaTypeResult"/> for <c>application/x-www-form-urlencoded</c> or
+    /// <c>multipart/form-data</c> (legacy bound these from a form; this framework has no form binding, so it refuses
+    /// them rather than silently leaving the operation unpopulated); or an <see cref="OperationResult"/> representing
+    /// a binding failure (invalid JSON, etc.).
     /// </returns>
     public static Task<OperationResult?> ReadJsonBodyAsync<TOperation>(
         HttpContext httpContext,
@@ -416,11 +419,21 @@ public static class PipelineHelpers
         // Content-type guard: a non-JSON content type is a body no IBodyParser could read. Legacy read the body of every
         // non-GET method through whichever IBodyParser.CanRead matched the content type, and silently left the operation
         // unpopulated (no error, no 415 anywhere in that path) when none did, for every method alike (Signature365
-        // 8b40ecc961, HttpBodyMessagePopulationSource.cs:80-86). R108 matched that for DELETE/HEAD/OPTIONS; POST/PUT/PATCH
-        // still 415'd here. Match legacy's uniformity for those too: skip silently for every method this is reached for.
+        // 8b40ecc961, HttpBodyMessagePopulationSource.cs:80-86). R116 matched that for every non-JSON content type. But
+        // legacy registered a FormBodyParser by default for exactly application/x-www-form-urlencoded and
+        // multipart/form-data (BlueprintHttpOptionsSetup.cs:25, Formatters/FormBodyParser.cs:29-30) and bound form
+        // fields/IFormFile from a request carrying one of those. This framework has no form binding, so it cannot
+        // reproduce that: silently ignoring the body here would let the handler run with those properties unset. Refuse
+        // exactly those two media types with a 415 instead; every other non-JSON type still skips silently as R116 made
+        // it.
         if (httpContext.Request.ContentType is not null &&
             !httpContext.Request.ContentType.Contains("json", StringComparison.OrdinalIgnoreCase))
         {
+            if (IsLegacyFormContentType(httpContext.Request.ContentType))
+            {
+                return Task.FromResult<OperationResult?>(UnsupportedMediaTypeResult.Instance);
+            }
+
             return Task.FromResult<OperationResult?>(null);
         }
 
@@ -476,6 +489,27 @@ public static class PipelineHelpers
 
         // Slow path: chunked transfer or unknown Content-Length — use MemoryStream
         return ReadJsonBodyChunkedAsync(httpContext, cancellationToken, operation, populate, jsonOptions);
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="contentType"/> is <c>application/x-www-form-urlencoded</c> or
+    /// <c>multipart/form-data</c> (parameters such as <c>boundary</c> or <c>charset</c> ignored), the exact two media
+    /// types legacy's default <c>FormBodyParser</c> matched (Signature365 8b40ecc961,
+    /// <c>Blueprint.Http/Formatters/FormBodyParser.cs:29-30</c>).
+    /// </summary>
+    private static bool IsLegacyFormContentType(string contentType)
+    {
+        var mediaType = contentType.AsSpan();
+        var semicolonIndex = mediaType.IndexOf(';');
+        if (semicolonIndex >= 0)
+        {
+            mediaType = mediaType[..semicolonIndex];
+        }
+
+        mediaType = mediaType.Trim();
+
+        return mediaType.Equals("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase)
+            || mediaType.Equals("multipart/form-data", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

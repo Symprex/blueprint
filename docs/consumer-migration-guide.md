@@ -802,13 +802,21 @@ is bound from its route alone, as before. `[FromBody]` on a DELETE property now 
 A caller that sent a DELETE's properties in the query string must send them in the body.
 
 **Behaviour change (v1.0.3).** A request whose `Content-Type` is set but is not JSON no longer gets a 415 for any
-method: the operation's body properties are simply left unpopulated, as legacy Blueprint did for every request but a
-GET — it never rejected a body it could not parse; it silently left the operation as it was
+method: the operation's body properties are simply left unpopulated, for every request but a GET — legacy Blueprint
+never rejected a body it could not parse; it silently left the operation as it was
 (`HttpBodyMessagePopulationSource.cs:80-86`). A body-less DELETE, HEAD or OPTIONS that nonetheless carries a stray,
 non-JSON `Content-Type` (a proxy or client default) is bound from its route alone, not 415'd, as before v1.0.3
 brought DELETE/HEAD/OPTIONS under the same check as POST/PUT/PATCH. POST, PUT and PATCH now match too: a stray or
 wrong content type on one of those leaves the operation's body properties unset rather than short-circuiting to a
 415 — if those properties are required, validation reports them missing instead.
+
+This is *not* what legacy Blueprint did in one respect: legacy registered a `FormBodyParser` by default for exactly
+`application/x-www-form-urlencoded` and `multipart/form-data`, and bound form fields and `IFormFile` properties from a
+request carrying one of those (`BlueprintHttpOptionsSetup.cs:25`, `Formatters/FormBodyParser.cs:29-30`). This
+framework has no form binding, so it cannot reproduce that behaviour; silently ignoring the body would let the
+handler run with those properties unset instead. A request with one of those two content types still gets a 415, on
+any method that reads a body — this is the one non-JSON content type family this framework refuses rather than
+ignores. Every other non-JSON content type (`text/plain`, `application/xml`, …) is ignored as described above.
 
 ## Development-time inspection
 
