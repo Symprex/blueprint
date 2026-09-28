@@ -67,11 +67,14 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <param name="operation">The operation to send.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
-    /// The deserialized response. A 204 No Content is <see cref="StatusCodeResult.NoContent.Instance"/> when
-    /// <typeparamref name="TResponse"/> can hold a <see cref="StatusCodeResult"/>, as legacy's client made one.
+    /// The deserialized response. A bodiless response with no media type — a 204 No Content, or any other status with
+    /// nothing to read — is a <see cref="StatusCodeResult"/> singleton of the response's status when
+    /// <typeparamref name="TResponse"/> can hold a <see cref="StatusCodeResult"/>, <see cref="HttpResult"/>,
+    /// <see cref="Blueprint.OperationResult"/> or <see cref="object"/> (a status-only <see cref="HttpResult"/>
+    /// when only that base is asked for), as legacy's client made one.
     /// </returns>
     /// <exception cref="BlueprintApiException">Thrown for non-success status codes (4xx/5xx).</exception>
-    /// <exception cref="InvalidOperationException">A 204 No Content for a <typeparamref name="TResponse"/> that cannot hold a <see cref="StatusCodeResult"/>, as legacy's client threw.</exception>
+    /// <exception cref="InvalidOperationException">A bodiless, media-type-less response for a <typeparamref name="TResponse"/> that cannot hold one of those shapes, as legacy's client threw.</exception>
     /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity with validation errors.</exception>
     public Task<TResponse?> SendAsync<TResponse>(
         IOperation operation,
@@ -89,11 +92,14 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// <param name="options">Optional call options to modify the outgoing request (e.g. add headers).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
-    /// The deserialized response. A 204 No Content is <see cref="StatusCodeResult.NoContent.Instance"/> when
-    /// <typeparamref name="TResponse"/> can hold a <see cref="StatusCodeResult"/>, as legacy's client made one.
+    /// The deserialized response. A bodiless response with no media type — a 204 No Content, or any other status with
+    /// nothing to read — is a <see cref="StatusCodeResult"/> singleton of the response's status when
+    /// <typeparamref name="TResponse"/> can hold a <see cref="StatusCodeResult"/>, <see cref="HttpResult"/>,
+    /// <see cref="Blueprint.OperationResult"/> or <see cref="object"/> (a status-only <see cref="HttpResult"/>
+    /// when only that base is asked for), as legacy's client made one.
     /// </returns>
     /// <exception cref="BlueprintApiException">Thrown for non-success status codes (4xx/5xx).</exception>
-    /// <exception cref="InvalidOperationException">A 204 No Content for a <typeparamref name="TResponse"/> that cannot hold a <see cref="StatusCodeResult"/>, as legacy's client threw.</exception>
+    /// <exception cref="InvalidOperationException">A bodiless, media-type-less response for a <typeparamref name="TResponse"/> that cannot hold one of those shapes, as legacy's client threw.</exception>
     /// <exception cref="ValidationException">Thrown for 422 Unprocessable Entity with validation errors.</exception>
     public async Task<TResponse?> SendAsync<TResponse>(
         IOperation operation,
@@ -1163,17 +1169,12 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         if (response.StatusCode == HttpStatusCode.NoContent)
         {
             // A result the host writes as an empty 204 is read as that result, as a union's member is. Otherwise, as legacy's
-            // client had nothing to read in a 204, it is a StatusCodeResult of the status when the response type can hold
-            // one, and anything else throws (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:199-228).
-            // StatusCodeResult is abstract here, so the 204's is its own nested result.
-            if (CreateBodilessResult(typeof(TResponse), (int)HttpStatusCode.NoContent) is { } bodiless)
+            // client had nothing to read in a 204, any TResponse shape legacy's StatusCodeResult branch covered gets a
+            // StatusCodeResult-shaped result, and anything else throws (Signature365 8b40ecc961,
+            // Common.Core/Api/BlueprintHttpClient.cs:199-228).
+            if (CreateNoMediaTypeResult(typeof(TResponse), (int)HttpStatusCode.NoContent) is { } bodiless)
             {
                 return (TResponse)bodiless;
-            }
-
-            if (typeof(StatusCodeResult).IsAssignableTo(typeof(TResponse)))
-            {
-                return (TResponse)(object)StatusCodeResult.NoContent.Instance;
             }
 
             throw new InvalidOperationException(
@@ -1202,6 +1203,17 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         {
             var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             return (TResponse)(object)text;
+        }
+
+        // No media type at all, any status: legacy's last resort for whatever nothing else claimed — a StatusCodeResult
+        // (its own type, HttpResult, OperationResult or object), or, since StatusCodeResult and HttpResult are siblings
+        // here where legacy's StatusCodeResult derived from HttpResult, a status-only HttpResult when only that base is
+        // asked for (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:199-225). Live: Microsoft365.Gateway's
+        // HandleGraphWebhookNotificationsCommand : ICommand<HttpResult> forwarding Microsoft365's bodiless 202.
+        if (contentType is null
+            && CreateNoMediaTypeResult(typeof(TResponse), (int)response.StatusCode) is { } noMediaTypeResult)
+        {
+            return (TResponse)noMediaTypeResult;
         }
 
         // A resource event is read as legacy read one, not by constructor (ResourceEventReader). A JSON null is no event.
@@ -1493,6 +1505,61 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The result a response with no media type is, for any of the <c>TResponse</c> shapes legacy's fallback branch
+    /// covered when nothing else claimed the response: whatever <see cref="CreateBodilessResult"/> already gives; a
+    /// <see cref="StatusCodeResult"/> singleton of <paramref name="status"/> when <paramref name="resultType"/> can hold a
+    /// <see cref="StatusCodeResult"/>, <see cref="HttpResult"/>, <see cref="OperationResult"/> or <see cref="object"/>
+    /// (legacy's client made a <c>StatusCodeResult</c> of any status whenever nothing else claimed the response, and
+    /// legacy's <c>StatusCodeResult</c> derived from <c>HttpResult</c> — Signature365 <c>8b40ecc961</c>,
+    /// <c>Common.Core/Api/BlueprintHttpClient.cs:199-225</c>); otherwise, when <paramref name="resultType"/> can only hold
+    /// the base <see cref="HttpResult"/> (a sibling of <see cref="StatusCodeResult"/> here, not a base of it), a status-only
+    /// <see cref="HttpResult"/> of <paramref name="status"/>.
+    /// </summary>
+    /// <returns>The result, or <see langword="null"/> when nothing legacy's fallback covered claims it.</returns>
+    /// <remarks>
+    /// A <paramref name="resultType"/> of the base <see cref="StatusCodeResult"/>, <see cref="OperationResult"/> or
+    /// <see cref="object"/> at a status with no nested <see cref="StatusCodeResult"/> singleton (for example 205) still
+    /// finds nothing here: legacy's <c>StatusCodeResult</c> could hold any status; the nested singletons here cannot. That
+    /// is a pre-existing departure, not one this method fixes.
+    /// </remarks>
+    private static object? CreateNoMediaTypeResult(Type resultType, int status)
+    {
+        if (CreateBodilessResult(resultType, status) is { } bodiless)
+        {
+            return bodiless;
+        }
+
+        if (typeof(StatusCodeResult).IsAssignableTo(resultType))
+        {
+            return FindStatusCodeResult(typeof(StatusCodeResult), status);
+        }
+
+        if (typeof(HttpResult).IsAssignableTo(resultType))
+        {
+            return new BodilessHttpResult((HttpStatusCode)status);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// A client-materialised <see cref="HttpResult"/> carrying only a status, for a bodiless, media-type-less response
+    /// when <c>TResponse</c> asks for the base <see cref="HttpResult"/> and could not, unlike <see cref="OperationResult"/>
+    /// or <see cref="object"/>, also be answered by a <see cref="StatusCodeResult"/> singleton (they are siblings here,
+    /// where legacy's <c>StatusCodeResult</c> derived from <c>HttpResult</c> and so could answer this shape itself — see
+    /// <see cref="CreateNoMediaTypeResult"/>). Its <see cref="HttpResult.ExecuteAsync"/> (the base implementation — this
+    /// type adds nothing) writes exactly the status and no body, so a gateway handler that forwards this value unchanged
+    /// answers its own caller with the same bodiless response.
+    /// </summary>
+    private sealed class BodilessHttpResult : HttpResult
+    {
+        public BodilessHttpResult(HttpStatusCode statusCode)
+            : base(statusCode)
+        {
+        }
     }
 
     /// <summary>

@@ -193,6 +193,108 @@ public sealed class BlueprintHttpClientTests : IClassFixture<SampleAppFixture>
             .Should().BeSameAs(Runtime.Exec.StatusCodeResult.NoContent.Instance, "an object holds a StatusCodeResult too");
     }
 
+    // R112: legacy's client made a StatusCodeResult of any status whenever nothing else claimed the response and
+    // StatusCodeResult was assignable to the response type (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs
+    // :199-225). Legacy's StatusCodeResult derived from HttpResult, so that covered HttpResult too. Here they are siblings,
+    // so HttpResult needs its own status-only result. Live: Microsoft365.Gateway's
+    // HandleGraphWebhookNotificationsCommand : ICommand<HttpResult> forwards Microsoft365's bodiless 202.
+    [Fact]
+    public async Task SendAsync_202_accepted_with_no_media_type_for_an_HttpResult_returns_a_status_only_result()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.Accepted));
+        var client = this._fixture.CreateClient(handler);
+
+        var result = await client.SendAsync<Blueprint.Http.HttpResult>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.Should().NotBeNull();
+        result!.StatusCode.Should().Be(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task SendAsync_204_no_content_for_an_HttpResult_returns_a_status_only_result()
+    {
+        // Before R112 this threw: the 204 branch only checked the (unrelated, here) StatusCodeResult family.
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var client = this._fixture.CreateClient(handler);
+
+        var result = await client.SendAsync<Blueprint.Http.HttpResult>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        result.Should().NotBeNull();
+        result!.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    // Before R112 these fell through to a JSON read of an empty, media-type-less body: only 204 was handled, and only for
+    // the StatusCodeResult family, so a 202 for any of these three shapes threw a JSON exception instead.
+    [Fact]
+    public async Task SendAsync_202_accepted_with_no_media_type_for_object_returns_the_status_code_result_singleton()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.Accepted));
+        var client = this._fixture.CreateClient(handler);
+
+        (await client.SendAsync<object>(new ArchiveTemplateCommand { Id = "t-1" }))
+            .Should().BeSameAs(Runtime.Exec.StatusCodeResult.Accepted.Instance);
+    }
+
+    [Fact]
+    public async Task SendAsync_202_accepted_with_no_media_type_for_OperationResult_returns_the_status_code_result_singleton()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.Accepted));
+        var client = this._fixture.CreateClient(handler);
+
+        (await client.SendAsync<Blueprint.OperationResult>(new ArchiveTemplateCommand { Id = "t-1" }))
+            .Should().BeSameAs(Runtime.Exec.StatusCodeResult.Accepted.Instance);
+    }
+
+    [Fact]
+    public async Task SendAsync_202_accepted_with_no_media_type_for_the_base_StatusCodeResult_returns_the_status_code_result_singleton()
+    {
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.Accepted));
+        var client = this._fixture.CreateClient(handler);
+
+        (await client.SendAsync<Runtime.Exec.StatusCodeResult>(new ArchiveTemplateCommand { Id = "t-1" }))
+            .Should().BeSameAs(Runtime.Exec.StatusCodeResult.Accepted.Instance);
+    }
+
+    [Fact]
+    public async Task SendAsync_200_json_body_for_object_still_reads_the_body_not_a_status_code_result()
+    {
+        // Guards the "no media type" branch's scope: a real JSON body for one of the shapes it also covers (object here)
+        // must still be read as JSON, not diverted to a StatusCodeResult singleton.
+        var handler = new FakeHttpHandler(static _ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"id":"t-1"}""", Encoding.UTF8, "application/json"),
+            });
+        var client = this._fixture.CreateClient(handler);
+
+        var result = await client.SendAsync<object>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        // object also matches PlainTextResult's "assignable to TResponse" check when a content type is present — a
+        // pre-existing, unrelated behaviour — but it must never be the StatusCodeResult.OK singleton the media-type-less
+        // branch would give it.
+        result.Should().NotBeSameAs(Runtime.Exec.StatusCodeResult.OK.Instance);
+        result.Should().BeOfType<Runtime.Exec.PlainTextResult>();
+    }
+
+    [Fact]
+    public async Task SendAsync_202_accepted_with_a_json_content_type_for_the_base_StatusCodeResult_does_not_shortcut_to_the_singleton()
+    {
+        // Guards the media-type-less scope from the other side: a real application/json body must never be short-circuited
+        // to the StatusCodeResult.Accepted singleton just because the status matches one.
+        var handler = new FakeHttpHandler(static _ =>
+            new HttpResponseMessage(HttpStatusCode.Accepted)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            });
+        var client = this._fixture.CreateClient(handler);
+
+        var act = () => client.SendAsync<Runtime.Exec.StatusCodeResult>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        // The abstract StatusCodeResult cannot be deserialized from JSON — the point is that it tries, and fails that way,
+        // rather than quietly returning StatusCodeResult.Accepted.Instance because the status happens to match.
+        await act.Should().ThrowAsync<NotSupportedException>();
+    }
+
     [Fact]
     public async Task SendAsync_422_throws_validation_exception_with_errors()
     {
