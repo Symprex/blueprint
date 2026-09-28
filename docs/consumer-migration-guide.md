@@ -790,6 +790,14 @@ Blueprint did: it read the body of every request but a GET, and the query string
 is bound from its route alone, as before. `[FromBody]` on a DELETE property now compiles; BPPO004 applies to a GET only.
 A caller that sent a DELETE's properties in the query string must send them in the body.
 
+Making DELETE (and HEAD, OPTIONS) body methods brings them under the same non-JSON-content-type check a POST or PUT
+already had: a request whose `Content-Type` is set but is not JSON gets a 415, even with no body to read. For DELETE,
+HEAD and OPTIONS that check is relaxed to match legacy, which never rejected a body it could not parse for any
+non-GET method — it silently left the operation unpopulated. A body-less DELETE that nonetheless carries a stray,
+non-JSON `Content-Type` (a proxy or client default) is bound from its route alone, not 415'd. POST and PUT keep the
+415 unchanged; legacy's full behaviour (silently ignoring an unparseable body on every method, POST and PUT included)
+is not reproduced there.
+
 ## Development-time inspection
 
 Blueprint exposes development-only endpoints for inspecting the generated API surface:

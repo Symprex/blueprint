@@ -413,10 +413,22 @@ public static class PipelineHelpers
             return Task.FromResult<OperationResult?>(null);
         }
 
-        // Content-type guard: reject non-JSON bodies early
+        // Content-type guard: reject non-JSON bodies early. Legacy read the body of every non-GET method through
+        // whichever IBodyParser.CanRead matched the content type, and silently left the operation unpopulated (no
+        // error) when none did (Signature365 8b40ecc961, HttpBodyMessagePopulationSource.cs:80-86) -- for every method
+        // alike, POST/PUT included. R98 made DELETE/HEAD/OPTIONS body methods too, so a request for one of them that
+        // carries only a stray, non-JSON Content-Type header (a proxy or client default, often with no data at all)
+        // now reaches this guard and is 415'd where legacy silently ignored it. Matched here for exactly the methods
+        // R98 newly made body methods; POST/PUT/PATCH keep this guard unchanged -- reproducing legacy's full
+        // uniformity for those too is out of this fix's scope (see R108 in REVIEW-FIXES.md).
         if (httpContext.Request.ContentType is not null &&
             !httpContext.Request.ContentType.Contains("json", StringComparison.OrdinalIgnoreCase))
         {
+            if (IsLegacyBodyTolerantMethod(httpContext.Request.Method))
+            {
+                return Task.FromResult<OperationResult?>(null);
+            }
+
             return Task.FromResult<OperationResult?>(UnsupportedMediaTypeResult.Instance);
         }
 
@@ -472,6 +484,18 @@ public static class PipelineHelpers
 
         // Slow path: chunked transfer or unknown Content-Length — use MemoryStream
         return ReadJsonBodyChunkedAsync(httpContext, cancellationToken, operation, populate, jsonOptions);
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="method"/> is one of the HTTP methods R98 newly made a body method
+    /// (<c>PropertyOwnershipModule.IsBodyMethod</c>, any method but GET): DELETE, HEAD or OPTIONS. POST/PUT/PATCH
+    /// already read a body before that change and keep this guard's existing 415 for a non-JSON content type.
+    /// </summary>
+    private static bool IsLegacyBodyTolerantMethod(string method)
+    {
+        return string.Equals(method, "DELETE", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(method, "HEAD", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

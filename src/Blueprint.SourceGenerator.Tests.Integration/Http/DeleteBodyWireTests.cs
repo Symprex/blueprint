@@ -70,6 +70,21 @@ public sealed class DeleteBodyWireTests
     }
 
     [Fact]
+    public async Task A_body_less_DELETE_with_a_stray_non_JSON_content_type_is_bound_from_its_route_alone()
+    {
+        // A body-less DELETE that nonetheless carries a Content-Type header (e.g. a proxy or client default) used to
+        // reach PipelineHelpers.ReadJsonBodyAsync's content-type guard and 415, once R98 made DELETE a body method too.
+        // Legacy ignored a body no parser could read for every non-GET alike (HttpBodyMessagePopulationSource.cs:80-86
+        // at Signature365 8b40ecc961): no parser selected, no error, the operation left as it was.
+        await using var host = await DeleteBodyHost.StartAsync();
+
+        var (status, body) = await host.DeleteWithStrayContentTypeAsync("delete-body/folders/folder-1");
+
+        status.Should().Be(200);
+        body.Should().Be("\"id=folder-1;force=False\"");
+    }
+
+    [Fact]
     public async Task A_DELETEs_query_string_is_not_read_for_a_property_its_body_owns()
     {
         // The query catch-all applied to a GET alone (BlueprintApiBuilderExtensions.cs:68-73).
@@ -141,6 +156,21 @@ public sealed class DeleteBodyWireTests
             {
                 request.Content = new StringContent(json, Encoding.UTF8, "application/json");
             }
+
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            using var response = await this.Client.SendAsync(request);
+
+            return ((int)response.StatusCode, await response.Content.ReadAsStringAsync());
+        }
+
+        /// <summary>Sends a DELETE with an empty body but a stray, non-JSON Content-Type header (no data to read).</summary>
+        public async Task<(int Status, string Body)> DeleteWithStrayContentTypeAsync(string url)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Delete, url)
+            {
+                Content = new StringContent(string.Empty, Encoding.UTF8, "text/plain"),
+            };
 
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
