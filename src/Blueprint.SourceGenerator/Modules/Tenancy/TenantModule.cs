@@ -300,15 +300,6 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
     }
 
     /// <summary>
-    /// Returns <see langword="true"/> when any route template on the operation contains
-    /// a <c>{TenantId}</c> or <c>{*TenantId}</c> placeholder, indicating that route binding
-    /// will populate the property and the TenantModule should not override it.
-    /// </summary>
-    /// <remarks>
-    /// A legacy <c>{TenantId:ResourceProperty}</c> placeholder binds <c>TenantId</c> from the route too
-    /// (<see cref="RoutePlaceholderSyntax"/>), so it counts, as it does for <c>PropertyOwnershipModule</c>.
-    /// </remarks>
-    /// <summary>
     /// Returns whether <c>TenantId</c> is exclusively route-owned — a placeholder in <em>every</em> one of the
     /// operation's route templates, legacy's "every link" ownership rule
     /// (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/MessagePopulation/HttpRouteMessagePopulationSource.cs:33-40</c>).
