@@ -19,12 +19,12 @@ internal static class PropertyOwnershipDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPPO002: An operation using GET or DELETE has properties that would be body-owned by convention,
-    /// but GET/DELETE operations should not have a request body.
+    /// BPPO002: An operation using GET has properties that would be body-owned by convention, but a GET's request body
+    /// is not read (R98: only GET reads the query string; every other method, a DELETE included, reads its body).
     /// </summary>
-    public static readonly DiagnosticDescriptor BodyPropertiesOnGetOrDelete = new(
+    public static readonly DiagnosticDescriptor BodyPropertiesOnGet = new(
         id: "BPPO002",
-        title: "Body-owned properties on GET/DELETE operation",
+        title: "Body-owned properties on GET operation",
         messageFormat: "Operation '{0}' uses {1} but has properties that would be body-owned by convention: {2}. Consider using [FromQuery] or changing the HTTP method.",
         category: "PropertyOwnership",
         DiagnosticSeverity.Warning,

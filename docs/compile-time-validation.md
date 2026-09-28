@@ -86,7 +86,7 @@ Reserved direction:
 Current property ownership IDs in active use:
 
 - `BPPO001`: route-bound property has a type that cannot be converted from a string route value.
-- `BPPO002`: operation uses GET/DELETE but has properties that would be body-owned by convention (warning).
+- `BPPO002`: operation uses GET but has properties that would be body-owned by convention (warning). Only GET reads the query string (R98); every other method, a DELETE included, reads its body.
 - `BPPO003`: query-bound property has a type that cannot be converted from a string query value.
 - `BPPO004`: explicit `[FromBody]` on a GET operation (error — a GET's request body is not read; every other method's is, a DELETE's included).
 - `BPPO005`: explicit `[FromRoute]` without a matching route placeholder in the URL template.

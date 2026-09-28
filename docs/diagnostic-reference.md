@@ -117,7 +117,7 @@ These attributes inspect an item count, so they only make sense on a collection 
 | ID | Severity | Title |
 |----|----------|-------|
 | BPPO001 | Error | Unsupported route property type |
-| BPPO002 | Warning | Body-owned properties on GET/DELETE operation |
+| BPPO002 | Warning | Body-owned properties on GET operation |
 | BPPO003 | Error | Unsupported query property type |
 | BPPO004 | Error | `[FromBody]` on GET operation |
 | BPPO005 | Error | `[FromRoute]` without matching route placeholder |
