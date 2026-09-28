@@ -20,7 +20,6 @@ public class HttpOperationResultExecutor
 {
     private const string JsonContentType = "application/json; charset=utf-8";
     private const string ProblemJsonContentType = "application/problem+json; charset=utf-8";
-    private const string PlainTextContentType = "text/plain; charset=utf-8";
 
     // The problem types and anonymous title legacy Blueprint's authorisation denials were written with (Signature365
     // 8b40ecc961: Errors/UnauthorizedException.cs:16, Errors/ForbiddenException.cs:15,
@@ -344,10 +343,11 @@ public class HttpOperationResultExecutor
                 await WriteResourceEventEnvelopeAsync(httpContext, operationContext, resourceEventResult).ConfigureAwait(false);
                 return true;
             case PlainTextResult plainTextResult:
+                // Written exactly, with no charset appended, as legacy did (Signature365 8b40ecc961,
+                // Blueprint.Http/PlainTextResult.cs:57: response.ContentType = this.ContentType, verbatim, including its
+                // text/plain default).
                 httpContext.Response.StatusCode = (int)plainTextResult.StatusCode;
-                httpContext.Response.ContentType = string.Equals(plainTextResult.ContentType, "text/plain", StringComparison.Ordinal)
-                    ? PlainTextContentType
-                    : $"{plainTextResult.ContentType}; charset=utf-8";
+                httpContext.Response.ContentType = plainTextResult.ContentType;
                 await httpContext.Response.WriteAsync(plainTextResult.Content, httpContext.RequestAborted).ConfigureAwait(false);
                 return true;
             case FileStreamResult fileStreamResult:

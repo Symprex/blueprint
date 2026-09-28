@@ -626,7 +626,9 @@ public class HttpEndToEndIntegrationTests
         var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
 
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
-        response.ContentType.Should().Be("text/plain; charset=utf-8");
+
+        // No charset: legacy wrote ContentType exactly (Signature365 8b40ecc961, Blueprint.Http/PlainTextResult.cs:57).
+        response.ContentType.Should().Be("text/plain");
         response.Body.Should().Be("Hello, plain text!");
     }
 
@@ -642,7 +644,7 @@ public class HttpEndToEndIntegrationTests
         var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
 
         response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
-        response.ContentType.Should().Be("text/plain; charset=utf-8");
+        response.ContentType.Should().Be("text/plain");
         response.Body.Should().Be("Resource not found");
     }
 
@@ -658,7 +660,7 @@ public class HttpEndToEndIntegrationTests
         var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
 
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
-        response.ContentType.Should().Be("text/vcard; charset=utf-8");
+        response.ContentType.Should().Be("text/vcard");
         response.Body.Should().Be("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:John Doe\r\nEND:VCARD");
     }
 

@@ -1085,7 +1085,7 @@ public class ReferenceAppHttpEndToEndIntegrationTests
         });
 
         response.StatusCode.Should().Be(StatusCodes.Status200OK);
-        response.ContentType.Should().Be("text/plain; charset=utf-8");
+        response.ContentType.Should().Be("text/plain");
         response.Body.Should().Contain("healthy");
     }
 
