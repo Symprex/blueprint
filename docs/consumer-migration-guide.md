@@ -280,9 +280,10 @@ blueprint.AddApiAuthoriser<FullAuthoriser>();
 `{"type":"security_failure","title":"Access denied. Anonymous access is not allowed.","status":401}` for an anonymous caller,
 each with a `traceId` when the operation has an activity. The `Reason` is never written; it is logged at Information under
 `Blueprint.Authorisation.AuthorisationMiddlewareBuilder`. The `ForbiddenResult` or `UnauthenticatedResult` a pipeline returns
-carries the denial as `Failure`. Coming from legacy Blueprint nothing changes, except a `traceId` (see the exception bodies
-below). Coming from v1.0.2, the fixed "Unauthorized" / "Forbidden" bodies are gone, and a denial whose failure type is not
-`Authorisation` (a `default` `ExecutionAllowed` included) is a 401 where it was a 403.
+carries the denial as `Failure`. Coming from legacy Blueprint nothing changes in the body, except a `traceId` (see the
+exception bodies below); the content type is `application/problem+json` unless `NegotiateErrorContentType` is set (see
+"Error content type" below). Coming from v1.0.2, the fixed "Unauthorized" / "Forbidden" bodies are gone, and a denial
+whose failure type is not `Authorisation` (a `default` `ExecutionAllowed` included) is a 401 where it was a 403.
 
 **Behaviour change for exception bodies (v1.0.3).** An exception is written with the body legacy Blueprint wrote:
 - an `ApiException` with its own type, title, status, detail and extensions, a null one left out, whatever its status and
@@ -292,10 +293,10 @@ below). Coming from v1.0.2, the fixed "Unauthorized" / "Forbidden" bodies are go
 - in each case a `traceId` extension last, when the operation has an activity.
 
 `UnauthorizedException(message)` puts the message in the title, with no detail. Coming from legacy Blueprint nothing
-changes, except one deliberate departure: a body without an activity never has a `traceId`. Legacy's could. An
-`ApiException` made without extensions shared one static dictionary, which legacy wrote each body's `traceId` into, so a
-later body with no activity carried another request's `traceId`, and concurrent requests raced on it. This applies to
-denials too. Coming from v1.0.2:
+changes in the body (for the content type see "Error content type" below), except one deliberate departure: a body
+without an activity never has a `traceId`. Legacy's could. An `ApiException` made without extensions shared one static
+dictionary, which legacy wrote each body's `traceId` into, so a later body with no activity carried another request's
+`traceId`, and concurrent requests raced on it. This applies to denials too. Coming from v1.0.2:
 - a null title or detail was filled in ("Server error", "Request error", the exception message);
 - a 5xx `ApiException`'s detail was replaced;
 - exposed stack traces went in a `stackTrace` extension;
@@ -447,6 +448,11 @@ Available result types:
 **Behaviour change for a `PlainTextResult` with no content (v1.0.3).** `new PlainTextResult(null)` is written as an
 empty body at the result's status, as legacy Blueprint wrote it; before v1.0.3 its constructor threw
 `ArgumentNullException`. Its `Content` is then empty. A `?? string.Empty` added only to avoid that throw can go.
+
+**Behaviour change for a query's resource event (v1.0.3).** A resource event's `SelfQuery` runs only when the operation is
+a command, as legacy Blueprint ran it. A query that returns a resource event with a self query hands it on as it is:
+`Data` stays `null`, and `SelfQuery` is kept. A query's `DeferredResourceEventResult<T>` is not resolved either. Coming
+from legacy Blueprint nothing changes. Coming from v1.0.2, a query's self query ran and filled `Data`.
 
 #### Response header extensions
 
