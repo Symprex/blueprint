@@ -97,6 +97,30 @@ public class OpenApiSchemaNameCollisionTests
     }
 
     [Fact]
+    public void A_ResourceEvent_envelope_is_named_from_the_inner_types_final_key_not_its_projection_time_name()
+    {
+        using var document = Render(new OpenApiInfoOptions());
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+
+        var envelopeNames = schemas.EnumerateObject()
+            .Select(static p => p.Name)
+            .Where(static name => name.StartsWith("ResourceEventOfEnvelopeMatch", StringComparison.Ordinal))
+            .ToList();
+
+        foreach (var envelopeName in envelopeNames)
+        {
+            var innerRef = RefsIn(schemas.GetProperty(envelopeName).GetProperty("properties").GetProperty("data")).Single();
+            var innerKey = innerRef[Schemas.Length..];
+
+            // The envelope's own key must always be "ResourceEventOf" + the exact key its "data" $ref resolves to —
+            // whatever the reach order gave that key, never the projection-time name baked in ad hoc.
+            envelopeName.Should().Be("ResourceEventOf" + innerKey);
+        }
+
+        envelopeNames.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void Under_the_default_naming_two_types_of_one_simple_name_each_get_a_component()
     {
         using var document = Render(new OpenApiInfoOptions());

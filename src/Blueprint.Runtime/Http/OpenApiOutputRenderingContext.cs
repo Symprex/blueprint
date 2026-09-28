@@ -1274,7 +1274,7 @@ public sealed record OpenApiOutputRenderingContext(
             }
             else if (content.IsResourceEventEnvelope && content.SchemaComponents.Length >= 1)
             {
-                Reach(OpenApiDocumentRenderingContext.BuildResourceEventEnvelopeBodyTypeName(content.SchemaComponents[0].BodyTypeName));
+                ReachResourceEventEnvelope(content.SchemaComponents[0].BodyTypeName);
             }
             else
             {
@@ -1282,6 +1282,48 @@ public sealed record OpenApiOutputRenderingContext(
                 {
                     Reach(component.IsArrayWrapper ? component.Component.BodyTypeName : component.BodyTypeName);
                 }
+            }
+        }
+
+        // A ResourceEvent envelope's own key must be built from the inner type's *final* key — the one its "data"
+        // property's $ref actually resolves to — never from the inner's projection-time name embedded verbatim in the
+        // envelope's synthetic BodyTypeName. The two can differ: the projection's own walk can give one type of a
+        // shared simple name the base name and the other "…2", while this reach-order walk (over responses, in
+        // document order) can visit them in the other order and swap which one keeps the base name. Reaching the inner
+        // type first — through the ordinary Reach(), which every other reference already goes through — and reading
+        // back its resolved key is what keeps the envelope's name and its "data" $ref pointing at the same component
+        // (R28: without this, "ResourceEventOfX2" could wrap the component actually written under key "X").
+        void ReachResourceEventEnvelope(string innerRawName)
+        {
+            var envelopeRawName = OpenApiDocumentRenderingContext.BuildResourceEventEnvelopeBodyTypeName(innerRawName);
+
+            if (keys.ContainsKey(envelopeRawName) || !componentsByName.TryGetValue(envelopeRawName, out var envelopeComponent))
+            {
+                return;
+            }
+
+            Reach(innerRawName);
+
+            var innerFinalKey = keys.GetValueOrDefault(innerRawName)
+                ?? SanitiseSchemaKey(baseNames.GetValueOrDefault(innerRawName, innerRawName), schemaNameFormatter);
+
+            var key = "ResourceEventOf" + innerFinalKey;
+            var uniqueKey = key;
+
+            for (var counter = 2; !takenKeys.Add(uniqueKey); counter++)
+            {
+                uniqueKey = key + counter.ToString(CultureInfo.InvariantCulture);
+            }
+
+            keys[envelopeRawName] = uniqueKey;
+
+            foreach (var property in envelopeComponent.Properties)
+            {
+                Reach(property.SchemaRef);
+                Reach(property.EnumSchemaRef);
+                Reach(property.ItemsSchemaRef);
+                Reach(property.AdditionalPropertiesSchemaRef);
+                Reach(property.AdditionalPropertiesItemsSchemaRef);
             }
         }
 

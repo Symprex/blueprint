@@ -1,3 +1,4 @@
+using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 
@@ -174,6 +175,59 @@ public partial class GetCollisionPreviewQuery : IQuery<CollisionPreviewApiResour
     public static CollisionPreviewApiResource Handle(GetCollisionPreviewQuery query)
     {
         return new CollisionPreviewApiResource();
+    }
+}
+
+/// <summary>Holds the first of two <c>ApiResource</c>s named <c>EnvelopeMatch</c>, wrapped in a ResourceEvent envelope
+/// below (R28).</summary>
+public static class EnvelopeOne
+{
+    /// <summary>The first of two <c>EnvelopeMatch</c> resources.</summary>
+    public sealed class EnvelopeMatch : ApiResource
+    {
+        public override string Object => "EnvelopeMatchOne";
+    }
+}
+
+/// <summary>Holds the second of two <c>ApiResource</c>s named <c>EnvelopeMatch</c>.</summary>
+public static class EnvelopeTwo
+{
+    /// <summary>The second of two <c>EnvelopeMatch</c> resources.</summary>
+    public sealed class EnvelopeMatch : ApiResource
+    {
+        public override string Object => "EnvelopeMatchTwo";
+    }
+}
+
+/// <summary>
+/// Submits the second-projected resource (its namespace, <c>EnvelopeTwo</c>, sorts after <c>EnvelopeOne</c>'s — so the
+/// schema projection's own walk names it <c>EnvelopeMatch2</c> — but at a URL that sorts first, so the document's reach
+/// order gives it the un-suffixed final key <c>EnvelopeMatch</c>: projection-time name and final key disagree, which is
+/// R28's bug — the envelope must be named from the final key (<c>ResourceEventOfEnvelopeMatch</c>), not the
+/// projection-time one (<c>ResourceEventOfEnvelopeMatch2</c>).
+/// </summary>
+[AllowAnonymous]
+[RootLink("/collisions/envelopes/aaa-two")]
+[HttpPost]
+public partial class SubmitEnvelopeTwoCommand : ICommand<ResourceEvent<EnvelopeTwo.EnvelopeMatch>>
+{
+    public static ResourceEvent<EnvelopeTwo.EnvelopeMatch> Handle(SubmitEnvelopeTwoCommand command)
+    {
+        return new ResourceEvent<EnvelopeTwo.EnvelopeMatch>(ResourceEventChangeType.Created, "created", new EnvelopeTwo.EnvelopeMatch());
+    }
+}
+
+/// <summary>Submits the first-projected resource (kept the base name <c>EnvelopeMatch</c> in the schema projection's
+/// own walk) at a URL reached after the one above, so the document's reach order gives it the final key
+/// <c>EnvelopeMatch2</c> instead — the swap this fixture is for.</summary>
+[AllowAnonymous]
+[RootLink("/collisions/envelopes/zzz-one")]
+[HttpPost]
+public partial class SubmitEnvelopeOneCommand : ICommand<ResourceEvent<EnvelopeOne.EnvelopeMatch>>
+{
+    public static ResourceEvent<EnvelopeOne.EnvelopeMatch> Handle(SubmitEnvelopeOneCommand command)
+    {
+        return new ResourceEvent<EnvelopeOne.EnvelopeMatch>(ResourceEventChangeType.Created, "created", new EnvelopeOne.EnvelopeMatch());
     }
 }
 

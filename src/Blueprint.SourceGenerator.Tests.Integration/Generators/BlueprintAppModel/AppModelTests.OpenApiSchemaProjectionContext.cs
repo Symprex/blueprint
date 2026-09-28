@@ -36,6 +36,8 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "E2EConflictDetail",
             "E2EJobAcceptedPayload",
             "E2EWidgetResponse",
+            "EnvelopeMatch",
+            "EnvelopeMatch2",
             "ExpandableOfDepartment",
             "ExpandableOfLocation",
             "ExpandableTestEmployee",
