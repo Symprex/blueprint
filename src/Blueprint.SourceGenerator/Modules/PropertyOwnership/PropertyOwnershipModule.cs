@@ -14,7 +14,7 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, IDescriptorContributor, IPipelineContributor
 {
-    private static readonly Regex PlaceholderRegex = new(@"\{\*{0,2}([A-Za-z0-9_]+)\}", RegexOptions.Compiled);
+    private static readonly Regex PlaceholderRegex = RoutePlaceholderSyntax.Placeholder;
 
     private sealed record RouteTemplateInfo(string Template, LocationInfo? Location);
 

@@ -401,6 +401,74 @@ public class TenantModuleTests
     }
 
     [Fact]
+    public void When_TenantId_is_in_a_legacy_alternate_named_route_placeholder_then_pipeline_does_not_auto_populate_from_accessor()
+    {
+        // Legacy routed {TenantId:Id} as {TenantId} and bound TenantId from it as it bound {TenantId} (Signature365
+        // 8b40ecc961, Blueprint/ApiOperationLink.cs:53-78; HttpRouteMessagePopulationSource.cs:36-41), so the two are the
+        // same to tenant filling: the route supplies it. Signature365's GetDefaultProductForTenantQuery has this shape.
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public readonly struct ApiId : IParsable<ApiId>
+                {
+                    public string Value { get; }
+                    public ApiId(string value) => this.Value = value;
+                    public static ApiId Parse(string s, IFormatProvider? provider) => new(s);
+                    public static bool TryParse(string? s, IFormatProvider? provider, out ApiId result)
+                    {
+                        if (s is null) { result = default; return false; }
+                        result = new ApiId(s);
+                        return true;
+                    }
+                    public override string ToString() => this.Value;
+                }
+
+                public class TenantResource : ApiResource
+                {
+                    public override string Object => "tenant";
+                    public string Id { get; set; }
+                }
+
+                [Link(typeof(TenantResource), "/billing/tenants/{TenantId:Id}/products/default", Rel = "defaultProduct")]
+                [HttpGet]
+                public partial class GetDefaultProductForTenantQuery : IQuery<string>
+                {
+                    public ApiId TenantId { get; set; }
+
+                    public static Task<string> HandleAsync(GetDefaultProductForTenantQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSource = string.Join("\n", result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText));
+
+        pipelineSource.Should().Contain("ResolveTenant(");
+        pipelineSource.Should().NotContain("_parsedTenantId");
+    }
+
+    [Fact]
     public void When_TenantId_is_nullable_value_type_then_pipeline_uses_HasValue_guard()
     {
         const string source = """

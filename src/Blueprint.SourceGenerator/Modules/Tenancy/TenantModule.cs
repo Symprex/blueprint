@@ -36,7 +36,7 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
     private const string TenantResolverType = "Blueprint.Tenancy.ITenantResolver";
     private const string TenantIdPropertyName = "TenantId";
 
-    private static readonly Regex PlaceholderRegex = new(@"\{\*{0,2}([A-Za-z0-9_]+)\}", RegexOptions.Compiled);
+    private static readonly Regex PlaceholderRegex = RoutePlaceholderSyntax.Placeholder;
 
     /// <inheritdoc />
     public string ModuleId => nameof(TenantModule);
@@ -280,6 +280,10 @@ public sealed class TenantModule : IBlueprintSourceGeneratorModule, IPipelineCon
     /// a <c>{TenantId}</c> or <c>{*TenantId}</c> placeholder, indicating that route binding
     /// will populate the property and the TenantModule should not override it.
     /// </summary>
+    /// <remarks>
+    /// A legacy <c>{TenantId:ResourceProperty}</c> placeholder binds <c>TenantId</c> from the route too
+    /// (<see cref="RoutePlaceholderSyntax"/>), so it counts, as it does for <c>PropertyOwnershipModule</c>.
+    /// </remarks>
     private static bool IsTenantIdInRouteTemplate(INamedTypeSymbol operationType)
     {
         foreach (var url in HttpHostExposureHelper.GetAllRouteTemplates(operationType))

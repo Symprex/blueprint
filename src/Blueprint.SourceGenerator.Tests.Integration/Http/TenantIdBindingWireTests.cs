@@ -108,6 +108,22 @@ public sealed class TenantIdBindingWireTests
     }
 
     [Fact]
+    public async Task A_TenantId_in_a_legacy_alternate_named_route_placeholder_is_bound_from_the_route_and_not_replaced_by_the_callers_tenant()
+    {
+        // Shaped as Signature365 Admin Portal's GetDefaultProductForTenantQuery. Legacy routed {TenantId:Id} as {TenantId}
+        // and bound it from the route (Blueprint/ApiOperationLink.cs:53-78; HttpRouteMessagePopulationSource.cs:36-41,
+        // :99-107), so SetTenantMiddleware found it set (:60-68). Its resource key's {TenantId:Id} read the operation's
+        // TenantId, which it has (Blueprint/Authorisation/ClaimRequiredAttribute.cs:74-99), so the key names that tenant.
+        await using var host = await TenantHost.StartAsync();
+
+        var (status, body) = await host.GetAsync($"tenant-binding/billing/tenants/{NamedTenant}/products/default", Caller.Authenticated(CallerTenant));
+
+        status.Should().Be(200);
+        body.Should().Be($"\"tenant={NamedTenant}\"");
+        host.ExpandedResourceKeys.Should().Equal($"/Tenants/{NamedTenant}");
+    }
+
+    [Fact]
     public async Task An_anonymous_callers_TenantId_is_bound_from_the_request()
     {
         // Signature365's anonymous PortalCreateAzureAdDomainVerificationDnsRecordsCommand names its tenant in the body: with
@@ -222,6 +238,13 @@ public sealed class TenantIdBindingWireTests
 
         Parameter(paths, "/tenant-binding/queries", "tenantId").GetProperty("in").GetString().Should().Be("query");
         Parameter(paths, "/tenant-binding/tenants/{TenantId}", "TenantId").GetProperty("in").GetString().Should().Be("path");
+
+        // A {TenantId:Id} placeholder was a path parameter as {TenantId} was (OpenApiDocumentBuilder.cs:96, :145-152).
+        paths.GetProperty("/tenant-binding/billing/tenants/{TenantId}/products/default").GetProperty("get").GetProperty("parameters")
+            .EnumerateArray()
+            .Where(static p => string.Equals(p.GetProperty("name").GetString(), "TenantId", StringComparison.OrdinalIgnoreCase))
+            .Select(static p => p.GetProperty("in").GetString())
+            .Should().Equal("path");
 
         var addOnParameter = Parameter(paths, "/tenant-binding/add-ons/microsoft365", "tenantId");
         addOnParameter.GetProperty("in").GetString().Should().Be("query");
@@ -547,6 +570,29 @@ public partial class BindTenantIdRouteQuery : IQuery<string>
     {
         return TenantBindingHandlers.Describe(query.TenantId.Value);
     }
+}
+
+/// <summary>
+/// Shaped as Signature365 Admin Portal's <c>GetDefaultProductForTenantQuery</c>: a link whose <c>{TenantId:Id}</c>
+/// placeholder names the resource's <c>Id</c>, and a resource key naming the tenant. (Signature365's key is
+/// <c>/Tenants/{TenantId:Id}</c>, whose fallback names no operation property: BPAU010 warns, and the primary is used.)
+/// </summary>
+[Resource("billing-product", "read", "/Tenants/{TenantId}")]
+[Link(typeof(BoundTenantLinkApiResource), "/tenant-binding/billing/tenants/{TenantId:Id}/products/default", Rel = "defaultProduct")]
+public partial class GetBoundTenantDefaultProductQuery : IQuery<string>
+{
+    public BoundTenantId TenantId { get; set; }
+
+    public static string Handle(GetBoundTenantDefaultProductQuery query)
+    {
+        return TenantBindingHandlers.Describe(query.TenantId.Value);
+    }
+}
+
+/// <summary>The tenant resource <see cref="GetBoundTenantDefaultProductQuery"/> is linked from, by its <c>Id</c>.</summary>
+public partial class BoundTenantLinkApiResource : ApiResource
+{
+    public string Id { get; set; } = null!;
 }
 
 /// <summary>

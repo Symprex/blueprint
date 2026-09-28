@@ -735,6 +735,14 @@ executes one. Before v1.0.3 that was only true of `string` and `[TypeConverter]`
 …) was a binding failure, so an in-process caller had to fill `HttpContext.Request.RouteValues` itself. It no longer
 has to. A route value that is present but cannot be parsed is still a binding failure.
 
+**Behaviour change for alternate-named route placeholders (v1.0.3).** A `[SelfLink]` or `[Link]` placeholder that names
+an alternate resource property, `{UserTenantId:TenantId}`, binds the operation's `UserTenantId` from the path, as
+`{UserTenantId}` does. This is what legacy Blueprint did. Before v1.0.3 the property was read from the query string (a
+GET) or the body instead, and filled from the caller's tenant if it was a `TenantId`, although the URL it was routed at,
+and the URL the generated client sent, carried it in the path. `[FromRoute]` on such a property now compiles (it reported
+BPPO005), and the OpenAPI document publishes it as a path parameter. A root link's URL is still routed as declared, so a
+colon there is ASP.NET's inline constraint syntax.
+
 ## Development-time inspection
 
 Blueprint exposes development-only endpoints for inspecting the generated API surface:

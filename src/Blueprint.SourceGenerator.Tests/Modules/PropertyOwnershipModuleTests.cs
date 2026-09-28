@@ -726,6 +726,138 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
+    public void When_placeholder_names_an_alternate_resource_property_then_the_operation_property_is_route_owned()
+    {
+        // Legacy parsed {propName:alternatePropName} (Signature365 8b40ecc961, Blueprint/ApiOperationLink.cs:29), routed it as
+        // {propName} (:53-78) and bound propName from that route value (Blueprint.Http/MessagePopulation/
+        // HttpRouteMessagePopulationSource.cs:36-41, :99-107). Signature365's PortalGetTenantUserQuery has this shape.
+        var result = CompileDescriptor(
+            """
+            [SelfLink(typeof(TenantUserResource), "/tenant-users/{UserTenantId:TenantId}/{Id}")]
+            public partial class GetTenantUserQuery : IQuery<string>
+            {
+                public string UserTenantId { get; set; }
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetTenantUserQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            public class TenantUserResource : ApiResource
+            {
+                public override string Object => "tenantUser";
+                public string TenantId { get; set; }
+                public string Id { get; set; }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = string.Join("\n", result.Output.Select(static t => t.ToString()));
+
+        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationPropertyBindingEntry(\"UserTenantId\", global::Blueprint.Model.PropertyBindingSource.Route, \"UserTenantId\"");
+        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationPropertyBindingEntry(\"Id\", global::Blueprint.Model.PropertyBindingSource.Route, \"Id\"");
+        descriptorSource.Should().NotContain("PropertyBindingSource.Query");
+    }
+
+    [Fact]
+    public void When_placeholder_has_a_legacy_format_then_the_operation_property_is_route_owned()
+    {
+        // Legacy's grammar also allowed a format, {propName(format)}, routed as {propName} too (ApiOperationLink.cs:29, :72-76).
+        var result = CompileDescriptor(
+            """
+            [SelfLink(typeof(ItemResource), "/items/{Id(D)}")]
+            public partial class GetItemQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetItemQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            public class ItemResource : ApiResource
+            {
+                public override string Object => "item";
+                public string Id { get; set; }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = string.Join("\n", result.Output.Select(static t => t.ToString()));
+
+        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationPropertyBindingEntry(\"Id\", global::Blueprint.Model.PropertyBindingSource.Route, \"Id\"");
+        descriptorSource.Should().NotContain("PropertyBindingSource.Query");
+    }
+
+    [Fact]
+    public void When_FromRoute_names_an_alternate_named_placeholder_then_it_is_route_owned_without_BPPO005()
+    {
+        var result = CompileDescriptor(
+            """
+            [Link(typeof(TenantUserResource), "/tenant-users/{UserTenantId:TenantId}/{Id}/make-owner", Rel = "makeOwner")]
+            public partial class MakeTenantOwnerCommand : ICommand<string>
+            {
+                [FromRoute]
+                public string UserTenantId { get; set; }
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(MakeTenantOwnerCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            public class TenantUserResource : ApiResource
+            {
+                public override string Object => "tenantUser";
+                public string TenantId { get; set; }
+                public string Id { get; set; }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = string.Join("\n", result.Output.Select(static t => t.ToString()));
+
+        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationPropertyBindingEntry(\"UserTenantId\", global::Blueprint.Model.PropertyBindingSource.Route, \"UserTenantId\"");
+        descriptorSource.Should().NotContain("PropertyBindingSource.Body");
+    }
+
+    [Fact]
+    public void When_alternate_named_placeholder_names_no_operation_property_then_reports_BPPO012()
+    {
+        // The name before the colon is the operation's property, as legacy required (ApiOperationLink.cs:57-67).
+        var result = CompileDescriptor(
+            """
+            [SelfLink(typeof(TenantUserResource), "/tenant-users/{Missing:TenantId}")]
+            public partial class GetTenantUserQuery : IQuery<string>
+            {
+                public string UserTenantId { get; set; }
+
+                public static Task<string> HandleAsync(GetTenantUserQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            public class TenantUserResource : ApiResource
+            {
+                public override string Object => "tenantUser";
+                public string TenantId { get; set; }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Id == "BPPO012")
+            .Should().ContainSingle()
+            .Which.GetMessage().Should().Contain("'Missing'");
+    }
+
+    [Fact]
     public void When_route_template_has_unresolved_placeholder_then_reports_BPPO012()
     {
         var result = CompileDescriptor(
