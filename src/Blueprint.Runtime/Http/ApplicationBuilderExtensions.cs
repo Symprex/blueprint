@@ -567,6 +567,13 @@ public static class EndpointRouteBuilderExtensions
         /// Before this, a fault here had no <c>catch</c> on this path and escaped the request delegate unhandled, which
         /// ASP.NET Core's own top-level handling turns into a bare 500 with no body.
         /// </summary>
+        /// <remarks>
+        /// The catch is filtered to a response that has not started, matching legacy's own filter exactly
+        /// (<c>OkResultOperationExecutor.cs:48</c>, <c>when (httpContext.Response.HasStarted == false)</c>). A fault
+        /// reached after the response has started is not writable into a fresh problem body — some of the old response
+        /// is already on the wire — so it is left to propagate, as legacy left it (its router had no catch at all), and
+        /// ASP.NET Core's top-level handling aborts the connection instead of completing it as if nothing had failed.
+        /// </remarks>
         private async Task AwaitWriteTaskAsync(
             HttpContext httpContext,
             ApiOperationContext apiContext,
@@ -585,7 +592,7 @@ public static class EndpointRouteBuilderExtensions
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!httpContext.Response.HasStarted)
             {
                 await this.HandleUnexpectedExceptionAsync(httpContext, operation, ex).ConfigureAwait(false);
             }
@@ -611,8 +618,12 @@ public static class EndpointRouteBuilderExtensions
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!httpContext.Response.HasStarted)
             {
+                // Same filter as AwaitWriteTaskAsync above, for the same reason: legacy caught a write fault only when
+                // the response had not started (OkResultOperationExecutor.cs:48), and had no router catch at all, so a
+                // fault reached here after the response started propagates instead of being swallowed into a response
+                // that looks complete.
                 await this.HandleUnexpectedExceptionAsync(httpContext, operation, ex).ConfigureAwait(false);
             }
         }
