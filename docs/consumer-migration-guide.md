@@ -280,9 +280,9 @@ blueprint.AddApiAuthoriser<FullAuthoriser>();
 `{"type":"security_failure","title":"Access denied. Anonymous access is not allowed.","status":401}` for an anonymous caller,
 each with a `traceId` when the operation has an activity. The `Reason` is never written; it is logged at Information under
 `Blueprint.Authorisation.AuthorisationMiddlewareBuilder`. The `ForbiddenResult` or `UnauthenticatedResult` a pipeline returns
-carries the denial as `Failure`. Coming from legacy Blueprint nothing changes. Coming from v1.0.2, the fixed "Unauthorized" /
-"Forbidden" bodies are gone, and a denial whose failure type is not `Authorisation` (a `default` `ExecutionAllowed`
-included) is a 401 where it was a 403.
+carries the denial as `Failure`. Coming from legacy Blueprint nothing changes, except a `traceId` (see the exception bodies
+below). Coming from v1.0.2, the fixed "Unauthorized" / "Forbidden" bodies are gone, and a denial whose failure type is not
+`Authorisation` (a `default` `ExecutionAllowed` included) is a 401 where it was a 403.
 
 **Behaviour change for exception bodies (v1.0.3).** An exception is written with the body legacy Blueprint wrote:
 - an `ApiException` with its own type, title, status, detail and extensions, a null one left out, whatever its status and
@@ -292,7 +292,10 @@ included) is a 401 where it was a 403.
 - in each case a `traceId` extension last, when the operation has an activity.
 
 `UnauthorizedException(message)` puts the message in the title, with no detail. Coming from legacy Blueprint nothing
-changes. Coming from v1.0.2:
+changes, except one deliberate departure: a body without an activity never has a `traceId`. Legacy's could. An
+`ApiException` made without extensions shared one static dictionary, which legacy wrote each body's `traceId` into, so a
+later body with no activity carried another request's `traceId`, and concurrent requests raced on it. This applies to
+denials too. Coming from v1.0.2:
 - a null title or detail was filled in ("Server error", "Request error", the exception message);
 - a 5xx `ApiException`'s detail was replaced;
 - exposed stack traces went in a `stackTrace` extension;

@@ -1032,6 +1032,8 @@ public class HttpOperationResultExecutor
                 Detail = apiException.Detail,
             };
 
+            // Copied into this body's own dictionary, deliberately unlike legacy, whose exceptions without extensions
+            // shared one static dictionary that the traceId below was written into (see AuthorisationDenialWireTests).
             foreach (var kvp in apiException.Extensions)
             {
                 problemDetails.Extensions[kvp.Key] = kvp.Value;

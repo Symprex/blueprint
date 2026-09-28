@@ -127,6 +127,11 @@ public sealed class AuthorisationDenialWireTests
     {
         // Legacy's anonymous refusal was an UnhandledExceptionOperationResult like any other denial, so it carried the
         // traceId too (UnhandledExceptionOperationResultExecutor.cs:35-38): the fixed body is only the no-activity case.
+        // A deliberate departure: legacy's no-activity body could carry a traceId all the same. An ApiException made
+        // without extensions shared one static mutable dictionary (ApiException.cs:14, :34), which AddExtension wrote the
+        // traceId into (UnhandledExceptionOperationResultExecutor.cs:37, ProblemDetails.cs:73-74). So a later body with no
+        // activity carried another request's traceId, and concurrent requests raced on the dictionary. Here a body without
+        // an activity has no traceId; do not port the shared dictionary back.
         await using var host = await DenialHost.StartAsync(withLogging: true);
 
         var (status, body) = await host.GetAsync("allow", user: null);
