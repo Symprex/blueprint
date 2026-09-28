@@ -557,14 +557,37 @@ public static class EndpointRouteBuilderExtensions
                 return Task.CompletedTask;
             }
 
-            return AwaitWriteTaskAsync(writeTask, result, apiContext);
+            return this.AwaitWriteTaskAsync(httpContext, apiContext, writeTask, result, operation);
         }
 
-        private static async Task AwaitWriteTaskAsync(Task<bool> writeTask, OperationResult result, ApiOperationContext apiContext)
+        /// <summary>
+        /// Awaits a result write that did not complete synchronously, matching the exception handling
+        /// <see cref="RouteOperationSlowPathAsync"/> gives a fault reached only after an <c>await</c>: legacy wrote the
+        /// exception a failed write threw (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/OkResultOperationExecutor.cs:48-65</c>).
+        /// Before this, a fault here had no <c>catch</c> on this path and escaped the request delegate unhandled, which
+        /// ASP.NET Core's own top-level handling turns into a bare 500 with no body.
+        /// </summary>
+        private async Task AwaitWriteTaskAsync(
+            HttpContext httpContext,
+            ApiOperationContext apiContext,
+            Task<bool> writeTask,
+            OperationResult result,
+            ApiOperationDescriptor operation)
         {
-            if (await writeTask.ConfigureAwait(false) == false)
+            try
             {
-                await result.ExecuteAsync(apiContext).ConfigureAwait(false);
+                if (await writeTask.ConfigureAwait(false) == false)
+                {
+                    await result.ExecuteAsync(apiContext).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await this.HandleUnexpectedExceptionAsync(httpContext, operation, ex).ConfigureAwait(false);
             }
         }
 
