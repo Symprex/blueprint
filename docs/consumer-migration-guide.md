@@ -90,6 +90,12 @@ mid-name is renamed: `GenerateVCardQuery` `GenerateVCard` → `GeneratevCard`, `
 `GetInvoicesv2`, `GetHTMLPreviewQuery` `GetHTMLPreview` → `GethtmlPreview`, `ExportCommandSample` `ExportCommandSample` →
 `ExportSample`. Regenerate clients from the new document, and rename an operation if `BP009` reports a new collision.
 
+**Behaviour change for an operation at several URLs (v1.0.3).** An operation published at more than one URL is given a
+distinct `operationId` at each — the first keeps the plain name, the second is named `{Name}2`, and so on — instead of
+the same `operationId` repeated. This is what legacy's NSwag document did. See `docs/openapi-migration.md`'s
+"operationId of an operation at several URLs" section for the full rule and the request-body de-duplication that goes
+with it. Regenerate clients that called a second or later URL by a duplicated `operationId`.
+
 ### 3. Generator wiring
 
 Reference the source generator as an analyzer in your app project:
@@ -415,6 +421,11 @@ Blueprint-specific validators are also available:
 | `ResourceKeyAttribute` | type/GUID resource key format |
 
 Invalid property references in cross-property validators are caught at build time (BPV001–BPV007).
+
+**Behaviour change for `RequiredItemsIfAttribute`'s message (v1.0.3).** Its failure message is "The `{0}` field must
+contain at least one non-empty item if `{1}` field is `{2}`.", legacy Blueprint's exact text — it rejects a blank or
+`null` item as well as an empty collection, and the message now says so. Before v1.0.3 it said "at least one item".
+`RequiredItemsIfNotAttribute` (new-only, no legacy equivalent) still says "at least one item".
 
 ### 8. Migrate result types
 
@@ -855,6 +866,14 @@ The source generator catches contract errors at build time. Key diagnostics:
 
 See `docs/compile-time-validation.md` for the full diagnostic reference.
 
+**Behaviour change for `BP109`/`BP110` and a `KeyOnlyResourceEventResult` union (v1.0.3).** The host writes a
+`KeyOnlyResourceEventResult` as the empty 201, 200 or 204 of its change type, known only at run time, so `BP109`
+(same host response shape) and `BP110` (same HTTP status, no discrimination strategy) now judge it against all three
+statuses, not only 201. A union that passed before v1.0.3 — for example `Results<KeyOnlyResourceEventResult,
+NoResultOperationResult>`, indistinguishable on an update's empty 200 — now fails to build. See
+`docs/compile-time-validation.md`'s `BP109`/`BP110` entries for the full rule. `KeyOnlyResourceEventResult` is
+new-only, so no legacy Blueprint consumer is affected.
+
 ## Running the migration tooling
 
 ### Review mode (dry run)
@@ -1219,6 +1238,13 @@ legacy Blueprint's `response_empty` problem: title "Response deserialisation fai
 deserialised", status 502. Its `StatusCode` and `ResponseBody` are the response's own. This is what legacy's client did.
 A `JsonElement` is still the `null` element. Coming from v1.0.2, where such a body returned `null`, a caller that checked
 for `null` must catch the exception instead.
+
+**Behaviour change for a 422's `errors` (v1.0.3).** A 422 is read into a `ValidationException` from the member named
+exactly `errors` (the name the host writes) — not any other casing. With no such member, or a JSON `null` body, the
+exception's dictionary is empty rather than a form-level entry made up from the response's detail. This is what
+legacy Blueprint's client did (`ValidationProblemDetailsJsonConverter`, `ValueTextEquals` on the exact name). Coming
+from v1.0.2, where the read was case-insensitive and a missing/`null` `errors` produced a form-level message, a caller
+relying on either must not.
 
 ### Hangfire (background task scheduling)
 
