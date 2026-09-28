@@ -269,6 +269,35 @@ public sealed class TenantIdBindingWireTests
     }
 
     [Fact]
+    public async Task An_authenticated_caller_naming_another_tenant_in_the_body_is_refused_and_the_handler_does_not_run()
+    {
+        // R100: TenantIdBindingWireTests' other cases prove binding leaves a caller-named tenant alone (legacy's
+        // SetTenantMiddleware never refused one on its own, :60-62 above) — but that only matters if an authoriser
+        // downstream still sees the bound value and can refuse it. Wire a denying IOperationAuthoriser through the real
+        // router (TenantIsolationIntegrationTests.cs's equivalent is in-process, no binding) and prove the caller's
+        // named tenant reaches it, is refused, and the handler never runs.
+        await using var host = await TenantHost.StartAsync(withDenyingAuthoriser: true);
+
+        var (status, body) = await host.PostAsync("tenant-binding/commands", $$"""{"tenantId":"{{NamedTenant}}","name":"x"}""", Caller.Authenticated(CallerTenant));
+
+        status.Should().Be(403);
+        body.Should().Be("""{"type":"unauthorized","title":"You may not act for another tenant","status":403}""");
+        host.Handled.Should().BeEmpty("the handler must not run for a tenant the authoriser refused");
+    }
+
+    [Fact]
+    public async Task An_authenticated_caller_naming_another_tenant_in_the_query_is_refused_and_the_handler_does_not_run()
+    {
+        await using var host = await TenantHost.StartAsync(withDenyingAuthoriser: true);
+
+        var (status, body) = await host.GetAsync($"tenant-binding/queries?tenantId={NamedTenant}", Caller.Authenticated(CallerTenant));
+
+        status.Should().Be(403);
+        body.Should().Be("""{"type":"unauthorized","title":"You may not act for another tenant","status":403}""");
+        host.Handled.Should().BeEmpty("the handler must not run for a tenant the authoriser refused");
+    }
+
+    [Fact]
     public void The_document_publishes_TenantId_where_the_request_carries_it()
     {
         // Legacy's document: every property of a GET was a parameter, and a route placeholder a path one
@@ -285,6 +314,13 @@ public sealed class TenantIdBindingWireTests
             .GetProperty(bodyReference["#/components/schemas/".Length..]);
         bodyComponent.GetProperty("properties").EnumerateObject().Select(static p => p.Name).Should().Contain("tenantId");
 
+        // Not legacy-derived (parameter casing, R101): legacy named a GET's query parameter by the raw property name
+        // (OpenApiDocumentBuilder.cs:150, `property.Name`), so it would have written "TenantId" here too. This document
+        // was rendered with default OpenApiInfoOptions, and the framework's default for a query parameter's name is
+        // camel-case, matching the wire's JSON casing rather than legacy's; the opt-in
+        // `QueryParameterNaming = OpenApiParameterNaming.PropertyName` reproduces legacy's "TenantId" exactly
+        // (OpenApiParameterNamingTests.Query_parameters_can_be_named_by_their_property_as_legacy_named_them). A route
+        // placeholder is unaffected either way — it keeps its own literal casing, "TenantId" below.
         Parameter(paths, "/tenant-binding/queries", "tenantId").GetProperty("in").GetString().Should().Be("query");
         Parameter(paths, "/tenant-binding/tenants/{TenantId}", "TenantId").GetProperty("in").GetString().Should().Be("path");
 
@@ -338,6 +374,35 @@ public sealed class TenantIdBindingWireTests
         }
     }
 
+    /// <summary>
+    /// Refuses an authenticated caller whose bound <c>TenantId</c> is not their own claimed tenant, proving that an
+    /// authoriser downstream of binding still sees — and can refuse — a tenant the caller named rather than left unset.
+    /// </summary>
+    private sealed class DenyingOtherTenantAuthoriser : IOperationAuthoriser
+    {
+        public bool AppliesTo(ApiOperationDescriptor descriptor)
+        {
+            return descriptor.OperationType.GetProperty("TenantId") is not null;
+        }
+
+        public Task<ExecutionAllowed> CanExecuteOperationAsync(
+            ApiOperationContext operationContext,
+            ApiOperationDescriptor descriptor,
+            object operation)
+        {
+            var callerTenant = operationContext.UserPrincipal?.FindFirst(ClaimTenantResolver.ClaimType)?.Value;
+            var namedTenant = descriptor.OperationType.GetProperty("TenantId")!.GetValue(operation)?.ToString();
+
+            if (callerTenant is not null && namedTenant is not null && !string.Equals(callerTenant, namedTenant, StringComparison.Ordinal))
+            {
+                return Task.FromResult(
+                    ExecutionAllowed.No("tenant mismatch", "You may not act for another tenant", ExecutionAllowedFailureType.Authorisation));
+            }
+
+            return ExecutionAllowed.YesTask;
+        }
+    }
+
     /// <summary>Records every resource key the operation's authorisation expanded, and allows it.</summary>
     private sealed class RecordingResourceAuthorizationProvider(ConcurrentQueue<string> expandedKeys) : IResourceAuthorizationProvider
     {
@@ -377,7 +442,7 @@ public sealed class TenantIdBindingWireTests
 
         public IReadOnlyCollection<string> Handled => TenantBindingHandlers.Handled;
 
-        public static async Task<TenantHost> StartAsync()
+        public static async Task<TenantHost> StartAsync(bool withDenyingAuthoriser = false)
         {
             TenantBindingHandlers.Handled.Clear();
 
@@ -388,6 +453,12 @@ public sealed class TenantIdBindingWireTests
             builder.Logging.ClearProviders();
 
             builder.Services.AddSingleton<IResourceAuthorizationProvider>(new RecordingResourceAuthorizationProvider(expandedResourceKeys));
+
+            if (withDenyingAuthoriser)
+            {
+                builder.Services.AddSingleton<IOperationAuthoriser, DenyingOtherTenantAuthoriser>();
+            }
+
             builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
                 blueprint => blueprint.AddTenancy<AsyncLocalTenantAccessor, ClaimTenantResolver>());
 
