@@ -258,7 +258,10 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         // Each unique status code produces a ProblemDetails response in the OpenAPI document.
         foreach (var factory in context.GetMetadata<ApiExceptionFactoryRegistration>())
         {
-            responses.Add(CreateResponse(factory.HttpStatus, true, "Blueprint.ApiException", problemDetailsBody));
+            responses.Add(CreateResponse(factory.HttpStatus, true, "Blueprint.ApiException", problemDetailsBody) with
+            {
+                ProblemFactoryReferences = ImmutableArray.Create(factory.FieldReference),
+            });
         }
 
         return responses.ToImmutable();
@@ -468,6 +471,10 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             responseGroup
                 .SelectMany(static response => response.BodyTypeNames)
                 .Distinct(StringComparer.Ordinal)
+                .ToImmutableArray(),
+            responseGroup
+                .SelectMany(static response => response.ProblemFactoryReferences.IsDefault ? ImmutableArray<string>.Empty : response.ProblemFactoryReferences)
+                .Distinct(StringComparer.Ordinal)
                 .ToImmutableArray());
     }
 
@@ -495,7 +502,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             var leadEntries = responseList
                 .Take(responseList.Count - tailLength)
                 .Select(static response =>
-                    $"new global::Blueprint.Model.OperationHttpResponseMetadata({response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)})")
+                    RenderResponse(response))
                 .ToArray();
 
             codeWriter.AppendLine(
@@ -508,7 +515,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         // Fallback: emit all responses inline
         var renderedResponses = responseList
             .Select(static response =>
-                $"new global::Blueprint.Model.OperationHttpResponseMetadata({response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)})")
+                RenderResponse(response))
             .ToArray();
 
         codeWriter.AppendLine(
@@ -742,6 +749,26 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     private static string RenderStringLiteral(string value)
     {
         return CSharpSymbolDisplay.FormatLiteral(value, quote: true);
+    }
+
+    /// <summary>
+    /// Renders one <c>OperationHttpResponseMetadata</c> construction. A response with <c>ApiExceptionFactory</c> fields
+    /// also passes each field's title and type, read from the field itself when the descriptor is built, as legacy's
+    /// <c>ApiExceptionFactoryResponseConvention</c> read the field's value.
+    /// </summary>
+    private static string RenderResponse(HttpResponseMetadataRegistration response)
+    {
+        var arguments = $"{response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)}";
+
+        if (!response.ProblemFactoryReferences.IsDefaultOrEmpty)
+        {
+            var examples = response.ProblemFactoryReferences
+                .Select(static reference => $"new global::Blueprint.Model.OperationProblemExample({reference}.Title, {reference}.Type)");
+
+            arguments += $", global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", examples)})";
+        }
+
+        return $"new global::Blueprint.Model.OperationHttpResponseMetadata({arguments})";
     }
 
     private static string RenderStringArray(IEnumerable<string> values)

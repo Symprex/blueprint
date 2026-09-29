@@ -3,6 +3,8 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Blueprint.Model;
+using Blueprint.Utilities;
 
 namespace Blueprint.Runtime.Http;
 
@@ -28,6 +30,12 @@ public sealed record OpenApiOutputRenderingContext(
     /// The result type name <c>HttpResponseMetadataModule</c> gives the 415 it adds for an operation that reads a body.
     /// </summary>
     private const string UnsupportedMediaTypeResultTypeName = "Blueprint.Runtime.Exec.UnsupportedMediaTypeResult";
+
+    /// <summary>
+    /// The result type name <c>HttpResponseMetadataModule</c> gives a response an operation's <c>ApiExceptionFactory</c>
+    /// fields contribute.
+    /// </summary>
+    private const string ApiExceptionResultTypeName = "Blueprint.ApiException";
 
     /// <summary>
     /// Converts a raw CLR type name into a safe OpenAPI schema component key. When a custom
@@ -827,7 +835,7 @@ public sealed record OpenApiOutputRenderingContext(
                 continue;
             }
 
-            WriteResponse(writer, response, schemaNameFormatter);
+            WriteResponse(writer, response, schemaNameFormatter, omitLegacyExtras);
         }
 
         writer.WriteEndObject();
@@ -840,12 +848,18 @@ public sealed record OpenApiOutputRenderingContext(
             && response.ResultTypeNames.All(static name => name == UnsupportedMediaTypeResultTypeName);
     }
 
-    private static void WriteResponse(Utf8JsonWriter writer, OpenApiResponseObjectModel response, Func<string, string>? schemaNameFormatter)
+    private static void WriteResponse(Utf8JsonWriter writer, OpenApiResponseObjectModel response, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(MapStatusCodeString(response.StatusCode));
         writer.WriteStartObject();
 
-        writer.WriteString("description", MapStatusDescription(response.StatusCode));
+        // Legacy documented an operation's ApiExceptionFactory fields (see WriteLegacyProblemExample); a Default consumer
+        // keeps the status's own description and no example map, which is not the shape OpenAPI defines for "example".
+        var legacyProblemExamples = omitLegacyExtras && !response.ProblemExamples.IsDefaultOrEmpty;
+
+        writer.WriteString(
+            "description",
+            legacyProblemExamples ? DescribeLegacyProblemResponse(response) : MapStatusDescription(response.StatusCode));
 
         if (!response.Headers.IsDefault && !response.Headers.IsEmpty)
         {
@@ -854,10 +868,26 @@ public sealed record OpenApiOutputRenderingContext(
 
         if (!response.Content.IsEmpty)
         {
-            WriteResponseContent(writer, response.Content, schemaNameFormatter);
+            WriteResponseContent(writer, response.Content, schemaNameFormatter, legacyProblemExamples ? response : null);
         }
 
         writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Legacy's description of a response carrying <c>ApiExceptionFactory</c> fields: the factory's title when it is the
+    /// only description the status had, else empty. Legacy nulled a status's description once two of its responses
+    /// disagreed (Signature365 8b40ecc961, <c>Blueprint.OpenApi/OpenApiDocumentBuilder.cs:196-201</c>) and NSwag wrote
+    /// the null as "". Every operation also had legacy's "Unexpected error" 500 and a validating one its "Validation
+    /// failure" 422, so a factory at a status another result type shares is described as "", as in every committed
+    /// document.
+    /// </summary>
+    private static string DescribeLegacyProblemResponse(OpenApiResponseObjectModel response)
+    {
+        var onlyFactories = response.ResultTypeNames.All(static name => name == ApiExceptionResultTypeName);
+        var titles = response.ProblemExamples.Select(static example => example.Title).Distinct(StringComparer.Ordinal).ToArray();
+
+        return onlyFactories && titles.Length == 1 ? titles[0] : string.Empty;
     }
 
     private static void WriteResponseHeaders(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseHeaderModel> headers)
@@ -883,7 +913,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
     }
 
-    private static void WriteResponseContent(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseContentModel> content, Func<string, string>? schemaNameFormatter)
+    private static void WriteResponseContent(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseContentModel> content, Func<string, string>? schemaNameFormatter, OpenApiResponseObjectModel? legacyProblemResponse)
     {
         writer.WritePropertyName("content");
         writer.WriteStartObject();
@@ -896,6 +926,55 @@ public sealed record OpenApiOutputRenderingContext(
 
             WriteResponseSchema(writer, mediaEntry, schemaNameFormatter);
 
+            if (legacyProblemResponse is not null)
+            {
+                WriteLegacyProblemExample(writer, legacyProblemResponse);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Writes legacy's map of an operation's <c>ApiExceptionFactory</c> fields under the singular "example" key:
+    /// <c>{"MissingPartnerCompany":{"value":{"status":404,"title":"...","type":"missing_partner_company"}}}</c>, keyed by the
+    /// type in PascalCase (Signature365 8b40ecc961, <c>Blueprint.OpenApi/OpenApiDocumentBuilder.cs:246-262</c>; a later
+    /// factory with the same type replaces an earlier one, as legacy's dictionary did). Signature365's client generator
+    /// reads this map, not the standard "examples", to build each API's error catalogue.
+    /// </summary>
+    private static void WriteLegacyProblemExample(Utf8JsonWriter writer, OpenApiResponseObjectModel response)
+    {
+        var examples = new Dictionary<string, OperationProblemExample>(StringComparer.Ordinal);
+        var keys = new List<string>();
+
+        foreach (var example in response.ProblemExamples)
+        {
+            var key = example.Type.ToPascalCase();
+            if (!examples.ContainsKey(key))
+            {
+                keys.Add(key);
+            }
+
+            examples[key] = example;
+        }
+
+        writer.WritePropertyName("example");
+        writer.WriteStartObject();
+
+        foreach (var key in keys)
+        {
+            var example = examples[key];
+
+            writer.WritePropertyName(key);
+            writer.WriteStartObject();
+            writer.WritePropertyName("value");
+            writer.WriteStartObject();
+            writer.WriteNumber("status", response.StatusCode);
+            writer.WriteString("title", example.Title);
+            writer.WriteString("type", example.Type);
+            writer.WriteEndObject();
             writer.WriteEndObject();
         }
 

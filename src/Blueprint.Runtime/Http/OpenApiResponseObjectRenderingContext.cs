@@ -87,7 +87,8 @@ public sealed record OpenApiResponseObjectRenderingContext(
             response.Response.HasResponseBody,
             response.Response.ResultTypeNames,
             content,
-            headers);
+            headers,
+            response.Response.ProblemExamples);
     }
 
     private static ImmutableArray<OpenApiResponseContentModel> CreateContent(
@@ -459,12 +460,17 @@ public sealed record OpenApiResponseObjectOperationContext(
 /// <param name="ResultTypeNames">The semantic result type names that collapse into this response family.</param>
 /// <param name="Content">The rendered response content keyed by media type when covered schema components exist.</param>
 /// <param name="Headers">Well-known response headers inferred from result types and status codes.</param>
+/// <param name="ProblemExamples">
+/// The title and type of each <c>ApiExceptionFactory</c> the operation declares at this status
+/// (<see cref="OperationHttpResponseMetadata.ProblemExamples"/>). Default or empty when there are none.
+/// </param>
 public sealed record OpenApiResponseObjectModel(
     int StatusCode,
     bool HasResponseBody,
     ImmutableArray<string> ResultTypeNames,
     ImmutableArray<OpenApiResponseContentModel> Content,
-    ImmutableArray<OpenApiResponseHeaderModel> Headers = default);
+    ImmutableArray<OpenApiResponseHeaderModel> Headers = default,
+    ImmutableArray<OperationProblemExample> ProblemExamples = default);
 
 /// <summary>
 /// Captures one rendered media-type entry for an OpenAPI-style response object.

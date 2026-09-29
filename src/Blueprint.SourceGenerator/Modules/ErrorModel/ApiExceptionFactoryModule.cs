@@ -86,7 +86,10 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
 
             if (TryExtractHttpStatus(field, context, out var httpStatus))
             {
-                builder.Add(new ApiExceptionFactoryRegistration(field.Name, httpStatus));
+                builder.Add(new ApiExceptionFactoryRegistration(
+                    field.Name,
+                    httpStatus,
+                    $"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{field.Name}"));
             }
             else
             {
