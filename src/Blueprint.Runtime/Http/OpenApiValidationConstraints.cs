@@ -234,36 +234,54 @@ internal sealed record OpenApiValidationConstraints(
     /// </para>
     /// </remarks>
     /// <param name="property">The CLR property to extract conditional requirements from, or <c>null</c> when not found.</param>
+    /// <param name="useLegacyRules">
+    /// Whether to extract what legacy Blueprint's <c>RequiredIfSchemaProcessor</c> exported instead (R162): only
+    /// <c>RequiredIf</c> and <c>RequiredItemsIf</c>, and not one whose dependent value is <c>null</c>; a string target as a
+    /// non-blank string and any other target, of any type, as not null; every items target as non-blank strings whatever its
+    /// element type; the <c>RequiredIf</c> attributes before the <c>RequiredItemsIf</c> ones, in declaration order, unsorted.
+    /// </param>
     /// <returns>The conditional requirements declared on the property, in dependent-property name order; empty when none apply.</returns>
-    public static ImmutableArray<OpenApiConditionalRequirement> ExtractConditionalRequirements(PropertyInfo? property)
+    public static ImmutableArray<OpenApiConditionalRequirement> ExtractConditionalRequirements(PropertyInfo? property, bool useLegacyRules = false)
     {
         if (property is null)
         {
             return [];
         }
 
-        var scalarTargetKind = GetScalarTargetKind(property.PropertyType);
-        var itemsTargetKind = GetItemsTargetKind(property.PropertyType);
+        var scalarTargetKind = useLegacyRules
+            ? property.PropertyType == typeof(string) ? OpenApiConditionalTargetKind.NonBlankString : OpenApiConditionalTargetKind.NonNull
+            : GetScalarTargetKind(property.PropertyType);
+        var itemsTargetKind = useLegacyRules
+            ? OpenApiConditionalTargetKind.NonBlankStringItems
+            : GetItemsTargetKind(property.PropertyType);
 
         var builder = ImmutableArray.CreateBuilder<OpenApiConditionalRequirement>();
+        var itemsBuilder = useLegacyRules ? ImmutableArray.CreateBuilder<OpenApiConditionalRequirement>() : builder;
 
         foreach (var attribute in property.GetCustomAttributes(inherit: true))
         {
             switch (attribute)
             {
-                case RequiredIfAttribute requiredIf:
-                    Add(requiredIf.DependentProperty, requiredIf.DependentValues, negated: false, scalarTargetKind);
+                case RequiredIfAttribute requiredIf when !useLegacyRules || requiredIf.DependentValue is not null:
+                    Add(builder, requiredIf.DependentProperty, requiredIf.DependentValues, negated: false, scalarTargetKind);
                     break;
-                case RequiredIfNotAttribute requiredIfNot:
-                    Add(requiredIfNot.DependentProperty, requiredIfNot.DependentValues, negated: true, scalarTargetKind);
+                case RequiredIfNotAttribute requiredIfNot when !useLegacyRules:
+                    Add(builder, requiredIfNot.DependentProperty, requiredIfNot.DependentValues, negated: true, scalarTargetKind);
                     break;
-                case RequiredItemsIfAttribute requiredItemsIf:
-                    Add(requiredItemsIf.DependentProperty, requiredItemsIf.DependentValues, negated: false, itemsTargetKind);
+                case RequiredItemsIfAttribute requiredItemsIf when !useLegacyRules || requiredItemsIf.DependentValue is not null:
+                    Add(itemsBuilder, requiredItemsIf.DependentProperty, requiredItemsIf.DependentValues, negated: false, itemsTargetKind);
                     break;
-                case RequiredItemsIfNotAttribute requiredItemsIfNot:
-                    Add(requiredItemsIfNot.DependentProperty, requiredItemsIfNot.DependentValues, negated: true, itemsTargetKind);
+                case RequiredItemsIfNotAttribute requiredItemsIfNot when !useLegacyRules:
+                    Add(itemsBuilder, requiredItemsIfNot.DependentProperty, requiredItemsIfNot.DependentValues, negated: true, itemsTargetKind);
                     break;
             }
+        }
+
+        if (useLegacyRules)
+        {
+            builder.AddRange(itemsBuilder);
+
+            return builder.ToImmutable();
         }
 
         // Reflection does not guarantee an order for repeated attributes on one member, and the rendered document is a
@@ -281,14 +299,14 @@ internal sealed record OpenApiValidationConstraints(
                 .ThenBy(static requirement => FormatDependentValuesKey(requirement.DependentValues), StringComparer.Ordinal),
         ];
 
-        void Add(string dependentProperty, IEnumerable<object?> dependentValues, bool negated, OpenApiConditionalTargetKind? targetKind)
+        void Add(ImmutableArray<OpenApiConditionalRequirement>.Builder target, string dependentProperty, IEnumerable<object?> dependentValues, bool negated, OpenApiConditionalTargetKind? targetKind)
         {
             if (targetKind is not { } kind || !TryNormaliseDependentValues(dependentValues, out var normalisedValues))
             {
                 return;
             }
 
-            builder.Add(new OpenApiConditionalRequirement(
+            target.Add(new OpenApiConditionalRequirement(
                 dependentProperty,
                 normalisedValues,
                 negated,

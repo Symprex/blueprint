@@ -1931,7 +1931,7 @@ public sealed record OpenApiOutputRenderingContext(
 
             foreach (var conditional in component.Conditionals)
             {
-                WriteConditionalRequirement(writer, conditional);
+                WriteConditionalRequirement(writer, conditional, omitLegacyExtras);
             }
 
             writer.WriteEndArray();
@@ -1949,7 +1949,7 @@ public sealed record OpenApiOutputRenderingContext(
     /// never over-enforces — a generated client validator that blocks a payload the server would accept is a worse
     /// failure than one the server still rejects.
     /// </remarks>
-    private static void WriteConditionalRequirement(Utf8JsonWriter writer, OpenApiConditionalRequirement conditional)
+    private static void WriteConditionalRequirement(Utf8JsonWriter writer, OpenApiConditionalRequirement conditional, bool omitLegacyExtras)
     {
         writer.WriteStartObject();
 
@@ -1975,12 +1975,13 @@ public sealed record OpenApiOutputRenderingContext(
 
         // "required" alone carries the whole of a NonNull requirement, so that kind contributes no property constraint
         // and the properties block is omitted rather than filled with an empty schema.
-        if (conditional.TargetKind != OpenApiConditionalTargetKind.NonNull)
+        // Legacy wrote "not": { "type": "null" } for it all the same (R162).
+        if (conditional.TargetKind != OpenApiConditionalTargetKind.NonNull || omitLegacyExtras)
         {
             writer.WritePropertyName("properties");
             writer.WriteStartObject();
             writer.WritePropertyName(conditional.TargetPropertyName);
-            WriteConditionalTargetConstraint(writer, conditional.TargetKind);
+            WriteConditionalTargetConstraint(writer, conditional.TargetKind, omitLegacyExtras);
             writer.WriteEndObject();
         }
 
@@ -2041,20 +2042,30 @@ public sealed record OpenApiOutputRenderingContext(
     /// over <c>required</c> is rejecting an explicit <c>"x": null</c>, so omitting it under-enforces slightly, which is the
     /// safe direction.
     /// </remarks>
-    private static void WriteConditionalTargetConstraint(Utf8JsonWriter writer, OpenApiConditionalTargetKind targetKind)
+    private static void WriteConditionalTargetConstraint(Utf8JsonWriter writer, OpenApiConditionalTargetKind targetKind, bool omitLegacyExtras)
     {
         writer.WriteStartObject();
 
         switch (targetKind)
         {
+            // Legacy's string target carried no pattern, only its items did.
             case OpenApiConditionalTargetKind.NonBlankString:
-                WriteNonBlankStringConstraint(writer);
+                WriteNonBlankStringConstraint(writer, includePattern: !omitLegacyExtras);
                 break;
 
             // NonNull contributes nothing beyond the enclosing "required" entry, so it yields an empty schema. The
             // caller skips it entirely rather than emitting one; handling it here keeps this method total, so that
-            // skip stays an optimisation rather than something this method depends on.
+            // skip stays an optimisation rather than something this method depends on. Legacy wrote "not": { "type":
+            // "null" }, which the generated client's validators accept.
             case OpenApiConditionalTargetKind.NonNull:
+                if (omitLegacyExtras)
+                {
+                    writer.WritePropertyName("not");
+                    writer.WriteStartObject();
+                    writer.WriteString("type", "null");
+                    writer.WriteEndObject();
+                }
+
                 break;
 
             case OpenApiConditionalTargetKind.NonBlankStringItems:
@@ -2079,14 +2090,17 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
     }
 
-    private static void WriteNonBlankStringConstraint(Utf8JsonWriter writer)
+    private static void WriteNonBlankStringConstraint(Utf8JsonWriter writer, bool includePattern = true)
     {
         writer.WriteString("type", "string");
         writer.WriteNumber("minLength", 1);
 
         // minLength alone still admits "   ", which string.IsNullOrWhiteSpace rejects. The pattern is unanchored, so it
         // matches a non-whitespace character anywhere in the value.
-        writer.WriteString("pattern", @"\S");
+        if (includePattern)
+        {
+            writer.WriteString("pattern", @"\S");
+        }
     }
 
     /// <summary>

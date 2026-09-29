@@ -475,7 +475,8 @@ public sealed record OpenApiSchemaProjectionContext(
         // attributes of its own.
         var conditionals = ExtractSchemaConditionals(
             bodyType,
-            CreateDeclaredJsonNamesByClrName(typeInfo));
+            CreateDeclaredJsonNamesByClrName(typeInfo),
+            useLegacyRules: naming == OpenApiSchemaNaming.Legacy);
 
         return new OpenApiSchemaModel(
             bodyTypeName,
@@ -518,10 +519,16 @@ public sealed record OpenApiSchemaProjectionContext(
     /// </remarks>
     /// <param name="bodyType">The covered body type whose properties declare the conditional validators.</param>
     /// <param name="declaredJsonNamesByClrName">The CLR-to-JSON name map for the properties this schema declares.</param>
+    /// <param name="useLegacyRules">
+    /// Whether to export what legacy Blueprint's <c>RequiredIfSchemaProcessor</c> exported, in the order it did: see
+    /// <see cref="OpenApiValidationConstraints.ExtractConditionalRequirements"/>. The requirements then follow the type's
+    /// property order rather than being sorted.
+    /// </param>
     /// <returns>The resolved conditional requirements in deterministic order; empty when none apply.</returns>
     internal static ImmutableArray<OpenApiConditionalRequirement> ExtractSchemaConditionals(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
-        IReadOnlyDictionary<string, string> declaredJsonNamesByClrName)
+        IReadOnlyDictionary<string, string> declaredJsonNamesByClrName,
+        bool useLegacyRules = false)
     {
         ArgumentNullException.ThrowIfNull(bodyType);
         ArgumentNullException.ThrowIfNull(declaredJsonNamesByClrName);
@@ -535,7 +542,7 @@ public sealed record OpenApiSchemaProjectionContext(
 
         foreach (var clrProperty in bodyType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            foreach (var requirement in OpenApiValidationConstraints.ExtractConditionalRequirements(clrProperty))
+            foreach (var requirement in OpenApiValidationConstraints.ExtractConditionalRequirements(clrProperty, useLegacyRules))
             {
                 if (declaredJsonNamesByClrName.TryGetValue(requirement.TargetPropertyName, out var targetName)
                     && declaredJsonNamesByClrName.TryGetValue(requirement.DependentPropertyName, out var dependentName))
@@ -547,6 +554,12 @@ public sealed record OpenApiSchemaProjectionContext(
                     });
                 }
             }
+        }
+
+        // Legacy wrote them in the order it found them, the type's property order.
+        if (useLegacyRules)
+        {
+            return builder.ToImmutable();
         }
 
         return

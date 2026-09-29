@@ -559,7 +559,7 @@ public sealed record OpenApiOperationRenderingContext(
                         && OpenApiDictionaryValues.AreValuesNullable(clrProperty, bodyValueType, nullabilityContext);
 
                     bodyPropertyNamesByClrName[entry.PropertyName] = bodyPropertyName;
-                    conditionalRequirements.AddRange(OpenApiValidationConstraints.ExtractConditionalRequirements(clrProperty));
+                    conditionalRequirements.AddRange(OpenApiValidationConstraints.ExtractConditionalRequirements(clrProperty, useLegacyRules: naming == OpenApiSchemaNaming.Legacy));
 
                     bodyProperties.Add(new OpenApiRequestBodyPropertyModel(
                         bodyPropertyName,
