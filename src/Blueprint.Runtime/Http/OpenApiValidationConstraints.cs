@@ -35,6 +35,14 @@ internal sealed record OpenApiValidationConstraints(
     public bool RequiresNonEmptyString { get; init; }
 
     /// <summary>
+    /// Gets a value indicating whether the property carries a <see cref="StringLengthAttribute"/>, whatever its
+    /// <see cref="StringLengthAttribute.MinimumLength"/> — including the default of 0, which <see cref="GetMinLength"/>
+    /// otherwise treats as "no minimum declared" since it constrains nothing. See <see cref="GetDocumentedMinLength"/>,
+    /// which is its only reader, for why a value of 0 still matters under legacy naming.
+    /// </summary>
+    public bool HasStringLengthAttribute { get; init; }
+
+    /// <summary>
     /// Returns <see langword="true"/> when at least one constraint value is non-default
     /// (excluding <see cref="IsRequired"/>, which is tracked separately by the parameter model).
     /// </summary>
@@ -108,6 +116,7 @@ internal sealed record OpenApiValidationConstraints(
             format)
         {
             RequiresNonEmptyString = IsRequiredNonEmptyString(attributes),
+            HasStringLengthAttribute = attributes.Any(static a => a is StringLengthAttribute),
         };
     }
 
@@ -163,10 +172,35 @@ internal sealed record OpenApiValidationConstraints(
     /// <param name="declaredMinLength">The minimum length the property's validation attributes declare, if any.</param>
     /// <param name="requiresNonEmptyString">Whether the property <see cref="IsRequiredNonEmptyString"/>.</param>
     /// <param name="isNonEnumString">Whether the property is documented as a string that is not an enum.</param>
+    /// <param name="hasStringLengthAttribute">
+    /// Whether the property carries a <see cref="StringLengthAttribute"/> at all (see <see cref="HasStringLengthAttribute"/>).
+    /// </param>
+    /// <param name="useLegacyStringLengthZero">
+    /// <see langword="true"/> under <see cref="OpenApiSchemaNaming.Legacy"/>: legacy's NJsonSchema echoed a
+    /// <see cref="StringLengthAttribute"/>'s <see cref="StringLengthAttribute.MinimumLength"/> verbatim, including its
+    /// default of 0 (Signature365's committed Portal document, e.g. a description bounded only by
+    /// <c>[StringLength(200)]</c>, carries <c>"minLength": 0</c>) — a fact this document otherwise leaves out under
+    /// Default naming, since a minimum of 0 constrains nothing.
+    /// </param>
     /// <returns>The minimum length to document, or <see langword="null"/> for none.</returns>
-    internal static int? GetDocumentedMinLength(int? declaredMinLength, bool requiresNonEmptyString, bool isNonEnumString)
+    internal static int? GetDocumentedMinLength(
+        int? declaredMinLength,
+        bool requiresNonEmptyString,
+        bool isNonEnumString,
+        bool hasStringLengthAttribute = false,
+        bool useLegacyStringLengthZero = false)
     {
-        return declaredMinLength ?? (requiresNonEmptyString && isNonEnumString ? 1 : null);
+        if (declaredMinLength is not null)
+        {
+            return declaredMinLength;
+        }
+
+        if (useLegacyStringLengthZero && hasStringLengthAttribute)
+        {
+            return 0;
+        }
+
+        return requiresNonEmptyString && isNonEnumString ? 1 : null;
     }
 
     /// <summary>
