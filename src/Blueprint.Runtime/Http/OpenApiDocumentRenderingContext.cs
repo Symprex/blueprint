@@ -1,4 +1,6 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using Blueprint.Http;
 using Blueprint.Model;
 
@@ -65,7 +67,7 @@ public sealed record OpenApiDocumentRenderingContext(
 
         // Collect distinct enum types referenced across all schema component properties and emit them
         // as top-level component schemas so properties can use $ref instead of inline enum arrays.
-        var enumComponents = CollectEnumSchemaComponents(schemaComponents);
+        var enumComponents = CollectEnumSchemaComponents(schemaComponents, schemaProjection.SchemaNamesByType);
 
         if (!enumComponents.IsEmpty)
         {
@@ -278,10 +280,20 @@ public sealed record OpenApiDocumentRenderingContext(
     /// <c>type: string</c> with <c>enum</c>, <c>x-enumNames</c>, and <c>x-enum-varnames</c> arrays, matching the
     /// standard pattern expected by TypeScript generators and other OpenAPI tooling.
     /// </summary>
+    /// <remarks>
+    /// An enum reached only as the items of an array, or the values of a dictionary, has no property of its own to carry
+    /// its members, yet the property writes a <c>$ref</c> to it (R143). Each such reference to a name that is one of
+    /// <paramref name="schemaNamesByType"/>'s enums gets its component too, or the reference dangles.
+    /// </remarks>
+    [UnconditionalSuppressMessage("Trimming", "IL2067", Justification = "Enum types used in STJ-serializable operations are preserved by the generated serializer context.")]
     private static ImmutableArray<OpenApiSchemaComponentModel> CollectEnumSchemaComponents(
-        ImmutableArray<OpenApiSchemaComponentModel> existingComponents)
+        ImmutableArray<OpenApiSchemaComponentModel> existingComponents,
+        FrozenDictionary<Type, string> schemaNamesByType)
     {
         var enumSchemas = new Dictionary<string, (ImmutableArray<string> Values, string? Description)>(StringComparer.Ordinal);
+        var enumTypesByName = schemaNamesByType
+            .Where(static pair => pair.Key.IsEnum)
+            .ToDictionary(static pair => pair.Value, static pair => pair.Key, StringComparer.Ordinal);
 
         foreach (var component in existingComponents)
         {
@@ -290,6 +302,14 @@ public sealed record OpenApiDocumentRenderingContext(
                 if (property.EnumSchemaRef is not null && !property.EnumValues.IsDefaultOrEmpty)
                 {
                     enumSchemas.TryAdd(property.EnumSchemaRef, (property.EnumValues, property.EnumDescription));
+                }
+
+                foreach (var reference in new[] { property.ItemsSchemaRef, property.AdditionalPropertiesSchemaRef, property.AdditionalPropertiesItemsSchemaRef })
+                {
+                    if (reference is not null && enumTypesByName.TryGetValue(reference, out var enumType))
+                    {
+                        enumSchemas.TryAdd(reference, (Enum.GetNames(enumType).ToImmutableArray(), OpenApiSchemaProjectionContext.GetTypeDescription(enumType)));
+                    }
                 }
             }
         }

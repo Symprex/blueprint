@@ -47,6 +47,7 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionStatusOne.CollisionStatus",
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionStatusTwo.CollisionStatus",
             "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.ArrayEnumParameterInvoiceApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.EnumItemsResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.EnvelopeOne.EnvelopeMatch",
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.EnvelopeTwo.EnvelopeMatch",
             "Blueprint.Http.ResourceEvent<Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.EnvelopeOne.EnvelopeMatch>",

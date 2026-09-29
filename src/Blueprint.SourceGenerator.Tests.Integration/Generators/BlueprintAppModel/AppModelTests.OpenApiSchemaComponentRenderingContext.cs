@@ -36,6 +36,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "E2EConflictDetail",
             "E2EJobAcceptedPayload",
             "E2EWidgetResponse",
+            "EnumItemsResource",
             "EnvelopeMatch",
             "EnvelopeMatch2",
             "EnvelopeMatch3",
