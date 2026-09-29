@@ -501,8 +501,8 @@ public class AppModelOpenApiOutputRenderingContextTests
         code.GetProperty("pattern").GetString().Should().Be("^[A-Z0-9]+$");
 
         var positiveCount = schema.GetProperty("properties").GetProperty("PositiveCount");
-        positiveCount.GetProperty("minimum").GetDecimal().Should().Be(0m);
-        positiveCount.GetProperty("exclusiveMinimum").GetBoolean().Should().BeTrue();
+        positiveCount.GetProperty("minimum").GetDecimal().Should().Be(1m, "[GreaterThan(0)] of an integer is at least 1");
+        positiveCount.TryGetProperty("exclusiveMinimum", out _).Should().BeFalse();
 
         var quantity = schema.GetProperty("properties").GetProperty("Quantity");
         quantity.GetProperty("minimum").GetDecimal().Should().Be(1m);

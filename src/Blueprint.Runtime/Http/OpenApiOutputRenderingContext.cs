@@ -642,7 +642,7 @@ public sealed record OpenApiOutputRenderingContext(
             }
 
             WriteEnumValues(writer, parameter.EnumValues, includeVarNames: !omitLegacyExtras);
-            WriteNumericConstraints(writer, parameter.Minimum, parameter.Maximum, parameter.ExclusiveMinimum, parameter.ExclusiveMaximum);
+            WriteNumericConstraints(writer, parameter.SchemaType, parameter.Minimum, parameter.Maximum, parameter.ExclusiveMinimum, parameter.ExclusiveMaximum);
 
             // For array parameters, [MinLength]/[MaxLength]/[NotEmptyList]/[MaxItemsList] map to
             // minItems/maxItems rather than minLength/maxLength.
@@ -751,26 +751,25 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteNumericConstraints(Utf8JsonWriter writer, decimal? minimum, decimal? maximum, bool exclusiveMinimum, bool exclusiveMaximum)
+    /// <summary>
+    /// Writes a numeric schema's <c>minimum</c> and <c>maximum</c>, and never an exclusive keyword (R147b): OpenAPI 3.0's
+    /// <c>exclusiveMinimum</c> is a boolean beside <c>minimum</c>, draft-07's (which a generated client's AJV reads) is the
+    /// bound itself, and no document is valid in both. An exclusive bound is written in the form both accept: an integer's
+    /// as the next integer (greater than 0 is at least 1, exactly), a number's as the inclusive bound, which rejects no value
+    /// the server accepts and merely admits the bound itself.
+    /// </summary>
+    private static void WriteNumericConstraints(Utf8JsonWriter writer, string? schemaType, decimal? minimum, decimal? maximum, bool exclusiveMinimum, bool exclusiveMaximum)
     {
+        var isInteger = string.Equals(schemaType, "integer", StringComparison.Ordinal);
+
         if (minimum.HasValue)
         {
-            writer.WriteNumber("minimum", minimum.Value);
-        }
-
-        if (exclusiveMinimum)
-        {
-            writer.WriteBoolean("exclusiveMinimum", true);
+            writer.WriteNumber("minimum", exclusiveMinimum && isInteger ? minimum.Value + 1 : minimum.Value);
         }
 
         if (maximum.HasValue)
         {
-            writer.WriteNumber("maximum", maximum.Value);
-        }
-
-        if (exclusiveMaximum)
-        {
-            writer.WriteBoolean("exclusiveMaximum", true);
+            writer.WriteNumber("maximum", exclusiveMaximum && isInteger ? maximum.Value - 1 : maximum.Value);
         }
     }
 
@@ -2351,25 +2350,7 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteString("pattern", property.Pattern);
         }
 
-        if (property.Minimum.HasValue)
-        {
-            writer.WriteNumber("minimum", property.Minimum.Value);
-        }
-
-        if (property.ExclusiveMinimum)
-        {
-            writer.WriteBoolean("exclusiveMinimum", true);
-        }
-
-        if (property.Maximum.HasValue)
-        {
-            writer.WriteNumber("maximum", property.Maximum.Value);
-        }
-
-        if (property.ExclusiveMaximum)
-        {
-            writer.WriteBoolean("exclusiveMaximum", true);
-        }
+        WriteNumericConstraints(writer, property.Type, property.Minimum, property.Maximum, property.ExclusiveMinimum, property.ExclusiveMaximum);
 
         if (property.IsDeprecated)
         {

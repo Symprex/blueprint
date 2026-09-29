@@ -108,7 +108,7 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
-    public async Task When_openapi_endpoint_invoked_then_page_parameter_has_exclusive_minimum()
+    public async Task When_openapi_endpoint_invoked_then_page_parameter_has_the_next_integer_as_its_minimum()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();
         using var doc = JsonDocument.Parse(json);
@@ -119,12 +119,12 @@ public class ReferenceAppOpenApiTests
             .Single(static p => p.GetProperty("name").GetString() == "page");
 
         var schema = pageParam.GetProperty("schema");
-        schema.GetProperty("minimum").GetDecimal().Should().Be(0);
-        schema.GetProperty("exclusiveMinimum").GetBoolean().Should().BeTrue();
+        schema.GetProperty("minimum").GetDecimal().Should().Be(1, "[GreaterThan(0)] of an integer is at least 1");
+        schema.TryGetProperty("exclusiveMinimum", out _).Should().BeFalse("no draft-07 validator accepts the OpenAPI 3.0 boolean");
     }
 
     [Fact]
-    public async Task When_openapi_endpoint_invoked_then_page_parameter_has_exclusive_maximum()
+    public async Task When_openapi_endpoint_invoked_then_page_parameter_has_the_previous_integer_as_its_maximum()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();
         using var doc = JsonDocument.Parse(json);
@@ -135,8 +135,8 @@ public class ReferenceAppOpenApiTests
             .Single(static p => p.GetProperty("name").GetString() == "page");
 
         var schema = pageParam.GetProperty("schema");
-        schema.GetProperty("maximum").GetDecimal().Should().Be(1001);
-        schema.GetProperty("exclusiveMaximum").GetBoolean().Should().BeTrue();
+        schema.GetProperty("maximum").GetDecimal().Should().Be(1000, "[LessThan(1001)] of an integer is at most 1000");
+        schema.TryGetProperty("exclusiveMaximum", out _).Should().BeFalse("no OpenAPI 3.0 document accepts the draft-07 number");
     }
 
     [Fact]

@@ -853,10 +853,8 @@
             "schema": {
               "type": "integer",
               "format": "int32",
-              "minimum": 0,
-              "exclusiveMinimum": true,
-              "maximum": 1001,
-              "exclusiveMaximum": true
+              "minimum": 1,
+              "maximum": 1000
             }
           },
           {
