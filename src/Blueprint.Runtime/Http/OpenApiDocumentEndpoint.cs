@@ -123,7 +123,9 @@ internal static class OpenApiDocumentEndpoint
         }
 
         var pathItemContext = OpenApiPathItemRenderingContext.Create(operationContext);
-        var documentContext = OpenApiDocumentRenderingContext.Create(pathItemContext);
+        var documentContext = OpenApiDocumentRenderingContext.Create(
+            pathItemContext,
+            infoOptions?.SchemaNaming == OpenApiSchemaNaming.Legacy);
 
         return (OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions, httpOptions, basePath).Json, operationContext.Warnings);
     }

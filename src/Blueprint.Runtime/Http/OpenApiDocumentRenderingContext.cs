@@ -22,8 +22,14 @@ public sealed record OpenApiDocumentRenderingContext(
     /// into JSON serialization, endpoint exposure, titles, tags, or customization hooks.
     /// </summary>
     /// <param name="pathItemRendering">The path-item rendering context to assemble into a document model.</param>
+    /// <param name="useLegacyResourceEventText">
+    /// When <see langword="true"/>, the <c>changeType</c> and <c>href</c> properties of a synthesized ResourceEvent
+    /// envelope carry Signature365's legacy Blueprint's own worded descriptions (typo included) rather than the
+    /// framework's neutral ones — set from <c>infoOptions?.SchemaNaming == OpenApiSchemaNaming.Legacy</c> by the
+    /// caller, the same way every other Legacy-only rendering choice is gated.
+    /// </param>
     /// <returns>The assembled OpenAPI-style document model.</returns>
-    public static OpenApiDocumentRenderingContext Create(OpenApiPathItemRenderingContext pathItemRendering)
+    public static OpenApiDocumentRenderingContext Create(OpenApiPathItemRenderingContext pathItemRendering, bool useLegacyResourceEventText = false)
     {
         ArgumentNullException.ThrowIfNull(pathItemRendering);
 
@@ -56,7 +62,7 @@ public sealed record OpenApiDocumentRenderingContext(
         // Promote ResourceEvent envelopes from inline response schemas to named component schemas so
         // TypeScript generators (which resolve types from $ref paths) can produce typed envelope classes
         // like ResourceEventOfTemplateApiResource instead of anonymous inline objects.
-        var (envelopeComponents, changeTypeEnum) = CollectResourceEventEnvelopeComponents(paths);
+        var (envelopeComponents, changeTypeEnum) = CollectResourceEventEnvelopeComponents(paths, useLegacyResourceEventText);
 
         if (!envelopeComponents.IsEmpty)
         {
@@ -318,7 +324,7 @@ public sealed record OpenApiDocumentRenderingContext(
     /// enum component that the envelope's <c>changeType</c> property references via <c>$ref</c>.
     /// </summary>
     private static (ImmutableArray<OpenApiSchemaComponentModel> Envelopes, OpenApiSchemaComponentModel? ChangeTypeEnum)
-        CollectResourceEventEnvelopeComponents(ImmutableArray<OpenApiPathItemModel> paths)
+        CollectResourceEventEnvelopeComponents(ImmutableArray<OpenApiPathItemModel> paths, bool useLegacyResourceEventText)
     {
         // envelopeBodyTypeName → innerBodyTypeName (deduplicated by envelope key)
         var envelopes = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -357,7 +363,7 @@ public sealed record OpenApiDocumentRenderingContext(
 
         foreach (var (envelopeBodyTypeName, innerBodyTypeName) in envelopes)
         {
-            builder.Add(CreateResourceEventEnvelopeComponent(envelopeBodyTypeName, innerBodyTypeName));
+            builder.Add(CreateResourceEventEnvelopeComponent(envelopeBodyTypeName, innerBodyTypeName, useLegacyResourceEventText));
         }
 
         var changeTypeEnum = new OpenApiSchemaComponentModel(
@@ -375,8 +381,15 @@ public sealed record OpenApiDocumentRenderingContext(
     /// The component contains real properties so schema processors can inspect and modify them.
     /// </summary>
     private static OpenApiSchemaComponentModel CreateResourceEventEnvelopeComponent(
-        string envelopeBodyTypeName, string innerBodyTypeName)
+        string envelopeBodyTypeName, string innerBodyTypeName, bool useLegacyResourceEventText)
     {
+        var changeTypeDescription = useLegacyResourceEventText
+            ? LegacyChangeTypeDescription
+            : DescribeResourceEventProperty(nameof(ResourceEvent.ChangeType));
+        var hrefDescription = useLegacyResourceEventText
+            ? LegacyHrefDescription
+            : DescribeResourceEventProperty(nameof(ResourceEvent.Href));
+
         var properties = ImmutableArray.Create(
             new OpenApiSchemaComponentPropertyModel(
                 "$object",
@@ -397,7 +410,7 @@ public sealed record OpenApiDocumentRenderingContext(
                 IsNullable: false,
                 EnumSchemaRef: "ResourceEventChangeType",
                 EnumValues: ImmutableArray.Create("Created", "Updated", "Deleted"),
-                Description: LegacyChangeTypeDescription),
+                Description: changeTypeDescription),
             new OpenApiSchemaComponentPropertyModel(
                 "created",
                 "string",
@@ -416,7 +429,7 @@ public sealed record OpenApiDocumentRenderingContext(
                 "string",
                 IsExtensionData: false,
                 IsNullable: true,
-                Description: LegacyHrefDescription),
+                Description: hrefDescription),
             new OpenApiSchemaComponentPropertyModel(
                 "data",
                 null,
@@ -463,9 +476,11 @@ public sealed record OpenApiDocumentRenderingContext(
             Description: OpenApiXmlDocs.GetSchemaSummary(typeof(ResourceEvent<>)));
     }
 
-    // Signature365's committed documents describe these two members in legacy's words, which their own summaries no
-    // longer carry: legacy's change-type summary had a stray "a" and named a Type property ResourceEvent does not have, and
-    // its href summary named the ResourceEventMiddleware that populated it. The document keeps the words, typo and all.
+    // Signature365's committed documents describe these two members in legacy's words: legacy's change-type summary
+    // had a stray "a" and named a Type property ResourceEvent does not have, and its href summary named the
+    // ResourceEventMiddleware that populated it. Under Legacy naming only, the document keeps the words, typo and
+    // all, for every consumer; a Default consumer gets the framework's own neutral summary instead (below), the same
+    // way every other Legacy-only text choice is opt-in rather than universal.
     private const string LegacyChangeTypeDescription =
         "Gets a the change type of this event, which is a higher-level version of the Type property,\n"
         + "indicating whether the resource was updated, created or deleted.";

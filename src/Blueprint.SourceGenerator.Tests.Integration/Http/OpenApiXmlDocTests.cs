@@ -81,14 +81,17 @@ public sealed class OpenApiXmlDocTests
             .Should().Be(expected);
     }
 
+    // changeType/href: R26 gates legacy's own worded descriptions (typo included) to Legacy naming only (proven in
+    // OpenApiResourceEventEnvelopeTests); Render() below uses Default options, so these two carry the framework's own
+    // neutral summaries instead.
     [Theory]
     [InlineData(null, "A typed subclass of ResourceEvent that redefines the Data type to\nbe of a specific type, useful for better type safety when dealing with events throughout the code\nbase.")]
     [InlineData("$object", "Gets the object of this 'resource', which is \"event\".")]
     [InlineData("eventId", "Gets the id of this event, for example 'timeEntry.updated' or 'account.approvals.enabled'.")]
-    [InlineData("changeType", "Gets a the change type of this event, which is a higher-level version of the Type property,\nindicating whether the resource was updated, created or deleted.")]
+    [InlineData("changeType", "Gets the change type of this event, indicating whether the resource was created, updated or deleted.")]
     [InlineData("created", "Gets the created date of this event.")]
     [InlineData("resourceObject", "Gets the type of resource represented.")]
-    [InlineData("href", "Gets or sets the href of the resource this event represents, to be populated by the ResourceEventMiddleware\ncomponent from the resource type and id definition object.")]
+    [InlineData("href", "Gets or sets the href of the resource this event represents, populated by the framework from the resource type's\nself link and the event's data or self query.")]
     [InlineData("changedValues", "Gets or sets a dictionary of previous values, used to identify what has actually changed\nbetween two resources, keyed on the property name with the previous value of the resource\nbeing the value.")]
     [InlineData("metadata", "Gets the metadata dictionary of this resource event, a simple bag of key value pairs\nof useful information that can be stored free-form against an event.")]
     [InlineData("secureData", "Gets a dictionary of security-related data that will NOT be persisted anywhere.")]

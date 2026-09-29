@@ -2462,7 +2462,7 @@
             "description": "Gets the id of this event, for example \u0027timeEntry.updated\u0027 or \u0027account.approvals.enabled\u0027."
           },
           "changeType": {
-            "description": "Gets a the change type of this event, which is a higher-level version of the Type property,\nindicating whether the resource was updated, created or deleted.",
+            "description": "Gets the change type of this event, indicating whether the resource was created, updated or deleted.",
             "oneOf": [
               {
                 "$ref": "#/components/schemas/ResourceEventChangeType"
@@ -2481,7 +2481,7 @@
           "href": {
             "type": "string",
             "nullable": true,
-            "description": "Gets or sets the href of the resource this event represents, to be populated by the ResourceEventMiddleware\ncomponent from the resource type and id definition object."
+            "description": "Gets or sets the href of the resource this event represents, populated by the framework from the resource type\u0027s\nself link and the event\u0027s data or self query."
           },
           "data": {
             "$ref": "#/components/schemas/TemplateApiResource"
