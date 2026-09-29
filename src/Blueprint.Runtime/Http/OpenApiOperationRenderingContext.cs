@@ -298,6 +298,11 @@ public sealed record OpenApiOperationRenderingContext(
 
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
             var effectiveFormat = constraints.Format ?? schemaFormat;
+
+            // R132: a parameter's validation-derived format is one legacy never wrote either (the same reflection-only schema as
+            // R44); its type's format (int32, int64, date-time) is the only one Signature365's 811 committed parameters carry.
+            var parameterFormat = parameterConstraints.Format ?? schemaFormat;
+
             var obsoletePropertyAttr = clrProperty?.GetCustomAttribute<System.ObsoleteAttribute>();
             var isDeprecated = obsoletePropertyAttr is not null;
             var propertyDeprecationReason = obsoletePropertyAttr?.Message;
@@ -333,7 +338,7 @@ public sealed record OpenApiOperationRenderingContext(
                         "path",
                         Required: true,
                         schemaType,
-                        effectiveFormat)
+                        parameterFormat)
                     {
                         Description = description,
                         MinLength = parameterConstraints.MinLength,
@@ -359,7 +364,7 @@ public sealed record OpenApiOperationRenderingContext(
                         "query",
                         Required: isRequired,
                         schemaType,
-                        effectiveFormat)
+                        parameterFormat)
                     {
                         Description = description,
                         MinLength = parameterConstraints.MinLength,
@@ -396,7 +401,7 @@ public sealed record OpenApiOperationRenderingContext(
                         "header",
                         Required: isRequired,
                         schemaType,
-                        effectiveFormat)
+                        parameterFormat)
                     {
                         Description = description,
                         MinLength = parameterConstraints.MinLength,
@@ -421,7 +426,7 @@ public sealed record OpenApiOperationRenderingContext(
                         "cookie",
                         Required: isRequired,
                         schemaType,
-                        effectiveFormat)
+                        parameterFormat)
                     {
                         Description = description,
                         MinLength = parameterConstraints.MinLength,
