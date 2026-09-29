@@ -17,6 +17,21 @@ public sealed record OpenApiDocumentRenderingContext(
     ImmutableArray<OpenApiSchemaComponentModel> SchemaComponents)
 {
     /// <summary>
+    /// Creates a deterministic OpenAPI-style document model from the supplied path-item rendering context, with the
+    /// framework's own ResourceEvent envelope descriptions.
+    /// </summary>
+    /// <remarks>
+    /// The 1.0.2 signature, kept so that a binary built against it still binds: <c>useLegacyResourceEventText</c> was added
+    /// in 1.0.3 as an optional parameter, which a recompile fills in but an existing binary cannot.
+    /// </remarks>
+    /// <param name="pathItemRendering">The path-item rendering context to assemble into a document model.</param>
+    /// <returns>The assembled OpenAPI-style document model.</returns>
+    public static OpenApiDocumentRenderingContext Create(OpenApiPathItemRenderingContext pathItemRendering)
+    {
+        return Create(pathItemRendering, useLegacyResourceEventText: false);
+    }
+
+    /// <summary>
     /// Creates a deterministic OpenAPI-style document model from the supplied path-item rendering context.
     /// This seam intentionally stays model-only: it assembles the current path and schema inventories without widening
     /// into JSON serialization, endpoint exposure, titles, tags, or customization hooks.

@@ -470,7 +470,51 @@ public sealed record OpenApiResponseObjectModel(
     ImmutableArray<string> ResultTypeNames,
     ImmutableArray<OpenApiResponseContentModel> Content,
     ImmutableArray<OpenApiResponseHeaderModel> Headers = default,
-    ImmutableArray<OperationProblemExample> ProblemExamples = default);
+    ImmutableArray<OperationProblemExample> ProblemExamples = default)
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OpenApiResponseObjectModel"/> class with no problem examples.
+    /// </summary>
+    /// <remarks>
+    /// The 1.0.2 signature, kept so that a binary built against it (an operation processor that makes a response, for
+    /// example) still binds: <see cref="ProblemExamples"/> was added in 1.0.3 as an optional parameter, which a recompile
+    /// fills in but an existing binary cannot.
+    /// </remarks>
+    /// <param name="statusCode">The HTTP status code emitted for this response family.</param>
+    /// <param name="hasResponseBody">Whether the response family writes a response body.</param>
+    /// <param name="resultTypeNames">The semantic result type names that collapse into this response family.</param>
+    /// <param name="content">The rendered response content keyed by media type when covered schema components exist.</param>
+    /// <param name="headers">Well-known response headers inferred from result types and status codes.</param>
+    public OpenApiResponseObjectModel(
+        int statusCode,
+        bool hasResponseBody,
+        ImmutableArray<string> resultTypeNames,
+        ImmutableArray<OpenApiResponseContentModel> content,
+        ImmutableArray<OpenApiResponseHeaderModel> headers)
+        : this(statusCode, hasResponseBody, resultTypeNames, content, headers, default)
+    {
+    }
+
+    /// <summary>Deconstructs the response into the five members it had in 1.0.2, kept for binaries built against that signature.</summary>
+    /// <param name="statusCode">The HTTP status code emitted for this response family.</param>
+    /// <param name="hasResponseBody">Whether the response family writes a response body.</param>
+    /// <param name="resultTypeNames">The semantic result type names that collapse into this response family.</param>
+    /// <param name="content">The rendered response content keyed by media type when covered schema components exist.</param>
+    /// <param name="headers">Well-known response headers inferred from result types and status codes.</param>
+    public void Deconstruct(
+        out int statusCode,
+        out bool hasResponseBody,
+        out ImmutableArray<string> resultTypeNames,
+        out ImmutableArray<OpenApiResponseContentModel> content,
+        out ImmutableArray<OpenApiResponseHeaderModel> headers)
+    {
+        statusCode = this.StatusCode;
+        hasResponseBody = this.HasResponseBody;
+        resultTypeNames = this.ResultTypeNames;
+        content = this.Content;
+        headers = this.Headers;
+    }
+}
 
 /// <summary>
 /// Captures one rendered media-type entry for an OpenAPI-style response object.
