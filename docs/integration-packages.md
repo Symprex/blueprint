@@ -100,6 +100,7 @@ services.AddRebus((configure, sp) =>
 | `IHandleMessages<T>` operation discovery | `BlueprintApiActivator.GetHandlers<T>()` caches and routes |
 | Per-message DI scope | Fresh scope created per message automatically |
 | `SaveMartenChangesMiddleware` around a subscribed message's `IHandleMessages<T>` | A plain (non-operation) handler's scoped `IUnitOfWork`, when registered, is saved when Rebus commits the message's transaction — after every handler has returned, before the messages they sent go out, and never for a delivery that failed or was moved to the error queue |
+| `BackgroundTaskRunnerMiddleware` around a subscribed message's `IHandleMessages<T>` | The tasks a plain handler enqueued through its scope's `IBackgroundTaskScheduler` are released (`RunNowAsync`) in the same commit callback, straight after that save and only once it has returned, with or without a unit of work — as legacy's runner followed its save (`AccessTokenRenewalFailedEventExecutorPipeline.cs:74-82` at Signature365 `8b40ecc961`) and matched every operation |
 
 ### Transaction Scope
 
@@ -132,8 +133,9 @@ Blueprint provides the two seams an outbox needs, and nothing else:
   drains nothing.
 
 The save does not close the transaction to new messages. A generated pipeline commits `IMessageOutbox`, runs the audit
-sink and flushes background tasks after the save and before it completes the Rebus scope, and a received message's
-later commit callbacks run after its save. A message sent from any of those joins the transaction after the drain has
+sink and flushes background tasks after the save and before it completes the Rebus scope; a plain handler's background
+tasks are released straight after its save, in the same commit callback; and a received message's later commit
+callbacks run after both. A message sent from any of those joins the transaction after the drain has
 run, so it is not in the saved session. The outbox must refuse it, or send it without the outbox; queued into the saved
 session, it would never be written. Legacy had no such window, because it completed its scope before it saved, and
 flushed and audited after it had completed the scope — still ambient, as its `using var` lasted to the end of the

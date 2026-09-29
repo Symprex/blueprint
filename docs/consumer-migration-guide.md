@@ -681,6 +681,22 @@ public partial class SendWelcomeEmailTask : ICommand<NoResultOperationResult>
 
 The generated pipeline for background tasks includes validation, unit-of-work, message outbox, and audit stages just like HTTP operations.
 
+**Behaviour change for plain Rebus handlers (v1.0.3).** Before v1.0.3, a background task that a plain (non-operation)
+`IHandleMessages<T>` enqueued through its `IBackgroundTaskScheduler` was never released: only a generated pipeline
+flushed the scheduler, and `BlueprintApiActivator` ran no pipeline around such a handler, so the task was discarded with
+the message's scope. Legacy ran every subscribed message as an operation whose pipeline called `RunNowAsync()` after its
+save (`AccessTokenRenewalFailedEventExecutorPipeline.cs:74-82` at Signature365 `8b40ecc961`). The activator now releases
+the scope's tasks when Rebus commits the message's transaction, straight after it saves the scope's unit of work, and:
+
+- only when the delivery succeeded — not for a handler that threw, a save that threw, or a message moved to the error
+  queue;
+- with or without a registered `IUnitOfWork`, as legacy's runner matched every operation;
+- before the commit callbacks an `IRebusTransactionEnlistment` or the transport's first send registered, so, as for a
+  generated pipeline's flush, a task provider must not send a Rebus message.
+
+A consumer whose plain handlers enqueue tasks sees them dispatched. One with no `IBackgroundTaskScheduler` registered
+sees no change.
+
 ### 13. Persistence
 
 Register a unit-of-work implementation to auto-save changes after an operation succeeds:

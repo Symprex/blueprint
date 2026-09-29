@@ -31,7 +31,9 @@ namespace Blueprint.Rebus;
 /// </para>
 /// <para>
 /// The <see cref="Persistence.IUnitOfWork"/> of that scope, when one is registered, is saved when Rebus commits the
-/// transaction, so the writes those handlers made through it are persisted exactly when the delivery succeeds.
+/// transaction, so the writes those handlers made through it are persisted exactly when the delivery succeeds. The
+/// background tasks they enqueued through the scope's <see cref="Tasks.IBackgroundTaskScheduler"/> are released straight
+/// after that save, and never for a delivery that failed.
 /// </para>
 /// </remarks>
 public sealed class BlueprintApiActivator : IContainerAdapter
@@ -93,9 +95,10 @@ public sealed class BlueprintApiActivator : IContainerAdapter
     /// </summary>
     /// <remarks>
     /// The order in which this registers with the transaction is what an outbox depends on: the scope's disposal first,
-    /// so nothing that follows can leak it; then the unit of work save as the first commit callback; then the consumer's
-    /// <see cref="IRebusTransactionEnlistment"/>s, so any commit callback they add runs after the save; and all of it
-    /// before a handler runs, so before a handler first sends.
+    /// so nothing that follows can leak it; then the unit of work save, followed in the same callback by the release of
+    /// the background tasks, as the first commit callback; then the consumer's <see cref="IRebusTransactionEnlistment"/>s,
+    /// so any commit callback they add runs after the save and the release; and all of it before a handler runs, so
+    /// before a handler first sends.
     /// </remarks>
     private async Task<IEnumerable<IHandleMessages<TMessage>>> GetPlainHandlersAsync<TMessage>(ITransactionContext transactionContext)
     {
@@ -108,17 +111,19 @@ public sealed class BlueprintApiActivator : IContainerAdapter
         transactionContext.OnDisposed(_ => DisposeHandlerScope(scope));
 
         // Registered before any handler runs, so it precedes the commit callback the transport registers when a handler
-        // first sends: the handlers' writes are persisted before the messages announcing them go out.
+        // first sends: the handlers' writes are persisted, and the background tasks they enqueued released, before the
+        // messages announcing them go out.
         //
         // This save is never taken back. When a handler fails and second-level retries are on, Rebus discards the
         // first-level sends and dispatches the failed message again in the same transaction context, but this callback,
-        // and the failed handler's unsaved writes in its scope, stay registered: if that dispatch succeeded, the commit
-        // would save them. It cannot today only because the second-level dispatch asks for the handlers of Rebus's internal
-        // FailedMessageWrapper<TMessage>, which resolution by exact type never finds, so that dispatch fails and nothing
-        // commits. A polymorphic resolver (Autofac's contravariant resolution, say) that answered it with an
-        // IHandleMessages<IFailed<TMessage>> would make it commit, saving the failed handler's writes.
+        // and the failed handler's unsaved writes and enqueued tasks in its scope, stay registered: if that dispatch
+        // succeeded, the commit would save them and release the tasks. It cannot today only because the second-level
+        // dispatch asks for the handlers of Rebus's internal FailedMessageWrapper<TMessage>, which resolution by exact
+        // type never finds, so that dispatch fails and nothing commits. A polymorphic resolver (Autofac's contravariant
+        // resolution, say) that answered it with an IHandleMessages<IFailed<TMessage>> would make it commit, saving the
+        // failed handler's writes.
         var cancellationToken = MessageContext.Current?.IncomingStepContext.Load<CancellationToken>() ?? CancellationToken.None;
-        transactionContext.OnCommit(_ => SaveHandlerUnitOfWorkAsync(scope.ServiceProvider, cancellationToken));
+        transactionContext.OnCommit(_ => SaveAndReleaseAsync(scope.ServiceProvider, cancellationToken));
 
         // Only when a unit of work will be saved in this transaction: an outbox enlisted where nothing is saved would
         // never be written.
@@ -161,6 +166,42 @@ public sealed class BlueprintApiActivator : IContainerAdapter
     private static void DisposeHandlerScope(AsyncServiceScope scope)
     {
         Task.Run(() => scope.DisposeAsync().AsTask()).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Saves a plain handler's DI scope's unit of work, then releases the background tasks its handlers enqueued, from the
+    /// received message's first commit callback.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Legacy ran every subscribed message as an operation whose pipeline called
+    /// <c>IBackgroundTaskScheduler.RunNowAsync()</c> after it had completed its Rebus scope and saved the Marten session,
+    /// in the same <c>try</c>, so a handler or a save that threw released nothing; and its runner matched every operation,
+    /// whether or not a session was saved (Signature365 <c>8b40ecc961</c>,
+    /// <c>AccessTokenRenewalFailedEventExecutorPipeline.cs:74-82</c>, catch <c>:101-115</c>;
+    /// <c>Blueprint.Tasks/BackgroundTaskRunnerMiddleware.cs:21-24</c>). So the tasks are released here with or without a
+    /// unit of work, and only once the save has returned: in the one callback, so that a save that throws skips the release
+    /// whatever Rebus does with the commit callbacks after a failing one.
+    /// </para>
+    /// <para>
+    /// A generated pipeline orders the same steps the same way: the save, then the flush, then the completion of its Rebus
+    /// scope, whose commit callbacks include an enlistment's and the transport's send. Here those callbacks were registered
+    /// after this one, or by a handler's first send, so they run after it too. A task provider must therefore not send a
+    /// Rebus message: it would join the transaction after an outbox's drain has run in the save.
+    /// </para>
+    /// <para>
+    /// The scheduler is the one resolved from the handlers' own scope, so it holds what they enqueued; none is resolved
+    /// when none is registered (<see cref="PipelineHelpers.FlushBackgroundTasksAsync"/>). A release that throws fails the
+    /// transaction's completion, as a save that throws does, after the save has committed.
+    /// </para>
+    /// </remarks>
+    /// <param name="services">The service provider of the scope the message's handlers were resolved from.</param>
+    /// <param name="cancellationToken">The cancellation token of the delivery.</param>
+    /// <returns>A task that completes when the unit of work has been saved and the enqueued tasks released.</returns>
+    private static async Task SaveAndReleaseAsync(IServiceProvider services, CancellationToken cancellationToken)
+    {
+        await SaveHandlerUnitOfWorkAsync(services, cancellationToken).ConfigureAwait(false);
+        await PipelineHelpers.FlushBackgroundTasksAsync(services).ConfigureAwait(false);
     }
 
     /// <summary>

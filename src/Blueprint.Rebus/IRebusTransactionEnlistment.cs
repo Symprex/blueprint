@@ -25,9 +25,10 @@ namespace Blueprint.Rebus;
 /// </description></item>
 /// <item><description>
 /// <see cref="BlueprintApiActivator"/>, for a received message handled by plain <c>IHandleMessages&lt;T&gt;</c>, with the
-/// received message's transaction, when an <see cref="Persistence.IUnitOfWork"/> is registered. The unit of work is saved
-/// from that transaction's first commit callback, which runs before any commit callback an enlistment or a handler
-/// registers, and with that transaction as <see cref="AmbientTransactionContext.Current"/>.
+/// received message's transaction, when an <see cref="Persistence.IUnitOfWork"/> is registered. The unit of work is saved,
+/// and the background tasks the handlers enqueued then released, from that transaction's first commit callback, which
+/// runs before any commit callback an enlistment or a handler registers, and with that transaction as
+/// <see cref="AmbientTransactionContext.Current"/>.
 /// </description></item>
 /// </list>
 /// <para>
@@ -54,8 +55,9 @@ namespace Blueprint.Rebus;
 /// <c>RebusCommitAmbientContextTests</c> pins both;
 /// </description></item>
 /// <item><description>
-/// for a received message, a commit callback that runs after the save — one an enlistment or a handler registered —
-/// runs after it, and a message it sends joins the transaction after the save too.
+/// for a received message, the plain handlers' background tasks are released straight after the save, and a commit
+/// callback that runs after the save — one an enlistment or a handler registered — runs after it, and a message either
+/// sends joins the transaction after the save too.
 /// </description></item>
 /// </list>
 /// <para>
