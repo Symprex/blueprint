@@ -286,13 +286,13 @@ The flush-on-success semantic guarantees tasks are only dispatched when the comm
 
 ## Persistence contract (Unit of Work)
 
-Blueprint's `UnitOfWorkModule` generates a `SaveChangesAsync` call for ICommand operations at Order=900 in PostExecution:
+Blueprint's `UnitOfWorkModule` generates a `SaveChangesAsync` call for every operation at Order=900 in PostExecution:
 
-- **Only commands:** Queries never trigger save. `[DoNotSaveChanges]` on a non-command triggers diagnostic `BPP001`.
+- **Every operation:** Commands, queries and background tasks all save, as legacy's save middleware did (queries since v1.0.3; `BPP001` is retired). A query run nested (a resource event's self query) does not.
 - **Only on success:** Save only runs when `handlerResult.WasSuccessful` is true.
 - **Optional DI:** If no `IUnitOfWork` is registered, the step is skipped gracefully.
 - **DI scope owns disposal:** The unit-of-work instance is disposed by the DI container scope, not by Blueprint. Register as scoped.
-- **Opt-out:** `[DoNotSaveChanges]` on a command suppresses the generated save call.
+- **Opt-out:** `[DoNotSaveChanges]` on any operation suppresses the generated save call.
 
 ### Implementation pattern
 

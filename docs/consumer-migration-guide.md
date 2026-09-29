@@ -683,18 +683,37 @@ The generated pipeline for background tasks includes validation, unit-of-work, m
 
 ### 13. Persistence
 
-Register a unit-of-work implementation to auto-save changes after successful command execution:
+Register a unit-of-work implementation to auto-save changes after an operation succeeds:
 
 ```csharp
 blueprint.AddUnitOfWork<MartenUnitOfWork>();
 ```
 
-The generated pipeline calls `SaveChangesAsync()` on `IUnitOfWork` after successful command execution. Opt out per-operation:
+The generated pipeline calls `SaveChangesAsync()` on `IUnitOfWork` after any operation — command, query or background
+task — succeeds. Opt out per-operation:
 
 ```csharp
 [DoNotSaveChanges]
 public partial class PreviewCommand : ICommand<OkResult<Preview>> { }
 ```
+
+**Behaviour change for queries (v1.0.3).** Before v1.0.3 only commands and background tasks saved the unit of work,
+opened a Rebus transaction scope and enlisted it (`IRebusTransactionEnlistment`); a query did none of them. Legacy
+Blueprint did all three after any operation: Signature365's `SaveMartenChangesMiddleware` and
+`UseMartenAsOutboxMiddleware` matched every operation without `[DoNotSaveChanges]`, and
+`StartRebusTransactionScopeMiddleware` every one without `[NoRebusTransaction]`
+(`Common/Data/Marten/SaveMartenChangesMiddleware.cs:24-29` at Signature365 `8b40ecc961`). A query now does too:
+
+- a document a query stores in the scope's session is saved, and a message it sends is held in its Rebus transaction
+  and sent when the query completes, rather than at once (through the enlisted outbox, where one is registered);
+- `[DoNotSaveChanges]` on a query stops the save and the enlistment (the scope still opens), and no longer raises
+  `BPP001`, which is retired; `[NoRebusTransaction]` on a query stops the scope;
+- a query run nested — a resource event's self query, which runs inside its command's scope and session — opens no
+  scope, enlists nothing and saves nothing, as legacy ran a nested operation through a pipeline without these steps. A
+  nested command or background task behaves as before: it saves, and opens and enlists a scope of its own.
+
+A query that stores or sends something it must not keep needs `[DoNotSaveChanges]`. A query that must not share a Rebus
+transaction needs `[NoRebusTransaction]`.
 
 ### 14. Messaging
 
@@ -817,8 +836,9 @@ framework has no form binding, so it cannot reproduce that behaviour; silently i
 handler run with those properties unset instead. A request with one of those two content types and a body still gets
 a 415, on any method that reads a body — this is the one non-JSON content type family this framework refuses rather
 than ignores. One with no body (`Content-Length: 0`, or an empty chunked body) runs the handler with the operation as
-it was, as legacy did: it read a body-less form as an empty one and bound nothing. Every other non-JSON content type
-(`text/plain`, `application/xml`, …) is ignored as described above.
+it was, as legacy did for `Content-Length: 0` and for an empty chunked urlencoded body: it read those as an empty form
+and bound nothing (an empty chunked multipart body, which legacy's form reader failed on with a 500, runs the handler
+too). Every other non-JSON content type (`text/plain`, `application/xml`, …) is ignored as described above.
 
 ## Development-time inspection
 
@@ -913,7 +933,7 @@ The source generator catches contract errors at build time. Key diagnostics:
 | BP101–BP104 | Validation | Invalid CompareAttribute, GreaterThanProperty, LessThanProperty references |
 | BPA001 | Auditing | [Sensitive] on non-public property |
 | BPM001 | Messaging | [DoNotPublishMessages] on an operation that is neither a command nor a background task |
-| BPP001 | Persistence | [DoNotSaveChanges] on non-command |
+| BPP001 | Persistence | Retired in v1.0.3 ([DoNotSaveChanges] now has effect on a query) |
 | BPT001 | Background tasks | BackgroundTask operation not a command |
 | BPMOD001–004 | Module system | Ordering conflicts, duplicate contributors, missing variables |
 | BPMIG001–201 | Migration | Legacy patterns requiring attention |
@@ -995,7 +1015,7 @@ After migration, verify:
 - [ ] Authentication returns 401/403 with ProblemDetails bodies
 - [ ] Audit events fire with correct trace correlation
 - [ ] Background tasks flush after successful commands
-- [ ] Unit of work saves after successful commands
+- [ ] Unit of work saves after successful commands and queries (not after `[DoNotSaveChanges]` ones)
 - [ ] Resource events emit with correct change types (201 Created, 200 Updated, 204 Deleted)
 - [ ] Self-link URLs appear in response `_links` and 201 Location headers
 
@@ -1348,9 +1368,9 @@ blueprint.AddMessageOutbox<RebusMessageOutbox>();
 // Register in startup:
 blueprint.AddUnitOfWork<MartenUnitOfWork>();
 
-// The generated pipeline calls SaveChangesAsync() after successful
-// command execution, before background task flush. Skipped for queries,
-// validation failures, and [DoNotSaveChanges] operations.
+// The generated pipeline calls SaveChangesAsync() after any operation
+// succeeds, before background task flush. Skipped for validation failures,
+// [DoNotSaveChanges] operations, and a query run nested (a self query).
 ```
 
 ### Pipeline execution order
@@ -1362,7 +1382,7 @@ The generated pipeline executes consumer seams in this order:
 3. **Authorization** → `[Resource]`, `IApiAuthoriser`
 4. **Validation** → data annotation + `IValidator` checks
 5. **Handler execution** → `HandleAsync()`
-6. **Unit of work** → `IUnitOfWork.SaveChangesAsync()` (commands only, on success)
+6. **Unit of work** → `IUnitOfWork.SaveChangesAsync()` (any operation without `[DoNotSaveChanges]`, on success)
 7. **Message outbox** → `IMessageOutbox.CommitAsync()` (on success)
 8. **Background task flush** → `IBackgroundTaskScheduleProvider.EnqueueAsync()`
 9. **Resource expansion** → `IResourceExpander` (for `?expand=` parameters)

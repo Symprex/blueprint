@@ -16,7 +16,8 @@ namespace Blueprint.Rebus;
 /// </para>
 /// <list type="bullet">
 /// <item><description>
-/// a generated command or background-task pipeline that saves a unit of work, with the transaction of the
+/// a generated pipeline that saves a unit of work — any operation without <c>[DoNotSaveChanges]</c>, queries included,
+/// but not a query run nested (a resource event's self query) — with the transaction of the
 /// <c>RebusTransactionScope</c> it opens, and only when an <see cref="Persistence.IUnitOfWork"/> is registered. It
 /// enlists once the tenant is resolved and the operation authorised and validated, straight before the handler, as
 /// legacy did, so an enlistment resolving a tenant-scoped service gets the caller's tenant, and an operation that is

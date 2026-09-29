@@ -9,8 +9,8 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 
 /// <summary>
 /// Proves that the <c>UnitOfWorkModule</c> coordinates persistence saves through the generated
-/// pipeline variable sharing model: save-changes is called on command success, skipped on
-/// validation failure, and entirely absent for query operations.
+/// pipeline variable sharing model: save-changes is called on command and query success, and skipped on
+/// validation failure and for <c>[DoNotSaveChanges]</c>.
 /// </summary>
 public class UnitOfWorkModuleIntegrationTests
 {
@@ -67,8 +67,10 @@ public class UnitOfWorkModuleIntegrationTests
     }
 
     [Fact]
-    public async Task When_query_operation_succeeds_then_unit_of_work_is_not_invoked()
+    public async Task When_query_operation_succeeds_then_unit_of_work_saves_changes()
     {
+        // R138: legacy's SaveMartenChangesMiddleware saved after any operation without [DoNotSaveChanges], queries
+        // included (Signature365 8b40ecc961, Common/Data/Marten/SaveMartenChangesMiddleware.cs:24-29).
         var app = new IntegrationTestBlueprintApp();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var unitOfWork = new TestUnitOfWork();
@@ -80,7 +82,7 @@ public class UnitOfWorkModuleIntegrationTests
         var result = await pipeline.ExecuteAsync(context);
 
         result.Should().NotBeNull();
-        unitOfWork.SaveChangesCallCount.Should().Be(0, "unit-of-work should NOT participate in query pipelines");
+        unitOfWork.SaveChangesCallCount.Should().Be(1, "save-changes should be called exactly once after a successful query, as after a command");
     }
 
     [Fact]
@@ -158,7 +160,7 @@ public partial class PersistableCommand : ICommand
 }
 
 /// <summary>
-/// A query operation that proves the unit-of-work module does NOT participate in query pipelines.
+/// A query operation that proves the unit-of-work module participates in query pipelines, as legacy's save did (R138).
 /// </summary>
 public partial class PersistenceQueryProof : IQuery<string>
 {

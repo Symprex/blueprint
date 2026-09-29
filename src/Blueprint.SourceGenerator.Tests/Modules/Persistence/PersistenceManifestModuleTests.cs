@@ -33,8 +33,9 @@ public class PersistenceManifestModuleTests
     }
 
     [Fact]
-    public void When_query_then_persistence_disabled()
+    public void When_query_then_persistence_enabled()
     {
+        // R138: a query's pipeline saves the unit of work, as legacy's did; the manifest says what the pipeline does.
         var compilation = CreateCompilation(
             """
             using Blueprint.Model;
@@ -49,7 +50,51 @@ public class PersistenceManifestModuleTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
+        result.Value!.Entries["persistence.saveChangesEnabled"].ToString().Should().Be("True");
+    }
+
+    [Fact]
+    public void When_query_with_DoNotSaveChanges_then_persistence_disabled()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+
+            namespace TestNamespace;
+
+            [DoNotSaveChanges]
+            public partial class GetItemQuery : IQuery<string> { }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new PersistenceManifestModule()]);
+        var result = config.BuildDebugManifest("TestNamespace.GetItemQuery", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
         result.Value!.Entries["persistence.saveChangesEnabled"].ToString().Should().Be("False");
+    }
+
+    [Fact]
+    public void When_background_task_then_persistence_enabled()
+    {
+        // The pipeline has saved a background task's unit of work since before v0.1.0 (acc8ad33); the manifest said
+        // commands only.
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Tasks;
+
+            namespace TestNamespace;
+
+            public partial class ProcessItemTask : IBackgroundTask { }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new PersistenceManifestModule()]);
+        var result = config.BuildDebugManifest("TestNamespace.ProcessItemTask", compilation);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Entries["persistence.saveChangesEnabled"].ToString().Should().Be("True");
     }
 
     [Fact]

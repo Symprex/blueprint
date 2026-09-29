@@ -124,7 +124,7 @@ namespace Blueprint.Generated
     internal sealed partial class GetOrderStatusExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
 
         internal GetOrderStatusExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "GetOrderStatus", pipelineServices)
@@ -149,6 +149,11 @@ namespace Blueprint.Generated
             }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetOrderStatus.HandleAsync(operation).ConfigureAwait(false));
 
+
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            }
 
             if (this.AuditSink != null)
             {

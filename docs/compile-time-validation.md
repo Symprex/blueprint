@@ -186,9 +186,11 @@ Reserved direction:
 | --- | --- |
 | `BPP001`-`BPP099` | persistence diagnostics for invalid or no-effect declarative contracts that the generator can prove at build time |
 
-Current persistence IDs in active use:
+No persistence ID is in active use:
 
-- `BPP001`: `[DoNotSaveChanges]` applied to a non-command operation where it has no effect (only `ICommand` operations trigger the `UnitOfWorkModule`).
+- `BPP001` (retired in v1.0.3) warned that `[DoNotSaveChanges]` on a non-command operation had no effect. The
+  `UnitOfWorkModule` now saves after any operation without `[DoNotSaveChanges]`, queries included, as legacy
+  Blueprint's save middleware did, so the attribute has effect on every operation and nothing is reported.
 
 ### Messaging diagnostics
 

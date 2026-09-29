@@ -1,6 +1,4 @@
-using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
-using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules.Persistence;
 
@@ -9,10 +7,10 @@ namespace Blueprint.SourceGenerator.Modules.Persistence;
 /// reflecting whether the UnitOfWork save-changes stage is active for the operation.
 /// </summary>
 /// <remarks>
-/// Save-changes is only active for command operations that do not carry <c>[DoNotSaveChanges]</c>.
-/// This module replicates the same eligibility check that <see cref="UnitOfWorkModule"/> performs
-/// when deciding whether to contribute to the pipeline, so the manifest accurately reflects the
-/// runtime behavior without depending on pipeline plan metadata.
+/// Save-changes is active for every operation that does not carry <c>[DoNotSaveChanges]</c> (R138: queries included, as
+/// in legacy). This module asks <see cref="UnitOfWorkModule.SavesUnitOfWork"/>, the check that module makes when deciding
+/// whether to contribute to the pipeline, so the manifest accurately reflects the runtime behavior without depending on
+/// pipeline plan metadata. (It said commands only, while the pipeline saved background tasks too.)
 /// </remarks>
 internal sealed class PersistenceManifestModule : IBlueprintSourceGeneratorModule, IDebugManifestContributor
 {
@@ -37,25 +35,8 @@ internal sealed class PersistenceManifestModule : IBlueprintSourceGeneratorModul
     /// <inheritdoc />
     public void ContributeToManifest(DebugManifestContributorContext context)
     {
-        var operationType = context.GetOperationTypeSymbol();
-        var isCommand = IsCommand(operationType);
-        var hasOptOut = HasDoNotSaveChangesAttribute(operationType);
-        var enabled = isCommand && !hasOptOut;
+        var enabled = UnitOfWorkModule.SavesUnitOfWork(context.GetOperationTypeSymbol());
 
         context.AddEntry("persistence.saveChangesEnabled", enabled.ToString());
-    }
-
-    private static bool IsCommand(INamedTypeSymbol operationType)
-    {
-        return operationType.AllInterfaces.Any(static candidate =>
-            candidate.Name is "ICommand"
-            && candidate.IsInNamespace("Blueprint", "Model"));
-    }
-
-    private static bool HasDoNotSaveChangesAttribute(INamedTypeSymbol operationType)
-    {
-        return operationType.GetAttributes().Any(static attr =>
-            attr.AttributeClass?.Name is "DoNotSaveChangesAttribute"
-            && attr.AttributeClass.IsInNamespace("Blueprint", "Persistence"));
     }
 }

@@ -5,7 +5,8 @@ namespace Blueprint.Persistence;
 /// <summary>
 /// Abstraction for unit-of-work persistence coordination within the generated pipeline.
 /// The generated pipeline calls <see cref="SaveChangesAsync"/> in the PostExecution stage
-/// after a successful command handler execution, allowing consumers to commit tracked changes.
+/// after a successful handler execution of any operation without <c>[DoNotSaveChanges]</c> (a command, query or
+/// background task), allowing consumers to commit tracked changes.
 /// </summary>
 /// <remarks>
 /// <para>

@@ -119,9 +119,10 @@ Atomic delivery needs a transactional outbox, which Blueprint leaves to the cons
 Blueprint provides the two seams an outbox needs, and nothing else:
 
 - **`IRebusTransactionEnlistment`** (`Blueprint.Rebus`), registered in DI, is called with the Rebus transaction a unit
-  of work will be saved inside, before any handler runs in it: by a generated command or background-task pipeline that
-  saves a unit of work, once it has resolved the tenant and authorised and validated the operation, straight before the
-  handler (as legacy's `UseMartenAsOutboxMiddleware` did), and by `BlueprintApiActivator` for a plain
+  of work will be saved inside, before any handler runs in it: by a generated pipeline that saves a unit of work — any
+  operation without `[DoNotSaveChanges]`, queries included since v1.0.3, but not a query run nested (a self query) —
+  once it has resolved the tenant and authorised and validated the operation, straight before the handler (as legacy's
+  `UseMartenAsOutboxMiddleware` did), and by `BlueprintApiActivator` for a plain
   `IHandleMessages<T>`, whose unit of work it saves from the transaction's first commit callback. Neither enlists when
   no `IUnitOfWork` is registered.
 - **`options.AddBlueprintOutboxListener(listener)`** (`Blueprint.Marten`) adds the consumer's drain listener, which

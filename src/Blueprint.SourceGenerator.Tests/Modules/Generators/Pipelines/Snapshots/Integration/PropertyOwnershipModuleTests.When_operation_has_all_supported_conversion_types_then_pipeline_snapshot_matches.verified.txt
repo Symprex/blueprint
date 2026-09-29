@@ -47,7 +47,7 @@ namespace Blueprint.Generated
     internal sealed partial class AllTypesGetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "AllTypesGetQuery", pipelineServices)
@@ -216,6 +216,11 @@ namespace Blueprint.Generated
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesGetQuery.HandleAsync(operation).ConfigureAwait(false));
 
+
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            }
 
             if (this.AuditSink != null)
             {

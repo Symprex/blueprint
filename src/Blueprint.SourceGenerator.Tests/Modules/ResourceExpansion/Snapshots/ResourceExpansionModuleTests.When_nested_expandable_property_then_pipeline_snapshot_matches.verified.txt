@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class GetTopQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceExpansionModule", "PipelineReturnModule"];
+            ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceExpansionModule", "PipelineReturnModule"];
 
         internal GetTopQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "GetTopQuery", pipelineServices)
@@ -71,6 +71,11 @@ namespace Blueprint.Generated
             }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::TestNamespace.TopResource>(await global::TestNamespace.GetTopQuery.HandleAsync(operation).ConfigureAwait(false));
 
+
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            }
 
             if (this.AuditSink != null)
             {

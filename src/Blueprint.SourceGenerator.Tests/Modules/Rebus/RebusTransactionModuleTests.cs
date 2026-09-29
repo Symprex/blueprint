@@ -59,8 +59,11 @@ public class RebusTransactionModuleTests
     }
 
     [Fact]
-    public void When_query_operation_then_plan_excludes_rebus_transaction()
+    public void When_query_operation_then_plan_contains_rebus_validation_and_post_execution()
     {
+        // R138: legacy's StartRebusTransactionScopeMiddleware matched any operation without [NoRebusTransaction]
+        // (Signature365 8b40ecc961, BlueprintRebus/StartRebusTransactionScopeMiddleware.cs:25-30), queries included:
+        // Portal's Microsoft365AddOnConnectQueryExecutorPipeline.cs:114-131 opens, enlists and completes the scope.
         var compilation = CreateCompilation(
             """
             using Blueprint.Model;
@@ -88,9 +91,74 @@ public class RebusTransactionModuleTests
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
 
-        result.Value!.Contributions.Should().NotContain(
-            static c => c.ContributorId == nameof(RebusTransactionModule),
-            "queries should not get Rebus transaction scope — they do not publish messages");
+        result.Value!.Contributions.Should().ContainInOrder(
+            new PipelineContribution(PipelineStage.Validation, nameof(RebusTransactionModule)),
+            new PipelineContribution(PipelineStage.Execution, nameof(HandlerExecutionModule)),
+            new PipelineContribution(PipelineStage.PostExecution, nameof(RebusTransactionModule)));
+    }
+
+    [Fact]
+    public void When_query_saves_a_unit_of_work_then_its_scope_opens_and_is_enlisted_unless_nested()
+    {
+        // R138: a query opens the scope and enlists as a command does (legacy Microsoft365AddOnConnectQueryExecutorPipeline.cs
+        // :114-119), except in a nested execution (a resource event's self query), which legacy ran without either
+        // (StartRebusTransactionScopeMiddleware and UseMartenAsOutboxMiddleware: SupportsNestedExecution => false).
+        var lines = GeneratePipelineLines(
+            """
+            public partial class GetOrderQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetOrderQuery operation) => Task.FromResult("order");
+            }
+            """,
+            includeBlueprintRebus: true);
+
+        var scopeLine = lines.FindIndex(static l => l.StartsWith("using var rebusTransactionScope", StringComparison.Ordinal));
+        var handlerLine = lines.FindIndex(static l => l.Contains("GetOrderQuery.HandleAsync(operation)", StringComparison.Ordinal));
+
+        scopeLine.Should().BeGreaterThanOrEqualTo(0);
+        scopeLine.Should().BeLessThan(handlerLine);
+        lines.Skip(scopeLine).Take(4).Should().Equal(
+            "using var rebusTransactionScope = this._hasRebus && !context.IsNested ? new global::Rebus.Transport.RebusTransactionScope() : null;",
+            "if (rebusTransactionScope != null && this.HasUnitOfWork)",
+            "{",
+            "await global::Blueprint.Rebus.RebusTransactionEnlistment.EnlistAsync(rebusTransactionScope.TransactionContext, context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+        lines.Should().Contain("if (rebusTransactionScope != null) await rebusTransactionScope.CompleteAsync().ConfigureAwait(false);");
+    }
+
+    [Fact]
+    public void When_query_does_not_save_a_unit_of_work_then_its_scope_still_opens_but_is_not_enlisted()
+    {
+        // Legacy opened the scope for a [DoNotSaveChanges] query as for any other (its StartRebusTransactionScopeMiddleware
+        // looked only for [NoRebusTransaction]) and enlisted nothing (UseMartenAsOutboxMiddleware.cs:26-31).
+        var lines = GeneratePipelineLines(
+            """
+            [Blueprint.Persistence.DoNotSaveChanges]
+            public partial class GetOrderQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetOrderQuery operation) => Task.FromResult("order");
+            }
+            """,
+            includeBlueprintRebus: true);
+
+        lines.Should().Contain("using var rebusTransactionScope = this._hasRebus && !context.IsNested ? new global::Rebus.Transport.RebusTransactionScope() : null;");
+        lines.Should().NotContain(static l => l.Contains("RebusTransactionEnlistment", StringComparison.Ordinal));
+        lines.Should().NotContain(static l => l.Contains("SaveUnitOfWorkAsync", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void When_query_has_NoRebusTransaction_then_it_opens_no_scope()
+    {
+        var lines = GeneratePipelineLines(
+            """
+            [Blueprint.Rebus.NoRebusTransaction]
+            public partial class GetOrderQuery : IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetOrderQuery operation) => Task.FromResult("order");
+            }
+            """,
+            includeBlueprintRebus: true);
+
+        lines.Should().NotContain(static l => l.Contains("rebusTransactionScope", StringComparison.Ordinal));
     }
 
     [Fact]

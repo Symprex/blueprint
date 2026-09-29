@@ -165,7 +165,7 @@ These attributes inspect an item count, so they only make sense on a collection 
 
 | ID | Severity | Title |
 |----|----------|-------|
-| BPP001 | Warning | `[DoNotSaveChanges]` on non-command operation (no effect) |
+| BPP001 | — | Retired in v1.0.3: `[DoNotSaveChanges]` on a query now has effect, as the unit of work is saved after any operation without it |
 
 ## Messaging (BPM)
 

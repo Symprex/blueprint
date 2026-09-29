@@ -664,11 +664,11 @@ The return-type audit is stronger than the original document’s scattered notes
 The legacy ResourceEvent API surface survives in the new model. Convenience factories (`ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>`), self-query constructors, `ResourceEventDefinition.For(new Query())` inference from `IQuery<T>`, and `IResourceEventAuditRepository`-style sinks are all available. The runtime now recognizes `Blueprint.Http.ResourceEvent<T>` as a valid declared result contract, uses the full envelope schema in OpenAPI, and passes the full `OperationResult` into `IResourceEventAuditSink` so S365 can keep publishing audit events through its existing bus-aware repository logic.
 
 ### Control attributes and compile-time behavior
-The control-attribute story is complete and does not need to be rediscovered service-by-service. `[DoNotSaveChanges]` removes the UoW step and is guarded by `BPP001`, `[NoRebusTransaction]` skips the Rebus transaction wrapper, `[DoNotAudit]` strips audit work at compile time, `[Sensitive]` emits ordered sensitive-field metadata, `[AlwaysExpand]` forces resource expansion, `[AllowAnonymous]` short-circuits auth checks, and `[UnexposedOperation]` keeps internal operations out of the HTTP host and OpenAPI document.
+The control-attribute story is complete and does not need to be rediscovered service-by-service. `[DoNotSaveChanges]` removes the UoW step for any operation (its guard, `BPP001`, retired in v1.0.3 when queries began to save), `[NoRebusTransaction]` skips the Rebus transaction wrapper, `[DoNotAudit]` strips audit work at compile time, `[Sensitive]` emits ordered sensitive-field metadata, `[AlwaysExpand]` forces resource expansion, `[AllowAnonymous]` short-circuits auth checks, and `[UnexposedOperation]` keeps internal operations out of the HTTP host and OpenAPI document.
 
 | Attribute | Consolidated behavior |
 |-----------|------------------------|
-| `[DoNotSaveChanges]` | Compile-time UoW skip; guarded by `BPP001` |
+| `[DoNotSaveChanges]` | Compile-time UoW skip, for any operation (`BPP001` retired in v1.0.3) |
 | `[NoRebusTransaction]` | Compile-time Rebus transaction opt-out |
 | `[DoNotAudit]` | Compile-time audit-step removal |
 | `[Sensitive]` | Ordered sensitive-field metadata emitted at compile time |
@@ -739,7 +739,7 @@ The property-ownership diagnostics are important because they describe most migr
 HTTP-shape conflicts are handled at compile time instead of by endpoint surprises. `BPOA002` reports conflicting HTTP method attributes, `BPLG001` validates link attributes and placeholder usage, and `BPLG007` now reports route collisions between different operations that claim the same route+method pair. That route-collision diagnostic aligns with the runtime endpoint-collision warning added during startup registration.
 
 ### Validation, result, and serializer diagnostics
-The remaining migration-critical diagnostics cluster around operation definitions and serializer setup. `BPV012` warns about meaningless `[Required]` usage on non-nullable value types, `BPV013` highlights `IValidatableObject` participation, `BP001` / `BP002` / `BP005` / `BP104` / `BP108` cover invalid pipeline and result declarations, `BPP001` guards `[DoNotSaveChanges]`, `BP006` enforces serializer-context coverage for problem details, `BP009` catches duplicate descriptor names (as legacy named them: `Query`/`Command` removed anywhere, then cased), and `BP010` rejects unevaluable `ApiExceptionFactory` initializers.
+The remaining migration-critical diagnostics cluster around operation definitions and serializer setup. `BPV012` warns about meaningless `[Required]` usage on non-nullable value types, `BPV013` highlights `IValidatableObject` participation, `BP001` / `BP002` / `BP005` / `BP104` / `BP108` cover invalid pipeline and result declarations, `BP006` enforces serializer-context coverage for problem details, `BP009` catches duplicate descriptor names (as legacy named them: `Query`/`Command` removed anywhere, then cased), and `BP010` rejects unevaluable `ApiExceptionFactory` initializers.
 
 ### `ApiExceptionFactory` moved to compile time
 The `ApiExceptionFactory` work deserves to stay visible because it is a concrete migration win. `ApiExceptionFactoryModule` now scans operation fields at compile time, extracts status-code metadata from enum/int/cast initializers, projects those responses into OpenAPI, and raises `BP010` when it cannot evaluate an initializer safely. That replaces the old runtime reflection convention and directly benefits the handful of S365 operations that use `ApiExceptionFactory` patterns.
@@ -753,7 +753,7 @@ The diagnostic story is backed by actual IDE help. `Blueprint.SourceGenerator.Co
 | Property ownership | `BPPO006`, `BPPO009`, `BPPO010`, `BPPO011`, `BPPO012`, `BPPO013` |
 | HTTP / links | `BPOA002`, `BPLG001`, `BPLG007` |
 | Validation | `BPV012`, `BPV013` |
-| Result / serializer / naming | `BP001`, `BP002`, `BP005`, `BP006`, `BP009`, `BP010`, `BP104`, `BP108`, `BPP001` |
+| Result / serializer / naming | `BP001`, `BP002`, `BP005`, `BP006`, `BP009`, `BP010`, `BP104`, `BP108` |
 
 ### Diagnostic philosophy after consolidation
 The best way to read the diagnostics section is that Blueprint now prefers compile-time proof over runtime repair. Invalid templates, bad route placeholders, duplicate names, unsupported ownership combinations, and missing serializer metadata now fail or warn close to the source rather than surfacing only after a service boots or a frontend consumes the wrong document.
