@@ -899,6 +899,11 @@ service-to-service request or response could not be read (`JsonException`) or wa
 configures no options gets the defaults, as before. `AddBlueprintHttpClient<TApp>` is unchanged: it takes its
 `JsonSerializerOptions` as an argument.
 
+**Behaviour change (v1.0.3).** `ReflectionUtilities.GetUnderlyingTypeIfNullable(null)` returns `null`, as legacy's did
+(`Blueprint/Utilities/ReflectionUtilities.cs:21-29`); it threw an `ArgumentNullException`. The parameter is now `Type?`,
+and the return is not null whenever the argument is not, so callers that pass a real type see no change. A call site that
+guarded a null type only to avoid the exception can drop the guard.
+
 **Behaviour change for a DELETE (v1.0.3).** A DELETE's properties that are not in its route are read from its JSON body,
 as a POST's are, and no longer from its query string. `BlueprintHttpClient` sends a DELETE's operation as its JSON body
 with no query string, and the OpenAPI document describes those properties as its request body. This is what legacy

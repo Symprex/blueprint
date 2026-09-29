@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Blueprint.Utilities;
 
 /// <summary>
@@ -8,13 +10,15 @@ public static class ReflectionUtilities
 {
     /// <summary>
     /// If the given type is <see cref="Nullable{T}"/> returns the underlying type;
-    /// otherwise returns the input unchanged.
+    /// otherwise returns the input unchanged, a <see langword="null"/> type included, as legacy Blueprint did
+    /// (Signature365 <c>Blueprint/Utilities/ReflectionUtilities.cs:21-29</c>).
     /// </summary>
     /// <param name="type">The type to potentially unwrap.</param>
     /// <returns>The underlying type or the original type.</returns>
-    public static Type GetUnderlyingTypeIfNullable(Type type)
+    [return: NotNullIfNotNull(nameof(type))]
+    public static Type? GetUnderlyingTypeIfNullable(Type? type)
     {
-        return Nullable.GetUnderlyingType(type) ?? type;
+        return type is null ? null : Nullable.GetUnderlyingType(type) ?? type;
     }
 
     /// <summary>
