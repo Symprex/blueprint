@@ -72,6 +72,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "MinLengthShapeToken",
             "MultiExpandableTestEmployee",
             "NodaTimeEchoResponse",
+            "OperationIdMixedLinkApiResource",
             "PagedApiResourceOfLegacyShapeTenant",
             "ParameterTitlesApiResource",
             "ProblemDetails",

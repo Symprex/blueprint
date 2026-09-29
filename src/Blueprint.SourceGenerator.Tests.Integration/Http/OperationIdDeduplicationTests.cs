@@ -58,6 +58,17 @@ public sealed class OperationIdDeduplicationTests
     }
 
     [Fact]
+    public void An_operation_declaring_a_self_link_before_a_root_link_keeps_its_name_at_the_self_link()
+    {
+        // The root link's URL sorts first by ordinal, and a descriptor once registered every root link before every
+        // self link, so either would have given the root link the unnumbered id.
+        using var document = Render();
+
+        OperationId(document, "/operation-ids/mixed/self", "get").Should().Be("GetOperationIdMixedLink");
+        OperationId(document, "/operation-ids/mixed/root", "get").Should().Be("GetOperationIdMixedLink2");
+    }
+
+    [Fact]
     public void Every_operationId_in_the_document_is_unique()
     {
         using var document = Render();
@@ -149,5 +160,22 @@ public partial class GetOperationIdTripleQuery : IQuery<string>
     public static string Handle(GetOperationIdTripleQuery query)
     {
         return "triple";
+    }
+}
+
+/// <summary>A resource an operation links to itself as, shaped as the resource of the Admin Portal's <c>AdminPortalGetAccountInjectionQuery</c>.</summary>
+public partial class OperationIdMixedLinkApiResource : ApiResource
+{
+    public string? Name { get; init; }
+}
+
+/// <summary>A query declaring a <c>[SelfLink]</c> and then a <c>[RootLink]</c>, as the Admin Portal's <c>AdminPortalGetAccountInjectionQuery</c> does.</summary>
+[SelfLink(typeof(OperationIdMixedLinkApiResource), "/operation-ids/mixed/self")]
+[RootLink("/operation-ids/mixed/root", Rel = "root")]
+public partial class GetOperationIdMixedLinkQuery : IQuery<OperationIdMixedLinkApiResource>
+{
+    public static OperationIdMixedLinkApiResource Handle(GetOperationIdMixedLinkQuery query)
+    {
+        return new OperationIdMixedLinkApiResource { Name = "mixed" };
     }
 }

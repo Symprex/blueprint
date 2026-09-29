@@ -89,9 +89,21 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     /// <inheritdoc />
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        LookForRootLinks(context);
-        LookForSelfLinks(context);
-        LookForLinks(context);
+        // Each kind of link attribute is read on its own, but what it registers is held until all three have been read and
+        // then added in the order the attributes are declared, as legacy's one pass over them registered them.
+        var registrations = new List<(int Position, object[] Metadata)>();
+
+        LookForRootLinks(context, registrations);
+        LookForSelfLinks(context, registrations);
+        LookForLinks(context, registrations);
+
+        foreach (var (_, metadata) in registrations.OrderBy(static r => r.Position))
+        {
+            foreach (var item in metadata)
+            {
+                context.AddMetadata(item);
+            }
+        }
 
         context.AddRenderStep(codeWriter => RenderDescriptor(
             codeWriter,
@@ -388,7 +400,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     /// <c>OperationScanner</c> made a link of every link attribute (Signature365 <c>8b40ecc961</c>,
     /// <c>Blueprint/Configuration/OperationScanner.cs:294-298</c>; <c>RootLinkAttribute</c> is <c>AllowMultiple</c>).
     /// </summary>
-    private static void LookForRootLinks(DescriptorContributorContext context)
+    private static void LookForRootLinks(DescriptorContributorContext context, List<(int Position, object[] Metadata)> registrations)
     {
         var operationType = context.GetOperationTypeSymbol();
 
@@ -432,14 +444,17 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                 }
             }
 
-            context.AddMetadata(new UrlRegistration(url, locationInfo));
-            context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
-
             var rel = index < rawRootLinkAttributes.Count
                 ? rawRootLinkAttributes[index].NamedArguments.FirstOrDefault(static a => a.Key == "Rel").Value.Value as string
                 : null;
 
-            context.AddMetadata(CreateRootLinkRegistration(operationType, rel, url));
+            registrations.Add((
+                DeclarationPosition(operationType, index < rawRootLinkAttributes.Count ? rawRootLinkAttributes[index] : null),
+                [
+                    new UrlRegistration(url, locationInfo),
+                    HostExposureRegistration.HttpAt(locationInfo),
+                    CreateRootLinkRegistration(operationType, rel, url),
+                ]));
         }
     }
 
@@ -469,7 +484,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         return OperationNameHelpers.GetDescriptorName(operationType.Name);
     }
 
-    private static void LookForSelfLinks(DescriptorContributorContext context)
+    private static void LookForSelfLinks(DescriptorContributorContext context, List<(int Position, object[] Metadata)> registrations)
     {
         var operationType = context.GetOperationTypeSymbol();
         var selfLinkAttributes = SelfLinkAttributeDescriptor.Instance.ParseAll(operationType);
@@ -488,10 +503,10 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             // Resolve the effective rel: default is "self", but can be overridden via Rel = "..." on the attribute
             var effectiveRel = "self";
+            var rawAttr = parsedIndex < rawSelfLinkAttributes.Count ? rawSelfLinkAttributes[parsedIndex] : null;
 
-            if (parsedIndex < rawSelfLinkAttributes.Count)
+            if (rawAttr is not null)
             {
-                var rawAttr = rawSelfLinkAttributes[parsedIndex];
 
                 foreach (var namedArg in rawAttr.NamedArguments)
                 {
@@ -602,9 +617,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             var urlRegistration = new UrlRegistration(normalisedUrl, urlLocation);
             var linkRegistration = new LinkRegistration(normalisedUrl, effectiveRel, resourceTypeSymbol, urlLocation, new EquatableList<LinkPlaceholderMapping>(placeholderMappings.ToArray()));
 
-            context.AddMetadata(urlRegistration);
-            context.AddMetadata(linkRegistration);
-            context.AddMetadata(HostExposureRegistration.HttpAt(urlLocation));
+            registrations.Add((
+                DeclarationPosition(operationType, rawAttr),
+                [urlRegistration, linkRegistration, HostExposureRegistration.HttpAt(urlLocation)]));
         }
     }
 
@@ -613,7 +628,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     /// the runtime model <c>LinkAttribute</c> base class.
     /// These represent non-self HATEOAS links that also register an HTTP endpoint.
     /// </summary>
-    private static void LookForLinks(DescriptorContributorContext context)
+    private static void LookForLinks(DescriptorContributorContext context, List<(int Position, object[] Metadata)> registrations)
     {
         var operationType = context.GetOperationTypeSymbol();
 
@@ -706,11 +721,14 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     }
                 }
 
-                context.AddMetadata(new UrlRegistration(url!, locationInfo));
-                context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
-
                 // A link without a resource type was a root link (Blueprint/ApiDataModel.cs:212-215, ApiOperationLink.cs:176).
-                context.AddMetadata(CreateRootLinkRegistration(operationType, rel, url!));
+                registrations.Add((
+                    DeclarationPosition(operationType, attribute),
+                    [
+                        new UrlRegistration(url!, locationInfo),
+                        HostExposureRegistration.HttpAt(locationInfo),
+                        CreateRootLinkRegistration(operationType, rel, url!),
+                    ]));
 
                 continue;
             }
@@ -803,10 +821,26 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             var urlRegistration = new UrlRegistration(normalisedUrl, locationInfo);
             var linkRegistration = new LinkRegistration(normalisedUrl, rel!, resourceTypeSymbol, locationInfo!, new EquatableList<LinkPlaceholderMapping>(placeholderMappings.ToArray()));
 
-            context.AddMetadata(urlRegistration);
-            context.AddMetadata(linkRegistration);
-            context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
+            registrations.Add((
+                DeclarationPosition(operationType, attribute),
+                [urlRegistration, linkRegistration, HostExposureRegistration.HttpAt(locationInfo)]));
         }
+    }
+
+    /// <summary>
+    /// Gives the position of a link attribute among the operation's attributes, so that what the three kinds of link
+    /// attribute register can be put back in declaration order. An attribute that cannot be found goes last.
+    /// </summary>
+    private static int DeclarationPosition(INamedTypeSymbol operationType, AttributeData? attribute)
+    {
+        if (attribute is null)
+        {
+            return int.MaxValue;
+        }
+
+        var position = operationType.GetAttributes().IndexOf(attribute);
+
+        return position < 0 ? int.MaxValue : position;
     }
 
     private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo? argumentLocationInfo, DescriptorContributorContext context)
