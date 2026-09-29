@@ -190,7 +190,9 @@ public partial class OperationResultTranslationEndpointTests
         body.GetProperty("eventId").GetString().Should().Be("events.created");
         body.GetProperty("changeType").GetString().Should().Be("Created");
         body.GetProperty("created").GetString().Should().NotBeNullOrEmpty();
-        body.GetProperty("resourceObject").GetString().Should().Be("resultTranslationResponse");
+
+        // Legacy removes "DTO" case-sensitively (Blueprint.Http/ApiResource.cs:68-77), so a "Dto" is kept.
+        body.GetProperty("resourceObject").GetString().Should().Be("resultTranslationResponseDto");
         body.GetProperty("data").GetProperty("displayName").GetString().Should().Be("Blueprint");
         body.GetProperty("data").GetProperty("totalCount").GetInt32().Should().Be(3);
     }

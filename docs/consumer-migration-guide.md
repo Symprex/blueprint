@@ -1445,6 +1445,15 @@ legacy Blueprint's client did (`ValidationProblemDetailsJsonConverter`, `ValueTe
 from v1.0.2, where the read was case-insensitive and a missing/`null` `errors` produced a form-level message, a caller
 relying on either must not.
 
+**Behaviour change for a resource's type name (v1.0.3, all modes).** `ApiResource.GetTypeName`, which names a
+resource event's `eventId` (`<name>.created`) and `resourceObject` and the resource's own `$object`, removes
+`ApiResource`, then `Resource`, then `DTO` from the type's name wherever each occurs (ordinal, case-sensitive), then
+camelizes, as legacy Blueprint did. Before, it removed one suffix only, so `EventStoreTestApiResourceWithDoNotAuditProperties`
+was `eventStoreTestApiResourceWithDoNotAuditProperties` and is now `eventStoreTestWithDoNotAuditProperties`; and `DTO`
+was matched ignoring case, so `TenantDto` was `tenant` and is now `tenantDto`. A resource whose name carries a marker
+somewhere other than its end, or a `Dto` suffix, has a different event id and `resourceObject` than under v1.0.2 (a
+consumer that stored or matched the old ones must update them); coming from legacy Blueprint nothing changes.
+
 ### Hangfire (background task scheduling)
 
 Blueprint provides the `Blueprint.Tasks.Hangfire` package with ready-to-use implementations:

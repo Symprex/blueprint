@@ -186,8 +186,8 @@ public class ResourceEvent : OperationResult
     internal Type ResourceType { get; set; }
 
     /// <summary>
-    /// Derives a conventional resource-type name from a <see cref="Type"/>, stripping common
-    /// suffixes (<c>ApiResource</c>, <c>Resource</c>, <c>DTO</c>) and camelCasing the result.
+    /// Derives a conventional resource-type name from a <see cref="Type"/>, removing the markers
+    /// (<c>ApiResource</c>, <c>Resource</c>, <c>DTO</c>) wherever they occur and camelCasing the result.
     /// Delegates to <see cref="ApiResource.GetTypeName"/> for the canonical, cached implementation.
     /// </summary>
     /// <param name="resourceType">The CLR type to derive the resource name from.</param>
