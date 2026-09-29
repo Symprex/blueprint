@@ -164,7 +164,7 @@ public sealed record OpenApiOperationRenderingContext(
                 .ToImmutableArray()
             : ImmutableArray<string>.Empty;
         var urlFormats = operation.Operation.Urls
-            .Select(static url => url.UrlFormat)
+            .Select(static url => ToPathKey(url.UrlFormat))
             .OrderBy(static urlFormat => urlFormat, StringComparer.Ordinal)
             .ToImmutableArray();
         var tags = operation.Operation.TryGetFeatureData<OperationGroupMetadataFeatureData>(out var operationGroupMetadata)
@@ -229,6 +229,21 @@ public sealed record OpenApiOperationRenderingContext(
             RequiresAuthentication = requiresAuthentication,
             TagDescriptions = tagDescriptions,
         };
+    }
+
+    /// <summary>
+    /// Returns the key a route template is written under in the document's <c>paths</c>: the template with exactly one
+    /// leading slash, as legacy keyed it (<c>"/" + route.RoutingUrl</c>, R149), whether the link that declares it wrote one.
+    /// </summary>
+    /// <remarks>
+    /// This is applied where an operation's URL formats are read, before paths are grouped, so a route declared with and
+    /// without its slash is one path rather than two keys of which one is invalid.
+    /// </remarks>
+    /// <param name="urlFormat">The route template as its link declares it.</param>
+    /// <returns>The path key.</returns>
+    internal static string ToPathKey(string urlFormat)
+    {
+        return "/" + urlFormat.TrimStart('/');
     }
 
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(

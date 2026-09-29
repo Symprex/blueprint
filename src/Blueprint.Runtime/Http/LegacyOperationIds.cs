@@ -81,7 +81,7 @@ internal static class LegacyOperationIds
             .GroupBy(static o => o.Operation.OperationType.FullName ?? o.Operation.OperationType.Name, StringComparer.Ordinal)
             .ToDictionary(
                 static g => g.Key,
-                static g => g.First().Operation.Urls.Select(static url => url.UrlFormat).Distinct(StringComparer.Ordinal).ToList(),
+                static g => g.First().Operation.Urls.Select(static url => OpenApiOperationRenderingContext.ToPathKey(url.UrlFormat)).Distinct(StringComparer.Ordinal).ToList(),
                 StringComparer.Ordinal);
 
         // Each path, in the order it was first reached, with its methods in the order they were first reached.
