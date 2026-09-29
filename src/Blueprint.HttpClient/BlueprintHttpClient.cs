@@ -59,6 +59,9 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         this._jsonOptions = jsonOptions ?? BlueprintJsonOptions.CreateDefaultOptions();
     }
 
+    /// <inheritdoc />
+    public override System.Net.Http.HttpClient HttpClient => this._httpClient;
+
     /// <summary>
     /// Sends an operation to the remote API and deserializes the response body as <typeparamref name="TResponse"/>.
     /// The operation type is resolved against the app's descriptors to determine the URL and HTTP method.

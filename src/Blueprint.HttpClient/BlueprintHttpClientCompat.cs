@@ -11,6 +11,12 @@ namespace Blueprint.HttpClient;
 public abstract class BlueprintHttpClient
 {
     /// <summary>
+    /// Gets the inner HTTP client the calls are sent with, as legacy's client exposed it (Signature365
+    /// <c>Common.Core/Api/BlueprintHttpClient.cs:47-50</c>), so a caller can read or set its default headers.
+    /// </summary>
+    public abstract System.Net.Http.HttpClient HttpClient { get; }
+
+    /// <summary>
     /// Adapts a typed <see cref="BlueprintHttpClient{TApp}"/> to the legacy non-generic surface
     /// so that callers holding a <see cref="BlueprintHttpClient"/> reference can dispatch operations
     /// without knowing the concrete app type.
