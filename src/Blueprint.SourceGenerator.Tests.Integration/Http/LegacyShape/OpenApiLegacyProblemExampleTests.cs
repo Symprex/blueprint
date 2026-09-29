@@ -79,6 +79,18 @@ public sealed class OpenApiLegacyProblemExampleTests
         }
     }
 
+    [Fact]
+    public void A_non_public_factory_is_documented_too_as_legacy_documented_every_static_factory_field()
+    {
+        // Legacy's convention read GetFields(Static | NonPublic | Public), so a private factory's status and example were
+        // documented like a public one's (Signature365's Portal declares 16 operations' factories privately).
+        using var document = Render(OpenApiSchemaNaming.Legacy);
+
+        var gone = Responses(document).GetProperty("410");
+        gone.GetProperty("description").GetString().Should().Be("Problem example widget is gone");
+        JsonExample(gone).EnumerateObject().Select(static p => p.Name).Should().Equal("ProblemExampleWidgetGone");
+    }
+
     private static JsonDocument Render(OpenApiSchemaNaming naming)
     {
         var (_, rendered) = OpenApiDocumentEndpoint.Create(
@@ -112,7 +124,7 @@ public static class ProblemExampleSharedProblems
         HttpStatusCode.Conflict);
 }
 
-/// <summary>An operation declaring factories at 404 (two), 409 (referenced from another class) and 500.</summary>
+/// <summary>An operation declaring factories at 404 (two), 409 (referenced from another class), 410 (private) and 500.</summary>
 [AllowAnonymous]
 [RootLink("/legacy-shape/problem-example-widgets")]
 [HttpPost]
@@ -138,6 +150,12 @@ public partial class SubmitProblemExampleWidgetCommand : ICommand<string>
         "Problem example upstream failed",
         "problem_example_upstream_failed",
         HttpStatusCode.InternalServerError);
+
+    /// <summary>The widget has been removed; declared privately, as some Signature365 operations declare theirs.</summary>
+    private static readonly ApiExceptionFactory _widgetGone = new(
+        "Problem example widget is gone",
+        "problem_example_widget_gone",
+        HttpStatusCode.Gone);
 
     public string? Name { get; set; }
 

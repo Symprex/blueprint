@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace Blueprint.SourceGenerator.Tests.Modules;
 
 /// <summary>
-/// Proves the <c>ApiExceptionFactoryModule</c> discovers <c>public static readonly ApiExceptionFactory</c> fields
+/// Proves the <c>ApiExceptionFactoryModule</c> discovers static <c>ApiExceptionFactory</c> fields of any accessibility
 /// on operation types and projects them into the generated descriptor as additional HTTP response metadata entries
 /// for OpenAPI documentation.
 /// </summary>
@@ -208,7 +208,7 @@ public class ApiExceptionFactoryModuleTests
     }
 
     [Fact]
-    public void When_factory_field_is_not_public_then_it_is_ignored()
+    public void When_factory_field_is_not_public_then_it_is_included_as_legacy_included_it()
     {
         const string source = """
             using System.Net;
@@ -250,8 +250,11 @@ public class ApiExceptionFactoryModuleTests
         var descriptorSources = result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator));
         var descriptorSource = string.Join("\n", descriptorSources.Select(static s => s.SourceText));
 
-        // Private fields should not contribute to response metadata
-        descriptorSource.Should().NotContain("404");
+        // Legacy's convention read GetFields(Static | NonPublic | Public), so a private factory contributes its status and,
+        // since the descriptor is nested in the operation's partial type, its title and type. No diagnostic above proves
+        // the generated reference to the private field compiles.
+        descriptorSource.Should().Contain("404");
+        descriptorSource.Should().Contain("global::TestNamespace.PrivateFactoryQuery.Secret.Title");
     }
 
     [Fact]

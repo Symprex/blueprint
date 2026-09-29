@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
-/// Scans operation types for <c>public static readonly ApiExceptionFactory</c> fields and projects each discovered
+/// Scans operation types for static <c>ApiExceptionFactory</c> fields of any accessibility and projects each discovered
 /// factory as <see cref="ApiExceptionFactoryRegistration"/> metadata so <see cref="HttpResponseMetadataModule"/> can
 /// include the corresponding error status codes in OpenAPI response documentation.
 /// </summary>
@@ -74,7 +74,10 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
 
         foreach (var member in operationType.GetMembers())
         {
-            if (member is not IFieldSymbol { IsStatic: true, IsReadOnly: true, DeclaredAccessibility: Accessibility.Public } field)
+            // Every static field, whatever its accessibility and whether or not it is readonly: legacy's convention read
+            // GetFields(Static | NonPublic | Public) (Signature365 8b40ecc961, ApiExceptionFactoryResponseConvention.cs:16).
+            // The generated descriptor is nested in the operation's partial type, so it can read a private field.
+            if (member is not IFieldSymbol { IsStatic: true } field)
             {
                 continue;
             }
