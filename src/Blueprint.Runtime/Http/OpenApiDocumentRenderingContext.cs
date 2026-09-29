@@ -63,7 +63,7 @@ public sealed record OpenApiDocumentRenderingContext(
             .ToImmutableArray();
 
         var schemaProjection = pathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.SchemaProjection;
-        schemaComponents = EnrichWithResourceLinks(schemaComponents, schemaProjection.Document.App, schemaProjection.ProjectedFullNameToName);
+        schemaComponents = EnrichWithResourceLinks(schemaComponents, schemaProjection.Document.App, schemaProjection.ProjectedFullNameToName, keepLinksToUnexposedOperations: schemaProjection.Naming == OpenApiSchemaNaming.Legacy);
 
         // Collect distinct enum types referenced across all schema component properties and emit them
         // as top-level component schemas so properties can use $ref instead of inline enum arrays.
@@ -204,11 +204,13 @@ public sealed record OpenApiDocumentRenderingContext(
     private static ImmutableArray<OpenApiSchemaComponentModel> EnrichWithResourceLinks(
         ImmutableArray<OpenApiSchemaComponentModel> components,
         BlueprintApp app,
-        IReadOnlyDictionary<string, string> fullNameToShortName)
+        IReadOnlyDictionary<string, string> fullNameToShortName,
+        bool keepLinksToUnexposedOperations)
     {
         // Build a lookup of resource name → non-self links, keyed by the same BodyTypeName schema projection gives the
-        // resource's component: the name it maps a projected type's CLR full name to, a type reached only through another's property, list or dictionary included. A resource with no mapping
-        // keeps its full name, so a component keyed by full name still matches. Any SchemaNameFormatter is applied to
+        // resource's component: the name it maps a projected type's CLR full name to, a type reached only through
+        // another's property, list or dictionary included. A resource with no mapping keeps its full name, so a
+        // component keyed by full name still matches. Any SchemaNameFormatter is applied to
         // that BodyTypeName later, when the component is written, so the links follow the component to its final key.
         var linksByResourceName = new Dictionary<string, List<OpenApiSchemaLinkExtension>>(StringComparer.Ordinal);
 
@@ -225,8 +227,9 @@ public sealed record OpenApiDocumentRenderingContext(
             }
 
             // The document leaves an unexposed operation out, so a link naming its operationId would dangle — and the
-            // runtime never adds such a link to a resource's $links either.
-            if (!link.OperationDescriptor.IsExposed)
+            // runtime never adds such a link to a resource's $links either. Legacy's BlueprintLinkSchemaProcessor filtered
+            // nothing, and the generated client builds a stub for an operationId with no path.
+            if (!link.OperationDescriptor.IsExposed && !keepLinksToUnexposedOperations)
             {
                 continue;
             }
