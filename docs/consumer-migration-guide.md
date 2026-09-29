@@ -991,6 +991,63 @@ type that declares it, so an operation's static initialiser (and that of a class
 `= PartnerApiExceptions.NotFound`) now runs when the app is constructed instead of on first use. An initialiser that
 throws, or a factory that is still `null` then, fails at construction. Declare a factory as a `static readonly` field with
 a plain initialiser, and keep other work out of an operation's static initialiser.
+
+**Behaviour change for an enum reached only as an array's items or a dictionary's values (v1.0.3).** A response
+resource's `IEnumerable<SignatureUsage>` property (or a `Dictionary<string, SignatureUsage>`, or a dictionary of arrays of
+it) wrote `items.$ref` to the enum's component, but the component was collected only from a property's own enum, so it was
+not written and the reference dangled: a generated client could not resolve the type. Such an enum now has its component,
+with its members and the description of its type, as a property's own enum has. Regenerate clients: expect components such
+as `SignatureUsage` to appear.
+
+**Behaviour change for a property typed as `IEnumerable<T>` (v1.0.3).** A request-body property declared as the interface
+itself (`IEnumerable<string>? ApplyTo`) is now an array with typed `items`. Before, only a type that implements the
+interface (`List<T>`, an array, a read-only list) was recognised, and the interface was documented `"type": "string"`, so a
+generated client typed the field as a string.
+
+**Behaviour change for a `System.Type` property (v1.0.3).** A property of `System.Type`, which an app's converter writes as
+the type's name, is now documented `"type": "string"`, and an `IEnumerable<Type>` as an array of string `items`. Before, a
+response property had no schema type at all, a collection of them was an array with no `items` (which is not valid OpenAPI
+3.0 and stopped client generators that cannot type it), and a request-body property was an `object`.
+
+**Behaviour change for an exclusive numeric bound under `Default` naming (v1.0.3).** `[GreaterThan]` and `[LessThan]` are
+no longer written as `"minimum": 0, "exclusiveMinimum": true` (and the maximum's pair): that is OpenAPI 3.0's form, and
+draft-07 validators, such as the AJV a generated client uses, reject the boolean as an invalid schema and stop. No document
+is valid in both, so none is written. An integer's exclusive bound is written as the next integer (`[GreaterThan(0)]` is
+`"minimum": 1`, `[LessThan(1001)]` is `"maximum": 1000`), which is the same set of values; a number's (`decimal`, `double`,
+`float`) as the inclusive bound (`"minimum": 0`), which rejects nothing the server accepts and admits the bound itself.
+`Legacy` naming writes neither, as legacy Blueprint's NJsonSchema did not know the attributes. Check a validator built on
+these bounds if it relied on the exclusive keyword.
+
+**Behaviour change for path keys (v1.0.3).** Every key of `paths` now has exactly one leading slash. A link declared
+without one (`[Link(..., "signatures/{SignatureId}/publish")]`) was a key without one, which is not a valid OpenAPI path
+and which a client generator cannot join to a base URL, as legacy Blueprint's `"/" + route` never was. A route declared both
+with and without the slash is now one path item, not two. Regenerate clients that called those operations.
+
+**Behaviour change for the order of an operation's link attributes (v1.0.3).** The URLs, resource links and root links of an
+operation are now registered in the order its `[SelfLink]`, `[RootLink]` and `[Link]` attributes are declared, whichever
+kinds they are, as legacy Blueprint's scanner registered them. Before, every root link came before every self link, and
+those before every `[Link]`. It changes the order of the operation's URLs, of its resource links and of its root links,
+which the root document lists. The first URL declared also keeps the operation's plain `operationId` in every naming (see
+the note above on an operation at several URLs), so an operation declaring a `[SelfLink]` before a `[RootLink]` now
+numbers them the other way round: `GetAccountInjectionStatus` at the self link's URL and `GetAccountInjectionStatus2` at
+the root link's.
+
+**Behaviour change for `x-links` on a resource reached through another (v1.0.3).** A resource that only ever appears as the
+items of a list, or as a nested property, of another resource (a `Product` in a list) now carries the `x-links` of the
+action links declared against it. Before, links were attached only to a type the app returned directly, so a generated
+client lost the `canExecute` actions of a resource it received nested. A resource that is itself a nested class is found
+by its full name too. Regenerate clients and expect more resource components to carry `x-links`.
+
+**Behaviour change for a deprecated property that references a component (v1.0.3).** A deprecated property written as a
+reference to a component (an enum, or an object that is nullable or described) now carries `deprecated: true` and its
+message (`x-deprecated-reason`, or `x-deprecatedMessage` under `Legacy` naming), beside the `oneOf` around the `$ref`.
+Before, only a plain property did, and the deprecation was dropped from a
+reference. A deprecated reference that is neither nullable nor described was a bare `$ref`, which cannot carry either, so
+it is now wrapped in `oneOf` too.
+
+**Behaviour change for the `Link` component (v1.0.3).** The well-known `Link` schema component now has
+`"additionalProperties": false`, as every other object component the framework writes has. Before it allowed further
+properties, so a client that generates strict types from `additionalProperties` got a looser `Link` than every other model.
 ## Compile-time diagnostics
 
 The source generator catches contract errors at build time. Key diagnostics:
