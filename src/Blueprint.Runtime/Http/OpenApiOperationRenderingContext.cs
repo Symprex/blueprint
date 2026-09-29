@@ -514,10 +514,16 @@ public sealed record OpenApiOperationRenderingContext(
             }
         }
 
-        var orderedParameters = parameters
-            .OrderBy(static p => p.In, StringComparer.Ordinal)
-            .ThenBy(static p => p.Name, StringComparer.Ordinal)
-            .ToImmutableArray();
+        // R142: legacy listed parameters in the order of the operation's properties (the derived type's, then each base's,
+        // route, query and header interleaved as declared), which Signature365's generated client turns into a method's
+        // positional arguments. Default keeps its stable order by location and then name, which a consumer's own client may
+        // already depend on. The ownership entries are already in declaration order.
+        var orderedParameters = naming == OpenApiSchemaNaming.Legacy
+            ? parameters.ToImmutable()
+            : parameters
+                .OrderBy(static p => p.In, StringComparer.Ordinal)
+                .ThenBy(static p => p.Name, StringComparer.Ordinal)
+                .ToImmutableArray();
 
         var requestBody = bodyProperties.Count > 0
             ? new OpenApiRequestBodyModel(Required: true, bodyProperties.ToImmutableArray())
