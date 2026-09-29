@@ -3470,6 +3470,7 @@
         "title": "Link",
         "description": "A link from one resource to another, that indicates what operations may be available\nfor a given ILinkableResource being returned from the API.",
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "href"
         ],

@@ -1567,9 +1567,12 @@ public sealed record OpenApiOutputRenderingContext(
             // CLR type name — must fail here, naming both.
             var sourcesByKey = new Dictionary<string, string>(StringComparer.Ordinal);
 
-            foreach (var component in objectSchemaComponents)
+            var processedComponents = objectSchemaComponents
+                .Select(component => ProcessSchemaComponent(component, schemaProcessorOptions))
+                .ToList();
+
+            foreach (var processed in processedComponents)
             {
-                var processed = ProcessSchemaComponent(component, schemaProcessorOptions);
                 EnsureUniqueComponentKey(
                     sourcesByKey,
                     SanitiseSchemaKey(processed.BodyTypeName, schemaNameFormatter),
@@ -1578,9 +1581,13 @@ public sealed record OpenApiOutputRenderingContext(
             }
 
             // Emit the well-known "Link" schema for HATEOAS $links dictionary values.
-            // This enables TypeScript/client generators to produce typed link objects.
-            EnsureUniqueComponentKey(sourcesByKey, "Link", "Blueprint.Model.Link");
-            WriteLinkSchemaComponent(writer, omitLegacyExtras);
+            // This enables TypeScript/client generators to produce typed link objects. Legacy's NJsonSchema wrote a component
+            // only when something reached it, so under Legacy naming it is written only when a component references it.
+            if (!omitLegacyExtras || processedComponents.Any(static component => ReferencesLinkComponent(component)))
+            {
+                EnsureUniqueComponentKey(sourcesByKey, "Link", "Blueprint.Model.Link");
+                WriteLinkSchemaComponent(writer, omitLegacyExtras);
+            }
 
             writer.WriteEndObject();
         }
@@ -1599,6 +1606,11 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndObject();
+    }
+
+    private static bool ReferencesLinkComponent(OpenApiSchemaComponentModel component)
+    {
+        return component.Properties.Any(static property => string.Equals(property.AdditionalPropertiesSchemaRef, "Link", StringComparison.Ordinal));
     }
 
     private static void EnsureUniqueComponentKey(Dictionary<string, string> sourcesByKey, string key, string source)
@@ -1776,6 +1788,7 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteString("type", "object");
+        writer.WriteBoolean("additionalProperties", false);
 
         writer.WritePropertyName("required");
         writer.WriteStartArray();
