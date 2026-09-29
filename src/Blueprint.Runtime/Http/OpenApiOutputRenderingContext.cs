@@ -857,9 +857,16 @@ public sealed record OpenApiOutputRenderingContext(
         // keeps the status's own description and no example map, which is not the shape OpenAPI defines for "example".
         var legacyProblemExamples = omitLegacyExtras && !response.ProblemExamples.IsDefaultOrEmpty;
 
-        writer.WriteString(
-            "description",
-            legacyProblemExamples ? DescribeLegacyProblemResponse(response) : MapStatusDescription(response.StatusCode));
+        var description = legacyProblemExamples ? DescribeLegacyProblemResponse(response) : MapStatusDescription(response.StatusCode);
+
+        if (description is null)
+        {
+            writer.WriteNull("description");
+        }
+        else
+        {
+            writer.WriteString("description", description);
+        }
 
         if (!response.Headers.IsDefault && !response.Headers.IsEmpty)
         {
@@ -876,18 +883,18 @@ public sealed record OpenApiOutputRenderingContext(
 
     /// <summary>
     /// Legacy's description of a response carrying <c>ApiExceptionFactory</c> fields: the factory's title when it is the
-    /// only description the status had, else empty. Legacy nulled a status's description once two of its responses
-    /// disagreed (Signature365 8b40ecc961, <c>Blueprint.OpenApi/OpenApiDocumentBuilder.cs:196-201</c>) and NSwag wrote
-    /// the null as "". Every operation also had legacy's "Unexpected error" 500 and a validating one its "Validation
-    /// failure" 422, so a factory at a status another result type shares is described as "", as in every committed
-    /// document.
+    /// only description the status had, else <see langword="null"/>. Legacy nulled a status's description once two of its
+    /// responses disagreed (Signature365 8b40ecc961, <c>Blueprint.OpenApi/OpenApiDocumentBuilder.cs:196-201</c>), and
+    /// its documents carry that as JSON <c>null</c> (93 responses, none an empty string). Every operation also had
+    /// legacy's "Unexpected error" 500 and a validating one its "Validation failure" 422, so a factory at a status
+    /// another result type shares is described as <see langword="null"/>.
     /// </summary>
-    private static string DescribeLegacyProblemResponse(OpenApiResponseObjectModel response)
+    private static string? DescribeLegacyProblemResponse(OpenApiResponseObjectModel response)
     {
         var onlyFactories = response.ResultTypeNames.All(static name => name == ApiExceptionResultTypeName);
         var titles = response.ProblemExamples.Select(static example => example.Title).Distinct(StringComparer.Ordinal).ToArray();
 
-        return onlyFactories && titles.Length == 1 ? titles[0] : string.Empty;
+        return onlyFactories && titles.Length == 1 ? titles[0] : null;
     }
 
     private static void WriteResponseHeaders(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseHeaderModel> headers)

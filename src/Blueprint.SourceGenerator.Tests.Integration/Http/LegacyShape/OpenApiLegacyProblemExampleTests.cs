@@ -12,15 +12,15 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape;
 /// Proves that under Legacy naming an operation's <see cref="ApiExceptionFactory"/> fields are documented as legacy
 /// Blueprint documented them: each status's JSON content carries an <c>example</c> map keyed by the factory's type in
 /// PascalCase, holding <c>{"value":{"status","title","type"}}</c>, and the response's description is the factory's title
-/// when it is the status's only description, or empty when the status has more than one.
+/// when it is the status's only description, or JSON <c>null</c> when the status has more than one.
 /// </summary>
 /// <remarks>
 /// Legacy's <c>ApiExceptionFactoryResponseConvention</c> (Signature365 8b40ecc961,
 /// <c>Blueprint/Configuration/ApiExceptionFactoryResponseConvention.cs</c>) read each factory field's value, and
 /// <c>OpenApiDocumentBuilder.cs:196-201</c> and <c>:246-262</c> wrote the description and the map. Signature365's
-/// committed documents show the result: 389 responses with a map, every key the PascalCase of its type, and an empty
-/// description wherever a status had more than one (including every 500, which also carried legacy's "Unexpected
-/// error"). Signature365's client generator reads this singular <c>example</c> map to build each API's error catalogue.
+/// committed documents show the result: 389 responses with a map, every key the PascalCase of its type, and a JSON
+/// <c>null</c> description (93 responses, no empty string in any document) wherever a status had more than one, including
+/// every 500, which also carried legacy's "Unexpected error". Signature365's client generator reads this singular <c>example</c> map to build each API's error catalogue.
 /// </remarks>
 public sealed class OpenApiLegacyProblemExampleTests
 {
@@ -42,23 +42,23 @@ public sealed class OpenApiLegacyProblemExampleTests
     }
 
     [Fact]
-    public void Under_legacy_naming_a_status_with_two_factories_has_an_empty_description_and_both_examples()
+    public void Under_legacy_naming_a_status_with_two_factories_has_a_null_description_and_both_examples()
     {
         using var document = Render(OpenApiSchemaNaming.Legacy);
 
         var notFound = Responses(document).GetProperty("404");
-        notFound.GetProperty("description").GetString().Should().BeEmpty();
+        notFound.GetProperty("description").ValueKind.Should().Be(JsonValueKind.Null);
         JsonExample(notFound).EnumerateObject().Select(static p => p.Name)
             .Should().BeEquivalentTo("MissingProblemExampleWidget", "MissingProblemExampleOwner");
     }
 
     [Fact]
-    public void Under_legacy_naming_a_factory_at_500_has_an_empty_description_beside_the_unhandled_exception()
+    public void Under_legacy_naming_a_factory_at_500_has_a_null_description_beside_the_unhandled_exception()
     {
         using var document = Render(OpenApiSchemaNaming.Legacy);
 
         var serverError = Responses(document).GetProperty("500");
-        serverError.GetProperty("description").GetString().Should().BeEmpty();
+        serverError.GetProperty("description").ValueKind.Should().Be(JsonValueKind.Null);
         JsonExample(serverError).EnumerateObject().Select(static p => p.Name).Should().Equal("ProblemExampleUpstreamFailed");
     }
 
