@@ -269,10 +269,12 @@ public sealed record OpenApiOutputRenderingContext(
         // Legacy's NJsonSchema-based generator never wrote a schema component's "title" and Newtonsoft's contract
         // resolution never tracked "readOnly" (checked against every Signature365 8b40ecc961 app's committed
         // Spec/openapi.json: zero of either, across all 21 documents) — omit both only under Legacy naming; a Default
-        // consumer keeps them, since they are real facts legacy simply had no means to describe.
+        // consumer keeps them, since they are real facts legacy simply had no means to describe. Nor did legacy write a
+        // request body's "required" (every request body in the Portal document carries "content" alone), which is
+        // omitted on the same terms.
         var omitLegacyExtras = infoOptions.SchemaNaming == OpenApiSchemaNaming.Legacy;
 
-        WritePaths(writer, document.Paths, LegacyOperationIds.Assign(document), allRequireAuth, effectiveSchemes, ComponentKeyOf, parameterTitleFormatter);
+        WritePaths(writer, document.Paths, LegacyOperationIds.Assign(document), allRequireAuth, effectiveSchemes, ComponentKeyOf, parameterTitleFormatter, omitLegacyExtras);
         WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, ComponentKeyOf, DescribeComponentSources(document), omitLegacyExtras);
         WriteDocumentTags(writer, document.Paths);
 
@@ -409,33 +411,33 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, IReadOnlyDictionary<(string UrlFormat, string Method), string> operationIds, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
+    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, IReadOnlyDictionary<(string UrlFormat, string Method), string> operationIds, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName("paths");
         writer.WriteStartObject();
 
         foreach (var pathItem in paths)
         {
-            WritePathItem(writer, pathItem, operationIds, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter);
+            WritePathItem(writer, pathItem, operationIds, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter, omitLegacyExtras);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, IReadOnlyDictionary<(string UrlFormat, string Method), string> operationIds, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
+    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, IReadOnlyDictionary<(string UrlFormat, string Method), string> operationIds, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(pathItem.UrlFormat);
         writer.WriteStartObject();
 
         foreach (var methodSlot in pathItem.Methods)
         {
-            WriteMethodSlot(writer, methodSlot, operationIds.GetValueOrDefault((pathItem.UrlFormat, methodSlot.HttpMethod.ToUpperInvariant())), useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter);
+            WriteMethodSlot(writer, methodSlot, operationIds.GetValueOrDefault((pathItem.UrlFormat, methodSlot.HttpMethod.ToUpperInvariant())), useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter, omitLegacyExtras);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, string? operationId, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter)
+    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, string? operationId, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(methodSlot.HttpMethod.ToLowerInvariant());
         writer.WriteStartObject();
@@ -459,7 +461,7 @@ public sealed record OpenApiOutputRenderingContext(
 
             WriteTags(writer, primaryOperation.Tags);
             WriteParameters(writer, primaryOperation.Parameters, parameterTitleFormatter);
-            WriteRequestBody(writer, primaryOperation.OperationName, primaryOperation.RequestBody, schemaNameFormatter);
+            WriteRequestBody(writer, primaryOperation.OperationName, primaryOperation.RequestBody, schemaNameFormatter, omitLegacyExtras);
             WriteResponses(writer, primaryOperation.Responses, schemaNameFormatter);
 
             if (primaryOperation.Deprecated)
@@ -620,7 +622,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteRequestBody(Utf8JsonWriter writer, string operationName, OpenApiRequestBodyModel? requestBody, Func<string, string>? schemaNameFormatter)
+    private static void WriteRequestBody(Utf8JsonWriter writer, string operationName, OpenApiRequestBodyModel? requestBody, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         if (requestBody is null)
         {
@@ -629,7 +631,12 @@ public sealed record OpenApiOutputRenderingContext(
 
         writer.WritePropertyName("requestBody");
         writer.WriteStartObject();
-        writer.WriteBoolean("required", requestBody.Required);
+
+        // Legacy never wrote a request body's "required" (see the omitLegacyExtras note in WriteDocument).
+        if (!omitLegacyExtras)
+        {
+            writer.WriteBoolean("required", requestBody.Required);
+        }
 
         writer.WritePropertyName("content");
         writer.WriteStartObject();

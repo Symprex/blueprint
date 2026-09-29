@@ -41,6 +41,33 @@ public class OpenApiLegacyExtrasTests
         run.GetProperty("properties").GetProperty("$object").GetProperty("readOnly").GetBoolean().Should().BeTrue();
     }
 
+    [Fact]
+    public void Legacy_naming_omits_a_request_bodys_required_flag()
+    {
+        // Legacy's generator never wrote requestBody.required: every one of the 97 request bodies in Signature365's
+        // 8b40ecc961 Portal document carries "content" alone.
+        using var document = Render(static options => options.SchemaNaming = OpenApiSchemaNaming.Legacy);
+
+        BoundedDescriptionRequestBody(document).TryGetProperty("required", out _)
+            .Should().BeFalse("legacy never wrote a request body's required flag");
+    }
+
+    [Fact]
+    public void Default_naming_still_marks_a_request_body_required()
+    {
+        using var document = Render(static _ => { });
+
+        BoundedDescriptionRequestBody(document).GetProperty("required").GetBoolean().Should().BeTrue();
+    }
+
+    private static JsonElement BoundedDescriptionRequestBody(JsonDocument document)
+    {
+        var path = document.RootElement.GetProperty("paths").EnumerateObject()
+            .Single(static p => p.Name.EndsWith("legacy-shape/bounded-description", StringComparison.Ordinal));
+
+        return path.Value.GetProperty("post").GetProperty("requestBody");
+    }
+
     private static JsonDocument Render(Action<OpenApiInfoOptions> configure)
     {
         var options = new OpenApiInfoOptions();
