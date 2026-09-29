@@ -709,7 +709,9 @@ public sealed record OpenApiSchemaProjectionContext(
             OpenApiValidationConstraints.GetDocumentedMinLength(
                 GetMinLength(validationAttributes),
                 OpenApiValidationConstraints.IsRequiredNonEmptyString(validationAttributes),
-                isNonEnumString: propertyKind == OpenApiSchemaKind.String && enumValues.IsDefaultOrEmpty && enumSchemaName is null),
+                isNonEnumString: propertyKind == OpenApiSchemaKind.String && enumValues.IsDefaultOrEmpty && enumSchemaName is null,
+                hasStringLengthAttribute: validationAttributes.Any(static attribute => attribute is StringLengthAttribute),
+                useLegacyStringLengthZero: naming == OpenApiSchemaNaming.Legacy),
             GetMaxLength(validationAttributes),
             GetPattern(validationAttributes),
             minimum.Value,

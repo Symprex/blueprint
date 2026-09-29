@@ -135,6 +135,17 @@ public sealed class MinLengthShapeApiResource
     public string? Name { get; init; }
 
     public string? Note { get; init; }
+
+    public MinLengthShapeToken? Token { get; init; }
+}
+
+/// <summary>A component nested in <see cref="MinLengthShapeApiResource"/>, bounded only above by <see cref="StringLengthAttribute"/>.</summary>
+public sealed class MinLengthShapeToken
+{
+    [StringLength(50)]
+    public string? Value { get; init; }
+
+    public string? Unbounded { get; init; }
 }
 
 /// <summary>An enum of the <see cref="CreateMinLengthShapeCommand"/>.</summary>

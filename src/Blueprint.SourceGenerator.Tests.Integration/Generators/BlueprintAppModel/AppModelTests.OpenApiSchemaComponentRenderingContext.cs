@@ -65,6 +65,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "LocationResource",
             "MappedLinkApiResource",
             "MinLengthShapeApiResource",
+            "MinLengthShapeToken",
             "MultiExpandableTestEmployee",
             "NodaTimeEchoResponse",
             "PagedApiResourceOfLegacyShapeTenant",

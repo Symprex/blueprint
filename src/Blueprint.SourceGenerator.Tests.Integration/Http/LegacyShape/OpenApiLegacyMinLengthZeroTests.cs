@@ -46,6 +46,35 @@ public sealed class OpenApiLegacyMinLengthZeroTests
         description.GetProperty("maxLength").GetInt32().Should().Be(200);
     }
 
+    [Fact]
+    public void Under_legacy_naming_a_nested_components_string_length_max_only_property_carries_minLength_zero()
+    {
+        // Legacy wrote it on nested components too: Signature365's Portal TenantCustomFieldValue.token, .displayName and
+        // .value, and EditableUserFieldValue.token, are bounded only above.
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(
+            new IntegrationTestBlueprintApp(),
+            new OpenApiInfoOptions { SchemaNaming = OpenApiSchemaNaming.Legacy });
+        using var document = JsonDocument.Parse(rendered.Json);
+
+        var value = ComponentProperty(document, "MinLengthShapeToken", "Value");
+        value.GetProperty("minLength").GetInt32().Should().Be(0);
+        value.GetProperty("maxLength").GetInt32().Should().Be(50);
+
+        ComponentProperty(document, "MinLengthShapeToken", "Unbounded").TryGetProperty("minLength", out _).Should().BeFalse(
+            "a string with no [StringLength] declares no minimum, not even 0");
+    }
+
+    [Fact]
+    public void Under_default_naming_a_nested_components_string_length_max_only_property_carries_no_minLength()
+    {
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+        using var document = JsonDocument.Parse(rendered.Json);
+
+        var value = ComponentProperty(document, "MinLengthShapeToken", "Value");
+        value.TryGetProperty("minLength", out _).Should().BeFalse();
+        value.GetProperty("maxLength").GetInt32().Should().Be(50);
+    }
+
     private static JsonElement ComponentProperty(JsonDocument document, string componentName, string propertyName)
     {
         return document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty(componentName)

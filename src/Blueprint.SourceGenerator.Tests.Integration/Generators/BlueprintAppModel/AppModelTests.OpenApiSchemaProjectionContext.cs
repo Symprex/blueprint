@@ -65,6 +65,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "LocationResource",
             "MappedLinkApiResource",
             "MinLengthShapeApiResource",
+            "MinLengthShapeToken",
             "MultiExpandableTestEmployee",
             "NodaTimeEchoResponse",
             "PagedApiResourceOfLegacyShapeTenant",
