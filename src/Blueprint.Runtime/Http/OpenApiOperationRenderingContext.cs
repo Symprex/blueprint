@@ -755,8 +755,9 @@ public sealed record OpenApiOperationRenderingContext(
             return (null, null, null, ImmutableArray<string>.Empty, additionalType, additionalFormat, additionalType == "object" ? FindSchemaName(valueType, schemaNamesByType) : null);
         }
 
-        // Check for IEnumerable<T>.
+        // Check for IEnumerable<T>, which the type may be itself (R144: GetInterfaces does not list the type).
         var enumInterface = propertyType.GetInterfaces()
+            .Append(propertyType)
             .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
         if (enumInterface is not null)
         {
@@ -991,8 +992,9 @@ public sealed record OpenApiOperationRenderingContext(
             return ("object", null);
         }
 
-        // Check for enumerable (renders as array with items).
-        if (underlying != typeof(string) && underlying.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
+        // Check for enumerable (renders as array with items), which the type may be itself (R144: GetInterfaces does not list
+        // the type, so a property typed as the IEnumerable<T> interface was a string).
+        if (underlying != typeof(string) && underlying.GetInterfaces().Append(underlying).Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
         {
             return ("array", null);
         }
