@@ -107,6 +107,59 @@ public sealed class OpenApiUndescribedBodyTypeTests
     }
 
     [Fact]
+    public void An_undescribed_types_warning_says_to_declare_it_on_the_serializer_context()
+    {
+        // Declaring the type is what makes the document describe it: the context then gives it an Object type info, and
+        // the property (or a collection's items) references its component.
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+        var type = typeof(UndescribedBodyPayload).FullName;
+        var itemType = typeof(UndescribedBodyItem).FullName;
+
+        rendered.Warnings.Should().Contain(
+            $"SubmitUndescribedBody.Payload: the serializer context IntegrationTestAppJsonContext does not describe {type}, so the "
+            + $"OpenAPI document shows it as an object with no properties. Declare [JsonSerializable(typeof({type}))] on "
+            + "IntegrationTestAppJsonContext for the document to describe it as a component.");
+        rendered.Warnings.Should().Contain(
+            $"SubmitUndescribedBody.Items: the serializer context IntegrationTestAppJsonContext does not describe {itemType}, so the "
+            + $"OpenAPI document shows it as an object with no properties. Declare [JsonSerializable(typeof({itemType}))] on "
+            + "IntegrationTestAppJsonContext for the document to describe it as a component.");
+    }
+
+    [Fact]
+    public void A_converter_written_types_warning_does_not_say_to_declare_what_the_context_already_describes()
+    {
+        // R131: the context already describes a converter-written type (GetTypeInfo succeeds, with JsonTypeInfoKind.None),
+        // so "does not describe it" and "declare it" were both false: declaring it again changes nothing. The document maps
+        // a property to a string through IParsable<T> or a TypeConverter to string (MapClrTypeToOpenApiSchema) before it
+        // would leave it an object, which is what describes a converter that writes a string.
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+        var type = typeof(ConverterWrittenBodyId).FullName;
+
+        rendered.Warnings.Should().Contain(
+            $"SubmitUndescribedBody.Id: the serializer context IntegrationTestAppJsonContext describes {type} as JsonTypeInfoKind.None, "
+            + "written by a converter rather than as an object with properties, so the OpenAPI document shows it as an object "
+            + "with no properties. Declaring it on IntegrationTestAppJsonContext does not change that, as the document cannot see "
+            + $"what a converter writes. If the converter writes a string, implement IParsable<T> on {type}, or give it a "
+            + "[TypeConverter] that converts it to string, for the document to describe it as a string.");
+    }
+
+    [Fact]
+    public void A_query_parameters_warning_says_a_parameter_is_never_a_component()
+    {
+        // R131: a query parameter's schema is never a component (its object branch renders bare, with no $ref), so
+        // declaring its type on the context changes nothing in the document; only IParsable<T> or a TypeConverter to
+        // string makes MapClrTypeToOpenApiSchema describe it, as a string.
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+        var type = typeof(UndescribedQueryFilter).FullName;
+
+        rendered.Warnings.Should().Contain(
+            $"SearchUndescribedFilter.Filter: the OpenAPI document shows the query parameter's type {type} as an object with no "
+            + $"properties. A query parameter is never a component, so declaring [JsonSerializable(typeof({type}))] on "
+            + $"IntegrationTestAppJsonContext does not change that. Implement IParsable<T> on {type}, or give it a [TypeConverter] "
+            + "that converts it to string, for the document to describe it as a string.");
+    }
+
+    [Fact]
     public void A_dictionary_of_described_values_and_a_JsonDocument_are_not_warned_about()
     {
         // R27 false positives: IReadOnlyDictionary<,> (not just IDictionary<,>) and JsonDocument (not just JsonElement)

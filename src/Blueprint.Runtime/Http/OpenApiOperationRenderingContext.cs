@@ -390,7 +390,7 @@ public sealed record OpenApiOperationRenderingContext(
                     // the equivalent request-body property.
                     if (schemaType == "object")
                     {
-                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, clrProperty?.PropertyType);
+                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, clrProperty?.PropertyType, isQueryParameter: true);
                     }
 
                     break;
@@ -502,12 +502,12 @@ public sealed record OpenApiOperationRenderingContext(
 
                     if (bodyItemsType == "object" && bodyItemsSchemaRef is null)
                     {
-                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, GetCollectionElementType(clrProperty?.PropertyType, dictionaryValues: false));
+                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, GetCollectionElementType(clrProperty?.PropertyType, dictionaryValues: false), isQueryParameter: false);
                     }
 
                     if (bodyAdditionalType == "object" && bodyAdditionalSchemaRef is null)
                     {
-                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, GetCollectionElementType(clrProperty?.PropertyType, dictionaryValues: true));
+                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, GetCollectionElementType(clrProperty?.PropertyType, dictionaryValues: true), isQueryParameter: false);
                     }
 
                     break;
@@ -1121,6 +1121,8 @@ public sealed record OpenApiOperationRenderingContext(
         FrozenDictionary<Type, string> requestBodyNamesByType,
         List<string> warnings)
     {
+        private const string StringRemediation = "or give it a [TypeConverter] that converts it to string, for the document to describe it as a string.";
+
         /// <summary>Returns the component a property of <paramref name="type"/> references, if it has one.</summary>
         /// <param name="descriptor">The operation whose request body has the property.</param>
         /// <param name="propertyName">The property's CLR name.</param>
@@ -1145,7 +1147,7 @@ public sealed record OpenApiOperationRenderingContext(
                 return requestBodyName;
             }
 
-            this.WarnIfUndescribed(descriptor, propertyName, underlying);
+            this.WarnIfUndescribed(descriptor, propertyName, underlying, isQueryParameter: false);
 
             return null;
         }
@@ -1154,8 +1156,12 @@ public sealed record OpenApiOperationRenderingContext(
         /// <param name="descriptor">The operation whose request body has the property.</param>
         /// <param name="propertyName">The property's CLR name.</param>
         /// <param name="type">The type the property is, or holds.</param>
+        /// <param name="isQueryParameter">
+        /// Whether the property is a query parameter, whose schema is never a component, rather than a request-body property
+        /// (or its items or values).
+        /// </param>
         [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
-        public void WarnIfUndescribed(ApiOperationDescriptor descriptor, string propertyName, Type? type)
+        public void WarnIfUndescribed(ApiOperationDescriptor descriptor, string propertyName, Type? type, bool isQueryParameter)
         {
             if (type is null
                 || schemaProjection.Document.App.AppOwnedSerializerContext is not System.Text.Json.Serialization.JsonSerializerContext serializerContext)
@@ -1181,16 +1187,42 @@ public sealed record OpenApiOperationRenderingContext(
             // through a [JsonConverter] — but the schema projection can describe an object's properties only when STJ's
             // own JsonTypeInfoKind is Object; a converter-written type renders exactly as bare as an undescribed one, so
             // it must be warned about the same way.
-            if (TryGetTypeInfo(serializerContext, underlying)?.Kind == System.Text.Json.Serialization.Metadata.JsonTypeInfoKind.Object)
+            var typeInfo = TryGetTypeInfo(serializerContext, underlying);
+            if (typeInfo?.Kind == System.Text.Json.Serialization.Metadata.JsonTypeInfoKind.Object)
             {
                 return;
             }
 
+            // R131: each remediation is the one that changes the document for its case. Declaring the type on the context
+            // does only for a type the context does not describe at all, and only where the property can reference a
+            // component. A query parameter never does, and a converter-written type is described already; for both, only
+            // IParsable<T> or a TypeConverter to string takes MapClrTypeToOpenApiSchema off its object branch.
             var contextName = serializerContext.GetType().Name;
-            warnings.Add(
-                $"{descriptor.Name}.{propertyName}: the serializer context {contextName} does not describe {underlying.FullName}, so the "
-                + $"OpenAPI document shows it as an object with no properties. Declare [JsonSerializable(typeof({underlying.FullName}))] "
-                + $"on {contextName} for the document to describe it as a component.");
+            var typeName = underlying.FullName;
+            var prefix = $"{descriptor.Name}.{propertyName}: ";
+
+            if (isQueryParameter)
+            {
+                warnings.Add(
+                    prefix + $"the OpenAPI document shows the query parameter's type {typeName} as an object with no properties. A query "
+                    + $"parameter is never a component, so declaring [JsonSerializable(typeof({typeName}))] on {contextName} does not "
+                    + $"change that. Implement IParsable<T> on {typeName}, {StringRemediation}");
+            }
+            else if (typeInfo is not null)
+            {
+                warnings.Add(
+                    prefix + $"the serializer context {contextName} describes {typeName} as JsonTypeInfoKind.{typeInfo.Kind}, written by a "
+                    + "converter rather than as an object with properties, so the OpenAPI document shows it as an object with no "
+                    + $"properties. Declaring it on {contextName} does not change that, as the document cannot see what a converter "
+                    + $"writes. If the converter writes a string, implement IParsable<T> on {typeName}, {StringRemediation}");
+            }
+            else
+            {
+                warnings.Add(
+                    prefix + $"the serializer context {contextName} does not describe {typeName}, so the OpenAPI document shows it as an "
+                    + $"object with no properties. Declare [JsonSerializable(typeof({typeName}))] on {contextName} for the document to "
+                    + "describe it as a component.");
+            }
         }
 
         private static System.Text.Json.Serialization.Metadata.JsonTypeInfo? TryGetTypeInfo(
