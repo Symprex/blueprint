@@ -934,6 +934,36 @@ public sealed record OpenApiOperationRenderingContext(
             return ("number", "float");
         }
 
+        // NodaTime types serialise as ISO-8601 strings via NodaTime.Serialization.SystemTextJson. Matched by full name,
+        // as OpenApiSchemaProjectionContext.MapFormat already does for a response-schema property, so Blueprint.Runtime
+        // does not need a NodaTime package reference. Without this, a request-body Instant (etc.) property falls
+        // through to the generic string-convertible-type branch below and loses its format entirely (R45) — legacy's
+        // committed Portal document gives ExtendLoggingSessionCommand.newExpirationDate (an Instant)
+        // {"type":"string","format":"date-time"}, and the response-schema path already gets this right for the same
+        // CLR type, so this is a mapping gap in this path specifically, not a legacy-only quirk.
+        var nodaTimeFullName = underlying.FullName;
+        if (nodaTimeFullName is not null && nodaTimeFullName.StartsWith("NodaTime.", StringComparison.Ordinal))
+        {
+            var nodaTimeFormat = nodaTimeFullName switch
+            {
+                "NodaTime.Instant" => "date-time",
+                "NodaTime.OffsetDateTime" => "date-time",
+                "NodaTime.ZonedDateTime" => "date-time",
+                "NodaTime.LocalDateTime" => "date-time",
+                "NodaTime.LocalDate" => "date",
+                "NodaTime.LocalTime" => "time",
+                "NodaTime.Duration" => "duration",
+                "NodaTime.Period" => "duration",
+                "NodaTime.Offset" => "duration",
+                _ => null,
+            };
+
+            if (nodaTimeFormat is not null)
+            {
+                return ("string", nodaTimeFormat);
+            }
+        }
+
         // IParsable<T> types serialize as strings; try to infer their format from a single
         // wrapped field (e.g. a readonly record struct wrapping Guid → format "uuid").
         var parsableFormat = InferIParsableFormat(underlying);
