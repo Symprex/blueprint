@@ -337,7 +337,10 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 continue;
             }
 
-            routeTemplates.Add(new RouteTemplateInfo(template!, GetRouteTemplateLocation(attribute, argumentIndex)));
+            // Named after the property each placeholder finds (ignoring case), as legacy routed it (RoutePlaceholderSyntax).
+            routeTemplates.Add(new RouteTemplateInfo(
+                RoutePlaceholderSyntax.Canonicalise(template!, operationType),
+                GetRouteTemplateLocation(attribute, argumentIndex)));
         }
 
         return routeTemplates;

@@ -49,7 +49,7 @@ internal static class HttpHostExposureHelper
         {
             if (TryExtractRouteTemplate(attribute, out var url))
             {
-                templates.Add(url);
+                templates.Add(RoutePlaceholderSyntax.Canonicalise(url, operationType));
             }
         }
 
@@ -71,7 +71,7 @@ internal static class HttpHostExposureHelper
             if (TryExtractRouteTemplate(attribute, out var url))
             {
                 var location = attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation();
-                templates.Add((url, location is null ? null : LocationInfo.CreateFrom(location)));
+                templates.Add((RoutePlaceholderSyntax.Canonicalise(url, operationType), location is null ? null : LocationInfo.CreateFrom(location)));
             }
         }
 

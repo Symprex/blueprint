@@ -108,6 +108,86 @@ public sealed class LegacyRoutePlaceholderWireTests
         tenantUserParameters[0].GetProperty("in").GetString().Should().Be("path");
     }
 
+    [Fact]
+    public async Task A_root_links_placeholder_spelled_in_another_case_binds_the_property_from_the_path()
+    {
+        // Signature365 Analytics' IngestCampaignEventCommand: [RootLink("/track/{type}")] on a property named Type.
+        // Legacy mapped api/track/{Type} (ApiOperationLink.cs:59-61, :76) and bound Type from that route value.
+        await using var host = await RoutePlaceholderHost.StartAsync();
+
+        var (status, body) = await host.SendAsync(
+            HttpMethod.Post,
+            "case-placeholders/track/signup",
+            """{"payload":"from-body"}""");
+
+        status.Should().Be(200);
+        body.Should().Be("\"type=signup;payload=from-body\"");
+    }
+
+    [Fact]
+    public async Task A_self_links_placeholder_spelled_in_another_case_binds_the_property_from_the_path()
+    {
+        await using var host = await RoutePlaceholderHost.StartAsync();
+
+        var (status, body) = await host.SendAsync(HttpMethod.Get, "case-placeholders/items/item-1?id=item-in-query");
+
+        status.Should().Be(200);
+        body.Should().Be("\"id=item-1\"");
+    }
+
+    [Fact]
+    public async Task A_query_sent_by_the_compiled_client_puts_the_property_in_the_path_of_a_placeholder_spelled_in_another_case()
+    {
+        await using var host = await RoutePlaceholderHost.StartAsync();
+
+        var (status, body) = await host.SendWithCompiledClientAsync(new GetCasePlaceholderItemQuery { Id = "item 2" });
+
+        status.Should().Be(200);
+        body.Should().Be("\"id=item 2\"");
+    }
+
+    [Fact]
+    public void The_registered_urls_and_links_use_the_propertys_name_for_a_placeholder_spelled_in_another_case()
+    {
+        var app = new IntegrationTestBlueprintApp();
+
+        var track = app.FindOperation(typeof(TrackCasePlaceholderCommand))!;
+
+        track.Urls.Select(static u => u.UrlFormat).Should().Equal("/case-placeholders/track/{Type}");
+
+        var item = app.FindOperation(typeof(GetCasePlaceholderItemQuery))!;
+
+        item.Urls.Select(static u => u.UrlFormat).Should().Equal("/case-placeholders/items/{Id}");
+        item.Links.Should().ContainSingle()
+            .Which.CreateRelativeUrl(new CasePlaceholderApiResource { Id = "item-3" })
+            .Should().Be("/case-placeholders/items/item-3");
+    }
+
+    [Fact]
+    public void The_document_publishes_a_placeholder_spelled_in_another_case_under_the_propertys_name_as_a_path_parameter()
+    {
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+        using var document = JsonDocument.Parse(rendered.Json);
+        var paths = document.RootElement.GetProperty("paths");
+
+        paths.EnumerateObject().Select(static p => p.Name).Should().NotContain(static name => name.Contains("{type}") || name.Contains("{id}"));
+
+        var trackParameters = Parameters(paths, "/case-placeholders/track/{Type}", "post")
+            .Where(static p => p.GetProperty("name").GetString() == "Type")
+            .ToList();
+
+        trackParameters.Should().ContainSingle();
+        trackParameters[0].GetProperty("in").GetString().Should().Be("path");
+        trackParameters[0].GetProperty("required").GetBoolean().Should().BeTrue();
+
+        var itemParameters = Parameters(paths, "/case-placeholders/items/{Id}", "get")
+            .Where(static p => p.GetProperty("name").GetString() == "Id")
+            .ToList();
+
+        itemParameters.Should().ContainSingle();
+        itemParameters[0].GetProperty("in").GetString().Should().Be("path");
+    }
+
     private static IEnumerable<JsonElement> Parameters(JsonElement paths, string path, string method)
     {
         return paths.GetProperty(path).GetProperty(method).TryGetProperty("parameters", out var parameters)
@@ -252,6 +332,43 @@ public partial class RoutePlaceholderMakeTenantOwnerCommand : ICommand<string>
     {
         return RoutePlaceholderHandlers.Describe(command.UserTenantId, command.Id);
     }
+}
+
+/// <summary>
+/// Shaped as Signature365 Analytics' <c>IngestCampaignEventCommand</c>: a root link whose placeholder is spelled in another
+/// case than its property.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/case-placeholders/track/{type}")]
+public partial class TrackCasePlaceholderCommand : ICommand<string>
+{
+    public string Type { get; set; } = default!;
+
+    public string? Payload { get; set; }
+
+    public static string Handle(TrackCasePlaceholderCommand command)
+    {
+        return $"type={command.Type ?? "(unset)"};payload={command.Payload ?? "(unset)"}";
+    }
+}
+
+/// <summary>A self link whose placeholder is spelled in another case than the operation's and the resource's property.</summary>
+[AllowAnonymous]
+[SelfLink(typeof(CasePlaceholderApiResource), "/case-placeholders/items/{id}")]
+public partial class GetCasePlaceholderItemQuery : IQuery<string>
+{
+    public string Id { get; set; } = default!;
+
+    public static string Handle(GetCasePlaceholderItemQuery query)
+    {
+        return "id=" + (query.Id ?? "(unset)");
+    }
+}
+
+/// <summary>The resource <see cref="GetCasePlaceholderItemQuery"/> self-links, by its <c>Id</c>.</summary>
+public partial class CasePlaceholderApiResource : ApiResource
+{
+    public string Id { get; set; } = null!;
 }
 
 /// <summary>The tenant user resource, linked by its <c>TenantId</c> and <c>Id</c>.</summary>

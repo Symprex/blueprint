@@ -427,6 +427,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                 continue;
             }
 
+            // Registered under the property's own name, as legacy routed it (RoutePlaceholderSyntax).
+            url = RoutePlaceholderSyntax.Canonicalise(url, operationType);
+
             if (url.Contains("{"))
             {
                 var placeholders = _placeholderRegex.Matches(url);
@@ -548,11 +551,17 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             // of (primary, fallback) must exist on resource for link URL generation.
             if (normalisedUrl.Contains("{"))
             {
+                // A placeholder finds the operation's and the resource's property ignoring case, and the URL is registered
+                // under the operation property's own name, as legacy routed it (RoutePlaceholderSyntax).
+                var operationMembers = operationType.GetAllMembers().ToList();
+                var resourceMembers = resourceTypeSymbol.GetAllMembers().ToList();
+
                 normalisedUrl = _mappedPlaceholderRegex.Replace(
                     normalisedUrl,
                     match =>
                     {
-                        var routePropertyName = match.Groups["routeName"].Value;
+                        var routePropertyName = RoutePlaceholderSyntax.ResolveMemberName(operationMembers, match.Groups["routeName"].Value)
+                                                ?? match.Groups["routeName"].Value;
                         var fallbackPropertyName = match.Groups["resourcePropName"]?.Value;
 
                         var argumentLocationInfo = urlLocation.WithSubRange(
@@ -566,23 +575,26 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                 argumentLocationInfo,
                                 context))
                         {
+                            var resourcePropertyName = RoutePlaceholderSyntax.ResolveMemberName(resourceMembers, routePropertyName);
+
                             if (string.IsNullOrEmpty(fallbackPropertyName))
                             {
                                 // Simple {Prop}: must exist on resource
-                                TryFindMember(
-                                    resourceTypeSymbol,
-                                    routePropertyName,
-                                    argumentLocationInfo,
-                                    context);
+                                if (resourcePropertyName is null)
+                                {
+                                    context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(
+                                        resourceTypeSymbol, routePropertyName, argumentLocationInfo));
+                                }
 
-                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, routePropertyName);
-                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, routePropertyName, isValueType));
+                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, resourcePropertyName ?? routePropertyName);
+                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName ?? routePropertyName, isValueType));
                             }
                             else
                             {
                                 // Fallback {Prop:Alt}: try primary on resource, then fallback
-                                var primaryExists = HasMember(resourceTypeSymbol, routePropertyName);
-                                var fallbackExists = HasMember(resourceTypeSymbol, fallbackPropertyName!);
+                                var resourceFallbackName = RoutePlaceholderSyntax.ResolveMemberName(resourceMembers, fallbackPropertyName!);
+                                var primaryExists = resourcePropertyName is not null;
+                                var fallbackExists = resourceFallbackName is not null;
 
                                 if (!primaryExists && !fallbackExists)
                                 {
@@ -593,8 +605,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                 else
                                 {
                                     // At least one exists. Use the first that exists as primary.
-                                    var effectivePrimary = primaryExists ? routePropertyName : fallbackPropertyName!;
-                                    var effectiveFallback = primaryExists && fallbackExists ? fallbackPropertyName : null;
+                                    var effectivePrimary = primaryExists ? resourcePropertyName! : resourceFallbackName!;
+                                    var effectiveFallback = primaryExists && fallbackExists ? resourceFallbackName : null;
 
                                     var primaryIsValue = IsResourcePropertyValueType(resourceTypeSymbol, effectivePrimary);
                                     var fallbackIsValue = effectiveFallback != null && IsResourcePropertyValueType(resourceTypeSymbol, effectiveFallback);
@@ -701,7 +713,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             // When resourceType is null, treat as root-link semantics (URL registration only)
             if (resourceTypeArg.IsNull)
             {
-                if (url!.Contains("{"))
+                url = RoutePlaceholderSyntax.Canonicalise(url!, operationType);
+
+                if (url.Contains("{"))
                 {
                     var placeholders = _placeholderRegex.Matches(url);
                     HashSet<string>? memberNames = null;
@@ -760,15 +774,18 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             if (normalisedUrl.Contains("{"))
             {
+                var operationMembers = operationType.GetAllMembers().ToList();
                 var opMemberNames = BuildMemberNameSet(operationType);
                 var resMemberCache = BuildMemberCache(resourceTypeSymbol);
-                var resMemberNames = new HashSet<string>(resMemberCache.Keys, StringComparer.Ordinal);
 
                 normalisedUrl = _mappedPlaceholderRegex.Replace(
                     normalisedUrl,
                     match =>
                     {
-                        var routePropertyName = match.Groups["routeName"].Value;
+                        // A placeholder finds the operation's and the resource's property ignoring case, and the URL is
+                        // registered under the operation property's own name, as legacy routed it (RoutePlaceholderSyntax).
+                        var routePropertyName = RoutePlaceholderSyntax.ResolveMemberName(operationMembers, match.Groups["routeName"].Value)
+                                                ?? match.Groups["routeName"].Value;
                         var fallbackPropertyName = match.Groups["resourcePropName"]?.Value;
 
                         var argumentLocationInfo = locationInfo?.WithSubRange(
@@ -777,18 +794,25 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
                         if (TryFindMember(operationType, routePropertyName, opMemberNames, argumentLocationInfo, context))
                         {
+                            var resourcePropertyName = RoutePlaceholderSyntax.ResolveMemberName(resMemberCache.Values, routePropertyName);
+
                             if (string.IsNullOrEmpty(fallbackPropertyName))
                             {
-                                TryFindMember(resourceTypeSymbol, routePropertyName, resMemberNames, argumentLocationInfo, context);
+                                if (resourcePropertyName is null)
+                                {
+                                    context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(
+                                        resourceTypeSymbol, routePropertyName, argumentLocationInfo));
+                                }
 
-                                var isValueType = IsResourcePropertyValueType(resMemberCache, routePropertyName);
-                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, routePropertyName, isValueType));
+                                var isValueType = IsResourcePropertyValueType(resMemberCache, resourcePropertyName ?? routePropertyName);
+                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName ?? routePropertyName, isValueType));
                             }
                             else
                             {
                                 // Fallback semantics: try primary (route name) on resource, then fallback
-                                var primaryExists = resMemberNames.Contains(routePropertyName);
-                                var fallbackExists = resMemberNames.Contains(fallbackPropertyName!);
+                                var resourceFallbackName = RoutePlaceholderSyntax.ResolveMemberName(resMemberCache.Values, fallbackPropertyName!);
+                                var primaryExists = resourcePropertyName is not null;
+                                var fallbackExists = resourceFallbackName is not null;
 
                                 if (!primaryExists && !fallbackExists)
                                 {
@@ -797,8 +821,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                 }
                                 else
                                 {
-                                    var effectivePrimary = primaryExists ? routePropertyName : fallbackPropertyName!;
-                                    var effectiveFallback = primaryExists && fallbackExists ? fallbackPropertyName : null;
+                                    var effectivePrimary = primaryExists ? resourcePropertyName! : resourceFallbackName!;
+                                    var effectiveFallback = primaryExists && fallbackExists ? resourceFallbackName : null;
 
                                     var primaryIsValue = IsResourcePropertyValueType(resMemberCache, effectivePrimary);
                                     var fallbackIsValue = effectiveFallback != null && IsResourcePropertyValueType(resMemberCache, effectiveFallback);

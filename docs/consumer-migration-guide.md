@@ -881,6 +881,15 @@ and the URL the generated client sent, carried it in the path. `[FromRoute]` on 
 BPPO005), and the OpenAPI document publishes it as a path parameter. A root link's URL is still routed as declared, so a
 colon there is ASP.NET's inline constraint syntax.
 
+**Behaviour change (v1.0.3).** A route placeholder finds its operation property ignoring case, and the route is registered,
+linked and documented under the property's own name: `[RootLink("/track/{type}")]` on a property named `Type` compiles
+(it reported BPPO012 and BPLG001), routes `/track/{Type}`, binds `Type` from the path and publishes a `Type` path
+parameter. This is what legacy Blueprint did (`ApiOperationLink.cs:59-61` read the property with
+`BindingFlags.IgnoreCase`; `:76` routed `"{" + property.Name + "}"`). A `[SelfLink]` or `[Link]` placeholder, and its
+`:AlternateName`, likewise finds the resource's property ignoring case, and the generated link reads it by the name
+the resource spells it. A placeholder that matches no property even ignoring case is still reported. Where two
+properties differ only in case, the placeholder takes the one spelled exactly as it (legacy threw on the ambiguity).
+
 **Behaviour change for a DELETE (v1.0.3).** A DELETE's properties that are not in its route are read from its JSON body,
 as a POST's are, and no longer from its query string. `BlueprintHttpClient` sends a DELETE's operation as its JSON body
 with no query string, and the OpenAPI document describes those properties as its request body. This is what legacy
