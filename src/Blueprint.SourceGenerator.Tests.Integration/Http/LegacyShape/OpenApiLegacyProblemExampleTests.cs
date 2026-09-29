@@ -42,14 +42,14 @@ public sealed class OpenApiLegacyProblemExampleTests
     }
 
     [Fact]
-    public void Under_legacy_naming_a_status_with_two_factories_has_a_null_description_and_both_examples()
+    public void Under_legacy_naming_a_status_with_two_factories_has_a_null_description_and_both_examples_in_declaration_order()
     {
         using var document = Render(OpenApiSchemaNaming.Legacy);
 
         var notFound = Responses(document).GetProperty("404");
         notFound.GetProperty("description").ValueKind.Should().Be(JsonValueKind.Null);
         JsonExample(notFound).EnumerateObject().Select(static p => p.Name)
-            .Should().BeEquivalentTo("MissingProblemExampleWidget", "MissingProblemExampleOwner");
+            .Should().Equal("MissingProblemExampleWidget", "MissingProblemExampleOwner"); // declaration order: MissingOwner sorts first by field name
     }
 
     [Fact]

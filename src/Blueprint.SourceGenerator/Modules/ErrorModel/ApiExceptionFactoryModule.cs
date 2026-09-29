@@ -100,15 +100,9 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             }
         }
 
-        // Deterministic ordering: by status code, then by field name for same status.
-        builder.Sort(static (a, b) =>
-        {
-            var statusComparison = a.HttpStatus.CompareTo(b.HttpStatus);
-            return statusComparison != 0
-                ? statusComparison
-                : string.Compare(a.FieldName, b.FieldName, StringComparison.Ordinal);
-        });
-
+        // Declaration order, as legacy's GetFields returned the fields: it is the order of the example map a status
+        // documents (Signature365 8b40ecc961, e.g. Billing.Contract GetInvoiceQuery 404 {MissingStripeAccount,
+        // MissingInvoice}). It is deterministic, and HttpResponseMetadataModule groups the responses by status itself.
         return builder.ToImmutable();
     }
 
