@@ -35,6 +35,7 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `SaveMartenChanges` middleware | `IUnitOfWork` via `AddUnitOfWork<T>()` | Registration change |
 | `IUnitOfWork` middleware | Built-in `UnitOfWorkModule` via `AddUnitOfWork<T>()` | No change |
 | `IBackgroundTaskScheduler` | Same interface via `AddBackgroundTaskScheduler<T>()` | No change |
+| `app.UseBlueprintTaskRunner()` (`Blueprint.Tasks.AspNetCore`) | `app.UseBlueprintTaskRunner()` in `Blueprint.Runtime`, which releases nothing for a request routed to a Blueprint operation | No change |
 | `IUserAuthorisationContext` | Same interface via `AddUserAuthorisationContextFactory<T>()` | No change |
 | `IApiAuthoriser` | Same interface via `AddApiAuthoriser<T>()`, or focused `IOperationAuthoriser` / `ILinkVisibilityAuthoriser` | Recommended split |
 | `StateBasedLinkChecker<T,R>` | Now implements `ILinkVisibilityAuthoriser` via `AddLinkVisibilityAuthoriser<T>()` | Registration change |
@@ -665,6 +666,36 @@ public class CreateTemplateHandler(IBackgroundTaskScheduler scheduler)
     }
 }
 ```
+
+#### Scheduling outside an operation
+
+Only a generated pipeline releases the tasks enqueued during it. A task enqueued outside any operation — from a Razor
+page, a controller or a service resolved from the request's services — is released by the opt-in middleware legacy's
+`Blueprint.Tasks.AspNetCore` provided, under the same name (since v1.0.3):
+
+```csharp
+app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.UseBlueprintTaskRunner();
+
+app.UseEndpoints(endpoints => endpoints.MapRazorPages());
+```
+
+As legacy's `TaskRunnerMiddleware` did (`Blueprint.Tasks.AspNetCore/TaskRunnerMiddleware.cs:32-36` at Signature365
+`8b40ecc961`), it awaits the rest of the pipeline and then calls `RunNowAsync()` on the request's
+`IBackgroundTaskScheduler`, whatever status the request was answered with, and releases nothing when the rest of the
+pipeline throws. Two differences:
+
+- **A request routed to a Blueprint operation releases nothing.** Legacy ran each operation in a DI scope of its own
+  (`Blueprint.Http/ApplicationBuilderExtensions.cs:213`), so the request's scheduler never held an operation's tasks;
+  this host runs an operation in the request's scope. The operation's pipeline releases its tasks when it succeeds, and
+  an operation that failed after enqueuing — a validation failure, a handler that threw, a save that threw — must not
+  have them released. A task that code outside the operation enqueued during that same request, which legacy released,
+  is not released.
+- **No scheduler registered releases nothing.** Legacy's middleware took the scheduler as an `Invoke` parameter, so every
+  request failed without one.
 
 #### Background task operations
 

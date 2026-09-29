@@ -263,6 +263,7 @@ Blueprint supports deferred task execution through `IBackgroundTaskScheduler`:
 2. **Enqueue from a handler:** Inject `IBackgroundTaskScheduler` as a handler DI parameter, call `scheduler.Enqueue(new MyTask { ... })`.
 3. **Generated flush:** The `BackgroundTaskFlushModule` runs at Order=1000 in PostExecution — after UoW save and audit. It calls `scheduler.FlushAsync()` only on handler success.
 4. **Task host dispatch:** `BlueprintApp.GetOperationsForHost("tasks")` returns all task-marked operations. The executor finds and runs the matching pipeline when a scheduled task arrives.
+5. **Outside an operation:** a task enqueued from a Razor page, controller or other request-scoped service is released only when the host registers `app.UseBlueprintTaskRunner()`, which calls `RunNowAsync()` on the request's scheduler after the rest of the pipeline returns (not when it throws), and releases nothing for a request routed to a Blueprint operation. A plain Rebus `IHandleMessages<T>`'s tasks are released by `BlueprintApiActivator` straight after its unit-of-work save.
 
 ### Implementation pattern
 
