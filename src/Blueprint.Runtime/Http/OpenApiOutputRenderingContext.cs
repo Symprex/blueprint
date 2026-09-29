@@ -1820,7 +1820,7 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("description", component.Description ?? string.Empty);
             }
 
-            WriteEnumValues(writer, component.ComponentEnumValues);
+            WriteEnumValues(writer, component.ComponentEnumValues, includeVarNames: !omitLegacyExtras);
             writer.WriteEndObject();
             return;
         }
@@ -2152,6 +2152,26 @@ public sealed record OpenApiOutputRenderingContext(
         return processedComponent;
     }
 
+    /// <summary>
+    /// Writes <c>deprecated</c> for a deprecated property, whatever form the property takes, with its message beside it:
+    /// as <c>x-deprecatedMessage</c> under Legacy naming, which is what legacy's NJsonSchema wrote, and otherwise as
+    /// <c>x-deprecated-reason</c>.
+    /// </summary>
+    private static void WritePropertyDeprecation(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property, bool omitLegacyExtras)
+    {
+        if (!property.IsDeprecated)
+        {
+            return;
+        }
+
+        writer.WriteBoolean("deprecated", true);
+
+        if (property.DeprecationReason is not null)
+        {
+            writer.WriteString(omitLegacyExtras ? "x-deprecatedMessage" : "x-deprecated-reason", property.DeprecationReason);
+        }
+    }
+
     private static void WriteSchemaProperty(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(property.Name);
@@ -2162,7 +2182,7 @@ public sealed record OpenApiOutputRenderingContext(
         // property that is nullable or described wraps the reference in oneOf beside them, as legacy Blueprint did.
         if (property.SchemaRef is not null)
         {
-            if (property.IsNullable || property.Description is not null)
+            if (property.IsNullable || property.Description is not null || property.IsDeprecated)
             {
                 if (property.IsNullable)
                 {
@@ -2173,6 +2193,8 @@ public sealed record OpenApiOutputRenderingContext(
                 {
                     writer.WriteString("description", property.Description);
                 }
+
+                WritePropertyDeprecation(writer, property, omitLegacyExtras);
 
                 writer.WritePropertyName("oneOf");
                 writer.WriteStartArray();
@@ -2204,6 +2226,8 @@ public sealed record OpenApiOutputRenderingContext(
             {
                 writer.WriteString("description", property.Description);
             }
+
+            WritePropertyDeprecation(writer, property, omitLegacyExtras);
 
             writer.WritePropertyName("oneOf");
             writer.WriteStartArray();
@@ -2354,15 +2378,7 @@ public sealed record OpenApiOutputRenderingContext(
 
         WriteNumericConstraints(writer, property.Type, property.Minimum, property.Maximum, property.ExclusiveMinimum, property.ExclusiveMaximum);
 
-        if (property.IsDeprecated)
-        {
-            writer.WriteBoolean("deprecated", true);
-
-            if (property.DeprecationReason is not null)
-            {
-                writer.WriteString("x-deprecated-reason", property.DeprecationReason);
-            }
-        }
+        WritePropertyDeprecation(writer, property, omitLegacyExtras);
 
         // Legacy's Newtonsoft-based contract resolution never tracked a property's absent setter, so it never wrote
         // readOnly; omitted under Legacy naming to match.
