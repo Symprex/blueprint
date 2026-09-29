@@ -70,7 +70,14 @@ public sealed class OpenApiUndescribedBodyTypeTests
         // checked on their own (string is described), and a JsonDocument is an open value, like object/JsonElement/JsonNode.
         // SearchUndescribedFilter.Filter (R27): a query parameter is now checked too.
         rendered.Warnings.Select(static warning => warning[..warning.IndexOf(':', StringComparison.Ordinal)]).Should().BeEquivalentTo(
-            "BodyPopulation.Payload", "SubmitUndescribedBody.Payload", "SubmitUndescribedBody.Items", "SubmitUndescribedBody.Id", "SearchUndescribedFilter.Filter");
+            "BodyPopulation.Payload",
+            "SubmitUndescribedBody.Payload",
+            "SubmitUndescribedBody.Items",
+            "SubmitUndescribedBody.Id",
+            "SearchUndescribedFilter.Filter",
+            "SubmitDeclaredOnlyItems.Items",
+            "SubmitDeclaredOnlyItems.Elements",
+            "SubmitDeclaredOnlyItems.ByKey");
     }
 
     [Fact]
@@ -168,6 +175,49 @@ public sealed class OpenApiUndescribedBodyTypeTests
 
         rendered.Warnings.Should().NotContain(static warning => warning.Contains("Tags", StringComparison.Ordinal));
         rendered.Warnings.Should().NotContain(static warning => warning.Contains("Extra", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_item_the_context_describes_but_not_the_collection_that_holds_it_is_named_in_a_warning()
+    {
+        // R169: the document reaches a request body's nested types through the types the context has metadata for. A List<T>,
+        // T[] or Dictionary<,> of an item the context declares, when it does not declare the collection type itself and no
+        // declared type reaches it, is never walked: the item has no component and the property stays a bare object, yet
+        // the item is described, so no warning named it. S365 needed the collection declared too.
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+        using var document = JsonDocument.Parse(rendered.Json);
+        var item = "Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredOnlyBodyItem";
+
+        var properties = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("SubmitDeclaredOnlyItems").GetProperty("properties");
+        properties.GetProperty("items").GetProperty("items").GetProperty("type").GetString().Should().Be("object");
+
+        rendered.Warnings.Should().Contain(DeclaredOnlyWarning("Items", $"System.Collections.Generic.List<{item}>"));
+        rendered.Warnings.Should().Contain(DeclaredOnlyWarning("Elements", $"{item}[]"));
+        rendered.Warnings.Should().Contain(DeclaredOnlyWarning("ByKey", $"System.Collections.Generic.Dictionary<System.String, {item}>"));
+    }
+
+    [Fact]
+    public void An_item_of_a_collection_the_context_declares_is_a_component_and_is_not_warned_about()
+    {
+        // The other half of R169's premise: with the collection type declared too, the document reaches the item, so the
+        // remedy the warning gives is the one that works, and a declared collection is not warned about.
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+        using var document = JsonDocument.Parse(rendered.Json);
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+
+        schemas.GetProperty("SubmitDeclaredCollectionItems").GetProperty("properties").GetProperty("items").GetProperty("items")
+            .GetProperty("$ref").GetString().Should().Be("#/components/schemas/DeclaredCollectionBodyItem");
+        rendered.Warnings.Should().NotContain(static warning => warning.Contains("SubmitDeclaredCollectionItems", StringComparison.Ordinal));
+    }
+
+    private static string DeclaredOnlyWarning(string property, string collection)
+    {
+        var item = "Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredOnlyBodyItem";
+
+        return $"SubmitDeclaredOnlyItems.{property}: the serializer context IntegrationTestAppJsonContext describes {item} but not "
+            + $"{collection}, the collection that holds it, so the OpenAPI document cannot reach it and shows it as an object with "
+            + $"no properties. Declare [JsonSerializable(typeof({collection}))] on IntegrationTestAppJsonContext too for the "
+            + "document to describe it as a component.";
     }
 
     [Fact]
@@ -338,5 +388,49 @@ public sealed class ConverterWrittenBodyIdJsonConverter : System.Text.Json.Seria
     public override void Write(System.Text.Json.Utf8JsonWriter writer, ConverterWrittenBodyId value, System.Text.Json.JsonSerializerOptions options)
     {
         writer.WriteStringValue(value.Value);
+    }
+}
+
+/// <summary>An item the serializer context describes, but through no collection of it that it also declares (R169).</summary>
+public sealed class DeclaredOnlyBodyItem
+{
+    public string? Text { get; set; }
+}
+
+/// <summary>An item the serializer context describes, and the list of it too (R169).</summary>
+public sealed class DeclaredCollectionBodyItem
+{
+    public string? Text { get; set; }
+}
+
+/// <summary>Submits collections of an item the context describes, none of the collections' own types declared (R169).</summary>
+[AllowAnonymous]
+[RootLink("/body-widgets/declared-only-items")]
+[HttpPost]
+public partial class SubmitDeclaredOnlyItemsCommand : ICommand<string>
+{
+    public List<DeclaredOnlyBodyItem> Items { get; set; } = [];
+
+    public DeclaredOnlyBodyItem[] Elements { get; set; } = [];
+
+    public Dictionary<string, DeclaredOnlyBodyItem> ByKey { get; set; } = [];
+
+    public static string Handle(SubmitDeclaredOnlyItemsCommand command)
+    {
+        return command.Items.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+}
+
+/// <summary>Submits a collection whose own type the context declares as well as its item's (R169).</summary>
+[AllowAnonymous]
+[RootLink("/body-widgets/declared-collection-items")]
+[HttpPost]
+public partial class SubmitDeclaredCollectionItemsCommand : ICommand<string>
+{
+    public List<DeclaredCollectionBodyItem> Items { get; set; } = [];
+
+    public static string Handle(SubmitDeclaredCollectionItemsCommand command)
+    {
+        return command.Items.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 }

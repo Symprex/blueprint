@@ -607,12 +607,12 @@ public sealed record OpenApiOperationRenderingContext(
 
                     if (bodyItemsType == "object" && bodyItemsSchemaRef is null)
                     {
-                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, GetCollectionElementType(clrProperty?.PropertyType, dictionaryValues: false), isQueryParameter: false);
+                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, GetCollectionElementType(clrProperty?.PropertyType, dictionaryValues: false), isQueryParameter: false, collectionType: clrProperty?.PropertyType);
                     }
 
                     if (bodyAdditionalType == "object" && bodyAdditionalSchemaRef is null)
                     {
-                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, GetCollectionElementType(clrProperty?.PropertyType, dictionaryValues: true), isQueryParameter: false);
+                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, GetCollectionElementType(clrProperty?.PropertyType, dictionaryValues: true), isQueryParameter: false, collectionType: clrProperty?.PropertyType);
                     }
 
                     break;
@@ -1356,8 +1356,12 @@ public sealed record OpenApiOperationRenderingContext(
         /// Whether the property is a query parameter, whose schema is never a component, rather than a request-body property
         /// (or its items or values).
         /// </param>
+        /// <param name="collectionType">
+        /// The collection or dictionary type of the property when <paramref name="type"/> is its items or values, which the
+        /// document reaches the item through.
+        /// </param>
         [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
-        public void WarnIfUndescribed(ApiOperationDescriptor descriptor, string propertyName, Type? type, bool isQueryParameter)
+        public void WarnIfUndescribed(ApiOperationDescriptor descriptor, string propertyName, Type? type, bool isQueryParameter, Type? collectionType = null)
         {
             if (type is null
                 || schemaProjection.Document.App.AppOwnedSerializerContext is not System.Text.Json.Serialization.JsonSerializerContext serializerContext)
@@ -1386,6 +1390,21 @@ public sealed record OpenApiOperationRenderingContext(
             var typeInfo = TryGetTypeInfo(serializerContext, underlying);
             if (typeInfo?.Kind == System.Text.Json.Serialization.Metadata.JsonTypeInfoKind.Object)
             {
+                // R169: the schema projection reaches a request body's nested types through the types the context has
+                // metadata for, so an item the context describes is still no component when the collection that holds it
+                // is not declared (and no declared type reaches it): the property stays a bare object while the item looks
+                // described. Declaring the collection type too is what makes the document reach the item.
+                if (collectionType is not null && TryGetTypeInfo(serializerContext, collectionType) is null)
+                {
+                    var collectionName = OpenApiSchemaProjectionContext.FormatFullNameDisplayStyle(collectionType);
+
+                    warnings.Add(
+                        $"{descriptor.Name}.{propertyName}: the serializer context {serializerContext.GetType().Name} describes {underlying.FullName} but not "
+                        + $"{collectionName}, the collection that holds it, so the OpenAPI document cannot reach it and shows it as an object with "
+                        + $"no properties. Declare [JsonSerializable(typeof({collectionName}))] on {serializerContext.GetType().Name} too for the "
+                        + "document to describe it as a component.");
+                }
+
                 return;
             }
 

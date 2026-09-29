@@ -32,6 +32,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "CollisionPreviewApiResource",
             "CollisionTrailApiResource",
             "ComparisonBoundApiResource",
+            "DeclaredCollectionBodyItem",
             "DepartmentResource",
             "DictionaryShapeApiResource",
             "DictionaryShapeChild",
