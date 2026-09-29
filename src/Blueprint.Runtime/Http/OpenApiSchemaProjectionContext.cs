@@ -142,7 +142,7 @@ public sealed record OpenApiSchemaProjectionContext(
             }
         }
 
-        var (nestedObjectTypes, reachedEnumTypes) = CollectNestedObjectTypes(projectedTypesByName.Values.ToList(), GetRequestBodyPropertyTypes(document), serializerContext);
+        var (nestedObjectTypes, reachedEnumTypes) = CollectNestedObjectTypes(projectedTypesByName.Values.ToList(), GetRequestBodyPropertyTypes(document, naming), serializerContext);
 
         foreach (var nestedType in nestedObjectTypes)
         {
@@ -337,7 +337,7 @@ public sealed record OpenApiSchemaProjectionContext(
         "Trimming",
         "IL2075",
         Justification = "OpenAPI projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
-    private static IEnumerable<Type> GetRequestBodyPropertyTypes(OpenApiDocumentBuilderContext document)
+    private static IEnumerable<Type> GetRequestBodyPropertyTypes(OpenApiDocumentBuilderContext document, OpenApiSchemaNaming naming)
     {
         foreach (var operation in document.Operations)
         {
@@ -348,8 +348,8 @@ public sealed record OpenApiSchemaProjectionContext(
 
             foreach (var entry in ownership.Entries)
             {
-                if (entry.Source == Blueprint.Model.PropertyBindingSource.Body
-                    && operation.Operation.OperationType.GetProperty(entry.PropertyName, BindingFlags.Public | BindingFlags.Instance) is { } property)
+                if (operation.Operation.OperationType.GetProperty(entry.PropertyName, BindingFlags.Public | BindingFlags.Instance) is { } property
+                    && OpenApiOperationRenderingContext.IsRequestBodyEntry(operation.Operation, entry, property, naming))
                 {
                     yield return property.PropertyType;
                 }

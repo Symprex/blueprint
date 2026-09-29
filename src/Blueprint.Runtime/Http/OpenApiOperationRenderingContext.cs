@@ -384,6 +384,15 @@ public sealed record OpenApiOperationRenderingContext(
                 }
             }
 
+            // R153: under Legacy naming an owned property inherited from a base type is in the body as well.
+            var alsoInBody = entry.Source != PropertyBindingSource.Body && IsRequestBodyEntry(descriptor, entry, clrProperty, naming);
+            var bodyPropertyName = alsoInBody
+                ? System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(entry.PropertyName)
+                : entry.BindingName ?? entry.PropertyName;
+            var bodyDescription = alsoInBody
+                ? GetPropertyDescription(clrProperty, entry.PropertyName, docData, isBodyProperty: true)
+                : description;
+
             switch (entry.Source)
             {
                 case PropertyBindingSource.Route:
@@ -412,6 +421,12 @@ public sealed record OpenApiOperationRenderingContext(
                         EnumDescription = parameterEnumDescription,
                         AllowReserved = catchAllNames.Contains(bindingName),
                     });
+
+                    if (alsoInBody)
+                    {
+                        goto case PropertyBindingSource.Body;
+                    }
+
                     break;
 
                 case PropertyBindingSource.Query:
@@ -452,6 +467,11 @@ public sealed record OpenApiOperationRenderingContext(
                         bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, clrProperty?.PropertyType, isQueryParameter: true);
                     }
 
+                    if (alsoInBody)
+                    {
+                        goto case PropertyBindingSource.Body;
+                    }
+
                     break;
 
                 case PropertyBindingSource.Header:
@@ -478,6 +498,12 @@ public sealed record OpenApiOperationRenderingContext(
                         SchemaTitle = schemaTitle,
                         EnumDescription = parameterEnumDescription,
                     });
+
+                    if (alsoInBody)
+                    {
+                        goto case PropertyBindingSource.Body;
+                    }
+
                     break;
 
                 case PropertyBindingSource.Cookie:
@@ -504,6 +530,12 @@ public sealed record OpenApiOperationRenderingContext(
                         SchemaTitle = schemaTitle,
                         EnumDescription = parameterEnumDescription,
                     });
+
+                    if (alsoInBody)
+                    {
+                        goto case PropertyBindingSource.Body;
+                    }
+
                     break;
 
                 case PropertyBindingSource.Body:
@@ -517,15 +549,15 @@ public sealed record OpenApiOperationRenderingContext(
                         && !bodyValuesAreAnyValue
                         && OpenApiDictionaryValues.AreValuesNullable(clrProperty, bodyValueType, nullabilityContext);
 
-                    bodyPropertyNamesByClrName[entry.PropertyName] = entry.BindingName ?? entry.PropertyName;
+                    bodyPropertyNamesByClrName[entry.PropertyName] = bodyPropertyName;
                     conditionalRequirements.AddRange(OpenApiValidationConstraints.ExtractConditionalRequirements(clrProperty));
 
                     bodyProperties.Add(new OpenApiRequestBodyPropertyModel(
-                        entry.BindingName ?? entry.PropertyName,
+                        bodyPropertyName,
                         schemaType,
                         effectiveFormat)
                     {
-                        Description = description,
+                        Description = bodyDescription,
                         IsRequired = isRequired,
                         MinLength = OpenApiValidationConstraints.GetDocumentedMinLength(
                             constraints.MinLength,
@@ -854,6 +886,43 @@ public sealed record OpenApiOperationRenderingContext(
     internal ImmutableArray<string> Warnings { get; init; } = [];
 
     /// <summary>
+    /// Whether <paramref name="entry"/> is a property of the operation's request body: one the ownership plan gives the body
+    /// and, under <see cref="OpenApiSchemaNaming.Legacy"/>, a route, query, header or cookie property inherited from a
+    /// base type of a non-GET operation.
+    /// </summary>
+    /// <param name="descriptor">The operation.</param>
+    /// <param name="entry">The ownership plan's entry for one of its properties.</param>
+    /// <param name="clrProperty">The property the entry is for, where it can be found on the operation type.</param>
+    /// <param name="naming">How the document names schemas, which also says whether it reproduces legacy's.</param>
+    /// <returns><see langword="true"/> when the property is part of the request body.</returns>
+    /// <remarks>
+    /// Legacy took an owned property out of a body schema by comparing <c>PropertyInfo</c> references
+    /// (Signature365 <c>8b40ecc961</c>, <c>OpenApiDocumentBuilder.cs:461-463</c>), and Newtonsoft's
+    /// <c>ReflectionUtils.GetProperties</c> replaces a property declared on a base type with the one it gets from the
+    /// declaring type, which is never the one in the operation's own list. An inherited owned property was so never taken
+    /// out (R153). A property the operation declares itself, and every property of a GET, which has no body, behave as
+    /// they always did.
+    /// </remarks>
+    internal static bool IsRequestBodyEntry(
+        ApiOperationDescriptor descriptor,
+        OperationPropertyBindingEntry entry,
+        PropertyInfo? clrProperty,
+        OpenApiSchemaNaming naming)
+    {
+        if (entry.Source == PropertyBindingSource.Body)
+        {
+            return true;
+        }
+
+        return naming == OpenApiSchemaNaming.Legacy
+            && entry.Source is PropertyBindingSource.Route or PropertyBindingSource.Query or PropertyBindingSource.Header or PropertyBindingSource.Cookie
+            && clrProperty is not null
+            && clrProperty.DeclaringType != descriptor.OperationType
+            && !(descriptor.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var httpMethods)
+                 && httpMethods.HttpMethods.Any(static method => string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
     /// Maps the CLR type of each operation that has a request body to the name of that body's schema component, as
     /// <see cref="OpenApiDocumentRenderingContext"/> will name it: the operation's type under
     /// <see cref="OpenApiRequestBodyNaming.OperationType"/>, otherwise its name.
@@ -870,7 +939,11 @@ public sealed record OpenApiOperationRenderingContext(
             var descriptor = operation.Operation;
 
             if (descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownership)
-                && ownership.Entries.Any(static entry => entry.Source == PropertyBindingSource.Body))
+                && ownership.Entries.Any(entry => IsRequestBodyEntry(
+                    descriptor,
+                    entry,
+                    descriptor.OperationType.GetProperty(entry.PropertyName, BindingFlags.Public | BindingFlags.Instance),
+                    naming)))
             {
                 var name = requestBodyNaming == OpenApiRequestBodyNaming.OperationType
                     ? OpenApiSchemaNames.Format(descriptor.OperationType, naming)
