@@ -81,8 +81,12 @@ internal sealed record OpenApiValidationConstraints(
     /// <c>GetProperty</c> calls when the caller already has the <see cref="PropertyInfo"/>.
     /// </summary>
     /// <param name="property">The CLR property to extract constraints from, or <c>null</c> when not found.</param>
+    /// <param name="includeComparisonBounds">
+    /// Whether the bounds Blueprint's own comparison attributes declare count (see <see cref="GetMinimum"/>). <see langword="false"/>
+    /// under <see cref="OpenApiSchemaNaming.Legacy"/>, whose NJsonSchema did not know them.
+    /// </param>
     /// <returns>The extracted validation constraints, or <see cref="None"/> when no attributes are found.</returns>
-    public static OpenApiValidationConstraints ExtractFromProperty(PropertyInfo? property)
+    public static OpenApiValidationConstraints ExtractFromProperty(PropertyInfo? property, bool includeComparisonBounds = true)
     {
         if (property is null)
         {
@@ -100,8 +104,8 @@ internal sealed record OpenApiValidationConstraints(
         var minLength = GetMinLength(attributes);
         var maxLength = GetMaxLength(attributes);
         var pattern = GetPattern(attributes);
-        var minimum = GetMinimum(attributes);
-        var maximum = GetMaximum(attributes);
+        var minimum = GetMinimum(attributes, includeComparisonBounds);
+        var maximum = GetMaximum(attributes, includeComparisonBounds);
         var format = GetFormat(attributes);
 
         return new OpenApiValidationConstraints(
@@ -480,7 +484,16 @@ internal sealed record OpenApiValidationConstraints(
             .FirstOrDefault(static pattern => string.IsNullOrWhiteSpace(pattern) == false);
     }
 
-    private static (decimal? Value, bool IsExclusive) GetMinimum(IReadOnlyList<ValidationAttribute> validationAttributes)
+    /// <summary>
+    /// Gets a property's lower bound from its <see cref="RangeAttribute"/> and, when <paramref name="includeComparisonBounds"/>
+    /// is set, Blueprint's <see cref="GreaterThanAttribute"/> and <see cref="GreaterThanOrEqualToAttribute"/>.
+    /// </summary>
+    /// <remarks>
+    /// Legacy documented none of the comparison attributes (R147): they are plain <c>ValidationAttribute</c>s, which its
+    /// NJsonSchema did not read, and no property of Signature365's twelve <c>[GreaterThan]</c> ones carries a bound in any
+    /// committed document. <see cref="GetMaximum"/> is the same for the upper bound.
+    /// </remarks>
+    private static (decimal? Value, bool IsExclusive) GetMinimum(IReadOnlyList<ValidationAttribute> validationAttributes, bool includeComparisonBounds)
     {
         decimal? minimum = null;
         var isExclusive = false;
@@ -492,10 +505,10 @@ internal sealed record OpenApiValidationConstraints(
                 case RangeAttribute rangeAttribute:
                     ApplyLowerBound(ref minimum, ref isExclusive, ConvertToDecimal(rangeAttribute.Minimum), isExclusiveCandidate: false);
                     break;
-                case GreaterThanAttribute greaterThanAttribute:
+                case GreaterThanAttribute greaterThanAttribute when includeComparisonBounds:
                     ApplyLowerBound(ref minimum, ref isExclusive, greaterThanAttribute.MinimumValue, isExclusiveCandidate: true);
                     break;
-                case GreaterThanOrEqualToAttribute greaterThanOrEqualToAttribute:
+                case GreaterThanOrEqualToAttribute greaterThanOrEqualToAttribute when includeComparisonBounds:
                     ApplyLowerBound(ref minimum, ref isExclusive, greaterThanOrEqualToAttribute.MinimumValue, isExclusiveCandidate: false);
                     break;
             }
@@ -504,7 +517,7 @@ internal sealed record OpenApiValidationConstraints(
         return (minimum, isExclusive);
     }
 
-    private static (decimal? Value, bool IsExclusive) GetMaximum(IReadOnlyList<ValidationAttribute> validationAttributes)
+    private static (decimal? Value, bool IsExclusive) GetMaximum(IReadOnlyList<ValidationAttribute> validationAttributes, bool includeComparisonBounds)
     {
         decimal? maximum = null;
         var isExclusive = false;
@@ -516,10 +529,10 @@ internal sealed record OpenApiValidationConstraints(
                 case RangeAttribute rangeAttribute:
                     ApplyUpperBound(ref maximum, ref isExclusive, ConvertToDecimal(rangeAttribute.Maximum), isExclusiveCandidate: false);
                     break;
-                case LessThanAttribute lessThanAttribute:
+                case LessThanAttribute lessThanAttribute when includeComparisonBounds:
                     ApplyUpperBound(ref maximum, ref isExclusive, lessThanAttribute.MaximumValue, isExclusiveCandidate: true);
                     break;
-                case LessThanOrEqualToAttribute lessThanOrEqualToAttribute:
+                case LessThanOrEqualToAttribute lessThanOrEqualToAttribute when includeComparisonBounds:
                     ApplyUpperBound(ref maximum, ref isExclusive, lessThanOrEqualToAttribute.MaximumValue, isExclusiveCandidate: false);
                     break;
             }

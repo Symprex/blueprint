@@ -273,7 +273,7 @@ public sealed record OpenApiOperationRenderingContext(
             var (schemaType, schemaFormat) = clrProperty is not null
                 ? MapClrTypeToOpenApiSchema(clrProperty.PropertyType)
                 : MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
-            var constraints = OpenApiValidationConstraints.ExtractFromProperty(clrProperty);
+            var constraints = OpenApiValidationConstraints.ExtractFromProperty(clrProperty, includeComparisonBounds: naming != OpenApiSchemaNaming.Legacy);
 
             // R44: legacy generated a parameter's schema by reflection alone (generator.Generate(property.PropertyType)),
             // never applying its validation-attribute rules there — those applied only to a request-body schema's own

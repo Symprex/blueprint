@@ -64,6 +64,7 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.LegacyShape.ArrayEnumParameterInvoiceApiResource))]
 [JsonSerializable(typeof(Http.EnumItemsResource))]
 [JsonSerializable(typeof(Http.SystemTypeApiResource))]
+[JsonSerializable(typeof(Http.LegacyShape.ComparisonBoundApiResource))]
 [JsonSerializable(typeof(Http.SchemaNameCollisions.EnvelopeOne.EnvelopeMatch), TypeInfoPropertyName = "EnvelopeOneEnvelopeMatch")]
 [JsonSerializable(typeof(Http.SchemaNameCollisions.EnvelopeTwo.EnvelopeMatch), TypeInfoPropertyName = "EnvelopeTwoEnvelopeMatch")]
 [JsonSerializable(typeof(Blueprint.Http.ResourceEvent<Http.SchemaNameCollisions.EnvelopeOne.EnvelopeMatch>), TypeInfoPropertyName = "ResourceEventOfEnvelopeOneEnvelopeMatch")]

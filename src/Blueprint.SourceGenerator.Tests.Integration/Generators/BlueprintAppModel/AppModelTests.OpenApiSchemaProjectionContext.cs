@@ -30,6 +30,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "CollisionMatchApiResource",
             "CollisionPreviewApiResource",
             "CollisionTrailApiResource",
+            "ComparisonBoundApiResource",
             "DepartmentResource",
             "DictionaryShapeApiResource",
             "DictionaryShapeChild",

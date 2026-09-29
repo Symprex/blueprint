@@ -617,8 +617,8 @@ public sealed record OpenApiSchemaProjectionContext(
                 : null;
         var validationAttributes = GetValidationAttributes(property, validationAttributesByJsonPropertyName);
         ThrowIfUnsupportedCrossPropertyValidationAttribute(bodyTypeName, property.Name, validationAttributes);
-        var minimum = GetMinimum(validationAttributes);
-        var maximum = GetMaximum(validationAttributes);
+        var minimum = GetMinimum(validationAttributes, includeComparisonBounds: naming != OpenApiSchemaNaming.Legacy);
+        var maximum = GetMaximum(validationAttributes, includeComparisonBounds: naming != OpenApiSchemaNaming.Legacy);
         var isNullable = IsNullableProperty(property, nullabilityContext);
 
         // Legacy's NJsonSchema reflected a closed generic's property from its *open* generic definition (e.g.
@@ -1244,7 +1244,7 @@ public sealed record OpenApiSchemaProjectionContext(
         return null;
     }
 
-    private static (decimal? Value, bool IsExclusive) GetMinimum(IEnumerable<ValidationAttribute> validationAttributes)
+    private static (decimal? Value, bool IsExclusive) GetMinimum(IEnumerable<ValidationAttribute> validationAttributes, bool includeComparisonBounds)
     {
         decimal? minimum = null;
         var isExclusive = false;
@@ -1256,7 +1256,7 @@ public sealed record OpenApiSchemaProjectionContext(
                 case RangeAttribute rangeAttribute:
                     ApplyLowerBound(ref minimum, ref isExclusive, ConvertToDecimal(rangeAttribute.Minimum), isExclusiveCandidate: false);
                     break;
-                case GreaterThanAttribute greaterThanAttribute:
+                case GreaterThanAttribute greaterThanAttribute when includeComparisonBounds:
                     ApplyLowerBound(ref minimum, ref isExclusive, greaterThanAttribute.MinimumValue, isExclusiveCandidate: true);
                     break;
             }
@@ -1265,7 +1265,7 @@ public sealed record OpenApiSchemaProjectionContext(
         return (minimum, isExclusive);
     }
 
-    private static (decimal? Value, bool IsExclusive) GetMaximum(IEnumerable<ValidationAttribute> validationAttributes)
+    private static (decimal? Value, bool IsExclusive) GetMaximum(IEnumerable<ValidationAttribute> validationAttributes, bool includeComparisonBounds)
     {
         decimal? maximum = null;
         var isExclusive = false;
@@ -1277,7 +1277,7 @@ public sealed record OpenApiSchemaProjectionContext(
                 case RangeAttribute rangeAttribute:
                     ApplyUpperBound(ref maximum, ref isExclusive, ConvertToDecimal(rangeAttribute.Maximum), isExclusiveCandidate: false);
                     break;
-                case LessThanAttribute lessThanAttribute:
+                case LessThanAttribute lessThanAttribute when includeComparisonBounds:
                     ApplyUpperBound(ref maximum, ref isExclusive, lessThanAttribute.MaximumValue, isExclusiveCandidate: true);
                     break;
             }
