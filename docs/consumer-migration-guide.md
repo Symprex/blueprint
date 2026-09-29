@@ -904,6 +904,15 @@ configures no options gets the defaults, as before. `AddBlueprintHttpClient<TApp
 and the return is not null whenever the argument is not, so callers that pass a real type see no change. A call site that
 guarded a null type only to avoid the exception can drop the guard.
 
+**Behaviour change (v1.0.3).** A partial resource's generated `$object` is named by legacy's rule, the one
+`ApiResource.GetTypeName` follows and the `eventId` and `resourceObject` of its events use: `ApiResource`, `Resource` and
+`DTO` removed wherever they occur, underscores PascalCased away, and the first character alone lowered. A name that starts
+with an acronym therefore keeps it: `SMSMessageApiResource` is `sMSMessage` (as legacy's was), no longer the generator's
+`smsMessage`, which disagreed with its events' `sMSMessage`. An explicit `[JsonSchema("Name")]` is camelized the same way;
+`[ResourceObjectName("name")]` is used as written. Both override `$object` alone, as legacy's constructor override
+(`GatewayImportRunApiResource`) did: `GetTypeName`, and so the events' names, stay the type-name rule's. A client that
+read a resource whose name starts with an acronym as `smsMessage` must read `sMSMessage`.
+
 **Behaviour change for a DELETE (v1.0.3).** A DELETE's properties that are not in its route are read from its JSON body,
 as a POST's are, and no longer from its query string. `BlueprintHttpClient` sends a DELETE's operation as its JSON body
 with no query string, and the OpenAPI document describes those properties as its request body. This is what legacy
