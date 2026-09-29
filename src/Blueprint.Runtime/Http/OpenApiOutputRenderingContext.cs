@@ -849,10 +849,11 @@ public sealed record OpenApiOutputRenderingContext(
 
         foreach (var response in responses)
         {
-            // Legacy never documented a 415 (none of the 21 documents it wrote for Signature365 at 8b40ecc961 has one), so
-            // the one the pipeline's content-type check adds is left out under Legacy naming. A 415 an operation declares
-            // for itself, through a result type of its own, is still written.
-            if (omitLegacyExtras && IsSyntheticUnsupportedMediaTypeResponse(response))
+            // Legacy never documented a 415 (none of the 21 documents it wrote for Signature365 at 8b40ecc961 has one), nor
+            // a 400, 401 or 403 of the pipeline's own (R156: only an ApiException factory's), so those the pipeline adds are
+            // left out under Legacy naming. A response an operation declares for itself, through a result type of its own,
+            // or one a factory contributes to, is still written.
+            if (omitLegacyExtras && IsSyntheticPipelineResponse(response))
             {
                 continue;
             }
@@ -863,11 +864,10 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
     }
 
-    private static bool IsSyntheticUnsupportedMediaTypeResponse(OpenApiResponseObjectModel response)
+    private static bool IsSyntheticPipelineResponse(OpenApiResponseObjectModel response)
     {
-        return response.StatusCode == 415
-            && !response.ResultTypeNames.IsDefaultOrEmpty
-            && response.ResultTypeNames.All(static name => name == UnsupportedMediaTypeResultTypeName);
+        return !response.ResultTypeNames.IsDefaultOrEmpty
+            && response.ResultTypeNames.All(static name => SyntheticPipelineResultTypeNames.Contains(name));
     }
 
     private static void WriteResponse(Utf8JsonWriter writer, OpenApiResponseObjectModel response, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
@@ -879,7 +879,9 @@ public sealed record OpenApiOutputRenderingContext(
         // keeps the status's own description and no example map, which is not the shape OpenAPI defines for "example".
         var legacyProblemExamples = omitLegacyExtras && !response.ProblemExamples.IsDefaultOrEmpty;
 
-        var description = legacyProblemExamples ? DescribeLegacyProblemResponse(response) : MapStatusDescription(response.StatusCode);
+        var description = legacyProblemExamples
+            ? DescribeLegacyProblemResponse(response)
+            : omitLegacyExtras ? MapLegacyStatusDescription(response.StatusCode) : MapStatusDescription(response.StatusCode);
 
         if (description is null)
         {
@@ -2413,6 +2415,21 @@ public sealed record OpenApiOutputRenderingContext(
             503 => "503",
             504 => "504",
             _ => statusCode.ToString(),
+        };
+    }
+
+    /// <summary>
+    /// The status description legacy wrote: its <c>HttpHost</c> gave every operation a 422 "Validation failure" and a 500
+    /// "Unexpected error" (Signature365 8b40ecc961, <c>Blueprint.Http/HttpHost.cs:90-94</c>), and the other statuses an
+    /// operation documents read as their standard ones.
+    /// </summary>
+    private static string MapLegacyStatusDescription(int statusCode)
+    {
+        return statusCode switch
+        {
+            422 => "Validation failure",
+            500 => "Unexpected error",
+            _ => MapStatusDescription(statusCode),
         };
     }
 
