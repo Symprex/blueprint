@@ -793,6 +793,27 @@ success. For a consumer that registers an `IMessageOutbox`:
 A task that relied on its outbox messages being dropped needs `[DoNotPublishMessages]`. A consumer with no
 `IMessageOutbox` registered sees no change.
 
+**Behaviour change for handlers of a base message type (v1.0.3).** Before v1.0.3, `AddBlueprintRebusConsumer`
+registered each scanned `IHandleMessages<T>` for its own `T` only, and `BlueprintApiActivator` resolves a message's
+handlers by the message's exact type, so a handler of a base class or interface never ran for a derived message:
+Signature365's `SurveyThankYouKvPushHandler`, an `IHandleMessages<SurveyEditedEvent>`, did nothing for a
+`SurveyPausedEvent : SurveyEditedEvent`, which Rebus then failed to dispatch. Legacy made every subscribed message an
+operation and gave it every scanned handler of a type it could be assigned to
+(`Symprex.Signature365.BlueprintRebus/RebusHandleMessageOperationExecutorBuilderScanner.cs:50-75` at Signature365
+`8b40ecc961`). `AddBlueprintRebusConsumer` now does the same when it scans the calling assembly:
+
+- a scanned `IHandleMessages<TBase>` is also registered as the handler of every subscribed message type assignable to
+  `TBase`, whether `TBase` is a base class or an interface;
+- a subscribed message's handlers run in the order legacy's scanner gave them, by handler type as the assembly lists
+  them, not its own type's first;
+- a message type that is not subscribed gets only its own handlers, as before (legacy ran none for it);
+- a handler of a type derived from the message's type is not registered for it, as it cannot be given the message.
+
+A handler that implements both `IHandleMessages<TBase>` and `IHandleMessages<TDerived>` now runs twice for a subscribed
+`TDerived`, both times through its `TDerived` method, as legacy's pipeline called it twice: its scanner matched the
+handler once per interface and kept both (`RebusHandleMessageOperationExecutorBuilderScanner.cs:54-74`,
+`ApiOperationDescriptor.cs:179-194`). Handlers registered by hand rather than by the scan are unchanged.
+
 **A host with no operations.** A host that uses Blueprint only for Rebus — it declares no operations and maps no
 Blueprint routes, as Signature365's GraphProxy does — registers its app directly and does not call `AddBlueprintApi`:
 

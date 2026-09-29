@@ -17,6 +17,15 @@ public static class RebusServiceCollectionExtensions
     /// and auto-registers all <c>IHandleMessages&lt;T&gt;</c> implementations found in the calling assembly
     /// as scoped services in DI.
     /// </summary>
+    /// <remarks>
+    /// An <c>IHandleMessages&lt;TBase&gt;</c> is also registered as the handler of every subscribed message type assignable
+    /// to <c>TBase</c> — derived from a base class, or implementing an interface — so that it runs for such a message as it
+    /// did in legacy, where every subscribed message was an operation given every scanned handler of a type it could be
+    /// assigned to (Signature365 <c>8b40ecc961</c>,
+    /// <c>Symprex.Signature365.BlueprintRebus/RebusHandleMessageOperationExecutorBuilderScanner.cs:50-75</c>). Only
+    /// subscribed types are given base-type handlers, as only they were operations there. A handler of a type derived from
+    /// the message's type is not registered for it: it cannot be given the message.
+    /// </remarks>
     /// <param name="services">The services collection.</param>
     /// <param name="configure">A callback to subscribe message types via <see cref="BlueprintRebusConfiguration.Subscribe{T}"/>.</param>
     /// <returns>The services collection for chaining.</returns>
@@ -35,14 +44,20 @@ public static class RebusServiceCollectionExtensions
         // Auto-register IHandleMessages<T> implementations from the calling assembly
         // so that plain Rebus handlers (not Blueprint operations) are resolved from DI.
         var callingAssembly = System.Reflection.Assembly.GetCallingAssembly();
-        RegisterRebusHandlers(services, callingAssembly);
+        RegisterRebusHandlers(services, callingAssembly, config.SubscribedMessages);
 
         return services;
     }
 
-    private static void RegisterRebusHandlers(IServiceCollection services, System.Reflection.Assembly assembly)
+    private static void RegisterRebusHandlers(
+        IServiceCollection services,
+        System.Reflection.Assembly assembly,
+        IReadOnlyList<Type> subscribedMessages)
     {
         var handleMessagesOpenType = typeof(Rebus.Handlers.IHandleMessages<>);
+
+        // Legacy kept one operation per message type, however often it was subscribed (ApiDataModel.RegisterOperation).
+        var distinctSubscribedMessages = subscribedMessages.Distinct().ToList();
 
         foreach (var type in assembly.GetTypes())
         {
@@ -57,6 +72,20 @@ public static class RebusServiceCollectionExtensions
             foreach (var handlerInterface in handlerInterfaces)
             {
                 services.AddScoped(handlerInterface, type);
+
+                // In the same pass, so that a subscribed message's handlers are registered, and so resolved and run, in the
+                // order legacy's scanner gave them to its operation: by handler type, then by handled interface, whichever
+                // of them is the message's own type. IHandleMessages<in TMessage> is contravariant, so the handler is an
+                // IHandleMessages<TSubscribed> as registered.
+                var handledType = handlerInterface.GetGenericArguments()[0];
+
+                foreach (var subscribedMessage in distinctSubscribedMessages)
+                {
+                    if (subscribedMessage != handledType && handledType.IsAssignableFrom(subscribedMessage))
+                    {
+                        services.AddScoped(handleMessagesOpenType.MakeGenericType(subscribedMessage), type);
+                    }
+                }
             }
         }
     }
