@@ -80,6 +80,27 @@ public class OpenApiLegacyExtrasTests
         BoundedDescriptionPost(document).GetProperty("responses").TryGetProperty("415", out _).Should().BeTrue();
     }
 
+    [Fact]
+    public void Legacy_naming_omits_the_Link_components_title()
+    {
+        // The Link component is not one of the projected schemas but is written by hand, and its title is not among the
+        // zero legacy wrote: Link is in 16 of the 21 documents, none with a title.
+        using var document = Render(static options => options.SchemaNaming = OpenApiSchemaNaming.Legacy);
+
+        var link = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("Link");
+        link.TryGetProperty("title", out _).Should().BeFalse("legacy's Link component had no title in any document");
+        link.GetProperty("type").GetString().Should().Be("object");
+    }
+
+    [Fact]
+    public void Default_naming_still_carries_the_Link_components_title()
+    {
+        using var document = Render(static _ => { });
+
+        var link = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("Link");
+        link.GetProperty("title").GetString().Should().Be("Link");
+    }
+
     private static JsonElement BoundedDescriptionRequestBody(JsonDocument document)
     {
         return BoundedDescriptionPost(document).GetProperty("requestBody");

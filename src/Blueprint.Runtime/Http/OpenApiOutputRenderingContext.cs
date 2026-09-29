@@ -1557,7 +1557,7 @@ public sealed record OpenApiOutputRenderingContext(
             // Emit the well-known "Link" schema for HATEOAS $links dictionary values.
             // This enables TypeScript/client generators to produce typed link objects.
             EnsureUniqueComponentKey(sourcesByKey, "Link", "Blueprint.Model.Link");
-            WriteLinkSchemaComponent(writer);
+            WriteLinkSchemaComponent(writer, omitLegacyExtras);
 
             writer.WriteEndObject();
         }
@@ -1735,11 +1735,16 @@ public sealed record OpenApiOutputRenderingContext(
     /// objects in <c>$links</c> dictionary values. This allows TypeScript and other client generators
     /// to produce typed link objects rather than treating links as opaque <c>object</c>.
     /// </summary>
-    private static void WriteLinkSchemaComponent(Utf8JsonWriter writer)
+    private static void WriteLinkSchemaComponent(Utf8JsonWriter writer, bool omitLegacyExtras)
     {
         writer.WritePropertyName("Link");
         writer.WriteStartObject();
-        writer.WriteString("title", "Link");
+
+        // Legacy never wrote a schema component's title, this one's included (see WriteSchemaComponent).
+        if (!omitLegacyExtras)
+        {
+            writer.WriteString("title", "Link");
+        }
 
         // Described by Link's documentation, as legacy described every schema.
         if (OpenApiXmlDocs.GetSchemaSummary(typeof(Blueprint.Model.Link)) is { } description)
