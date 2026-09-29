@@ -25,6 +25,11 @@ public sealed record OpenApiOutputRenderingContext(
     private const string DefaultOpenApiVersion = "3.0.4";
 
     /// <summary>
+    /// The result type name <c>HttpResponseMetadataModule</c> gives the 415 it adds for an operation that reads a body.
+    /// </summary>
+    private const string UnsupportedMediaTypeResultTypeName = "Blueprint.Runtime.Exec.UnsupportedMediaTypeResult";
+
+    /// <summary>
     /// Converts a raw CLR type name into a safe OpenAPI schema component key. When a custom
     /// <paramref name="customFormatter"/> is provided it is used directly; otherwise the default
     /// strategy extracts the simple class name (everything after the last <c>.</c>) which produces
@@ -462,7 +467,7 @@ public sealed record OpenApiOutputRenderingContext(
             WriteTags(writer, primaryOperation.Tags);
             WriteParameters(writer, primaryOperation.Parameters, parameterTitleFormatter);
             WriteRequestBody(writer, primaryOperation.OperationName, primaryOperation.RequestBody, schemaNameFormatter, omitLegacyExtras);
-            WriteResponses(writer, primaryOperation.Responses, schemaNameFormatter);
+            WriteResponses(writer, primaryOperation.Responses, schemaNameFormatter, omitLegacyExtras);
 
             if (primaryOperation.Deprecated)
             {
@@ -485,7 +490,7 @@ public sealed record OpenApiOutputRenderingContext(
         }
         else
         {
-            WriteResponses(writer, ImmutableArray<OpenApiResponseObjectModel>.Empty, schemaNameFormatter);
+            WriteResponses(writer, ImmutableArray<OpenApiResponseObjectModel>.Empty, schemaNameFormatter, omitLegacyExtras);
         }
 
         writer.WriteEndObject();
@@ -807,17 +812,32 @@ public sealed record OpenApiOutputRenderingContext(
         }
     }
 
-    private static void WriteResponses(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseObjectModel> responses, Func<string, string>? schemaNameFormatter)
+    private static void WriteResponses(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseObjectModel> responses, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName("responses");
         writer.WriteStartObject();
 
         foreach (var response in responses)
         {
+            // Legacy never documented a 415 (none of the 21 documents it wrote for Signature365 at 8b40ecc961 has one), so
+            // the one the pipeline's content-type check adds is left out under Legacy naming. A 415 an operation declares
+            // for itself, through a result type of its own, is still written.
+            if (omitLegacyExtras && IsSyntheticUnsupportedMediaTypeResponse(response))
+            {
+                continue;
+            }
+
             WriteResponse(writer, response, schemaNameFormatter);
         }
 
         writer.WriteEndObject();
+    }
+
+    private static bool IsSyntheticUnsupportedMediaTypeResponse(OpenApiResponseObjectModel response)
+    {
+        return response.StatusCode == 415
+            && !response.ResultTypeNames.IsDefaultOrEmpty
+            && response.ResultTypeNames.All(static name => name == UnsupportedMediaTypeResultTypeName);
     }
 
     private static void WriteResponse(Utf8JsonWriter writer, OpenApiResponseObjectModel response, Func<string, string>? schemaNameFormatter)

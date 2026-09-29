@@ -60,12 +60,37 @@ public class OpenApiLegacyExtrasTests
         BoundedDescriptionRequestBody(document).GetProperty("required").GetBoolean().Should().BeTrue();
     }
 
+    [Fact]
+    public void Legacy_naming_omits_the_synthetic_415_response()
+    {
+        // No document legacy wrote for Signature365 at 8b40ecc961 has a 415 response (all 21 checked): legacy read
+        // every non-JSON body by ignoring it, bar the form types, and documented no such response.
+        using var document = Render(static options => options.SchemaNaming = OpenApiSchemaNaming.Legacy);
+
+        BoundedDescriptionPost(document).GetProperty("responses").TryGetProperty("415", out _)
+            .Should().BeFalse("legacy never documented a 415");
+    }
+
+    [Fact]
+    public void Default_naming_still_documents_the_415_response()
+    {
+        // A form content type is still refused with a 415 (R117), so a Default consumer's document keeps it.
+        using var document = Render(static _ => { });
+
+        BoundedDescriptionPost(document).GetProperty("responses").TryGetProperty("415", out _).Should().BeTrue();
+    }
+
     private static JsonElement BoundedDescriptionRequestBody(JsonDocument document)
+    {
+        return BoundedDescriptionPost(document).GetProperty("requestBody");
+    }
+
+    private static JsonElement BoundedDescriptionPost(JsonDocument document)
     {
         var path = document.RootElement.GetProperty("paths").EnumerateObject()
             .Single(static p => p.Name.EndsWith("legacy-shape/bounded-description", StringComparison.Ordinal));
 
-        return path.Value.GetProperty("post").GetProperty("requestBody");
+        return path.Value.GetProperty("post");
     }
 
     private static JsonDocument Render(Action<OpenApiInfoOptions> configure)
