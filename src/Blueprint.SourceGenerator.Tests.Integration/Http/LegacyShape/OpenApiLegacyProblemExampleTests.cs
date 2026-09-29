@@ -63,6 +63,30 @@ public sealed class OpenApiLegacyProblemExampleTests
     }
 
     [Fact]
+    public void Under_legacy_naming_a_factory_at_400_on_a_body_binding_command_is_described_by_its_title()
+    {
+        // Legacy never documented the pipeline's own 400 (BindingFailureResult), so the factory was the status's only
+        // description: 89 single-factory 400s in Signature365's committed documents are described by their title.
+        using var document = Render(OpenApiSchemaNaming.Legacy);
+
+        var badRequest = Responses(document).GetProperty("400");
+        badRequest.GetProperty("description").GetString().Should().Be("Problem example widget is invalid");
+        JsonExample(badRequest).EnumerateObject().Select(static p => p.Name).Should().Equal("ProblemExampleWidgetInvalid");
+    }
+
+    [Fact]
+    public void Under_legacy_naming_a_factory_at_403_on_a_resource_operation_is_described_by_its_title()
+    {
+        // Likewise legacy never documented the pipeline's own 403 (ForbiddenResult); 10 single-factory 403s in the
+        // committed documents are described by their title.
+        using var document = Render(OpenApiSchemaNaming.Legacy);
+
+        var forbidden = GuardedResponses(document).GetProperty("403");
+        forbidden.GetProperty("description").GetString().Should().Be("Problem example widget is guarded");
+        JsonExample(forbidden).EnumerateObject().Select(static p => p.Name).Should().Equal("ProblemExampleWidgetGuarded");
+    }
+
+    [Fact]
     public void Under_default_naming_no_example_is_written_and_descriptions_are_unchanged()
     {
         using var document = Render(OpenApiSchemaNaming.Default);
@@ -108,6 +132,14 @@ public sealed class OpenApiLegacyProblemExampleTests
         return path.Value.GetProperty("post").GetProperty("responses");
     }
 
+    private static JsonElement GuardedResponses(JsonDocument document)
+    {
+        var path = document.RootElement.GetProperty("paths").EnumerateObject()
+            .Single(static p => p.Name.EndsWith("legacy-shape/problem-example-guarded", StringComparison.Ordinal));
+
+        return path.Value.GetProperty("post").GetProperty("responses");
+    }
+
     private static JsonElement JsonExample(JsonElement response)
     {
         return response.GetProperty("content").GetProperty("application/json").GetProperty("example");
@@ -124,7 +156,7 @@ public static class ProblemExampleSharedProblems
         HttpStatusCode.Conflict);
 }
 
-/// <summary>An operation declaring factories at 404 (two), 409 (referenced from another class), 410 (private) and 500.</summary>
+/// <summary>An operation declaring factories at 400, 404 (two), 409 (referenced from another class), 410 (private) and 500.</summary>
 [AllowAnonymous]
 [RootLink("/legacy-shape/problem-example-widgets")]
 [HttpPost]
@@ -151,6 +183,12 @@ public partial class SubmitProblemExampleWidgetCommand : ICommand<string>
         "problem_example_upstream_failed",
         HttpStatusCode.InternalServerError);
 
+    /// <summary>The widget is invalid.</summary>
+    public static readonly ApiExceptionFactory WidgetInvalid = new(
+        "Problem example widget is invalid",
+        "problem_example_widget_invalid",
+        HttpStatusCode.BadRequest);
+
     /// <summary>The widget has been removed; declared privately, as some Signature365 operations declare theirs.</summary>
     private static readonly ApiExceptionFactory _widgetGone = new(
         "Problem example widget is gone",
@@ -160,6 +198,26 @@ public partial class SubmitProblemExampleWidgetCommand : ICommand<string>
     public string? Name { get; set; }
 
     public static string Handle(SubmitProblemExampleWidgetCommand command)
+    {
+        return command.Name ?? string.Empty;
+    }
+}
+
+/// <summary>A [Resource] operation, so the pipeline adds its own 403, declaring a factory at 403.</summary>
+[Resource("problem-example", "update")]
+[RootLink("/legacy-shape/problem-example-guarded")]
+[HttpPost]
+public partial class SubmitProblemExampleGuardedCommand : ICommand<string>
+{
+    /// <summary>The widget is guarded.</summary>
+    public static readonly ApiExceptionFactory WidgetGuarded = new(
+        "Problem example widget is guarded",
+        "problem_example_widget_guarded",
+        HttpStatusCode.Forbidden);
+
+    public string? Name { get; set; }
+
+    public static string Handle(SubmitProblemExampleGuardedCommand command)
     {
         return command.Name ?? string.Empty;
     }

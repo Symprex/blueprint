@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
@@ -36,6 +37,19 @@ public sealed record OpenApiOutputRenderingContext(
     /// fields contribute.
     /// </summary>
     private const string ApiExceptionResultTypeName = "Blueprint.ApiException";
+
+    /// <summary>
+    /// The result type names <c>HttpResponseMetadataModule</c> gives the responses the pipeline itself adds (400 binding
+    /// failure, 401 unauthenticated, 403 forbidden, 415 unsupported media type), which legacy never documented and so
+    /// never counted when it compared a status's descriptions.
+    /// </summary>
+    private static readonly FrozenSet<string> SyntheticPipelineResultTypeNames = new[]
+    {
+        "Blueprint.Runtime.Exec.BindingFailureResult",
+        "Blueprint.Runtime.Exec.UnauthenticatedResult",
+        "Blueprint.Runtime.Exec.ForbiddenResult",
+        UnsupportedMediaTypeResultTypeName,
+    }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
     /// Converts a raw CLR type name into a safe OpenAPI schema component key. When a custom
@@ -887,11 +901,15 @@ public sealed record OpenApiOutputRenderingContext(
     /// responses disagreed (Signature365 8b40ecc961, <c>Blueprint.OpenApi/OpenApiDocumentBuilder.cs:196-201</c>), and
     /// its documents carry that as JSON <c>null</c> (93 responses, none an empty string). Every operation also had
     /// legacy's "Unexpected error" 500 and a validating one its "Validation failure" 422, so a factory at a status
-    /// another result type shares is described as <see langword="null"/>.
+    /// another result type shares is described as <see langword="null"/>. The responses the pipeline itself adds
+    /// (<see cref="SyntheticPipelineResultTypeNames"/>) are not counted: legacy never documented them, and described 89
+    /// single-factory 400s, 10 403s and 2 401s by their title.
     /// </summary>
     private static string? DescribeLegacyProblemResponse(OpenApiResponseObjectModel response)
     {
-        var onlyFactories = response.ResultTypeNames.All(static name => name == ApiExceptionResultTypeName);
+        var onlyFactories = response.ResultTypeNames
+            .Where(static name => !SyntheticPipelineResultTypeNames.Contains(name))
+            .All(static name => name == ApiExceptionResultTypeName);
         var titles = response.ProblemExamples.Select(static example => example.Title).Distinct(StringComparer.Ordinal).ToArray();
 
         return onlyFactories && titles.Length == 1 ? titles[0] : null;
