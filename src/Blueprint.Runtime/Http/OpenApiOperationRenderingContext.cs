@@ -368,6 +368,15 @@ public sealed record OpenApiOperationRenderingContext(
                         ItemsFormat = paramItemsFormat,
                         ItemsEnumValues = paramItemsEnumValues,
                     });
+
+                    // R27: a query parameter of an undescribed complex type rendered bare ({"type": "object"}, no
+                    // properties, no $ref — a parameter is never itself a component) with no warning naming it, unlike
+                    // the equivalent request-body property.
+                    if (schemaType == "object")
+                    {
+                        bodyTypes.WarnIfUndescribed(descriptor, entry.PropertyName, clrProperty?.PropertyType);
+                    }
+
                     break;
 
                 case PropertyBindingSource.Header:
@@ -1109,15 +1118,22 @@ public sealed record OpenApiOperationRenderingContext(
             var underlying = Nullable.GetUnderlyingType(type) ?? type;
 
             // An open value is an object with no properties by nature, and a dictionary's values are checked on their own.
+            // JsonDocument, like JsonElement and a JsonNode, is STJ's own open-value type: it always has a converter, so
+            // it would otherwise reach the Kind check below and be warned about as if undescribed.
             if (underlying == typeof(object)
                 || underlying == typeof(System.Text.Json.JsonElement)
+                || underlying == typeof(System.Text.Json.JsonDocument)
                 || typeof(System.Text.Json.Nodes.JsonNode).IsAssignableFrom(underlying)
                 || OpenApiDictionaryValues.GetValueType(underlying) is not null)
             {
                 return;
             }
 
-            if (TryGetTypeInfo(serializerContext, underlying) is not null)
+            // GetTypeInfo succeeds for any type the serializer context can serialize at all, including one it only knows
+            // through a [JsonConverter] — but the schema projection can describe an object's properties only when STJ's
+            // own JsonTypeInfoKind is Object; a converter-written type renders exactly as bare as an undescribed one, so
+            // it must be warned about the same way.
+            if (TryGetTypeInfo(serializerContext, underlying)?.Kind == System.Text.Json.Serialization.Metadata.JsonTypeInfoKind.Object)
             {
                 return;
             }

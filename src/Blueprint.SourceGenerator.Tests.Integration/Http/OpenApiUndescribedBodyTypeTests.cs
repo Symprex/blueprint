@@ -64,8 +64,57 @@ public sealed class OpenApiUndescribedBodyTypeTests
 
         // Every other request-body property of the integration app has a type the context describes, a component, an
         // operation's own type, or an open value; BodyPopulation's payload is the one other fixture it does not describe.
+        // SubmitUndescribedBody.Id (R27): a converter-written type is not described any better than an undescribed one —
+        // the document still shows it bare — so it is warned about too, the same as Payload/Items. Tags
+        // (IReadOnlyDictionary<string, string>) and Extra (JsonDocument) are not warned about: a dictionary's values are
+        // checked on their own (string is described), and a JsonDocument is an open value, like object/JsonElement/JsonNode.
+        // SearchUndescribedFilter.Filter (R27): a query parameter is now checked too.
         rendered.Warnings.Select(static warning => warning[..warning.IndexOf(':', StringComparison.Ordinal)]).Should().BeEquivalentTo(
-            "BodyPopulation.Payload", "SubmitUndescribedBody.Payload", "SubmitUndescribedBody.Items");
+            "BodyPopulation.Payload", "SubmitUndescribedBody.Payload", "SubmitUndescribedBody.Items", "SubmitUndescribedBody.Id", "SearchUndescribedFilter.Filter");
+    }
+
+    [Fact]
+    public void A_converter_written_type_the_context_still_cannot_describe_as_an_object_is_named_in_a_warning()
+    {
+        // R27: JsonSerializerContext.GetTypeInfo succeeds for a [JsonConverter]-attributed type (it has a converter),
+        // so the earlier "GetTypeInfo succeeds → described" check missed it entirely — the document renders it bare
+        // ({"type": "object"}, no properties), exactly like a type with no metadata at all, but no warning named it.
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+        using var document = JsonDocument.Parse(rendered.Json);
+
+        document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("SubmitUndescribedBody")
+            .GetProperty("properties").GetProperty("id").GetProperty("type").GetString().Should().Be("object");
+        rendered.Warnings.Should().ContainSingle(static warning => warning.Contains(nameof(ConverterWrittenBodyId), StringComparison.Ordinal))
+            .Which.Should().Contain("SubmitUndescribedBody").And.Contain("Id");
+    }
+
+    [Fact]
+    public void A_query_parameter_of_a_type_the_serializer_context_does_not_describe_is_named_in_a_warning()
+    {
+        // R27: a query parameter, unlike a request-body property, was never checked at all — an undescribed complex
+        // query parameter rendered bare with no warning naming it.
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+        using var document = JsonDocument.Parse(rendered.Json);
+
+        var filterParam = document.RootElement.GetProperty("paths").GetProperty("/body-widgets/undescribed-filter")
+            .GetProperty("get").GetProperty("parameters").EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "filter");
+        filterParam.GetProperty("schema").GetProperty("type").GetString().Should().Be("object");
+
+        rendered.Warnings.Should().ContainSingle(static warning => warning.Contains(typeof(UndescribedQueryFilter).FullName!, StringComparison.Ordinal)
+            && warning.Contains("SearchUndescribedFilter", StringComparison.Ordinal))
+            .Which.Should().Contain("Filter");
+    }
+
+    [Fact]
+    public void A_dictionary_of_described_values_and_a_JsonDocument_are_not_warned_about()
+    {
+        // R27 false positives: IReadOnlyDictionary<,> (not just IDictionary<,>) and JsonDocument (not just JsonElement)
+        // must not be mistaken for undescribed types.
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+
+        rendered.Warnings.Should().NotContain(static warning => warning.Contains("Tags", StringComparison.Ordinal));
+        rendered.Warnings.Should().NotContain(static warning => warning.Contains("Extra", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -162,6 +211,40 @@ public sealed class UndescribedBodyItem
     public string? Text { get; set; }
 }
 
+/// <summary>
+/// An <see cref="IParsable{TSelf}"/> query-bound value with no <see cref="System.ComponentModel.TypeConverter"/> — it
+/// satisfies the binding validator (which accepts IParsable), so it is a legitimate query parameter, but it is neither a
+/// known primitive/collection nor <see cref="Blueprint.Runtime.Http.OpenApiStringConvertibleTypes.IsConvertibleToString"/>
+/// (that check only recognises a TypeConverter), so it renders as an inline "object" schema, and the serializer context
+/// does not describe it either.
+/// </summary>
+public sealed class UndescribedQueryFilter
+{
+    public string? Text { get; set; }
+
+    // Duck-typed (not IParsable<T>) — satisfies the binding validator's "add a static TryParse method" option without
+    // implementing the interface, so it is not caught by InferIParsableFormat's IParsable`-interface check either.
+    public static bool TryParse(string? s, out UndescribedQueryFilter result)
+    {
+        result = new UndescribedQueryFilter { Text = s };
+        return true;
+    }
+}
+
+/// <summary>Searches with a query parameter of a type the serializer context does not describe (R27).</summary>
+[AllowAnonymous]
+[RootLink("/body-widgets/undescribed-filter")]
+[HttpGet]
+public partial class SearchUndescribedFilterQuery : IQuery<string>
+{
+    public UndescribedQueryFilter Filter { get; set; } = new();
+
+    public static string Handle(SearchUndescribedFilterQuery query)
+    {
+        return query.Filter.Text ?? string.Empty;
+    }
+}
+
 /// <summary>Submits payloads of types the serializer context does not describe.</summary>
 [AllowAnonymous]
 [RootLink("/body-widgets/undescribed")]
@@ -173,6 +256,10 @@ public partial class SubmitUndescribedBodyCommand : ICommand<string>
     public List<UndescribedBodyItem> Items { get; set; } = [];
 
     public ConverterWrittenBodyId Id { get; set; }
+
+    public IReadOnlyDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>();
+
+    public JsonDocument? Extra { get; set; }
 
     public static string Handle(SubmitUndescribedBodyCommand command)
     {
