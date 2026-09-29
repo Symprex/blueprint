@@ -205,6 +205,15 @@ public sealed record OpenApiOperationRenderingContext(
             operationRemarks = docData.Remarks;
         }
 
+        // R157: legacy wrote both, read at run time from the XML documentation beside the operation's assembly as it read a
+        // parameter's, and the empty string where the operation has none. Where the documentation file is not deployed
+        // the summary and remarks above are kept, since they are the same comments read at compile time.
+        if (naming == OpenApiSchemaNaming.Legacy)
+        {
+            operationDescription = OpenApiXmlDocs.GetOperationSummary(operation.Operation.OperationType) ?? operationDescription ?? string.Empty;
+            operationRemarks = OpenApiXmlDocs.GetOperationRemarks(operation.Operation.OperationType) ?? operationRemarks ?? string.Empty;
+        }
+
         var obsoleteAttr = operation.Operation.OperationType.GetCustomAttribute<ObsoleteAttribute>(inherit: false);
         var isDeprecated = obsoleteAttr is not null;
         var deprecationReason = obsoleteAttr?.Message;

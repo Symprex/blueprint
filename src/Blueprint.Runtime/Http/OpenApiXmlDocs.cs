@@ -54,11 +54,38 @@ internal static class OpenApiXmlDocs
         return GetSummary(member, escapeText: true);
     }
 
+    /// <summary>
+    /// Returns the summary of an operation's type as legacy gave an operation its <c>summary</c> (through its own
+    /// <c>XmlDocsExtensions</c>), or <see langword="null"/> when it has none.
+    /// </summary>
+    /// <param name="operationType">The operation's type.</param>
+    /// <returns>The summary, or <see langword="null"/>.</returns>
+    public static string? GetOperationSummary(Type operationType)
+    {
+        return GetTag(operationType, "summary", escapeText: true);
+    }
+
+    /// <summary>
+    /// Returns the remarks of an operation's type as legacy gave an operation its <c>description</c> (through its own
+    /// <c>XmlDocsExtensions</c>), or <see langword="null"/> when it has none.
+    /// </summary>
+    /// <param name="operationType">The operation's type.</param>
+    /// <returns>The remarks, or <see langword="null"/>.</returns>
+    public static string? GetOperationRemarks(Type operationType)
+    {
+        return GetTag(operationType, "remarks", escapeText: true);
+    }
+
     private static string? GetSummary(MemberInfo member, bool escapeText)
     {
-        var summary = ToContent(GetElement(member)?.Element("summary"), escapeText);
+        return GetTag(member, "summary", escapeText);
+    }
 
-        return summary.Length == 0 ? null : summary;
+    private static string? GetTag(MemberInfo member, string tagName, bool escapeText)
+    {
+        var content = ToContent(GetElement(member)?.Element(tagName), escapeText);
+
+        return content.Length == 0 ? null : content;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Legacy treated documentation it could not read, for whatever reason, as none.")]
