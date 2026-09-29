@@ -4,6 +4,7 @@ using System.Text.Json;
 using Blueprint.Http;
 using Blueprint.Model;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Blueprint.HttpClient;
 
@@ -138,7 +139,6 @@ public static class BlueprintHttpClientServiceCollectionExtensions
         var assembly = contractsAssembly ?? typeof(TInterface).Assembly;
         var app = RuntimeScanBlueprintApp.ScanAssembly(assembly);
         var httpClientName = typeof(TImplementation).Name;
-        var jsonOptions = BlueprintJsonOptions.CreateDefaultOptions();
 
         var builder = services.AddHttpClient(httpClientName, (sp, client) =>
         {
@@ -156,6 +156,10 @@ public static class BlueprintHttpClientServiceCollectionExtensions
         {
             var factory = sp.GetRequiredService<IHttpClientFactory>();
             var httpClient = factory.CreateClient(httpClientName);
+
+            // The app's configured options (NodaTime's converters, say), or Blueprint's defaults when it configures none, as
+            // legacy's client took them from DI (Signature365 origin/master, Common.Core/Api/BlueprintHttpClient.cs:40-44).
+            var jsonOptions = sp.GetRequiredService<IOptions<BlueprintJsonOptions>>().Value.SerializerOptions;
             var blueprintHttpClient = new BlueprintHttpClient<RuntimeScanBlueprintApp>(httpClient, app, jsonOptions);
 
             return ActivatorUtilities.CreateInstance<TImplementation>(sp, (BlueprintHttpClient)blueprintHttpClient);

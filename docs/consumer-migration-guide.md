@@ -890,6 +890,15 @@ parameter. This is what legacy Blueprint did (`ApiOperationLink.cs:59-61` read t
 the resource spells it. A placeholder that matches no property even ignoring case is still reported. Where two
 properties differ only in case, the placeholder takes the one spelled exactly as it (legacy threw on the ambiguity).
 
+**Behaviour change (v1.0.3).** A client registered with `AddBlueprintClient<TInterface, TImplementation>` serialises and
+deserialises through the app's configured `BlueprintJsonOptions` (`services.AddOptions<BlueprintJsonOptions>()` or
+`ConfigureJson`), as legacy's did: its `BlueprintHttpClient` took `IOptions<BlueprintJsonOptions>` from DI
+(`Common.Core/Api/BlueprintHttpClientRegistration.cs:83`, `BlueprintHttpClient.cs:40-44` in Signature365). Before v1.0.3
+it always used Blueprint's defaults, so a NodaTime `Instant` (or any other converter-dependent type) in a
+service-to-service request or response could not be read (`JsonException`) or was written in another format. An app that
+configures no options gets the defaults, as before. `AddBlueprintHttpClient<TApp>` is unchanged: it takes its
+`JsonSerializerOptions` as an argument.
+
 **Behaviour change for a DELETE (v1.0.3).** A DELETE's properties that are not in its route are read from its JSON body,
 as a POST's are, and no longer from its query string. `BlueprintHttpClient` sends a DELETE's operation as its JSON body
 with no query string, and the OpenAPI document describes those properties as its request body. This is what legacy
