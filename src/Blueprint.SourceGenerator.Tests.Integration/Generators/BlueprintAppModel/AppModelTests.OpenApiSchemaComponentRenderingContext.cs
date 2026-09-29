@@ -77,6 +77,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "RequiredShapeApiResource",
             "RequiredShapeChild",
             "SampleWidgetApiResource",
+            "SystemTypeApiResource",
             "TypedIdWidgetApiResource",
             "UnexposedFixtureApiResource",
             "ValidationProblemDetails",

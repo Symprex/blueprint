@@ -873,6 +873,12 @@ public sealed record OpenApiOperationRenderingContext(
             return ("string", "byte");
         }
 
+        // A System.Type is written as its name, so a property of one is a string, however the app's converter spells it (R145).
+        if (typeof(Type).IsAssignableFrom(underlying))
+        {
+            return ("string", null);
+        }
+
         if (underlying == typeof(int))
         {
             return ("integer", "int32");

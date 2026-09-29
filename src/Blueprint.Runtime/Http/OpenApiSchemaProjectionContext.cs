@@ -1422,7 +1422,8 @@ public sealed record OpenApiSchemaProjectionContext(
             || nonNullableType == typeof(DateTime)
             || nonNullableType == typeof(DateTimeOffset)
             || nonNullableType == typeof(Guid)
-            || nonNullableType == typeof(Uri))
+            || nonNullableType == typeof(Uri)
+            || typeof(Type).IsAssignableFrom(nonNullableType))
         {
             return OpenApiSchemaKind.String;
         }

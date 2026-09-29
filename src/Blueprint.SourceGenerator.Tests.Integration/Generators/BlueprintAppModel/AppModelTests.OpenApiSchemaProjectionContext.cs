@@ -77,6 +77,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "RequiredShapeApiResource",
             "RequiredShapeChild",
             "SampleWidgetApiResource",
+            "SystemTypeApiResource",
             "TypedIdWidgetApiResource",
             "UnexposedFixtureApiResource",
             "ValidationProblemDetails",
