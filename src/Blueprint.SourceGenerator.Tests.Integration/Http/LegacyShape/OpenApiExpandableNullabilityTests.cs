@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Blueprint.Model;
 using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
@@ -42,6 +44,20 @@ public class OpenApiExpandableNullabilityTests
         value.GetProperty("nullable").GetBoolean().Should().BeTrue("a Default consumer wants the correct nullability, not legacy's artefact");
     }
 
+    [Fact]
+    public void Legacy_naming_renders_Expandable_value_as_non_nullable_when_the_app_serialises_camelCase()
+    {
+        // Signature365 serialises camelCase, so the serialised name (value) is not the CLR name (Value) the open generic
+        // definition is looked up by; the integration app above serialises PascalCase, where the two coincide.
+        var documentContext = OpenApiDocumentBuilderContext.Create(new CamelCaseExpandableBlueprintApp());
+
+        var schemaContext = OpenApiSchemaProjectionContext.Create(documentContext, OpenApiSchemaNaming.Legacy);
+        var expandable = schemaContext.Schemas.Single(static schema => schema.BodyTypeName.StartsWith("ExpandableOf", StringComparison.Ordinal));
+
+        var value = expandable.Properties.Single(static property => property.Name == "value");
+        value.IsNullable.Should().BeFalse("legacy documented Expandable<T>.Value as non-nullable whatever the serialised casing");
+    }
+
     private static JsonDocument Render(Action<OpenApiInfoOptions> configure)
     {
         var options = new OpenApiInfoOptions();
@@ -51,4 +67,43 @@ public class OpenApiExpandableNullabilityTests
 
         return JsonDocument.Parse(rendered.Json);
     }
+
+    private sealed class CamelCaseExpandableBlueprintApp : BlueprintApp
+    {
+        public CamelCaseExpandableBlueprintApp()
+        {
+            var descriptor = new ApiOperationDescriptor(typeof(CamelCaseExpandableOperationShell), "CamelCaseExpandable", "test-fixture");
+            descriptor.SetFeatureData(new OperationHostExposureFeatureData(["http"]));
+            descriptor.SetFeatureData(new OperationSerializerContextCoverageFeatureData([typeof(CamelCaseExpandableEmployee).FullName!]));
+
+            this.AppOwnedSerializerContext = CamelCaseExpandableJsonContext.Default;
+            this.AppOwnedSerializerContextType = typeof(CamelCaseExpandableJsonContext);
+            this.AppOwnedSerializerContextBodyTypes = [typeof(CamelCaseExpandableEmployee)];
+            this.AppOwnedSerializerContextBodyTypeNames = [typeof(CamelCaseExpandableEmployee).FullName!];
+
+            this.Register(descriptor);
+        }
+    }
+
+    private sealed class CamelCaseExpandableOperationShell;
 }
+
+public sealed class CamelCaseExpandableDepartment : ApiResource
+{
+    public override string Object => "CamelCaseExpandableDepartment";
+
+    public string Name { get; set; } = string.Empty;
+}
+
+public sealed class CamelCaseExpandableEmployee : ApiResource
+{
+    public override string Object => "CamelCaseExpandableEmployee";
+
+    public Expandable<CamelCaseExpandableDepartment> Department { get; set; } = new("dept-1");
+}
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(CamelCaseExpandableEmployee))]
+[JsonSerializable(typeof(Expandable<CamelCaseExpandableDepartment>))]
+[JsonSerializable(typeof(CamelCaseExpandableDepartment))]
+public partial class CamelCaseExpandableJsonContext : JsonSerializerContext;

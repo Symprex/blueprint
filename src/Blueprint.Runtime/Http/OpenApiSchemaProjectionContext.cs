@@ -627,7 +627,7 @@ public sealed record OpenApiSchemaProjectionContext(
         // legacy documented the property as non-nullable however the closed instantiation reads (Signature365 8b40ecc961
         // Portal document, ExpandableOfAzureAdGroup.value: oneOf without "nullable"). A Default consumer still wants the
         // instantiation's real nullability, so this only overrides under the legacy naming option.
-        if (naming == OpenApiSchemaNaming.Legacy && IsGenericTypeParameterProperty(bodyType, property.Name))
+        if (naming == OpenApiSchemaNaming.Legacy && IsGenericTypeParameterProperty(bodyType, (property.AttributeProvider as PropertyInfo)?.Name))
         {
             isNullable = false;
         }
@@ -1147,6 +1147,8 @@ public sealed record OpenApiSchemaProjectionContext(
     /// is itself declared as a generic type parameter (e.g. <c>T? Value</c>) rather than a concrete or constructed type.
     /// </summary>
     /// <remarks>
+    /// <paramref name="propertyName"/> is the CLR property's name, not its serialised one, which a naming policy changes
+    /// (<c>value</c> for <c>Value</c>); it is <see langword="null"/> when the serializer metadata has no CLR property.
     /// <see cref="PropertyInfo.PropertyType"/> on a closed generic's property is always the closed argument
     /// (<c>AzureAdGroup</c>), never the parameter itself, so this must be checked on the open definition's own property.
     /// </remarks>
@@ -1154,9 +1156,9 @@ public sealed record OpenApiSchemaProjectionContext(
         "Trimming",
         "IL2075",
         Justification = "The open generic type definition of a covered closed generic body type is preserved alongside it.")]
-    private static bool IsGenericTypeParameterProperty(Type bodyType, string propertyName)
+    private static bool IsGenericTypeParameterProperty(Type bodyType, string? propertyName)
     {
-        if (!bodyType.IsGenericType || bodyType.IsGenericTypeDefinition)
+        if (propertyName is null || !bodyType.IsGenericType || bodyType.IsGenericTypeDefinition)
         {
             return false;
         }
