@@ -2702,21 +2702,21 @@
       },
       "ExpandableOfOwner": {
         "title": "ExpandableOfOwner",
-        "description": "A container for a lazily-expanded resource reference. Initially holds only the\nresource Id; when a client requests expansion via the ?expand=PropertyName\nquery parameter (or when the property is marked [AlwaysExpand]), a registered\nresource expander populates Value.",
+        "description": "Represents an expandable resource property.",
         "type": "object",
         "properties": {
           "ExpandError": {
             "type": "string",
             "nullable": true,
-            "description": "Gets or sets the reason expansion was attempted but failed, for example authentication_error when the\nupstream system an expander calls rejects its credentials. Value is null\nwhenever this is set, and clients read it to tell \u0022could not be expanded\u0022 apart from \u0022not expanded\u0022."
+            "description": "When set, indicates that expansion was attempted but failed for the given reason.\nValue will be null."
           },
           "Id": {
             "type": "string",
-            "description": "Gets the identifier of the expandable resource."
+            "description": "The ID of this expandable value."
           },
           "Value": {
             "nullable": true,
-            "description": "Gets or sets the expanded resource value. This is null until a\nregistered resource expander populates it.",
+            "description": "The value itself, which will be null if the value has not been expanded.",
             "oneOf": [
               {
                 "$ref": "#/components/schemas/OwnerApiResource"
