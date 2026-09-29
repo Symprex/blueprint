@@ -232,6 +232,27 @@ public sealed record OpenApiOperationRenderingContext(
     }
 
     /// <summary>
+    /// Returns the name of a query parameter: its binding name, or, when parameters are named by their property, the property's
+    /// name; and under <see cref="OpenApiSchemaNaming.Legacy"/>, as legacy named a parameter by the name its descriptor gave it,
+    /// the binding name when that is an explicit alias (<c>[FromQuery("validationToken")]</c>, R159), which the request binds
+    /// by and the property's name does not reach. A binding name that differs from the property's only by case is no alias,
+    /// as the host binds a query parameter whatever its case.
+    /// </summary>
+    private static string GetQueryParameterName(OperationPropertyBindingEntry entry, OpenApiParameterNaming queryParameterNaming, OpenApiSchemaNaming naming)
+    {
+        if (queryParameterNaming != OpenApiParameterNaming.PropertyName)
+        {
+            return entry.BindingName ?? entry.PropertyName;
+        }
+
+        return naming == OpenApiSchemaNaming.Legacy
+            && entry.BindingName is { } bindingName
+            && !string.Equals(bindingName, entry.PropertyName, StringComparison.OrdinalIgnoreCase)
+                ? bindingName
+                : entry.PropertyName;
+    }
+
+    /// <summary>
     /// Returns the key a route template is written under in the document's <c>paths</c>: the template with exactly one
     /// leading slash, as legacy keyed it (<c>"/" + route.RoutingUrl</c>, R149), whether the link that declares it wrote one.
     /// </summary>
@@ -311,6 +332,11 @@ public sealed record OpenApiOperationRenderingContext(
             var enumValues = GetEnumValues(clrProperty);
             var enumSchemaRef = GetEnumSchemaRef(clrProperty, naming, schemaNamesByType);
 
+            // R159: legacy's schema for an enum parameter carried the enum's own description, which the generated client reads.
+            var parameterEnumDescription = naming == OpenApiSchemaNaming.Legacy && enumSchemaRef is not null && clrProperty is not null
+                ? OpenApiSchemaProjectionContext.GetTypeDescription(Nullable.GetUnderlyingType(clrProperty.PropertyType) ?? clrProperty.PropertyType)
+                : null;
+
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
             var effectiveFormat = constraints.Format ?? schemaFormat;
 
@@ -383,13 +409,14 @@ public sealed record OpenApiOperationRenderingContext(
                         DeprecationReason = propertyDeprecationReason,
                         ExampleValue = exampleValueAttr?.Value,
                         SchemaTitle = schemaTitle,
+                        EnumDescription = parameterEnumDescription,
                         AllowReserved = catchAllNames.Contains(bindingName),
                     });
                     break;
 
                 case PropertyBindingSource.Query:
                     parameters.Add(new OpenApiParameterModel(
-                        queryParameterNaming == OpenApiParameterNaming.PropertyName ? entry.PropertyName : entry.BindingName ?? entry.PropertyName,
+                        GetQueryParameterName(entry, queryParameterNaming, naming),
                         "query",
                         Required: isRequired,
                         schemaType,
@@ -409,6 +436,7 @@ public sealed record OpenApiOperationRenderingContext(
                         DeprecationReason = propertyDeprecationReason,
                         ExampleValue = exampleValueAttr?.Value,
                         SchemaTitle = schemaTitle,
+                        EnumDescription = parameterEnumDescription,
                         ItemsType = paramItemsType,
                         ItemsFormat = paramItemsFormat,
                         ItemsEnumValues = paramItemsEnumValues,
@@ -448,6 +476,7 @@ public sealed record OpenApiOperationRenderingContext(
                         DeprecationReason = propertyDeprecationReason,
                         ExampleValue = exampleValueAttr?.Value,
                         SchemaTitle = schemaTitle,
+                        EnumDescription = parameterEnumDescription,
                     });
                     break;
 
@@ -473,6 +502,7 @@ public sealed record OpenApiOperationRenderingContext(
                         DeprecationReason = propertyDeprecationReason,
                         ExampleValue = exampleValueAttr?.Value,
                         SchemaTitle = schemaTitle,
+                        EnumDescription = parameterEnumDescription,
                     });
                     break;
 

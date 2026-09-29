@@ -487,7 +487,7 @@ public sealed record OpenApiOutputRenderingContext(
             }
 
             WriteTags(writer, primaryOperation.Tags);
-            WriteParameters(writer, primaryOperation.Parameters, parameterTitleFormatter, schemaNameFormatter);
+            WriteParameters(writer, primaryOperation.Parameters, parameterTitleFormatter, schemaNameFormatter, omitLegacyExtras);
             WriteRequestBody(writer, primaryOperation.OperationName, primaryOperation.RequestBody, schemaNameFormatter, omitLegacyExtras);
             WriteResponses(writer, primaryOperation.Responses, schemaNameFormatter, omitLegacyExtras);
 
@@ -536,7 +536,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteParameters(Utf8JsonWriter writer, ImmutableArray<OpenApiParameterModel> parameters, Func<string, string>? titleFormatter, Func<string, string>? schemaNameFormatter)
+    private static void WriteParameters(Utf8JsonWriter writer, ImmutableArray<OpenApiParameterModel> parameters, Func<string, string>? titleFormatter, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         if (parameters.IsEmpty)
         {
@@ -551,7 +551,13 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteStartObject();
             writer.WriteString("name", parameter.Name);
             writer.WriteString("in", parameter.In);
-            writer.WriteBoolean("required", parameter.Required);
+
+            // Legacy wrote a parameter's "required" only when true (550 of its 734 in Signature365's documents, the rest none;
+            // never false), and nothing of style, explode or a schema's nullable (R159): omitted under Legacy naming.
+            if (!omitLegacyExtras || parameter.Required)
+            {
+                writer.WriteBoolean("required", parameter.Required);
+            }
 
             if (parameter.AllowReserved)
             {
@@ -574,7 +580,7 @@ public sealed record OpenApiOutputRenderingContext(
             }
 
             // Array query/header parameters need style+explode for repeated key serialization
-            if (parameter.SchemaType == "array" && parameter.In is "query" or "header")
+            if (!omitLegacyExtras && parameter.SchemaType == "array" && parameter.In is "query" or "header")
             {
                 writer.WriteString("style", "form");
                 writer.WriteBoolean("explode", true);
@@ -597,9 +603,14 @@ public sealed record OpenApiOutputRenderingContext(
 
             // nullable and required are orthogonal in OpenAPI 3.0: a required parameter
             // can still accept null values, so emit nullable regardless of required status.
-            if (parameter.IsNullable)
+            if (parameter.IsNullable && !omitLegacyExtras)
             {
                 writer.WriteBoolean("nullable", true);
+            }
+
+            if (parameter.EnumDescription is not null)
+            {
+                writer.WriteString("description", parameter.EnumDescription);
             }
 
             // Array parameters: emit items sub-schema
@@ -630,7 +641,7 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteEndObject();
             }
 
-            WriteEnumValues(writer, parameter.EnumValues);
+            WriteEnumValues(writer, parameter.EnumValues, includeVarNames: !omitLegacyExtras);
             WriteNumericConstraints(writer, parameter.Minimum, parameter.Maximum, parameter.ExclusiveMinimum, parameter.ExclusiveMaximum);
 
             // For array parameters, [MinLength]/[MaxLength]/[NotEmptyList]/[MaxItemsList] map to
@@ -698,7 +709,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
     }
 
-    private static void WriteEnumValues(Utf8JsonWriter writer, ImmutableArray<string> enumValues)
+    private static void WriteEnumValues(Utf8JsonWriter writer, ImmutableArray<string> enumValues, bool includeVarNames = true)
     {
         if (enumValues.IsDefaultOrEmpty)
         {
@@ -721,8 +732,11 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName("x-enumNames");
         WriteStringArray(writer, enumValues);
 
-        writer.WritePropertyName("x-enum-varnames");
-        WriteStringArray(writer, enumValues);
+        if (includeVarNames)
+        {
+            writer.WritePropertyName("x-enum-varnames");
+            WriteStringArray(writer, enumValues);
+        }
     }
 
     private static void WriteStringArray(Utf8JsonWriter writer, ImmutableArray<string> values)

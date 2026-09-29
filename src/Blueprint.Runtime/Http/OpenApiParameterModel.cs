@@ -87,6 +87,12 @@ public sealed record OpenApiParameterModel(
     /// </summary>
     public string? ItemsEnumSchemaRef { get; init; }
 
+    /// <summary>
+    /// Gets the description of the enum the parameter is, which its schema carries, or <see langword="null"/> for none: under
+    /// <see cref="OpenApiSchemaNaming.Legacy"/>, as legacy's schema for an enum parameter carried the enum's own description.
+    /// </summary>
+    public string? EnumDescription { get; init; }
+
     /// <summary>Gets the description of the enum <see cref="ItemsEnumSchemaRef"/> names, which its component carries, or null.</summary>
     public string? ItemsEnumDescription { get; init; }
 
