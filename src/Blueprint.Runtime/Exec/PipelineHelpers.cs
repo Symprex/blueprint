@@ -398,10 +398,11 @@ public static class PipelineHelpers
     /// <returns>
     /// <c>null</c> when the body was read and populated successfully, or was empty/absent, or carried a content type no
     /// parser could read (legacy left the operation unpopulated in that case too, for every method); an
-    /// <see cref="UnsupportedMediaTypeResult"/> for <c>application/x-www-form-urlencoded</c> or
-    /// <c>multipart/form-data</c> (legacy bound these from a form; this framework has no form binding, so it refuses
-    /// them rather than silently leaving the operation unpopulated); or an <see cref="OperationResult"/> representing
-    /// a binding failure (invalid JSON, etc.).
+    /// <see cref="UnsupportedMediaTypeResult"/> for an <c>application/x-www-form-urlencoded</c> or
+    /// <c>multipart/form-data</c> request that carries a body (legacy bound these from a form; this framework has no
+    /// form binding, so it refuses them rather than silently leaving the operation unpopulated — one with no body is
+    /// <c>null</c>, as legacy read it as an empty form); or an <see cref="OperationResult"/> representing a binding
+    /// failure (invalid JSON, etc.).
     /// </returns>
     public static Task<OperationResult?> ReadJsonBodyAsync<TOperation>(
         HttpContext httpContext,
@@ -424,14 +425,15 @@ public static class PipelineHelpers
         // multipart/form-data (BlueprintHttpOptionsSetup.cs:25, Formatters/FormBodyParser.cs:29-30) and bound form
         // fields/IFormFile from a request carrying one of those. This framework has no form binding, so it cannot
         // reproduce that: silently ignoring the body here would let the handler run with those properties unset. Refuse
-        // exactly those two media types with a 415 instead; every other non-JSON type still skips silently as R116 made
+        // exactly those two media types with a 415 instead, but only when a body is present (R128): legacy read a
+        // body-less form as an empty one and ran the handler. Every other non-JSON type still skips silently as R116 made
         // it.
         if (httpContext.Request.ContentType is not null &&
             !httpContext.Request.ContentType.Contains("json", StringComparison.OrdinalIgnoreCase))
         {
             if (IsLegacyFormContentType(httpContext.Request.ContentType))
             {
-                return Task.FromResult<OperationResult?>(UnsupportedMediaTypeResult.Instance);
+                return RefuseFormBodyIfPresentAsync(httpContext, cancellationToken);
             }
 
             return Task.FromResult<OperationResult?>(null);
@@ -510,6 +512,34 @@ public static class PipelineHelpers
 
         return mediaType.Equals("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase)
             || mediaType.Equals("multipart/form-data", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Refuses a form request with an <see cref="UnsupportedMediaTypeResult"/> when it carries a body, and lets one with
+    /// no body through, as legacy's <c>FormBodyParser</c> read a body-less form as an empty one and bound nothing
+    /// (Signature365 8b40ecc961, <c>Blueprint.Http/Formatters/FormBodyParser.cs:35-45</c>).
+    /// </summary>
+    /// <remarks>
+    /// A body is present as the JSON path decides it: a known <c>Content-Length</c> says so itself (0 is no body); with
+    /// none (chunked), only reading tells, as <see cref="ReadJsonBodyChunkedAsync{TOperation}"/> reads before it
+    /// populates. One byte is enough to know, and a request it finds a byte in is refused, so nothing more is read.
+    /// </remarks>
+    private static Task<OperationResult?> RefuseFormBodyIfPresentAsync(HttpContext httpContext, CancellationToken cancellationToken)
+    {
+        if (httpContext.Request.ContentLength is { } contentLength)
+        {
+            return Task.FromResult<OperationResult?>(contentLength > 0 ? UnsupportedMediaTypeResult.Instance : null);
+        }
+
+        return RefuseFormBodyIfAnyByteAsync(httpContext, cancellationToken);
+    }
+
+    private static async Task<OperationResult?> RefuseFormBodyIfAnyByteAsync(HttpContext httpContext, CancellationToken cancellationToken)
+    {
+        var probe = new byte[1];
+        var bytesRead = await httpContext.Request.Body.ReadAsync(probe, cancellationToken).ConfigureAwait(false);
+
+        return bytesRead > 0 ? UnsupportedMediaTypeResult.Instance : null;
     }
 
     /// <summary>

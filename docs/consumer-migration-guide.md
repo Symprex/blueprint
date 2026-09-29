@@ -814,9 +814,11 @@ This is *not* what legacy Blueprint did in one respect: legacy registered a `For
 `application/x-www-form-urlencoded` and `multipart/form-data`, and bound form fields and `IFormFile` properties from a
 request carrying one of those (`BlueprintHttpOptionsSetup.cs:25`, `Formatters/FormBodyParser.cs:29-30`). This
 framework has no form binding, so it cannot reproduce that behaviour; silently ignoring the body would let the
-handler run with those properties unset instead. A request with one of those two content types still gets a 415, on
-any method that reads a body — this is the one non-JSON content type family this framework refuses rather than
-ignores. Every other non-JSON content type (`text/plain`, `application/xml`, …) is ignored as described above.
+handler run with those properties unset instead. A request with one of those two content types and a body still gets
+a 415, on any method that reads a body — this is the one non-JSON content type family this framework refuses rather
+than ignores. One with no body (`Content-Length: 0`, or an empty chunked body) runs the handler with the operation as
+it was, as legacy did: it read a body-less form as an empty one and bound nothing. Every other non-JSON content type
+(`text/plain`, `application/xml`, …) is ignored as described above.
 
 ## Development-time inspection
 

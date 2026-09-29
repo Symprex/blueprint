@@ -34,6 +34,8 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 /// </remarks>
 public sealed class DeleteBodyWireTests
 {
+    private const string MultipartLabelBody = "------stray\r\nContent-Disposition: form-data; name=\"label\"\r\n\r\nx\r\n------stray--\r\n";
+
     [Fact]
     public async Task A_DELETEs_properties_are_read_from_its_JSON_body()
     {
@@ -101,9 +103,9 @@ public sealed class DeleteBodyWireTests
     }
 
     [Theory]
-    [InlineData("application/x-www-form-urlencoded")]
-    [InlineData("multipart/form-data; boundary=----stray")]
-    public async Task A_POST_with_a_form_content_type_returns_415(string contentType)
+    [InlineData("application/x-www-form-urlencoded", "label=x")]
+    [InlineData("multipart/form-data; boundary=----stray", MultipartLabelBody)]
+    public async Task A_POST_with_a_form_content_type_and_a_body_returns_415(string contentType, string body)
     {
         // R117: legacy registered FormBodyParser by default (Signature365 8b40ecc961,
         // Blueprint.Http/BlueprintHttpOptionsSetup.cs:25) for exactly these two media types
@@ -112,7 +114,21 @@ public sealed class DeleteBodyWireTests
         // covers every other non-JSON type, not these two).
         await using var host = await DeleteBodyHost.StartAsync();
 
-        var (status, _) = await host.SendWithContentTypeAsync(HttpMethod.Post, "e2e/items", contentType);
+        var (status, _) = await host.SendWithContentTypeAsync(HttpMethod.Post, "e2e/items", contentType, body);
+
+        status.Should().Be(415);
+    }
+
+    [Theory]
+    [InlineData("application/x-www-form-urlencoded", "force=true")]
+    [InlineData("multipart/form-data; boundary=----stray", MultipartLabelBody)]
+    public async Task A_DELETE_with_a_form_content_type_and_a_body_returns_415(string contentType, string body)
+    {
+        // Legacy's FormBodyParser applied to any non-GET method, DELETE included (no method check in
+        // HttpBodyMessagePopulationSource.cs), so a DELETE with a form body is refused as a POST's is.
+        await using var host = await DeleteBodyHost.StartAsync();
+
+        var (status, _) = await host.SendWithContentTypeAsync(HttpMethod.Delete, "delete-body/folders/folder-1", contentType, body);
 
         status.Should().Be(415);
     }
@@ -120,14 +136,59 @@ public sealed class DeleteBodyWireTests
     [Theory]
     [InlineData("application/x-www-form-urlencoded")]
     [InlineData("multipart/form-data; boundary=----stray")]
-    public async Task A_DELETE_with_a_form_content_type_returns_415(string contentType)
+    public async Task A_body_less_DELETE_with_a_form_content_type_is_bound_from_its_route_alone(string contentType)
     {
-        // Legacy's FormBodyParser applied to any non-GET method, DELETE included (no method check in
-        // HttpBodyMessagePopulationSource.cs), so a DELETE with one of these content types 415s too, even without a
-        // body of its own.
+        // R128: legacy chose FormBodyParser by the content type alone (HttpBodyMessagePopulationSource.cs:68-78 at
+        // Signature365 8b40ecc961), and its ReadAsync read the form and wrote each field it held
+        // (Formatters/FormBodyParser.cs:35-45). ASP.NET Core reads a request with Content-Length: 0 as an empty form for
+        // both media types, so no field was written and the handler ran with the operation as it was. Only a form that
+        // carries a body is one this framework cannot bind.
         await using var host = await DeleteBodyHost.StartAsync();
 
-        var (status, _) = await host.SendWithContentTypeAsync(HttpMethod.Delete, "delete-body/folders/folder-1", contentType);
+        var (status, body) = await host.SendWithContentTypeAsync(HttpMethod.Delete, "delete-body/folders/folder-1", contentType);
+
+        status.Should().Be(200);
+        body.Should().Be("\"id=folder-1;force=False\"");
+    }
+
+    [Theory]
+    [InlineData("application/x-www-form-urlencoded")]
+    [InlineData("multipart/form-data; boundary=----stray")]
+    public async Task A_body_less_POST_with_a_form_content_type_runs_its_handler(string contentType)
+    {
+        // R128: as the DELETE above, a POST with Content-Length: 0 was read as an empty form and ran.
+        await using var host = await DeleteBodyHost.StartAsync();
+
+        var (status, body) = await host.SendWithContentTypeAsync(HttpMethod.Post, "e2e/items", contentType);
+
+        status.Should().Be(200);
+        body.Should().Be("\"created:\"");
+    }
+
+    [Fact]
+    public async Task A_chunked_form_POST_with_no_body_runs_its_handler()
+    {
+        // R128: with no Content-Length (chunked), whether there is a body is known only by reading it, as the JSON
+        // path's chunked read decides (PipelineHelpers.ReadJsonBodyChunkedAsync). ASP.NET Core reads an empty chunked
+        // urlencoded body as an empty form, so legacy ran the handler. (An empty chunked multipart body is not
+        // legacy-derived: ReadFormAsync throws "Unexpected end of Stream" for it, which legacy answered with a 500.)
+        await using var host = await DeleteBodyHost.StartAsync();
+
+        var (status, body) = await host.SendWithContentTypeAsync(HttpMethod.Post, "e2e/items", "application/x-www-form-urlencoded", chunked: true);
+
+        status.Should().Be(200);
+        body.Should().Be("\"created:\"");
+    }
+
+    [Theory]
+    [InlineData("application/x-www-form-urlencoded", "label=x")]
+    [InlineData("multipart/form-data; boundary=----stray", MultipartLabelBody)]
+    public async Task A_chunked_form_POST_with_a_body_returns_415(string contentType, string body)
+    {
+        // R128: a chunked form body is a body all the same, found by reading it.
+        await using var host = await DeleteBodyHost.StartAsync();
+
+        var (status, _) = await host.SendWithContentTypeAsync(HttpMethod.Post, "e2e/items", contentType, body, chunked: true);
 
         status.Should().Be(415);
     }
@@ -224,14 +285,22 @@ public sealed class DeleteBodyWireTests
             return this.SendWithContentTypeAsync(method, url, "text/plain", body: "not json");
         }
 
-        /// <summary>Sends a request of <paramref name="method"/> carrying exactly <paramref name="contentType"/> as its Content-Type header.</summary>
-        public async Task<(int Status, string Body)> SendWithContentTypeAsync(HttpMethod method, string url, string contentType, string body = "")
+        /// <summary>
+        /// Sends a request of <paramref name="method"/> carrying exactly <paramref name="contentType"/> as its Content-Type
+        /// header: with a Content-Length, or, when <paramref name="chunked"/>, with chunked transfer encoding and none.
+        /// </summary>
+        public async Task<(int Status, string Body)> SendWithContentTypeAsync(HttpMethod method, string url, string contentType, string body = "", bool chunked = false)
         {
+            var bytes = Encoding.UTF8.GetBytes(body);
             using var request = new HttpRequestMessage(method, url)
             {
-                Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body)),
+                Content = chunked ? new UnknownLengthContent(bytes) : new ByteArrayContent(bytes),
             };
             request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
+            if (chunked)
+            {
+                request.Headers.TransferEncodingChunked = true;
+            }
 
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
@@ -245,6 +314,21 @@ public sealed class DeleteBodyWireTests
             this.Client.Dispose();
             await this._app.StopAsync();
             await this._app.DisposeAsync();
+        }
+    }
+
+    /// <summary>Content whose length is not known up front, so the client sends it chunked, with no Content-Length.</summary>
+    private sealed class UnknownLengthContent(byte[] bytes) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
+        {
+            return stream.WriteAsync(bytes).AsTask();
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
         }
     }
 }
