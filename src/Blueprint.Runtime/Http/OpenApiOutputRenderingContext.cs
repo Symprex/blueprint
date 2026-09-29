@@ -2244,6 +2244,14 @@ public sealed record OpenApiOutputRenderingContext(
         // expected by TypeScript generators that resolve type names from $ref paths.
         if (property.EnumSchemaRef is not null)
         {
+            // Legacy left a property with nothing beside its reference as the bare reference (R163).
+            if (omitLegacyExtras && !property.IsNullable && property.Description is null && !property.IsDeprecated)
+            {
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.EnumSchemaRef, schemaNameFormatter)}");
+                writer.WriteEndObject();
+                return;
+            }
+
             if (property.IsNullable)
             {
                 writer.WriteBoolean("nullable", true);
@@ -2293,7 +2301,23 @@ public sealed record OpenApiOutputRenderingContext(
         {
             writer.WritePropertyName("items");
             writer.WriteStartObject();
-            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef, schemaNameFormatter)}");
+
+            // A nullable element wraps its reference in oneOf beside "nullable", as a nullable property does (R163).
+            if (property.ItemsAreNullable)
+            {
+                writer.WriteBoolean("nullable", true);
+                writer.WritePropertyName("oneOf");
+                writer.WriteStartArray();
+                writer.WriteStartObject();
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef, schemaNameFormatter)}");
+                writer.WriteEndObject();
+                writer.WriteEndArray();
+            }
+            else
+            {
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef, schemaNameFormatter)}");
+            }
+
             writer.WriteEndObject();
         }
         else if (property.ItemsType is not null)

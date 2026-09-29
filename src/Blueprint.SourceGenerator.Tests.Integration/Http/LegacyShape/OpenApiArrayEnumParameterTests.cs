@@ -55,7 +55,9 @@ public class OpenApiArrayEnumParameterTests
 
         var severity = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("ArrayEnumParameterAuditApiResource")
             .GetProperty("properties").EnumerateObject().Single(static property => property.Name.Equals("severity", StringComparison.OrdinalIgnoreCase)).Value;
-        severity.GetProperty("oneOf")[0].GetProperty("$ref").GetString().Should().Be("#/components/schemas/ArrayEnumParameterSeverity");
+
+        // Nothing else beside the reference, so legacy left it bare (R163).
+        severity.GetProperty("$ref").GetString().Should().Be("#/components/schemas/ArrayEnumParameterSeverity");
     }
 
     private static JsonElement ItemsOf(JsonDocument document, string path, string parameterName)

@@ -108,6 +108,7 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             AllowsAdditionalProperties: property.AllowsAdditionalProperties)
         {
             AdditionalPropertiesAreNullable = property.AdditionalPropertiesAreNullable,
+            ItemsAreNullable = property.ItemsAreNullable,
             EnumDescription = property.EnumDescription,
         };
     }
@@ -314,6 +315,12 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     /// the value's <c>$ref</c>, which OpenAPI 3.0 would otherwise not let it sit beside.
     /// </summary>
     public bool AdditionalPropertiesAreNullable { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the property is a collection of references to a component whose elements may be
+    /// null, written with <c>"nullable": true</c> beside a <c>oneOf</c> wrapping the items' <c>$ref</c>.
+    /// </summary>
+    public bool ItemsAreNullable { get; init; }
 
     /// <summary>
     /// Gets the description of the enum type <see cref="EnumSchemaRef"/> names, which its component carries, or

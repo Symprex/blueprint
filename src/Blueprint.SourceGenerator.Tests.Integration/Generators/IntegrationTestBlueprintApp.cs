@@ -89,4 +89,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.RelLessLinkWireWidgetApiResource))]
 [JsonSerializable(typeof(Http.OperationIdMixedLinkApiResource))]
 [JsonSerializable(typeof(Http.NestedLinkHolderApiResource))]
+[JsonSerializable(typeof(Http.LegacyShape.RefWrapperApiResource))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

@@ -179,6 +179,7 @@ public sealed record OpenApiDocumentRenderingContext(
                         AllowsAdditionalProperties: bodyProperty.AllowsAdditionalProperties)
                     {
                         AdditionalPropertiesAreNullable = bodyProperty.AdditionalPropertiesAreNullable,
+                        ItemsAreNullable = bodyProperty.ItemsAreNullable,
                         EnumDescription = bodyProperty.EnumDescription,
                     });
                 }

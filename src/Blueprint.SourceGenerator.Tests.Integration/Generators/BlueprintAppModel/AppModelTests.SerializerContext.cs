@@ -78,7 +78,8 @@ public class AppModelSerializerContextTests
             "Blueprint.Model.ListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LinkWireWidgetApiResource>",
             "Blueprint.SourceGenerator.Tests.Integration.Http.RelLessLinkWireWidgetApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.OperationIdMixedLinkApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.NestedLinkHolderApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.NestedLinkHolderApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.RefWrapperApiResource");
     }
 
     [Fact]
@@ -153,6 +154,7 @@ public class AppModelSerializerContextTests
             typeof(Blueprint.Model.ListApiResource<Http.LinkWireWidgetApiResource>),
             typeof(Http.RelLessLinkWireWidgetApiResource),
             typeof(Http.OperationIdMixedLinkApiResource),
-            typeof(Http.NestedLinkHolderApiResource));
+            typeof(Http.NestedLinkHolderApiResource),
+            typeof(Http.LegacyShape.RefWrapperApiResource));
     }
 }
