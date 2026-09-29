@@ -38,6 +38,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "E2EWidgetResponse",
             "EnvelopeMatch",
             "EnvelopeMatch2",
+            "EnvelopeMatch3",
             "ExpandableOfDepartment",
             "ExpandableOfLocation",
             "ExpandableTestEmployee",

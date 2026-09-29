@@ -118,6 +118,11 @@ public class OpenApiSchemaNameCollisionTests
         }
 
         envelopeNames.Should().HaveCount(2);
+
+        // A third type of the name, returned plain at the URL that sorts first, is reached before either envelope's inner type
+        // and takes the base key, so both envelopes wrap a type whose final key is not its base name; only reaching the inner
+        // type before building the envelope's key (R28) names the envelope from it (R135).
+        ResponseRefs(document, "/collisions/envelopes/000-three").Should().Equal(Schemas + "EnvelopeMatch");
     }
 
     [Fact]

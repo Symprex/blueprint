@@ -66,6 +66,7 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.SchemaNameCollisions.EnvelopeTwo.EnvelopeMatch), TypeInfoPropertyName = "EnvelopeTwoEnvelopeMatch")]
 [JsonSerializable(typeof(Blueprint.Http.ResourceEvent<Http.SchemaNameCollisions.EnvelopeOne.EnvelopeMatch>), TypeInfoPropertyName = "ResourceEventOfEnvelopeOneEnvelopeMatch")]
 [JsonSerializable(typeof(Blueprint.Http.ResourceEvent<Http.SchemaNameCollisions.EnvelopeTwo.EnvelopeMatch>), TypeInfoPropertyName = "ResourceEventOfEnvelopeTwoEnvelopeMatch")]
+[JsonSerializable(typeof(Http.SchemaNameCollisions.EnvelopeThree.EnvelopeMatch), TypeInfoPropertyName = "EnvelopeThreeEnvelopeMatch")]
 [JsonSerializable(typeof(Http.LegacyEventWidgetApiResource))]
 [JsonSerializable(typeof(Http.TypedIdWidgetApiResource))]
 [JsonSerializable(typeof(Http.RequiredShapeApiResource))]

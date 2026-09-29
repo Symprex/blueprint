@@ -199,6 +199,33 @@ public static class EnvelopeTwo
     }
 }
 
+/// <summary>Holds the third <c>ApiResource</c> named <c>EnvelopeMatch</c>, returned plain (not in an envelope) by the
+/// operation that sorts first (R135).</summary>
+public static class EnvelopeThree
+{
+    /// <summary>The third <c>EnvelopeMatch</c> resource.</summary>
+    public sealed class EnvelopeMatch : ApiResource
+    {
+        public override string Object => "EnvelopeMatchThree";
+    }
+}
+
+/// <summary>
+/// Gets the third resource plain, at a URL that sorts before both envelope operations', so the document reaches it
+/// first and gives it the base key <c>EnvelopeMatch</c>. Each envelope's inner type is then already past its
+/// projection-time name when its envelope is reached: an envelope key built from the inner's base name without first
+/// reaching the inner would be <c>ResourceEventOfEnvelopeMatch</c> for a type that is finally <c>EnvelopeMatch2</c>.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/collisions/envelopes/000-three")]
+public partial class GetEnvelopeThreeQuery : IQuery<EnvelopeThree.EnvelopeMatch>
+{
+    public static EnvelopeThree.EnvelopeMatch Handle(GetEnvelopeThreeQuery query)
+    {
+        return new EnvelopeThree.EnvelopeMatch();
+    }
+}
+
 /// <summary>
 /// Submits the second-projected resource (its namespace, <c>EnvelopeTwo</c>, sorts after <c>EnvelopeOne</c>'s — so the
 /// schema projection's own walk names it <c>EnvelopeMatch2</c> — but at a URL that sorts first, so the document's reach
