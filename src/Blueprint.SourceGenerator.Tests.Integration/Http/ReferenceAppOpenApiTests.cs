@@ -156,6 +156,28 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_openapi_endpoint_invoked_under_legacy_naming_then_parameters_carry_no_validation_keywords()
+    {
+        // R44: legacy (NJsonSchema) parameters carried only a type schema — Signature365's committed Partners
+        // document's Page/PageSize query parameters are {"title": "Integer", "type": "integer", "format": "int32"},
+        // no minimum/maximum, despite the underlying properties having range attributes. Under Legacy naming this
+        // document must match: no minimum/maximum/minLength/maxLength/pattern on a parameter's schema, even though the
+        // same property's request-body rendering (a different code path, R44 does not touch it) keeps them.
+        var (json, _) = await InvokeOpenApiEndpointAsync(static info => info.SchemaNaming = OpenApiSchemaNaming.Legacy);
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+
+        var pageSizeSchema = parameters.EnumerateArray().Single(static p => p.GetProperty("name").GetString() == "pageSize").GetProperty("schema");
+        pageSizeSchema.TryGetProperty("minimum", out _).Should().BeFalse("legacy's Page/PageSize parameters carried no minimum");
+        pageSizeSchema.TryGetProperty("maximum", out _).Should().BeFalse("legacy's Page/PageSize parameters carried no maximum");
+
+        var qSchema = parameters.EnumerateArray().Single(static p => p.GetProperty("name").GetString() == "q").GetProperty("schema");
+        qSchema.TryGetProperty("minLength", out _).Should().BeFalse("legacy parameters carried no minLength");
+    }
+
+    [Fact]
     public async Task When_openapi_endpoint_invoked_then_min_results_parameter_has_inclusive_minimum()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

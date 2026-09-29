@@ -275,6 +275,17 @@ public sealed record OpenApiOperationRenderingContext(
                 : MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
             var constraints = OpenApiValidationConstraints.ExtractFromProperty(clrProperty);
 
+            // R44: legacy generated a parameter's schema by reflection alone (generator.Generate(property.PropertyType)),
+            // never applying its validation-attribute rules there — those applied only to a request-body schema's own
+            // property (NJsonSchema's JsonSchemaGenerator.GenerateWithReferenceAndNullability). Signature365's committed
+            // Partners document's Page/PageSize query parameters, for example, are a bare {"type","format"} despite the
+            // properties carrying range attributes. A parameter's own "required" flag (isRequired, below) is unaffected —
+            // legacy did reflect that. Under Legacy naming a parameter drops every schema-level validation keyword;
+            // Default keeps them, since they are real, useful constraints legacy simply could not describe there.
+            var parameterConstraints = naming == OpenApiSchemaNaming.Legacy
+                ? OpenApiValidationConstraints.None
+                : constraints;
+
             // Legacy required every property whose type is not nullable, and every [Required] one, which it then did not
             // document as nullable. A route parameter is required either way.
             var isLegacyRule = requiredProperties == OpenApiRequiredProperties.NonNullable;
@@ -325,13 +336,13 @@ public sealed record OpenApiOperationRenderingContext(
                         effectiveFormat)
                     {
                         Description = description,
-                        MinLength = constraints.MinLength,
-                        MaxLength = constraints.MaxLength,
-                        Pattern = constraints.Pattern,
-                        Minimum = constraints.Minimum,
-                        Maximum = constraints.Maximum,
-                        ExclusiveMinimum = constraints.ExclusiveMinimum,
-                        ExclusiveMaximum = constraints.ExclusiveMaximum,
+                        MinLength = parameterConstraints.MinLength,
+                        MaxLength = parameterConstraints.MaxLength,
+                        Pattern = parameterConstraints.Pattern,
+                        Minimum = parameterConstraints.Minimum,
+                        Maximum = parameterConstraints.Maximum,
+                        ExclusiveMinimum = parameterConstraints.ExclusiveMinimum,
+                        ExclusiveMaximum = parameterConstraints.ExclusiveMaximum,
                         EnumValues = enumValues,
                         IsNullable = entry.IsNullable,
                         IsDeprecated = isDeprecated,
@@ -351,13 +362,13 @@ public sealed record OpenApiOperationRenderingContext(
                         effectiveFormat)
                     {
                         Description = description,
-                        MinLength = constraints.MinLength,
-                        MaxLength = constraints.MaxLength,
-                        Pattern = constraints.Pattern,
-                        Minimum = constraints.Minimum,
-                        Maximum = constraints.Maximum,
-                        ExclusiveMinimum = constraints.ExclusiveMinimum,
-                        ExclusiveMaximum = constraints.ExclusiveMaximum,
+                        MinLength = parameterConstraints.MinLength,
+                        MaxLength = parameterConstraints.MaxLength,
+                        Pattern = parameterConstraints.Pattern,
+                        Minimum = parameterConstraints.Minimum,
+                        Maximum = parameterConstraints.Maximum,
+                        ExclusiveMinimum = parameterConstraints.ExclusiveMinimum,
+                        ExclusiveMaximum = parameterConstraints.ExclusiveMaximum,
                         EnumValues = enumValues,
                         IsNullable = entry.IsNullable,
                         IsDeprecated = isDeprecated,
@@ -388,13 +399,13 @@ public sealed record OpenApiOperationRenderingContext(
                         effectiveFormat)
                     {
                         Description = description,
-                        MinLength = constraints.MinLength,
-                        MaxLength = constraints.MaxLength,
-                        Pattern = constraints.Pattern,
-                        Minimum = constraints.Minimum,
-                        Maximum = constraints.Maximum,
-                        ExclusiveMinimum = constraints.ExclusiveMinimum,
-                        ExclusiveMaximum = constraints.ExclusiveMaximum,
+                        MinLength = parameterConstraints.MinLength,
+                        MaxLength = parameterConstraints.MaxLength,
+                        Pattern = parameterConstraints.Pattern,
+                        Minimum = parameterConstraints.Minimum,
+                        Maximum = parameterConstraints.Maximum,
+                        ExclusiveMinimum = parameterConstraints.ExclusiveMinimum,
+                        ExclusiveMaximum = parameterConstraints.ExclusiveMaximum,
                         EnumValues = enumValues,
                         IsNullable = entry.IsNullable,
                         IsDeprecated = isDeprecated,
@@ -413,13 +424,13 @@ public sealed record OpenApiOperationRenderingContext(
                         effectiveFormat)
                     {
                         Description = description,
-                        MinLength = constraints.MinLength,
-                        MaxLength = constraints.MaxLength,
-                        Pattern = constraints.Pattern,
-                        Minimum = constraints.Minimum,
-                        Maximum = constraints.Maximum,
-                        ExclusiveMinimum = constraints.ExclusiveMinimum,
-                        ExclusiveMaximum = constraints.ExclusiveMaximum,
+                        MinLength = parameterConstraints.MinLength,
+                        MaxLength = parameterConstraints.MaxLength,
+                        Pattern = parameterConstraints.Pattern,
+                        Minimum = parameterConstraints.Minimum,
+                        Maximum = parameterConstraints.Maximum,
+                        ExclusiveMinimum = parameterConstraints.ExclusiveMinimum,
+                        ExclusiveMaximum = parameterConstraints.ExclusiveMaximum,
                         EnumValues = enumValues,
                         IsNullable = entry.IsNullable,
                         IsDeprecated = isDeprecated,
