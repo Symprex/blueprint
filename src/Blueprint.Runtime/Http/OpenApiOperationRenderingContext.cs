@@ -630,8 +630,14 @@ public sealed record OpenApiOperationRenderingContext(
                 .ThenBy(static p => p.Name, StringComparer.Ordinal)
                 .ToImmutableArray();
 
+        // R165: legacy's schema for the operation's type listed its properties as its contract did (OpenApiPropertyOrder),
+        // which is not the order of the operation's own property list that the parameters follow.
+        var orderedBodyProperties = naming == OpenApiSchemaNaming.Legacy
+            ? OrderBodyPropertiesAsLegacy(bodyProperties.ToImmutable(), descriptor.OperationType, bodyPropertyNamesByClrName)
+            : bodyProperties.ToImmutable();
+
         var requestBody = bodyProperties.Count > 0
-            ? new OpenApiRequestBodyModel(Required: true, bodyProperties.ToImmutableArray())
+            ? new OpenApiRequestBodyModel(Required: true, orderedBodyProperties)
             {
                 Conditionals = ResolveBodyConditionals(conditionalRequirements, bodyPropertyNamesByClrName),
 
@@ -641,6 +647,30 @@ public sealed record OpenApiOperationRenderingContext(
             : null;
 
         return (orderedParameters, requestBody);
+    }
+
+    /// <summary>
+    /// Puts the properties of an operation's request body in the order legacy's schema for the operation type listed them
+    /// (<see cref="OpenApiPropertyOrder"/>), a property no CLR property is found for going last in the order it had.
+    /// </summary>
+    private static ImmutableArray<OpenApiRequestBodyPropertyModel> OrderBodyPropertiesAsLegacy(
+        ImmutableArray<OpenApiRequestBodyPropertyModel> bodyProperties,
+        Type operationType,
+        Dictionary<string, string> bodyPropertyNamesByClrName)
+    {
+        var order = OpenApiPropertyOrder.GetLegacyOrder(operationType).Select(static (name, index) => (name, index)).ToDictionary(static pair => pair.name, static pair => pair.index, StringComparer.Ordinal);
+        var clrNamesByBodyName = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (clrName, bodyName) in bodyPropertyNamesByClrName)
+        {
+            clrNamesByBodyName.TryAdd(bodyName, clrName);
+        }
+
+        return
+        [
+            .. bodyProperties.OrderBy(property =>
+                clrNamesByBodyName.TryGetValue(property.Name, out var clrName) && order.TryGetValue(clrName, out var position) ? position : int.MaxValue),
+        ];
     }
 
     /// <summary>

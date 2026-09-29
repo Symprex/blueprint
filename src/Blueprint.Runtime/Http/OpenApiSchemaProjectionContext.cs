@@ -461,6 +461,13 @@ public sealed record OpenApiSchemaProjectionContext(
                 && OpenApiDictionaryValues.AreValuesNullable(extensionData.AttributeProvider as PropertyInfo, bucketValueType, nullabilityContext);
         }
 
+        // R165: legacy listed a type's properties in the order Newtonsoft.Json's contract did, where ordinal order is the
+        // rule for every other consumer.
+        if (naming == OpenApiSchemaNaming.Legacy)
+        {
+            properties = OrderAsLegacy(properties, bodyType, typeInfo);
+        }
+
         var propertyNames = properties
             .Select(static property => property.Name)
             .ToImmutableArray();
@@ -573,6 +580,47 @@ public sealed record OpenApiSchemaProjectionContext(
                     static requirement => OpenApiValidationConstraints.FormatDependentValuesKey(requirement.DependentValues),
                     StringComparer.Ordinal),
         ];
+    }
+
+    /// <summary>
+    /// Puts the properties of a schema in the order legacy's document listed them (<see cref="OpenApiPropertyOrder"/>).
+    /// A property that no CLR property is found for, by the serializer's own association or by name, goes last in the
+    /// order it had.
+    /// </summary>
+    /// <param name="properties">The schema's properties.</param>
+    /// <param name="bodyType">The type the schema is for.</param>
+    /// <param name="typeInfo">The serializer's metadata for <paramref name="bodyType"/>.</param>
+    /// <returns>The properties in legacy's order.</returns>
+    private static ImmutableArray<OpenApiSchemaPropertyModel> OrderAsLegacy(
+        ImmutableArray<OpenApiSchemaPropertyModel> properties,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
+        JsonTypeInfo typeInfo)
+    {
+        var order = OpenApiPropertyOrder.GetLegacyOrder(bodyType).Select(static (name, index) => (name, index)).ToDictionary(static pair => pair.name, static pair => pair.index, StringComparer.Ordinal);
+        var clrNamesByJsonName = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var jsonProperty in typeInfo.Properties)
+        {
+            if (jsonProperty.AttributeProvider is MemberInfo { Name: var clrName })
+            {
+                clrNamesByJsonName.TryAdd(jsonProperty.Name, clrName);
+            }
+        }
+
+        int PositionOf(OpenApiSchemaPropertyModel property)
+        {
+            if (clrNamesByJsonName.TryGetValue(property.Name, out var clrName) && order.TryGetValue(clrName, out var position))
+            {
+                return position;
+            }
+
+            // A property the schema adds (a problem's extensions) is named for the CLR property it stands for.
+            var byName = order.Keys.FirstOrDefault(name => string.Equals(name, property.Name, StringComparison.OrdinalIgnoreCase));
+
+            return byName is null ? int.MaxValue : order[byName];
+        }
+
+        return [.. properties.OrderBy(PositionOf)];
     }
 
     /// <summary>

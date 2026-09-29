@@ -525,6 +525,15 @@ public sealed record OpenApiDocumentRenderingContext(
                 IsNullable: true,
                 Description: DescribeResourceEventProperty(nameof(ResourceEvent.CorrelationId))));
 
+        // R165: legacy listed ResourceEvent's properties as declared, and the derived event's Data, which hides
+        // ResourceEvent's own, last.
+        if (useLegacyResourceEventText)
+        {
+            string[] legacyOrder = ["$object", "eventId", "changeType", "created", "resourceObject", "href", "changedValues", "metadata", "secureData", "correlationId", "data"];
+
+            properties = [.. properties.OrderBy(property => Array.IndexOf(legacyOrder, property.Name))];
+        }
+
         var required = ImmutableArray.Create("$object", "eventId", "changeType", "created", "resourceObject", "data");
 
         // Legacy described the envelope by ResourceEvent<T>'s documentation and its members by ResourceEvent's; the
