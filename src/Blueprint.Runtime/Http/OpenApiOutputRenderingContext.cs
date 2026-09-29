@@ -1813,9 +1813,11 @@ public sealed record OpenApiOutputRenderingContext(
         {
             writer.WriteString("type", "string");
 
-            if (component.Description is not null)
+            // Legacy's NJsonSchema wrote an enum component's description whether or not the enum had one, the empty string
+            // for one without (17 of Signature365's 192 enum components).
+            if (component.Description is not null || omitLegacyExtras)
             {
-                writer.WriteString("description", component.Description);
+                writer.WriteString("description", component.Description ?? string.Empty);
             }
 
             WriteEnumValues(writer, component.ComponentEnumValues);

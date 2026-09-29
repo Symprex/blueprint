@@ -431,6 +431,18 @@ public sealed record OpenApiSchemaProjectionContext(
             }
         }
 
+        // R158: legacy's document described a problem's members, which the ASP.NET Core shared framework ships no XML
+        // documentation to read here, and so does a document rendered as legacy's, from what legacy wrote.
+        if (isProblem && naming == OpenApiSchemaNaming.Legacy)
+        {
+            properties =
+            [
+                .. properties.Select(property => property.Description is null && OpenApiProblemDetailsDocs.GetMemberDescription(bodyType, property.Name) is { } description
+                    ? property with { Description = description }
+                    : property),
+            ];
+        }
+
         // Any other type with a [JsonExtensionData] bucket legacy described the same way, by rule rather than by what
         // Signature365 recorded for a problem: its Newtonsoft.Json contract kept the bucket as a dictionary property like
         // any other, and NJsonSchema, which recognises the attribute by name, documented the type as open to further
@@ -454,7 +466,8 @@ public sealed record OpenApiSchemaProjectionContext(
             .ToImmutableArray();
 
         // As legacy's NJsonSchema described a schema: the type's [Description], else its XML documentation's summary.
-        var schemaDescription = GetTypeDescription(bodyType);
+        var schemaDescription = GetTypeDescription(bodyType)
+            ?? (naming == OpenApiSchemaNaming.Legacy ? OpenApiProblemDetailsDocs.GetTypeDescription(bodyType) : null);
         var schemaTitle = bodyType.GetCustomAttribute<System.ComponentModel.DisplayNameAttribute>()?.DisplayName;
 
         // Conditional validators are cross-property, so they belong to this schema rather than to any one of its
