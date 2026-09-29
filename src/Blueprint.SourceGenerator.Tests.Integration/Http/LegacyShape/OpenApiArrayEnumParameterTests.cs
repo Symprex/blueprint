@@ -28,9 +28,47 @@ public class OpenApiArrayEnumParameterTests
         items.GetProperty("x-enumNames").EnumerateArray().Select(static value => value.GetString()).Should().Equal("Paid", "Posted", "PaymentDue");
     }
 
-    private static JsonDocument Render()
+    [Fact]
+    public void Under_legacy_naming_an_array_parameters_enum_items_reference_the_enums_component()
     {
-        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
+        // The generated client types the items by the last segment of the reference, so a reference to the component it
+        // has for the enum gives "Array<InvoiceStatus>" where inline items gave "Array<undefined>" (R148).
+        using var document = Render(OpenApiSchemaNaming.Legacy);
+
+        var items = ItemsOf(document, "/array-enum-parameter/invoices", "statuses");
+
+        items.EnumerateObject().Select(static property => property.Name).Should().Equal("$ref");
+        items.GetProperty("$ref").GetString().Should().Be("#/components/schemas/ArrayEnumParameterStatus");
+
+        var component = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("ArrayEnumParameterStatus");
+        component.GetProperty("enum").EnumerateArray().Select(static value => value.GetString()).Should().Equal("Paid", "Posted", "PaymentDue");
+        component.GetProperty("description").GetString().Should().Be("An invoice's status, as Signature365's Subscriptions app declares it.");
+    }
+
+    [Fact]
+    public void Under_legacy_naming_an_enum_a_response_also_uses_is_referenced_by_the_one_component()
+    {
+        using var document = Render(OpenApiSchemaNaming.Legacy);
+
+        ItemsOf(document, "/array-enum-parameter/audits", "severities").GetProperty("$ref").GetString()
+            .Should().Be("#/components/schemas/ArrayEnumParameterSeverity");
+
+        var severity = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("ArrayEnumParameterAuditApiResource")
+            .GetProperty("properties").EnumerateObject().Single(static property => property.Name.Equals("severity", StringComparison.OrdinalIgnoreCase)).Value;
+        severity.GetProperty("oneOf")[0].GetProperty("$ref").GetString().Should().Be("#/components/schemas/ArrayEnumParameterSeverity");
+    }
+
+    private static JsonElement ItemsOf(JsonDocument document, string path, string parameterName)
+    {
+        return document.RootElement.GetProperty("paths").GetProperty(path)
+            .GetProperty("get").GetProperty("parameters").EnumerateArray()
+            .Single(parameter => string.Equals(parameter.GetProperty("name").GetString(), parameterName, StringComparison.OrdinalIgnoreCase))
+            .GetProperty("schema").GetProperty("items");
+    }
+
+    private static JsonDocument Render(OpenApiSchemaNaming naming = OpenApiSchemaNaming.Default)
+    {
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions { SchemaNaming = naming });
 
         return JsonDocument.Parse(rendered.Json);
     }

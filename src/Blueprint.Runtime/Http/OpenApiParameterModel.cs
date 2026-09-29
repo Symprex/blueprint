@@ -81,6 +81,16 @@ public sealed record OpenApiParameterModel(
     public ImmutableArray<string> ItemsEnumValues { get; init; } = ImmutableArray<string>.Empty;
 
     /// <summary>
+    /// Gets the name of the component of the enum the items are, or <see langword="null"/> for none: under
+    /// <see cref="OpenApiSchemaNaming.Legacy"/>, an enum array parameter's items reference the enum's component, as legacy's
+    /// referenced its definition of it, rather than repeat <see cref="ItemsEnumValues"/> inline.
+    /// </summary>
+    public string? ItemsEnumSchemaRef { get; init; }
+
+    /// <summary>Gets the description of the enum <see cref="ItemsEnumSchemaRef"/> names, which its component carries, or null.</summary>
+    public string? ItemsEnumDescription { get; init; }
+
+    /// <summary>
     /// Gets the title of the parameter's schema before the schema name formatter is applied, or <see langword="null"/> for
     /// none: under <see cref="OpenApiSchemaNaming.Legacy"/>, the legacy name of the parameter's type, as legacy titled it.
     /// </summary>

@@ -14,6 +14,20 @@ public enum ArrayEnumParameterStatus
     PaymentDue,
 }
 
+/// <summary>How severe an audit finding is.</summary>
+public enum ArrayEnumParameterSeverity
+{
+    Low,
+    High,
+}
+
+/// <summary>An audit-like resource carrying <see cref="ArrayEnumParameterSeverity"/> as a property of its own, so the enum
+/// also has a component through a response, as Signature365's InvoiceStatus does.</summary>
+public sealed class ArrayEnumParameterAuditApiResource
+{
+    public ArrayEnumParameterSeverity Severity { get; init; }
+}
+
 /// <summary>An invoice-like resource, so <see cref="ArrayEnumParameterStatus"/> is reached only through the query
 /// parameter below, never through a response or request body.</summary>
 public sealed class ArrayEnumParameterInvoiceApiResource
@@ -31,5 +45,18 @@ public partial class GetArrayEnumParameterInvoicesQuery : IQuery<ArrayEnumParame
     public static ArrayEnumParameterInvoiceApiResource Handle(GetArrayEnumParameterInvoicesQuery query)
     {
         return new ArrayEnumParameterInvoiceApiResource();
+    }
+}
+
+/// <summary>Filters audit findings by an array of severities, an enum a response also uses.</summary>
+[AllowAnonymous]
+[RootLink("/array-enum-parameter/audits")]
+public partial class GetArrayEnumParameterAuditsQuery : IQuery<ArrayEnumParameterAuditApiResource>
+{
+    public ArrayEnumParameterSeverity[]? Severities { get; set; }
+
+    public static ArrayEnumParameterAuditApiResource Handle(GetArrayEnumParameterAuditsQuery query)
+    {
+        return new ArrayEnumParameterAuditApiResource();
     }
 }

@@ -62,6 +62,7 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.SchemaNameCollisions.CollisionStatusOne.CollisionStatus), TypeInfoPropertyName = "CollisionStatusOneCollisionStatus")]
 [JsonSerializable(typeof(Http.SchemaNameCollisions.CollisionStatusTwo.CollisionStatus), TypeInfoPropertyName = "CollisionStatusTwoCollisionStatus")]
 [JsonSerializable(typeof(Http.LegacyShape.ArrayEnumParameterInvoiceApiResource))]
+[JsonSerializable(typeof(Http.LegacyShape.ArrayEnumParameterAuditApiResource))]
 [JsonSerializable(typeof(Http.EnumItemsResource))]
 [JsonSerializable(typeof(Http.SystemTypeApiResource))]
 [JsonSerializable(typeof(Http.LegacyShape.ComparisonBoundApiResource))]

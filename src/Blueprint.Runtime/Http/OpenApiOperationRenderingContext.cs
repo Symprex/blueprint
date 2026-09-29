@@ -321,12 +321,26 @@ public sealed record OpenApiOperationRenderingContext(
             string? paramItemsType = null;
             string? paramItemsFormat = null;
             var paramItemsEnumValues = ImmutableArray<string>.Empty;
+            string? paramItemsEnumSchemaRef = null;
+            string? paramItemsEnumDescription = null;
             if (schemaType == "array" && clrProperty is not null)
             {
                 var (itemsType, itemsFormat, _, itemsEnumValues, _, _, _) = ResolveCollectionSchema(clrProperty, schemaNamesByType);
                 paramItemsType = itemsType;
                 paramItemsFormat = itemsFormat;
                 paramItemsEnumValues = itemsEnumValues;
+
+                // R148: legacy typed the items of an enum array parameter by the enum, which the generated client reads from the
+                // last segment of a reference; inline items (Default's) leave it "Array<undefined>". Under Legacy the items
+                // reference the enum's component, which the document writes for a parameter's enum too.
+                if (naming == OpenApiSchemaNaming.Legacy
+                    && !itemsEnumValues.IsDefaultOrEmpty
+                    && GetCollectionElementType(clrProperty.PropertyType, dictionaryValues: false) is { } elementType)
+                {
+                    var enumType = Nullable.GetUnderlyingType(elementType) ?? elementType;
+                    paramItemsEnumSchemaRef = GetEnumSchemaName(enumType, naming, schemaNamesByType);
+                    paramItemsEnumDescription = OpenApiSchemaProjectionContext.GetTypeDescription(enumType);
+                }
             }
 
             switch (entry.Source)
@@ -383,6 +397,8 @@ public sealed record OpenApiOperationRenderingContext(
                         ItemsType = paramItemsType,
                         ItemsFormat = paramItemsFormat,
                         ItemsEnumValues = paramItemsEnumValues,
+                        ItemsEnumSchemaRef = paramItemsEnumSchemaRef,
+                        ItemsEnumDescription = paramItemsEnumDescription,
                     });
 
                     // R27: a query parameter of an undescribed complex type rendered bare ({"type": "object"}, no
@@ -709,11 +725,17 @@ public sealed record OpenApiOperationRenderingContext(
             return null;
         }
 
+        return GetEnumSchemaName(propertyType, naming, schemaNamesByType);
+    }
+
+    /// <summary>Returns the schema component name of an enum type, as the response schemas name it.</summary>
+    private static string GetEnumSchemaName(Type enumType, OpenApiSchemaNaming naming, FrozenDictionary<Type, string> schemaNamesByType)
+    {
         // Prefer the name the schema projection's SchemaNamer already assigned this enum (shared collision-counter pool
         // with every object type): a query/route parameter enum also used in a body or response must reference the same
         // component, told apart from another type of the same simple name the same way. One reached nowhere else falls
         // back to the bare formatted name.
-        return schemaNamesByType.TryGetValue(propertyType, out var assignedName) ? assignedName : OpenApiSchemaNames.Format(propertyType, naming);
+        return schemaNamesByType.TryGetValue(enumType, out var assignedName) ? assignedName : OpenApiSchemaNames.Format(enumType, naming);
     }
 
     /// <summary>

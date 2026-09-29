@@ -487,7 +487,7 @@ public sealed record OpenApiOutputRenderingContext(
             }
 
             WriteTags(writer, primaryOperation.Tags);
-            WriteParameters(writer, primaryOperation.Parameters, parameterTitleFormatter);
+            WriteParameters(writer, primaryOperation.Parameters, parameterTitleFormatter, schemaNameFormatter);
             WriteRequestBody(writer, primaryOperation.OperationName, primaryOperation.RequestBody, schemaNameFormatter, omitLegacyExtras);
             WriteResponses(writer, primaryOperation.Responses, schemaNameFormatter, omitLegacyExtras);
 
@@ -536,7 +536,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteParameters(Utf8JsonWriter writer, ImmutableArray<OpenApiParameterModel> parameters, Func<string, string>? titleFormatter)
+    private static void WriteParameters(Utf8JsonWriter writer, ImmutableArray<OpenApiParameterModel> parameters, Func<string, string>? titleFormatter, Func<string, string>? schemaNameFormatter)
     {
         if (parameters.IsEmpty)
         {
@@ -607,16 +607,24 @@ public sealed record OpenApiOutputRenderingContext(
             {
                 writer.WritePropertyName("items");
                 writer.WriteStartObject();
-                writer.WriteString("type", parameter.ItemsType);
 
-                if (parameter.ItemsFormat is not null)
+                if (parameter.ItemsEnumSchemaRef is not null)
                 {
-                    writer.WriteString("format", parameter.ItemsFormat);
+                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(parameter.ItemsEnumSchemaRef, schemaNameFormatter)}");
                 }
-
-                if (!parameter.ItemsEnumValues.IsDefaultOrEmpty)
+                else
                 {
-                    WriteEnumValues(writer, parameter.ItemsEnumValues);
+                    writer.WriteString("type", parameter.ItemsType);
+
+                    if (parameter.ItemsFormat is not null)
+                    {
+                        writer.WriteString("format", parameter.ItemsFormat);
+                    }
+
+                    if (!parameter.ItemsEnumValues.IsDefaultOrEmpty)
+                    {
+                        WriteEnumValues(writer, parameter.ItemsEnumValues);
+                    }
                 }
 
                 writer.WriteEndObject();

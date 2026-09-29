@@ -67,7 +67,7 @@ public sealed record OpenApiDocumentRenderingContext(
 
         // Collect distinct enum types referenced across all schema component properties and emit them
         // as top-level component schemas so properties can use $ref instead of inline enum arrays.
-        var enumComponents = CollectEnumSchemaComponents(schemaComponents, schemaProjection.SchemaNamesByType);
+        var enumComponents = CollectEnumSchemaComponents(schemaComponents, paths, schemaProjection.SchemaNamesByType);
 
         if (!enumComponents.IsEmpty)
         {
@@ -283,11 +283,13 @@ public sealed record OpenApiDocumentRenderingContext(
     /// <remarks>
     /// An enum reached only as the items of an array, or the values of a dictionary, has no property of its own to carry
     /// its members, yet the property writes a <c>$ref</c> to it (R143). Each such reference to a name that is one of
-    /// <paramref name="schemaNamesByType"/>'s enums gets its component too, or the reference dangles.
+    /// <paramref name="schemaNamesByType"/>'s enums gets its component too, or the reference dangles. So does an enum
+    /// an array parameter's items reference (R148, under Legacy naming only).
     /// </remarks>
     [UnconditionalSuppressMessage("Trimming", "IL2067", Justification = "Enum types used in STJ-serializable operations are preserved by the generated serializer context.")]
     private static ImmutableArray<OpenApiSchemaComponentModel> CollectEnumSchemaComponents(
         ImmutableArray<OpenApiSchemaComponentModel> existingComponents,
+        ImmutableArray<OpenApiPathItemModel> paths,
         FrozenDictionary<Type, string> schemaNamesByType)
     {
         var enumSchemas = new Dictionary<string, (ImmutableArray<string> Values, string? Description)>(StringComparer.Ordinal);
@@ -309,6 +311,26 @@ public sealed record OpenApiDocumentRenderingContext(
                     if (reference is not null && enumTypesByName.TryGetValue(reference, out var enumType))
                     {
                         enumSchemas.TryAdd(reference, (Enum.GetNames(enumType).ToImmutableArray(), OpenApiSchemaProjectionContext.GetTypeDescription(enumType)));
+                    }
+                }
+            }
+        }
+
+        // Only the operation written for a method slot has its parameters written, as OpenApiOutputRenderingContext does.
+        foreach (var path in paths)
+        {
+            foreach (var method in path.Methods)
+            {
+                if (method.Operations.IsEmpty)
+                {
+                    continue;
+                }
+
+                foreach (var parameter in method.Operations[0].Parameters)
+                {
+                    if (parameter.ItemsEnumSchemaRef is not null && !parameter.ItemsEnumValues.IsDefaultOrEmpty)
+                    {
+                        enumSchemas.TryAdd(parameter.ItemsEnumSchemaRef, (parameter.ItemsEnumValues, parameter.ItemsEnumDescription));
                     }
                 }
             }
