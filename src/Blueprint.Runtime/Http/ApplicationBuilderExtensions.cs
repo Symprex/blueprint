@@ -549,15 +549,55 @@ public static class EndpointRouteBuilderExtensions
             {
                 if (writeTask.Result == false)
                 {
-                    // Legacy self-executing results
-                    var legacyTask = result.ExecuteAsync(apiContext);
-                    return legacyTask.IsCompleted ? Task.CompletedTask : legacyTask;
+                    // Legacy self-executing results. A synchronous throw is taken as a faulted task, so that it and a task
+                    // that has faulted, already or later, reach the same catch the slow path gives this fault
+                    // (RouteOperationSlowPathAsync); only a task that completed successfully completes the request here.
+                    Task legacyTask;
+                    try
+                    {
+                        legacyTask = result.ExecuteAsync(apiContext);
+                    }
+                    catch (Exception ex)
+                    {
+                        legacyTask = Task.FromException(ex);
+                    }
+
+                    return legacyTask.IsCompletedSuccessfully ? Task.CompletedTask : this.AwaitSelfExecutingResultAsync(httpContext, legacyTask, operation);
                 }
 
                 return Task.CompletedTask;
             }
 
             return this.AwaitWriteTaskAsync(httpContext, apiContext, writeTask, result, operation);
+        }
+
+        /// <summary>
+        /// Awaits a self-executing result's own execution that did not complete successfully at once, answering a fault
+        /// as <see cref="RouteOperationSlowPathAsync"/> answers the same fault: with the exception body while the response
+        /// has not started, and by propagating it, so the connection is aborted, once it has.
+        /// </summary>
+        /// <remarks>
+        /// Before this, the fast path returned <c>Task.CompletedTask</c> for a task that had already faulted, so its
+        /// exception was dropped and the request completed as if it had succeeded. Legacy's router awaited the result's
+        /// execution with no catch of its own (Signature365 <c>8b40ecc961</c>,
+        /// <c>Blueprint.Http/ApplicationBuilderExtensions.cs:244-247</c>); the exception body comes from its result
+        /// executor's catch, filtered to a response that has not started (<c>OkResultOperationExecutor.cs:48-65</c>), which
+        /// this router already applies to every other result fault (R105, R118).
+        /// </remarks>
+        private async Task AwaitSelfExecutingResultAsync(HttpContext httpContext, Task executionTask, ApiOperationDescriptor operation)
+        {
+            try
+            {
+                await executionTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (!httpContext.Response.HasStarted)
+            {
+                await this.HandleUnexpectedExceptionAsync(httpContext, operation, ex).ConfigureAwait(false);
+            }
         }
 
         /// <summary>
