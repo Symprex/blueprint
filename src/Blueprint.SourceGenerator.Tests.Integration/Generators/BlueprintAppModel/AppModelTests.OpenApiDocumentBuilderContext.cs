@@ -72,7 +72,8 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.LinkWireWidgetApiResource",
             "Blueprint.Model.ListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LinkWireWidgetApiResource>",
             "Blueprint.SourceGenerator.Tests.Integration.Http.RelLessLinkWireWidgetApiResource",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.OperationIdMixedLinkApiResource");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.OperationIdMixedLinkApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.NestedLinkHolderApiResource");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))

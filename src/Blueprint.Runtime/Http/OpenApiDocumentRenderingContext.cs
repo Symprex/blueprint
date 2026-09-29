@@ -63,7 +63,7 @@ public sealed record OpenApiDocumentRenderingContext(
             .ToImmutableArray();
 
         var schemaProjection = pathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.SchemaProjection;
-        schemaComponents = EnrichWithResourceLinks(schemaComponents, schemaProjection.Document.App, schemaProjection.FullNameToShortName);
+        schemaComponents = EnrichWithResourceLinks(schemaComponents, schemaProjection.Document.App, schemaProjection.ProjectedFullNameToName);
 
         // Collect distinct enum types referenced across all schema component properties and emit them
         // as top-level component schemas so properties can use $ref instead of inline enum arrays.
@@ -207,7 +207,7 @@ public sealed record OpenApiDocumentRenderingContext(
         IReadOnlyDictionary<string, string> fullNameToShortName)
     {
         // Build a lookup of resource name → non-self links, keyed by the same BodyTypeName schema projection gives the
-        // resource's component: the short name it maps a covered type's CLR full name to. A resource with no mapping
+        // resource's component: the name it maps a projected type's CLR full name to, a type reached only through another's property, list or dictionary included. A resource with no mapping
         // keeps its full name, so a component keyed by full name still matches. Any SchemaNameFormatter is applied to
         // that BodyTypeName later, when the component is written, so the links follow the component to its final key.
         var linksByResourceName = new Dictionary<string, List<OpenApiSchemaLinkExtension>>(StringComparer.Ordinal);

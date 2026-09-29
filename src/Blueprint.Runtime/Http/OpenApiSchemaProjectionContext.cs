@@ -167,6 +167,16 @@ public sealed record OpenApiSchemaProjectionContext(
 
         var schemaNamesByType = schemaNamesByTypeBuilder.ToFrozenDictionary();
 
+        // Every projected type, a nested one included, is known by its full name too, not only the covered body types
+        // fullNameToShortName holds, so that whatever the document goes on to key by a runtime type's full name (a
+        // resource's x-links) finds a component reached only through another type's property, list or dictionary.
+        var projectedFullNameToNameBuilder = new Dictionary<string, string>(fullNameToShortName, StringComparer.Ordinal);
+
+        foreach (var (name, type) in projectedTypesByName)
+        {
+            projectedFullNameToNameBuilder.TryAdd(type.FullName ?? type.Name, name);
+        }
+
         var schemaBuilder = ImmutableArray.CreateBuilder<OpenApiSchemaModel>();
 
         foreach (var (schemaName, schemaType) in projectedTypesByName.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
@@ -189,6 +199,7 @@ public sealed record OpenApiSchemaProjectionContext(
             Naming = naming,
             RequiredProperties = requiredProperties,
             SchemaNamesByType = schemaNamesByType,
+            ProjectedFullNameToName = projectedFullNameToNameBuilder.ToFrozenDictionary(StringComparer.Ordinal),
             BaseNames = namer.BaseNames.ToFrozenDictionary(StringComparer.Ordinal),
         };
     }
@@ -203,6 +214,12 @@ public sealed record OpenApiSchemaProjectionContext(
     /// of that type references in turn.
     /// </summary>
     internal FrozenDictionary<Type, string> SchemaNamesByType { get; init; } = FrozenDictionary<Type, string>.Empty;
+
+    /// <summary>
+    /// Gets the name of the schema component projected for each type, by the type's <see cref="Type.FullName"/>, which
+    /// <see cref="FullNameToShortName"/> holds only for the covered body types: this one also names the types those reach.
+    /// </summary>
+    internal FrozenDictionary<string, string> ProjectedFullNameToName { get; init; } = FrozenDictionary<string, string>.Empty;
 
     /// <summary>
     /// Gets, for each schema this projection named apart from another type of the same name, the name it would have had —
