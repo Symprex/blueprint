@@ -857,6 +857,50 @@ endpoints.MapBlueprintApi<MyApp, MyAppExecutor>(
 
 Processors run once at startup and receive both the rendered `OpenApiOperationModel` and the source `ApiOperationDescriptor`, so you can filter by descriptor metadata (e.g. only strip parameters from authenticated operations).
 
+### OpenAPI document changes in v1.0.3 that apply under every schema naming
+
+These change the document a consumer on `OpenApiSchemaNaming.Default` reads too, not only one on `Legacy` naming. Coming
+from v1.0.2 or earlier, regenerate the clients from the new document and expect the differences below.
+
+**Behaviour change for two enums of one simple name (v1.0.3).** Two distinct enum types with the same simple name (two
+nested `Status` enums, or two apps' own `AuthEnforcementType`) are now named apart by the same counter that names two
+same-named classes: the second is `X2`, with its own member list. Before, both properties referenced the one component and
+the second enum's members were lost, so a client saw the wrong values. A single enum is named as before.
+
+**Behaviour change for an enum-array query parameter (v1.0.3).** A collection query parameter of an enum
+(`InvoiceStatus[]? Statuses`) now describes its `items` inline with the member names — `type: string`, `enum`,
+`x-enumNames` and `x-enum-varnames` — where it was a bare `{"type": "string"}` and a generated client lost the enum. The
+enum is written inline, as a scalar enum query parameter already is, not as a `$ref` to a component. A `Header` or
+`Cookie` array parameter is unchanged.
+
+**Behaviour change for a NodaTime request-body or query property (v1.0.3).** A NodaTime property of a request body or a
+parameter now carries its ISO-8601 `format`, as the same type already did in a response schema: `Instant`,
+`OffsetDateTime`, `ZonedDateTime` and `LocalDateTime` are `date-time`, `LocalDate` is `date`, `LocalTime` is `time`, and
+`Duration`, `Period` and `Offset` are `duration`. Before, they were a bare `string`, so a generated client typed the field
+as a plain string.
+
+**Behaviour change for the ResourceEvent envelope's text (v1.0.3).** The `changeType` and `href` properties of a
+`ResourceEvent` envelope are now described by the framework's own summaries ("Gets the change type of this event,
+indicating whether the resource was created, updated or deleted." and the `href` one) unless `SchemaNaming` is `Legacy`,
+where they keep legacy Blueprint's wording (typo included). Before, every consumer got legacy's wording, which refers to
+a `Type` property `ResourceEvent` does not have. The wording is the only difference. A caller of
+`OpenApiDocumentRenderingContext.Create` chooses it with its new optional `useLegacyResourceEventText` argument, which
+defaults to `false`.
+
+**Behaviour change for a non-public `ApiExceptionFactory` (v1.0.3).** An operation's error statuses now come from every
+`static` field of type `ApiExceptionFactory` the operation declares, whatever its accessibility and whether or not it is
+`readonly`, as legacy Blueprint's `GetFields(Static | NonPublic | Public)` read them. Before, only `public static
+readonly` fields counted, so a private factory's status was missing from the document, from the operation's
+response metadata and from a client's error catalogue. Expect responses (for example a `410`) to appear on operations that
+declare their factories privately.
+
+**Behaviour change for when an operation's factories are read (v1.0.3).** The generated descriptor reads each factory's
+`Title` and `Type` when it is built — in the generated app's constructor, for every operation that declares a factory,
+under either naming — as legacy read each field's value. Reading a `static` field runs the static initialisation of the
+type that declares it, so an operation's static initialiser (and that of a class it borrows a factory from, such as
+`= PartnerApiExceptions.NotFound`) now runs when the app is constructed instead of on first use. An initialiser that
+throws, or a factory that is still `null` then, fails at construction. Declare a factory as a `static readonly` field with
+a plain initialiser, and keep other work out of an operation's static initialiser.
 ## Compile-time diagnostics
 
 The source generator catches contract errors at build time. Key diagnostics:
