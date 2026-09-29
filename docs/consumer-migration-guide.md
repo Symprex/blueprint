@@ -1045,6 +1045,13 @@ Before, only a plain property did, and the deprecation was dropped from a
 reference. A deprecated reference that is neither nullable nor described was a bare `$ref`, which cannot carry either, so
 it is now wrapped in `oneOf` too.
 
+**Behaviour change for an operation's and a parameter's deprecation message under `Legacy` naming (v1.0.3).** Under
+`SchemaNaming = Legacy`, a deprecated operation's or parameter's message is written as `x-deprecatedMessage`, as a
+deprecated property's is, and no longer as `x-deprecated-reason`; `deprecated: true` is unchanged. Legacy Blueprint's own
+document generator never marked an operation or parameter deprecated (none of Signature365's 18 legacy documents has
+one), so this follows the key NJsonSchema wrote for a schema, which NSwag's parameter is. `Default` naming still writes
+`x-deprecated-reason`.
+
 **Behaviour change for the `Link` component (v1.0.3).** The well-known `Link` schema component now has
 `"additionalProperties": false`, as every other object component the framework writes has. Before it allowed further
 properties, so a client that generates strict types from `additionalProperties` got a looser `Link` than every other model.

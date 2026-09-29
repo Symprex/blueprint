@@ -981,6 +981,31 @@ public class ReferenceAppOpenApiTests
             .Should().BeFalse("NameFilter is not obsolete and should not have deprecated");
     }
 
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Legacy, "x-deprecatedMessage", "x-deprecated-reason")]
+    [InlineData(OpenApiSchemaNaming.Default, "x-deprecated-reason", "x-deprecatedMessage")]
+    public async Task An_obsolete_operation_and_parameter_write_their_message_under_the_naming_s_key(OpenApiSchemaNaming naming, string written, string notWritten)
+    {
+        // R170: a property's message was already x-deprecatedMessage under Legacy (R160, NJsonSchema's key: its
+        // OpenApiParameter is a JsonSchema, so the key is the one legacy's NSwag wrote for a parameter); an operation's and a
+        // parameter's kept x-deprecated-reason there. GetTemplateVersionsQuery is [Obsolete] and its Id parameter is not;
+        // GetPagedTemplatesQuery.CategoryFilter is [Obsolete("Use NameFilter instead.")].
+        var (json, _) = await InvokeOpenApiEndpointAsync(info => info.SchemaNaming = naming);
+        using var doc = JsonDocument.Parse(json);
+        var paths = doc.RootElement.GetProperty("paths");
+
+        var operation = paths.GetProperty("/templates/{Id}/versions").GetProperty("get");
+        operation.GetProperty("deprecated").GetBoolean().Should().BeTrue();
+        operation.GetProperty(written).GetString().Should().Be("Use the new paginated template history endpoint instead.");
+        operation.TryGetProperty(notWritten, out _).Should().BeFalse();
+
+        var parameter = paths.GetProperty("/templates/paged").GetProperty("get").GetProperty("parameters").EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "categoryFilter");
+        parameter.GetProperty("deprecated").GetBoolean().Should().BeTrue();
+        parameter.GetProperty(written).GetString().Should().Be("Use NameFilter instead.");
+        parameter.TryGetProperty(notWritten, out _).Should().BeFalse();
+    }
+
     [Fact]
     public async Task When_body_property_has_default_value_attribute_then_schema_emits_default()
     {

@@ -497,7 +497,7 @@ public sealed record OpenApiOutputRenderingContext(
 
                 if (primaryOperation.DeprecationReason is not null)
                 {
-                    writer.WriteString("x-deprecated-reason", primaryOperation.DeprecationReason);
+                    writer.WriteString(DeprecationMessageKey(omitLegacyExtras), primaryOperation.DeprecationReason);
                 }
             }
 
@@ -575,7 +575,7 @@ public sealed record OpenApiOutputRenderingContext(
 
                 if (parameter.DeprecationReason is not null)
                 {
-                    writer.WriteString("x-deprecated-reason", parameter.DeprecationReason);
+                    writer.WriteString(DeprecationMessageKey(omitLegacyExtras), parameter.DeprecationReason);
                 }
             }
 
@@ -2180,9 +2180,18 @@ public sealed record OpenApiOutputRenderingContext(
     }
 
     /// <summary>
-    /// Writes <c>deprecated</c> for a deprecated property, whatever form the property takes, with its message beside it:
-    /// as <c>x-deprecatedMessage</c> under Legacy naming, which is what legacy's NJsonSchema wrote, and otherwise as
+    /// Returns the key a deprecation message of a property, a parameter or an operation is written under:
+    /// <c>x-deprecatedMessage</c> under Legacy naming, which is what legacy's NJsonSchema wrote, and otherwise
     /// <c>x-deprecated-reason</c>.
+    /// </summary>
+    private static string DeprecationMessageKey(bool omitLegacyExtras)
+    {
+        return omitLegacyExtras ? "x-deprecatedMessage" : "x-deprecated-reason";
+    }
+
+    /// <summary>
+    /// Writes <c>deprecated</c> for a deprecated property, whatever form the property takes, with its message beside it
+    /// under <see cref="DeprecationMessageKey"/>.
     /// </summary>
     private static void WritePropertyDeprecation(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property, bool omitLegacyExtras)
     {
@@ -2195,7 +2204,7 @@ public sealed record OpenApiOutputRenderingContext(
 
         if (property.DeprecationReason is not null)
         {
-            writer.WriteString(omitLegacyExtras ? "x-deprecatedMessage" : "x-deprecated-reason", property.DeprecationReason);
+            writer.WriteString(DeprecationMessageKey(omitLegacyExtras), property.DeprecationReason);
         }
     }
 
