@@ -899,6 +899,14 @@ service-to-service request or response could not be read (`JsonException`) or wa
 configures no options gets the defaults, as before. `AddBlueprintHttpClient<TApp>` is unchanged: it takes its
 `JsonSerializerOptions` as an argument.
 
+**Behaviour change (v1.0.3).** `AddBlueprintApi` installs the app's source-generated serializer context on
+`BlueprintJsonOptions` as the options are made (an `IPostConfigureOptions<BlueprintJsonOptions>`), not when the app is
+first resolved. Legacy configured those options only through `services.Configure`, and clients now share them (above), so
+a client that read or wrote JSON before the app was resolved made the app's own installation throw ("This
+JsonSerializerOptions instance is read-only or has already been used") and every later resolution of the app rethrow.
+Resolving the app still makes the options, so it still finds the context installed; only the first options made for the
+default name are given it, not a named or per-scope copy. Options you configure in `services.Configure` still run first.
+
 **Behaviour change (v1.0.3).** Under `OpenApiSchemaNaming.Legacy`, a non-GET operation whose request body has no properties
 still has a schema component in the document, though it references none and the operation has no `requestBody`: a closed
 empty object, `{"type":"object","description":…,"additionalProperties":false}`, keyed as the operation type's own schema

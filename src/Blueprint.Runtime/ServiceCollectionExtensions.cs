@@ -37,19 +37,14 @@ public static class ServiceCollectionExtensions
         // Created first so the app's factory reads what configure (run below, before the app is ever resolved) sets on it.
         var builder = new BlueprintServiceBuilder(services);
 
-        services.AddSingleton<TApp>(sp =>
-        {
-            var app = new TApp();
-            var jsonOptions = sp.GetService<IOptions<BlueprintJsonOptions>>();
-            if (jsonOptions?.Value is { } opts)
-            {
-                app.ApplySerializerOptions(opts.SerializerOptions);
-            }
-
-            app.HateoasLinksDisabled = builder.HateoasLinksDisabled;
-
-            return app;
-        });
+        // The app's serializer context is installed on the shared BlueprintJsonOptions as they are made, whichever of the
+        // options and the app is asked for first: a client that shares the options may serialise, which makes them
+        // read-only, before the app is ever resolved.
+        services.AddSingleton(sp => new BlueprintAppSerializerContextInstaller<TApp>(
+            sp,
+            () => new TApp { HateoasLinksDisabled = builder.HateoasLinksDisabled }));
+        services.AddSingleton<IPostConfigureOptions<BlueprintJsonOptions>>(static sp => sp.GetRequiredService<BlueprintAppSerializerContextInstaller<TApp>>());
+        services.AddSingleton<TApp>(static sp => sp.GetRequiredService<BlueprintAppSerializerContextInstaller<TApp>>().ResolveApp());
         services.AddSingleton<BlueprintApp>(static sp => sp.GetRequiredService<TApp>());
         services.AddSingleton<TExec>();
 
@@ -102,6 +97,60 @@ public static class ServiceCollectionExtensions
         configure?.Invoke(builder);
 
         return services;
+    }
+}
+
+/// <summary>
+/// Owns an app's construction and installs its serializer context on the <see cref="BlueprintJsonOptions"/> when they are
+/// made, so that the context does not depend on whether the app or the options are resolved first.
+/// </summary>
+/// <remarks>
+/// The options never resolve the app through the service provider (which would wait on the app's own resolution while the
+/// app's resolution waits on the options); both take the one instance from here.
+/// </remarks>
+/// <typeparam name="TApp">The app whose serializer context is installed.</typeparam>
+internal sealed class BlueprintAppSerializerContextInstaller<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TApp> : IPostConfigureOptions<BlueprintJsonOptions>
+    where TApp : BlueprintApp
+{
+    private readonly IServiceProvider _services;
+    private readonly Lazy<TApp> _app;
+    private int _installed;
+
+    /// <summary>
+    /// Initialises a new instance of the <see cref="BlueprintAppSerializerContextInstaller{TApp}"/> class.
+    /// </summary>
+    /// <param name="services">The service provider the options are resolved from.</param>
+    /// <param name="createApp">Creates the app, called once.</param>
+    public BlueprintAppSerializerContextInstaller(IServiceProvider services, Func<TApp> createApp)
+    {
+        this._services = services;
+        this._app = new Lazy<TApp>(createApp);
+    }
+
+    /// <summary>
+    /// Returns the app, having made the options first (unless something is making them already) so that its context is
+    /// installed whenever the app is resolved.
+    /// </summary>
+    /// <returns>The app.</returns>
+    public TApp ResolveApp()
+    {
+        var app = this._app.Value;
+
+        _ = this._services.GetService<IOptions<BlueprintJsonOptions>>()?.Value;
+
+        return app;
+    }
+
+    /// <inheritdoc />
+    public void PostConfigure(string? name, BlueprintJsonOptions options)
+    {
+        // Only once, and only for the options the app's host and its clients share: a named or snapshot copy is not theirs.
+        if (!string.IsNullOrEmpty(name) || Interlocked.Exchange(ref this._installed, 1) != 0)
+        {
+            return;
+        }
+
+        this._app.Value.ApplySerializerOptions(options.SerializerOptions);
     }
 }
 
