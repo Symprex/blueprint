@@ -917,6 +917,19 @@ documents carry 128 such operations and 128 such components, and no GET has one.
 gets a factory and a validator for each (a form built around a body-less command needs one). Default naming writes none,
 as before.
 
+The same holds for an operation published as GET and another method (legacy generated per method, so it had the
+component from the non-GET one), and for a body an operation processor (`OpenApiOperationProcessorOptions`) empties and
+drops: legacy's `ConfigureOperation` edited the registered schema in place and then removed the body, so the emptied
+component stayed. Signature365's Portal drops an auto-populated `TenantId` this way from 22 commands whose only body
+property it is.
+
+**Behaviour change (v1.0.3).** Under `OpenApiSchemaNaming.Legacy`, a validation attribute implies a schema `format` only
+where legacy's NJsonSchema derived one: from a `DataTypeAttribute` through its `EmailAddress`, `PhoneNumber` and `Url`
+map, so `System.ComponentModel.DataAnnotations.EmailAddress`, `Phone` and `Url` give `email`, `phone` and `uri`, while
+Blueprint's own `[EmailAddress]` and `[Url]` (which are `RegexAttribute`s) and `[CreditCard]` give none. A client
+generated from the document turns a format into a validator, so a format legacy never wrote would reject input its forms
+accept. This applies to request-body and component properties alike; a parameter already had no validation-derived
+format under Legacy. Default naming keeps every format, as before.
 **Behaviour change (v1.0.3).** `ReflectionUtilities.GetUnderlyingTypeIfNullable(null)` returns `null`, as legacy's did
 (`Blueprint/Utilities/ReflectionUtilities.cs:21-29`); it threw an `ArgumentNullException`. The parameter is now `Type?`,
 and the return is not null whenever the argument is not, so callers that pass a real type see no change. A call site that
