@@ -201,13 +201,13 @@ public sealed record OpenApiOperationRenderingContext(
 
         // R178: legacy registered the operation type's schema as it generated it and only then dropped an empty body, so a
         // non-GET operation with no body still had its (empty) component; a GET never had a body schema generated at all.
+        // R184: it generated per method, so an operation published as GET and another method had it from the other.
         string? bodylessSchemaName = null;
         string? bodylessSchemaDescription = null;
 
         if (naming == OpenApiSchemaNaming.Legacy
             && requestBody is null
-            && !httpMethods.IsEmpty
-            && !httpMethods.Contains("GET", StringComparer.Ordinal))
+            && httpMethods.Any(static method => !string.Equals(method, "GET", StringComparison.Ordinal)))
         {
             bodylessSchemaName = requestBodyNaming == OpenApiRequestBodyNaming.OperationType
                 ? OpenApiSchemaNames.Format(operation.Operation.OperationType, naming)

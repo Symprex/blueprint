@@ -59,6 +59,23 @@ public sealed class OpenApiLegacyBodylessOperationTests
         ComponentNames(document).Should().NotContain("GetLegacyBodylessWidgetsQuery");
     }
 
+    // R184: legacy generated the schema once per method, so an operation published as GET and POST had it from the POST.
+    [Fact]
+    public void An_operation_published_as_GET_and_POST_has_one_too()
+    {
+        using var document = Render(OpenApiSchemaNaming.Legacy, OpenApiRequestBodyNaming.OperationType);
+
+        ComponentNames(document).Should().Contain("TouchLegacyBodylessWidgetCommand");
+    }
+
+    [Fact]
+    public void Under_legacy_naming_with_bodies_keyed_by_operation_name_the_component_is_named_by_the_operation()
+    {
+        using var document = Render(OpenApiSchemaNaming.Legacy, OpenApiRequestBodyNaming.OperationName);
+
+        ComponentNames(document).Should().Contain("DisableLegacyBodylessWidget").And.NotContain("DisableLegacyBodylessWidgetCommand");
+    }
+
     [Fact]
     public void The_schema_name_formatter_applies_to_the_component_as_it_does_to_any_other()
     {
@@ -186,6 +203,21 @@ public partial class DeleteLegacyBodylessWidgetCommand : ICommand<string>
     public string Id { get; set; } = string.Empty;
 
     public static string Handle(DeleteLegacyBodylessWidgetCommand command)
+    {
+        return command.Id;
+    }
+}
+
+/// <summary>Touches a widget, by GET or POST.</summary>
+[AllowAnonymous]
+[RootLink("/legacy-bodyless/{Id}/touch")]
+[HttpGet]
+[HttpPost]
+public partial class TouchLegacyBodylessWidgetCommand : ICommand<string>
+{
+    public string Id { get; set; } = string.Empty;
+
+    public static string Handle(TouchLegacyBodylessWidgetCommand command)
     {
         return command.Id;
     }
