@@ -899,6 +899,16 @@ service-to-service request or response could not be read (`JsonException`) or wa
 configures no options gets the defaults, as before. `AddBlueprintHttpClient<TApp>` is unchanged: it takes its
 `JsonSerializerOptions` as an argument.
 
+**Behaviour change (v1.0.3).** Under `OpenApiSchemaNaming.Legacy`, a non-GET operation whose request body has no properties
+still has a schema component in the document, though it references none and the operation has no `requestBody`: a closed
+empty object, `{"type":"object","description":…,"additionalProperties":false}`, keyed as the operation type's own schema
+is (by `OpenApiRequestBodyNaming` and the `SchemaNameFormatter`) and described by the type's XML summary. Legacy
+registered the schema of the operation's type as it generated it and only then dropped the empty body
+(`Blueprint.OpenApi/OpenApiDocumentBuilder.cs:347`, `:357-360`, `:601-611` in Signature365); Signature365's 18 legacy
+documents carry 128 such operations and 128 such components, and no GET has one. A client generated from the document
+gets a factory and a validator for each (a form built around a body-less command needs one). Default naming writes none,
+as before.
+
 **Behaviour change (v1.0.3).** `ReflectionUtilities.GetUnderlyingTypeIfNullable(null)` returns `null`, as legacy's did
 (`Blueprint/Utilities/ReflectionUtilities.cs:21-29`); it threw an `ArgumentNullException`. The parameter is now `Type?`,
 and the return is not null whenever the argument is not, so callers that pass a real type see no change. A call site that

@@ -1405,6 +1405,10 @@ public sealed record OpenApiOutputRenderingContext(
                 {
                     Reach(requestBody.SchemaName ?? operation.OperationName);
                 }
+                else if (operation.BodylessRequestSchemaName is { } bodylessSchemaName)
+                {
+                    Reach(bodylessSchemaName);
+                }
 
                 foreach (var response in operation.Responses)
                 {
@@ -1905,6 +1909,10 @@ public sealed record OpenApiOutputRenderingContext(
 
                 writer.WriteEndObject();
             }
+        }
+        else if (component.IsBodylessOperation)
+        {
+            writer.WriteBoolean("additionalProperties", false);
         }
 
         if (!component.Links.IsDefaultOrEmpty)

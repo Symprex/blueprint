@@ -172,6 +172,13 @@ public sealed record OpenApiSchemaComponentModel(
     /// <c>additionalProperties: {"nullable": true}</c>.
     /// </summary>
     public bool AdditionalPropertiesAreNullable { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the component is the schema of an operation type that has no request body, which
+    /// legacy wrote as a closed object with no properties (<c>additionalProperties: false</c>) though the operation
+    /// references none.
+    /// </summary>
+    public bool IsBodylessOperation { get; init; }
 }
 
 /// <summary>

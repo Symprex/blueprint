@@ -121,6 +121,26 @@ public sealed record OpenApiDocumentRenderingContext(
             {
                 var primaryOperation = method.Operations.IsEmpty ? null : method.Operations[0];
 
+                // R178: an operation with no body has the empty schema legacy registered for its type.
+                if (primaryOperation is { RequestBody: null, BodylessRequestSchemaName: { } bodylessName })
+                {
+                    if (operationsByBodyName.TryAdd(bodylessName, primaryOperation.OperationTypeName)
+                        || !string.Equals(operationsByBodyName[bodylessName], primaryOperation.OperationTypeName, StringComparison.Ordinal))
+                    {
+                        builder.Add(new OpenApiSchemaComponentModel(
+                            bodylessName,
+                            "object",
+                            ImmutableArray<string>.Empty,
+                            ImmutableArray<OpenApiSchemaComponentPropertyModel>.Empty,
+                            Description: primaryOperation.BodylessRequestSchemaDescription)
+                        {
+                            IsBodylessOperation = true,
+                        });
+                    }
+
+                    continue;
+                }
+
                 if (primaryOperation?.RequestBody is not { } requestBody || requestBody.Properties.IsEmpty)
                 {
                     continue;

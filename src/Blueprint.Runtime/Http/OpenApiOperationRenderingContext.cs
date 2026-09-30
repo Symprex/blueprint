@@ -184,6 +184,22 @@ public sealed record OpenApiOperationRenderingContext(
             requestBody = requestBody with { SchemaName = OpenApiSchemaNames.Format(operation.Operation.OperationType, naming) };
         }
 
+        // R178: legacy registered the operation type's schema as it generated it and only then dropped an empty body, so a
+        // non-GET operation with no body still had its (empty) component; a GET never had a body schema generated at all.
+        string? bodylessSchemaName = null;
+        string? bodylessSchemaDescription = null;
+
+        if (naming == OpenApiSchemaNaming.Legacy
+            && requestBody is null
+            && !httpMethods.IsEmpty
+            && !httpMethods.Contains("GET", StringComparer.Ordinal))
+        {
+            bodylessSchemaName = requestBodyNaming == OpenApiRequestBodyNaming.OperationType
+                ? OpenApiSchemaNames.Format(operation.Operation.OperationType, naming)
+                : operation.Operation.Name;
+            bodylessSchemaDescription = OpenApiSchemaProjectionContext.GetTypeDescription(operation.Operation.OperationType);
+        }
+
         // Extract [Description] from the operation type for the operation-level summary.
         // Fall back to compile-time XML documentation when no [Description] attribute is present.
         var operationDescription = operation.Operation.OperationType
@@ -231,6 +247,8 @@ public sealed record OpenApiOperationRenderingContext(
             parameters,
             requestBody)
         {
+            BodylessRequestSchemaName = bodylessSchemaName,
+            BodylessRequestSchemaDescription = bodylessSchemaDescription,
             Summary = operationDescription,
             Description = operationRemarks,
             Deprecated = isDeprecated,
@@ -1479,6 +1497,16 @@ public sealed record OpenApiOperationModel(
     ImmutableArray<OpenApiParameterModel> Parameters,
     OpenApiRequestBodyModel? RequestBody)
 {
+    /// <summary>
+    /// Gets the name of the empty schema component an operation with no request body has, before the schema name
+    /// formatter is applied, or <see langword="null"/> for none: under <see cref="OpenApiSchemaNaming.Legacy"/>, a non-GET
+    /// operation whose body has no properties, as legacy registered its type's schema before it dropped the body.
+    /// </summary>
+    public string? BodylessRequestSchemaName { get; init; }
+
+    /// <summary>Gets the description of the <see cref="BodylessRequestSchemaName"/> component, or null for none.</summary>
+    public string? BodylessRequestSchemaDescription { get; init; }
+
     /// <summary>Gets the short summary for this operation in the OpenAPI output, or null when not specified.</summary>
     public string? Summary { get; init; }
 
