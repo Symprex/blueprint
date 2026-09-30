@@ -82,7 +82,8 @@ public class AppModelSerializerContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.RefWrapperApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredOnlyBodyItem",
             "Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredCollectionBodyItem",
-            "System.Collections.Generic.List<Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredCollectionBodyItem>");
+            "System.Collections.Generic.List<Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredCollectionBodyItem>",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.BodyFormatResult");
     }
 
     [Fact]
@@ -161,6 +162,7 @@ public class AppModelSerializerContextTests
             typeof(Http.LegacyShape.RefWrapperApiResource),
             typeof(Http.DeclaredOnlyBodyItem),
             typeof(Http.DeclaredCollectionBodyItem),
-            typeof(List<Http.DeclaredCollectionBodyItem>));
+            typeof(List<Http.DeclaredCollectionBodyItem>),
+            typeof(Http.LegacyShape.BodyFormatResult));
     }
 }

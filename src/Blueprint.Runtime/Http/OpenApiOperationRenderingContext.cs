@@ -380,7 +380,11 @@ public sealed record OpenApiOperationRenderingContext(
                 : null;
 
             // Validation-derived format (email, uri, phone) takes precedence over CLR type format.
-            var effectiveFormat = constraints.Format ?? schemaFormat;
+            // R183: under Legacy only a format legacy's NJsonSchema derived (OpenApiValidationConstraints.GetFormat).
+            var validationFormat = naming == OpenApiSchemaNaming.Legacy
+                ? OpenApiValidationConstraints.GetFormat(clrProperty, useLegacyRules: true)
+                : constraints.Format;
+            var effectiveFormat = validationFormat ?? schemaFormat;
 
             // R132: a parameter's validation-derived format is one legacy never wrote either (the same reflection-only schema as
             // R44); its type's format (int32, int64, date-time) is the only one Signature365's 811 committed parameters carry.

@@ -93,4 +93,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.DeclaredOnlyBodyItem))]
 [JsonSerializable(typeof(Http.DeclaredCollectionBodyItem))]
 [JsonSerializable(typeof(List<Http.DeclaredCollectionBodyItem>))]
+[JsonSerializable(typeof(Http.LegacyShape.BodyFormatResult))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

@@ -21,6 +21,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "AlwaysExpandTestEmployee",
             "ArrayEnumParameterAuditApiResource",
             "ArrayEnumParameterInvoiceApiResource",
+            "BodyFormatResult",
             "CatchAllFolderApiResource",
             "CollisionHolderApiResource",
             "CollisionItem",

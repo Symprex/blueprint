@@ -77,7 +77,8 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.RefWrapperApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredOnlyBodyItem",
             "Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredCollectionBodyItem",
-            "System.Collections.Generic.List<Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredCollectionBodyItem>");
+            "System.Collections.Generic.List<Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredCollectionBodyItem>",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.BodyFormatResult");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))

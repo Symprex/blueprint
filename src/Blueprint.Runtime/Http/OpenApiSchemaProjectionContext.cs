@@ -741,7 +741,8 @@ public sealed record OpenApiSchemaProjectionContext(
             isNullable &= !hasRequiredAttribute;
         }
 
-        var format = MapFormatFromValidationAttributes(validationAttributes) ?? MapFormat(property.PropertyType);
+        var format = OpenApiValidationConstraints.GetFormat(validationAttributes, useLegacyRules: naming == OpenApiSchemaNaming.Legacy)
+            ?? MapFormat(property.PropertyType);
         var (enumValues, enumSchemaName) = MapEnumValues(property.PropertyType, naming, schemaNamesByType);
         var enumDescription = enumSchemaName is null ? null : GetTypeDescription(Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType);
         var description = GetPropertyDescription(property);
@@ -1090,34 +1091,6 @@ public sealed record OpenApiSchemaProjectionContext(
                 {
                     return "int64";
                 }
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Extracts an OpenAPI format hint from well-known validation attributes. These override the
-    /// CLR type-based format when present, enabling <c>string</c> properties annotated with
-    /// <c>[EmailAddress]</c>, <c>[Phone]</c>, <c>[Url]</c>, or <c>[CreditCard]</c> to carry the
-    /// correct semantic format in the generated schema.
-    /// </summary>
-    private static string? MapFormatFromValidationAttributes(IReadOnlyList<ValidationAttribute> validationAttributes)
-    {
-        foreach (var attribute in validationAttributes)
-        {
-            switch (attribute)
-            {
-                case System.ComponentModel.DataAnnotations.EmailAddressAttribute:
-                case Blueprint.Validation.EmailAddressAttribute:
-                    return "email";
-                case PhoneAttribute:
-                    return "phone";
-                case System.ComponentModel.DataAnnotations.UrlAttribute:
-                case Blueprint.Validation.UrlAttribute:
-                    return "uri";
-                case CreditCardAttribute:
-                    return "credit-card";
             }
         }
 

@@ -106,7 +106,7 @@ internal sealed record OpenApiValidationConstraints(
         var pattern = GetPattern(attributes);
         var minimum = GetMinimum(attributes, includeComparisonBounds);
         var maximum = GetMaximum(attributes, includeComparisonBounds);
-        var format = GetFormat(attributes);
+        var format = GetFormat(attributes, useLegacyRules: false);
 
         return new OpenApiValidationConstraints(
             isRequired,
@@ -625,25 +625,50 @@ internal sealed record OpenApiValidationConstraints(
     }
 
     /// <summary>
+    /// Infers the OpenAPI <c>format</c> hint the validation attributes of <paramref name="property"/> imply, as
+    /// <see cref="GetFormat(IReadOnlyList{ValidationAttribute}, bool)"/> does.
+    /// </summary>
+    /// <param name="property">The CLR property, or <see langword="null"/> for none.</param>
+    /// <param name="useLegacyRules">Whether to imply only the formats legacy Blueprint's NJsonSchema wrote.</param>
+    /// <returns>The format, or <see langword="null"/> for none.</returns>
+    internal static string? GetFormat(PropertyInfo? property, bool useLegacyRules)
+    {
+        return property is null
+            ? null
+            : GetFormat(FilterValidationAttributes(property.GetCustomAttributes(inherit: true)), useLegacyRules);
+    }
+
+    /// <summary>
     /// Infers an OpenAPI <c>format</c> hint from well-known validation attributes
     /// (<c>EmailAddressAttribute</c> → <c>"email"</c>, <c>PhoneAttribute</c> → <c>"phone"</c>,
     /// <c>UrlAttribute</c> → <c>"uri"</c>, <c>CreditCardAttribute</c> → <c>"credit-card"</c>).
     /// </summary>
-    private static string? GetFormat(IReadOnlyList<ValidationAttribute> validationAttributes)
+    /// <remarks>
+    /// R183: legacy's NJsonSchema read a format only from a <see cref="DataTypeAttribute"/>, through a map of
+    /// <c>EmailAddress</c>, <c>PhoneNumber</c> and <c>Url</c> (with the date types), so under its rules Blueprint's own
+    /// <c>[EmailAddress]</c> and <c>[Url]</c>, which are <c>RegexAttribute</c>s, and <c>[CreditCard]</c> imply none. A
+    /// generated client turns a format into a validator, so one legacy never wrote changes what its forms accept.
+    /// </remarks>
+    /// <param name="validationAttributes">The property's validation attributes.</param>
+    /// <param name="useLegacyRules">Whether to imply only the formats legacy Blueprint's NJsonSchema wrote.</param>
+    /// <returns>The format, or <see langword="null"/> for none.</returns>
+    internal static string? GetFormat(IReadOnlyList<ValidationAttribute> validationAttributes, bool useLegacyRules)
     {
         foreach (var attribute in validationAttributes)
         {
             switch (attribute)
             {
                 case System.ComponentModel.DataAnnotations.EmailAddressAttribute:
-                case Blueprint.Validation.EmailAddressAttribute:
+                    return "email";
+                case Blueprint.Validation.EmailAddressAttribute when !useLegacyRules:
                     return "email";
                 case PhoneAttribute:
                     return "phone";
                 case System.ComponentModel.DataAnnotations.UrlAttribute:
-                case Blueprint.Validation.UrlAttribute:
                     return "uri";
-                case CreditCardAttribute:
+                case Blueprint.Validation.UrlAttribute when !useLegacyRules:
+                    return "uri";
+                case CreditCardAttribute when !useLegacyRules:
                     return "credit-card";
             }
         }
