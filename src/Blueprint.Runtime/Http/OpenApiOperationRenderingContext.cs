@@ -81,6 +81,8 @@ public sealed record OpenApiOperationRenderingContext(
             static d => d,
             StringComparer.OrdinalIgnoreCase);
 
+        var isLegacy = this.ResponseObjects.SchemaComponents.SchemaProjection.Naming == OpenApiSchemaNaming.Legacy;
+
         var processed = this.Operations
             .Select(operation =>
             {
@@ -94,6 +96,19 @@ public sealed record OpenApiOperationRenderingContext(
                 foreach (var processor in options.Processors)
                 {
                     current = processor(current, descriptor);
+                }
+
+                // R182: legacy's ConfigureOperation ran after the body's schema was registered, edited that schema in place
+                // and could then drop the body, which left the component, emptied, as R178's is for an operation with none.
+                if (isLegacy
+                    && operation.RequestBody is { } originalBody
+                    && current is { RequestBody: null, BodylessRequestSchemaName: null })
+                {
+                    current = current with
+                    {
+                        BodylessRequestSchemaName = originalBody.SchemaName ?? operation.OperationName,
+                        BodylessRequestSchemaDescription = originalBody.Description,
+                    };
                 }
 
                 return current;
@@ -1500,7 +1515,8 @@ public sealed record OpenApiOperationModel(
     /// <summary>
     /// Gets the name of the empty schema component an operation with no request body has, before the schema name
     /// formatter is applied, or <see langword="null"/> for none: under <see cref="OpenApiSchemaNaming.Legacy"/>, a non-GET
-    /// operation whose body has no properties, as legacy registered its type's schema before it dropped the body.
+    /// operation whose body has no properties, or one whose body an operation processor dropped, as legacy registered its
+    /// type's schema before it dropped the body.
     /// </summary>
     public string? BodylessRequestSchemaName { get; init; }
 

@@ -95,11 +95,61 @@ public sealed class OpenApiLegacyBodylessOperationTests
         schemas.GetProperty("LegacyBodylessClash2").TryGetProperty("properties", out _).Should().BeTrue();
     }
 
-    private static JsonDocument Render(OpenApiSchemaNaming naming, OpenApiRequestBodyNaming bodyNaming, Func<string, string>? formatter = null)
+    // R182: legacy's ConfigureOperation edited the body's schema in place and then dropped the emptied body, so the component
+    // it had already registered stayed, empty. Signature365's Portal strips an auto-populated TenantId this way from the 22
+    // commands whose only body property it is.
+    [Fact]
+    public void Under_legacy_naming_a_body_an_operation_processor_empties_and_drops_leaves_its_empty_component()
+    {
+        using var document = Render(OpenApiSchemaNaming.Legacy, OpenApiRequestBodyNaming.OperationType, processors: RemoveTenantIdBody());
+
+        var component = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("EnableLegacyBodylessWidgetCommand");
+
+        component.GetProperty("type").GetString().Should().Be("object");
+        component.GetProperty("additionalProperties").GetBoolean().Should().BeFalse();
+        component.GetProperty("description").GetString().Should().Be("Enables a widget.");
+        component.TryGetProperty("properties", out _).Should().BeFalse();
+        document.RootElement.GetProperty("paths").GetProperty("/legacy-bodyless/{Id}/enable").GetProperty("post")
+            .TryGetProperty("requestBody", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Under_default_naming_a_body_an_operation_processor_drops_leaves_no_component()
+    {
+        using var document = Render(OpenApiSchemaNaming.Default, OpenApiRequestBodyNaming.OperationName, processors: RemoveTenantIdBody());
+
+        ComponentNames(document).Should().NotContain(static name => name.StartsWith("EnableLegacyBodylessWidget", StringComparison.Ordinal));
+    }
+
+    private static OpenApiOperationProcessorOptions RemoveTenantIdBody()
+    {
+        var options = new OpenApiOperationProcessorOptions();
+
+        options.Processors.Add(static (operation, descriptor) =>
+        {
+            if (descriptor.OperationType != typeof(EnableLegacyBodylessWidgetCommand) || operation.RequestBody is not { } body)
+            {
+                return operation;
+            }
+
+            var properties = body.Properties.RemoveAll(static p => string.Equals(p.Name, "tenantId", StringComparison.OrdinalIgnoreCase));
+
+            return operation with { RequestBody = properties.IsEmpty ? null : body with { Properties = properties } };
+        });
+
+        return options;
+    }
+
+    private static JsonDocument Render(
+        OpenApiSchemaNaming naming,
+        OpenApiRequestBodyNaming bodyNaming,
+        Func<string, string>? formatter = null,
+        OpenApiOperationProcessorOptions? processors = null)
     {
         var (_, rendered) = OpenApiDocumentEndpoint.Create(
             new IntegrationTestBlueprintApp(),
-            new OpenApiInfoOptions { SchemaNaming = naming, RequestBodyNaming = bodyNaming, SchemaNameFormatter = formatter });
+            new OpenApiInfoOptions { SchemaNaming = naming, RequestBodyNaming = bodyNaming, SchemaNameFormatter = formatter },
+            operationProcessorOptions: processors);
 
         return JsonDocument.Parse(rendered.Json);
     }
@@ -136,6 +186,22 @@ public partial class DeleteLegacyBodylessWidgetCommand : ICommand<string>
     public string Id { get; set; } = string.Empty;
 
     public static string Handle(DeleteLegacyBodylessWidgetCommand command)
+    {
+        return command.Id;
+    }
+}
+
+/// <summary>Enables a widget.</summary>
+[AllowAnonymous]
+[RootLink("/legacy-bodyless/{Id}/enable")]
+[HttpPost]
+public partial class EnableLegacyBodylessWidgetCommand : ICommand<string>
+{
+    public string Id { get; set; } = string.Empty;
+
+    public string? TenantId { get; set; }
+
+    public static string Handle(EnableLegacyBodylessWidgetCommand command)
     {
         return command.Id;
     }
