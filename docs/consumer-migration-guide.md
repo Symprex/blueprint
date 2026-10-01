@@ -728,6 +728,33 @@ the scope's tasks when Rebus commits the message's transaction, straight after i
 A consumer whose plain handlers enqueue tasks sees them dispatched. One with no `IBackgroundTaskScheduler` registered
 sees no change.
 
+**Behaviour change for recurring tasks on Hangfire (v1.0.3).** `Blueprint.Hangfire`'s `HangfireRecurringTaskProvider`
+now registers and removes recurring jobs as legacy Blueprint's provider did (Signature365 `8b40ecc961`,
+`Blueprint.Tasks.Hangfire/HangfireRecurringTaskProvider.cs:52-66,85-86`). Before v1.0.3 it registered every declared
+schedule at host start under a `blueprint:{Name}` id and removed nothing. Now:
+
+- **Registration runs from a scheduler job, not at start-up.** Start-up only installs the recurring job
+  `{DefaultQueue}:Scheduler` (`:Scheduler` when no default queue is set), which re-runs registration every 30 minutes
+  (`*/30 * * * *`). Schedules are therefore registered when that job first runs, on a Hangfire server that listens to the
+  default queue — up to 30 minutes after a deployment, and not at all in a process with no such server.
+- **Every undeclared recurring job is removed.** Each registration removes every recurring job the Hangfire storage
+  lists that is not a declared schedule and is not the scheduler job, whatever its id. In a storage shared with other
+  apps or with recurring jobs created outside Blueprint, those jobs are removed too, as they were under legacy;
+  partition the storage by app (as Signature365's `RecurringJobPartitionedSqlServerStorage` does) before upgrading.
+- **Job ids change** to legacy's `{SchedulerType}:{Name}`, so the jobs v1.0.2 registered under `blueprint:{Name}` are
+  removed by the first registration and replaced.
+- **A scheduler that throws declares nothing.** Its exception is logged ("Its recurring tasks will be removed") and its
+  jobs are removed by that registration; they come back at the next one that succeeds.
+- **Queues:** a recurring job runs on its schedule's `Queue`, or the app's default queue; the task's own `[Queue]` is no
+  longer used for it. `BlueprintTaskOptions.DefaultQueue` is now `string?` and unset by default (it was `"default"`);
+  Hangfire's `default` queue is used when it is unset.
+
+**Behaviour change for failed background tasks on Hangfire (v1.0.3).** Before v1.0.3, a background task whose pipeline
+threw completed its Hangfire job as succeeded, with the failure only logged. The exception now fails the job, so
+Hangfire records the failure and applies its retry policy (ten automatic retries by default): a task that partly
+succeeded before throwing can run again, and must be safe to. Any other non-successful result, such as a validation
+failure, is logged and completes the job as before.
+
 ### 13. Persistence
 
 Register a unit-of-work implementation to auto-save changes after an operation succeeds:
@@ -761,6 +788,19 @@ Blueprint did all three after any operation: Signature365's `SaveMartenChangesMi
 
 A query that stores or sends something it must not keep needs `[DoNotSaveChanges]`. A query that must not share a Rebus
 transaction needs `[NoRebusTransaction]`.
+
+**Behaviour change for Marten domain events (v1.0.3).** Before v1.0.3, domain events raised by Marten entities were
+dispatched to in-process `IDomainEventHandler<TEvent>` implementations and never published:
+`AddBlueprintMarten` registered `DomainEventDispatchingSessionListener` before `OutboxPublishingSessionListener`, and the
+first cleared every entity's events before the second could see them, so a registered `IDomainEventPublisher` was never
+called. `DomainEventDispatchingSessionListener` now dispatches each event to its handlers, then publishes it to the
+registered `IDomainEventPublisher` (when there is one), and only then clears it. `AddBlueprintMarten` no longer
+registers `OutboxPublishingSessionListener`; it remains for a consumer that wants publishing without in-process dispatch.
+
+A consumer that registered an `IDomainEventPublisher` now has every domain event published during the session's save,
+after the in-process handlers have run. Publishing through the transactional outbox keeps that inside the save's
+transaction; a publisher that sends directly does so before the transaction commits. One with no
+`IDomainEventPublisher` registered sees no change.
 
 ### 14. Messaging
 
