@@ -477,6 +477,15 @@ Available result types:
 | `StatusCodeResult.*` | Various | Bodyless status code responses |
 | `NotModifiedResult<T>` | 304 | Conditional request matched (via `ETagger`) |
 
+**Behaviour change for a legacy resource event's status (v1.0.3).** A command returning a legacy
+`Blueprint.Http.ResourceEvent<T>` (or `ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>`) is answered with
+a 200 and the event, whatever its change type, with no `Location` header, and is documented as a 200. Before v1.0.3 it
+was a 201 with a `Location` taken from the event's self link when created, a 200 when updated and a 204 when deleted.
+Legacy Blueprint wrapped any returned value that was not an `OperationResult` in an `OkResult`, so it sent every resource
+event as a 200; coming from legacy nothing changes. `ResourceEventResult<T>` is unchanged: 201, 200 or 204 by change type.
+A client that relied on v1.0.2's 201/204 or its `Location` for a legacy event must read the 200 and the event's self link
+instead.
+
 **Behaviour change for a `PlainTextResult` with no content (v1.0.3).** `new PlainTextResult(null)` is written as an
 empty body at the result's status, as legacy Blueprint wrote it; before v1.0.3 its constructor threw
 `ArgumentNullException`. Its `Content` is then empty. A `?? string.Empty` added only to avoid that throw can go.
@@ -1251,7 +1260,8 @@ After migration, verify:
 - [ ] Audit events fire with correct trace correlation
 - [ ] Background tasks flush after successful commands
 - [ ] Unit of work saves after successful commands and queries (not after `[DoNotSaveChanges]` ones)
-- [ ] Resource events emit with correct change types (201 Created, 200 Updated, 204 Deleted)
+- [ ] Resource events emit with correct change types: a `ResourceEventResult<T>` as 201 Created, 200 Updated or 204
+  Deleted; a legacy `Blueprint.Http.ResourceEvent<T>` as a 200 with the event, whatever its change type
 - [ ] Self-link URLs appear in response `_links` and 201 Location headers
 
 ## Consumer-space companion packages
@@ -1563,6 +1573,19 @@ was `eventStoreTestApiResourceWithDoNotAuditProperties` and is now `eventStoreTe
 was matched ignoring case, so `TenantDto` was `tenant` and is now `tenantDto`. A resource whose name carries a marker
 somewhere other than its end, or a `Dto` suffix, has a different event id and `resourceObject` than under v1.0.2 (a
 consumer that stored or matched the old ones must update them); coming from legacy Blueprint nothing changes.
+
+**Behaviour change for a failed call's exception (v1.0.3).** `BlueprintApiException` now derives from
+`Blueprint.ApiException` and carries the upstream's problem, as legacy Blueprint's client threw an `ApiException`; in
+v1.0.2 it was a plain `Exception` with only `StatusCode` and `ResponseBody`, which it still has. So:
+
+- **A `catch (ApiException)` now catches failed client calls too.** A caller that caught both separately must order the
+  `BlueprintApiException` handler first or merge them.
+- **A failed call that escapes an operation keeps its status.** The host writes an `ApiException` as its problem, so a
+  gateway that lets an upstream 404 escape now answers its caller with that 404 and problem, where v1.0.2 answered a 500.
+- **The problem is mapped as legacy mapped it:** problem details are carried through with their extensions, except that
+  a 5xx's detail becomes "The remote server returned an internal error response" (the original goes to the inner
+  exception); a 404 with a body that is not JSON becomes `not_found`; any other body that is not JSON becomes
+  `invalid_json`; an unreachable server becomes `service_unavailable` (500) and a timeout `service_timeout` (408).
 
 ### Hangfire (background task scheduling)
 
