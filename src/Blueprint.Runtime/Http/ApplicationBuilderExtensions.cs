@@ -126,11 +126,24 @@ public static class EndpointRouteBuilderExtensions
 
         builders.Add(wellKnownBuilder);
 
+        var documentTitle = infoOptions?.Title ?? "Blueprint API";
+
+        // Legacy served the document at {basePath}openapi from its anonymous OpenApiQuery ([RootLink("/openapi")]): JSON,
+        // or for a browser a Scalar API reference page that loads the document relative to itself. Consumers still call
+        // that address (availability monitors, links to the documentation), so it is served beside .blueprint/openapi.json.
+        var documentationBuilder = endpoints.Map(
+            RoutePatternFactory.Parse(RouteUnder(basePath, "openapi")),
+            CreateOpenApiDocumentationDelegate(openApiDelegate, documentTitle));
+        documentationBuilder.WithDisplayName("GET OpenAPI document or documentation page");
+        documentationBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+
+        builders.Add(documentationBuilder);
+
         // RFC 9727 (June 2025) — api-catalog well-known endpoint for API discovery.
         // Returns a Linkset JSON document (application/linkset+json) pointing to the
         // OpenAPI spec, enabling standardised machine-readable API catalogue discovery.
         var openApiPath = absoluteBasePath + ".blueprint/openapi.json";
-        var apiCatalogTitle = infoOptions?.Title ?? "Blueprint API";
+        var apiCatalogTitle = documentTitle;
         var apiCatalogBuilder = endpoints.Map(
             RoutePatternFactory.Parse("/.well-known/api-catalog"),
             CreateApiCatalogDelegate(openApiPath, apiCatalogTitle));
@@ -288,6 +301,58 @@ public static class EndpointRouteBuilderExtensions
     private static string RouteUnder(string basePath, string relativeUrl)
     {
         return basePath + relativeUrl.TrimStart('/');
+    }
+
+    /// <summary>
+    /// Creates the delegate for legacy's <c>openapi</c> route. A request whose <c>Accept</c> header names
+    /// <c>text/html</c> and that has no <c>json</c> query key gets a Scalar API reference page; every other request,
+    /// including the page's own <c>?json</c> fetch, gets the OpenAPI document from <paramref name="openApiDelegate"/>.
+    /// Legacy's <c>OpenApiQuery</c> decided the same way.
+    /// </summary>
+    private static RequestDelegate CreateOpenApiDocumentationDelegate(RequestDelegate openApiDelegate, string title)
+    {
+        // The page loads the document relative to itself, so it resolves on every host and gateway prefix the API is reached
+        // through, and is same-origin, so it needs no proxy.
+        var pageBytes = System.Text.Encoding.UTF8.GetBytes($$"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>{{System.Net.WebUtility.HtmlEncode(title)}}</title>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body {
+                        margin: 0;
+                        padding: 0;
+                    }
+                </style>
+            </head>
+            <body>
+                <div id="app"></div>
+                <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+                <script>
+                  Scalar.createApiReference('#app', {
+                    url: window.location.pathname + '?json',
+                  })
+                </script>
+            </body>
+            </html>
+            """);
+
+        return context =>
+        {
+            var request = context.Request;
+
+            if (!request.Headers.Accept.ToString().Contains("text/html", StringComparison.Ordinal) || request.Query.ContainsKey("json"))
+            {
+                return openApiDelegate(context);
+            }
+
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            context.Response.ContentType = "text/html; charset=utf-8";
+
+            return context.Response.Body.WriteAsync(pageBytes, context.RequestAborted).AsTask();
+        };
     }
 
     /// <summary>

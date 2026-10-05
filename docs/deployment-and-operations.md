@@ -266,6 +266,7 @@ When `BlueprintHttpOptions.OperationsManifestResourceName` is configured, Bluepr
 | `/.blueprint/manifests/operations.html` | Interactive HTML page | Visual inspection of registered operations |
 | `/.blueprint/manifests/operations.md` | Markdown projection | Documentation-friendly operation list |
 | `/.blueprint/openapi.json` | OpenAPI 3.0 document | API contract for client code generation |
+| `/openapi` | The same document, or a Scalar API reference page for a browser (`Accept: text/html` without `?json`) | Legacy Blueprint's address, still called by availability checks and documentation links |
 
 These endpoints are always available (not gated to development mode). Consider restricting access via reverse proxy rules or middleware in production if the API surface should not be publicly discoverable.
 

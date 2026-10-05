@@ -931,7 +931,8 @@ In addition to standard checks, Generation requires:
    ```
 
 3. **Key differences to document**:
-   - Endpoint path: `/openapi` → `/api/.blueprint/openapi.json` (configurable)
+   - Endpoint path: the document is at `/api/.blueprint/openapi.json`, and legacy's `/api/openapi` still serves it (or
+     the Scalar page for a browser), so callers of the legacy address need no change
    - `operationId` format: the same as legacy — `Query`/`Command` removed anywhere in the C# type name, then legacy's
      PascalCasing, which folds acronyms (`GetTemplate` for `GetTemplateQuery`, `GetvCardConfiguration` for
      `GetVCardConfigurationQuery`, `GetInvoicesv2` for `GetInvoicesV2Query`)
