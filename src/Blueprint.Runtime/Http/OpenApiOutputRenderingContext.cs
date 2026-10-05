@@ -1,7 +1,11 @@
 using System.Buffers;
+using System.Collections.Frozen;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Blueprint.Model;
+using Blueprint.Utilities;
 
 namespace Blueprint.Runtime.Http;
 
@@ -22,6 +26,30 @@ public sealed record OpenApiOutputRenderingContext(
     /// <see cref="OpenApiInfoOptions.OpenApiVersion"/>.
     /// </summary>
     private const string DefaultOpenApiVersion = "3.0.4";
+
+    /// <summary>
+    /// The result type name <c>HttpResponseMetadataModule</c> gives the 415 it adds for an operation that reads a body.
+    /// </summary>
+    private const string UnsupportedMediaTypeResultTypeName = "Blueprint.Runtime.Exec.UnsupportedMediaTypeResult";
+
+    /// <summary>
+    /// The result type name <c>HttpResponseMetadataModule</c> gives a response an operation's <c>ApiExceptionFactory</c>
+    /// fields contribute.
+    /// </summary>
+    private const string ApiExceptionResultTypeName = "Blueprint.ApiException";
+
+    /// <summary>
+    /// The result type names <c>HttpResponseMetadataModule</c> gives the responses the pipeline itself adds (400 binding
+    /// failure, 401 unauthenticated, 403 forbidden, 415 unsupported media type), which legacy never documented and so
+    /// never counted when it compared a status's descriptions.
+    /// </summary>
+    private static readonly FrozenSet<string> SyntheticPipelineResultTypeNames = new[]
+    {
+        "Blueprint.Runtime.Exec.BindingFailureResult",
+        "Blueprint.Runtime.Exec.UnauthenticatedResult",
+        "Blueprint.Runtime.Exec.ForbiddenResult",
+        UnsupportedMediaTypeResultTypeName,
+    }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
     /// Converts a raw CLR type name into a safe OpenAPI schema component key. When a custom
@@ -135,10 +163,9 @@ public sealed record OpenApiOutputRenderingContext(
     /// </param>
     /// <param name="httpOptions">
     /// Optional Blueprint HTTP options consulted when no explicit <see cref="OpenApiInfoOptions.Servers"/> are
-    /// configured: <see cref="BlueprintHttpOptions.PublicApiHost"/> is preferred, falling back to
-    /// <see cref="BlueprintHttpOptions.PublicHost"/>, to populate a single default <c>servers</c> entry with the
-    /// address this API is reachable at. When <see langword="null"/>, or when neither option is set, the
-    /// <c>servers</c> array is omitted unless <see cref="OpenApiInfoOptions.Servers"/> already carries entries.
+    /// configured: <see cref="BlueprintHttpOptions.PublicApiHost"/>, as given, populates a single default
+    /// <c>servers</c> entry. When <see langword="null"/>, or when it is not set, the <c>servers</c> array is omitted
+    /// unless <see cref="OpenApiInfoOptions.Servers"/> already carries entries.
     /// </param>
     /// <returns>The rendered output context carrying the JSON string.</returns>
     public static OpenApiOutputRenderingContext Create(
@@ -147,13 +174,42 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiSchemaProcessorOptions? schemaProcessorOptions = null,
         BlueprintHttpOptions? httpOptions = null)
     {
+        return Create(documentRendering, infoOptions, schemaProcessorOptions, httpOptions, basePath: null);
+    }
+
+    /// <summary>
+    /// Creates a rendered OpenAPI 3.x JSON string from the supplied assembled document model, for an API mapped at
+    /// <paramref name="basePath"/>.
+    /// </summary>
+    /// <param name="documentRendering">The assembled document model to render.</param>
+    /// <param name="infoOptions">Optional customisation for the <c>info</c> block.</param>
+    /// <param name="schemaProcessorOptions">Optional ordered schema processors for the <c>components/schemas</c> section.</param>
+    /// <param name="httpOptions">
+    /// Optional Blueprint HTTP options consulted when no explicit <see cref="OpenApiInfoOptions.Servers"/> are
+    /// configured: the default <c>servers</c> entry is <see cref="BlueprintHttpOptions.PublicApiHost"/> followed by
+    /// <paramref name="basePath"/>.
+    /// </param>
+    /// <param name="basePath">
+    /// The base path the API's routes are mapped under, which the default <c>servers</c> entry ends with, as the
+    /// document's <c>paths</c> are relative to it. <see langword="null"/> when unknown, leaving the entry as
+    /// <see cref="BlueprintHttpOptions.PublicApiHost"/> alone.
+    /// </param>
+    /// <returns>The rendered output context carrying the JSON string.</returns>
+    public static OpenApiOutputRenderingContext Create(
+        OpenApiDocumentRenderingContext documentRendering,
+        OpenApiInfoOptions? infoOptions,
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions,
+        BlueprintHttpOptions? httpOptions,
+        string? basePath)
+    {
         ArgumentNullException.ThrowIfNull(documentRendering);
 
         var json = RenderJson(
             documentRendering,
             infoOptions ?? new OpenApiInfoOptions(),
             schemaProcessorOptions ?? new OpenApiSchemaProcessorOptions(),
-            httpOptions);
+            httpOptions,
+            basePath);
         return new OpenApiOutputRenderingContext(documentRendering, json);
     }
 
@@ -161,12 +217,13 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiDocumentRenderingContext document,
         OpenApiInfoOptions infoOptions,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
-        BlueprintHttpOptions? httpOptions)
+        BlueprintHttpOptions? httpOptions,
+        string? basePath)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true });
 
-        WriteDocument(writer, document, infoOptions, schemaProcessorOptions, httpOptions);
+        WriteDocument(writer, document, infoOptions, schemaProcessorOptions, httpOptions, basePath);
         writer.Flush();
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
@@ -177,7 +234,8 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiDocumentRenderingContext document,
         OpenApiInfoOptions infoOptions,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
-        BlueprintHttpOptions? httpOptions)
+        BlueprintHttpOptions? httpOptions,
+        string? basePath)
     {
         writer.WriteStartObject();
 
@@ -215,11 +273,36 @@ public sealed record OpenApiOutputRenderingContext(
                 ? [OpenApiSecurityScheme.BearerJwt()]
                 : [];
 
+        // Under legacy naming the formatter is handed the name that naming gives each component, whatever form the key
+        // is carried in here (a type's name, a request body's, a ResourceEvent envelope's synthetic CLR name), so it only
+        // ever sees names and can reproduce a consumer's legacy keys. The default hands it the key as it always has.
+        var schemaNameFormatter = infoOptions.SchemaNaming == OpenApiSchemaNaming.Legacy && infoOptions.SchemaNameFormatter is { } formatter
+            ? name => formatter(SimplifyClrTypeName(name))
+            : infoOptions.SchemaNameFormatter;
+
+        // Every component and every reference to one is written under the key it is assigned here, which no other
+        // component shares.
+        var componentKeys = AssignComponentKeys(document, schemaNameFormatter);
+        string ComponentKeyOf(string name) => componentKeys.TryGetValue(name, out var key) ? key : SanitiseSchemaKey(name, schemaNameFormatter);
+
         writer.WriteString("openapi", string.IsNullOrWhiteSpace(infoOptions.OpenApiVersion) ? DefaultOpenApiVersion : infoOptions.OpenApiVersion);
         WriteInfo(writer, infoOptions);
-        WriteServers(writer, ResolveServers(infoOptions.Servers, httpOptions));
-        WritePaths(writer, document.Paths, allRequireAuth, effectiveSchemes, infoOptions.SchemaNameFormatter);
-        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, infoOptions.SchemaNameFormatter);
+        WriteServers(writer, ResolveServers(infoOptions.Servers, httpOptions, basePath));
+
+        // A parameter's title is a schema name, passed through the consumer's formatter as legacy's schema name generator
+        // passed it, but not a component key: no counter, no sanitising.
+        var parameterTitleFormatter = infoOptions.SchemaNaming == OpenApiSchemaNaming.Legacy ? infoOptions.SchemaNameFormatter : null;
+
+        // Legacy's NJsonSchema-based generator never wrote a schema component's "title" and Newtonsoft's contract
+        // resolution never tracked "readOnly" (checked against every Signature365 8b40ecc961 app's committed
+        // Spec/openapi.json: zero of either, across all 21 documents) — omit both only under Legacy naming; a Default
+        // consumer keeps them, since they are real facts legacy simply had no means to describe. Nor did legacy write a
+        // request body's "required" (every request body in the Portal document carries "content" alone), which is
+        // omitted on the same terms.
+        var omitLegacyExtras = infoOptions.SchemaNaming == OpenApiSchemaNaming.Legacy;
+
+        WritePaths(writer, document.Paths, LegacyOperationIds.Assign(document), allRequireAuth, effectiveSchemes, ComponentKeyOf, parameterTitleFormatter, omitLegacyExtras);
+        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, ComponentKeyOf, DescribeComponentSources(document), omitLegacyExtras);
         WriteDocumentTags(writer, document.Paths);
 
         if (allRequireAuth && effectiveSchemes.Count > 0)
@@ -289,7 +372,9 @@ public sealed record OpenApiOutputRenderingContext(
 
     /// <summary>
     /// Resolves the effective <c>servers</c> list: the explicitly configured entries when there are any, and otherwise
-    /// the single gateway-reachable address in <see cref="BlueprintHttpOptions.PublicApiHost"/>. There is no tier below
+    /// the single gateway-reachable address in <see cref="BlueprintHttpOptions.PublicApiHost"/>, followed by the base
+    /// path the API is mapped under when that is known — as legacy Blueprint composed it, since the document's paths
+    /// are relative to the server and do not carry the base path themselves. There is no tier below
     /// that — when <c>PublicApiHost</c> is unset the <c>servers</c> array stays empty (omitted by
     /// <see cref="WriteServers"/>), and the incoming request's origin is never consulted because the document is
     /// rendered once at registration (<see cref="OpenApiDocumentEndpoint"/>), before any request exists.
@@ -301,7 +386,7 @@ public sealed record OpenApiOutputRenderingContext(
     /// <c>PublicHost</c> — an option that predates this and is set for link generation — silently advertise a
     /// prefix-less URL its API does not answer on.
     /// </remarks>
-    private static List<OpenApiServerEntry> ResolveServers(List<OpenApiServerEntry> configuredServers, BlueprintHttpOptions? httpOptions)
+    private static List<OpenApiServerEntry> ResolveServers(List<OpenApiServerEntry> configuredServers, BlueprintHttpOptions? httpOptions, string? basePath)
     {
         if (configuredServers.Count > 0)
         {
@@ -316,6 +401,13 @@ public sealed record OpenApiOutputRenderingContext(
 
         // The configured host may already carry a scheme (e.g. copied from a full URL); avoid doubling it up.
         var url = publicApiHost.Contains("://", StringComparison.Ordinal) ? publicApiHost : $"https://{publicApiHost}";
+
+        if (basePath is not null)
+        {
+            // Legacy's "{PublicApiHost}/{basePath}", which ends with a slash, the base path having one.
+            var trimmedBasePath = basePath.Trim('/');
+            url = url.TrimEnd('/') + "/" + (trimmedBasePath.Length > 0 ? trimmedBasePath + "/" : string.Empty);
+        }
 
         return [new OpenApiServerEntry { Url = url }];
     }
@@ -346,42 +438,43 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter)
+    private static void WritePaths(Utf8JsonWriter writer, ImmutableArray<OpenApiPathItemModel> paths, IReadOnlyDictionary<(string UrlFormat, string Method), string> operationIds, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName("paths");
         writer.WriteStartObject();
 
         foreach (var pathItem in paths)
         {
-            WritePathItem(writer, pathItem, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter);
+            WritePathItem(writer, pathItem, operationIds, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter, omitLegacyExtras);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter)
+    private static void WritePathItem(Utf8JsonWriter writer, OpenApiPathItemModel pathItem, IReadOnlyDictionary<(string UrlFormat, string Method), string> operationIds, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(pathItem.UrlFormat);
         writer.WriteStartObject();
 
         foreach (var methodSlot in pathItem.Methods)
         {
-            WriteMethodSlot(writer, methodSlot, useDocumentLevelSecurity, securitySchemes, schemaNameFormatter);
+            WriteMethodSlot(writer, methodSlot, operationIds.GetValueOrDefault((pathItem.UrlFormat, methodSlot.HttpMethod.ToUpperInvariant())), useDocumentLevelSecurity, securitySchemes, schemaNameFormatter, parameterTitleFormatter, omitLegacyExtras);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter)
+    private static void WriteMethodSlot(Utf8JsonWriter writer, OpenApiPathItemMethodModel methodSlot, string? operationId, bool useDocumentLevelSecurity, List<OpenApiSecurityScheme> securitySchemes, Func<string, string>? schemaNameFormatter, Func<string, string>? parameterTitleFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(methodSlot.HttpMethod.ToLowerInvariant());
         writer.WriteStartObject();
 
-        // When multiple operations share a method slot, use the first alphabetically for operationId.
+        // When multiple operations share a method slot, use the first alphabetically. Its operationId is its name, made
+        // unique across the document as legacy's was (LegacyOperationIds).
         var primaryOperation = methodSlot.Operations.IsEmpty ? null : methodSlot.Operations[0];
         if (primaryOperation is not null)
         {
-            writer.WriteString("operationId", primaryOperation.OperationName);
+            writer.WriteString("operationId", operationId ?? primaryOperation.OperationName);
 
             if (primaryOperation.Summary is not null)
             {
@@ -394,9 +487,9 @@ public sealed record OpenApiOutputRenderingContext(
             }
 
             WriteTags(writer, primaryOperation.Tags);
-            WriteParameters(writer, primaryOperation.Parameters);
-            WriteRequestBody(writer, primaryOperation.OperationName, primaryOperation.RequestBody, schemaNameFormatter);
-            WriteResponses(writer, primaryOperation.Responses, schemaNameFormatter);
+            WriteParameters(writer, primaryOperation.Parameters, parameterTitleFormatter, schemaNameFormatter, omitLegacyExtras);
+            WriteRequestBody(writer, primaryOperation.OperationName, primaryOperation.RequestBody, schemaNameFormatter, omitLegacyExtras);
+            WriteResponses(writer, primaryOperation.Responses, schemaNameFormatter, omitLegacyExtras);
 
             if (primaryOperation.Deprecated)
             {
@@ -404,7 +497,7 @@ public sealed record OpenApiOutputRenderingContext(
 
                 if (primaryOperation.DeprecationReason is not null)
                 {
-                    writer.WriteString("x-deprecated-reason", primaryOperation.DeprecationReason);
+                    writer.WriteString(DeprecationMessageKey(omitLegacyExtras), primaryOperation.DeprecationReason);
                 }
             }
 
@@ -419,7 +512,7 @@ public sealed record OpenApiOutputRenderingContext(
         }
         else
         {
-            WriteResponses(writer, ImmutableArray<OpenApiResponseObjectModel>.Empty, schemaNameFormatter);
+            WriteResponses(writer, ImmutableArray<OpenApiResponseObjectModel>.Empty, schemaNameFormatter, omitLegacyExtras);
         }
 
         writer.WriteEndObject();
@@ -443,7 +536,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteParameters(Utf8JsonWriter writer, ImmutableArray<OpenApiParameterModel> parameters)
+    private static void WriteParameters(Utf8JsonWriter writer, ImmutableArray<OpenApiParameterModel> parameters, Func<string, string>? titleFormatter, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         if (parameters.IsEmpty)
         {
@@ -458,7 +551,13 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteStartObject();
             writer.WriteString("name", parameter.Name);
             writer.WriteString("in", parameter.In);
-            writer.WriteBoolean("required", parameter.Required);
+
+            // Legacy wrote a parameter's "required" only when true (550 of its 734 in Signature365's documents, the rest none;
+            // never false), and nothing of style, explode or a schema's nullable (R159): omitted under Legacy naming.
+            if (!omitLegacyExtras || parameter.Required)
+            {
+                writer.WriteBoolean("required", parameter.Required);
+            }
 
             if (parameter.AllowReserved)
             {
@@ -476,12 +575,12 @@ public sealed record OpenApiOutputRenderingContext(
 
                 if (parameter.DeprecationReason is not null)
                 {
-                    writer.WriteString("x-deprecated-reason", parameter.DeprecationReason);
+                    writer.WriteString(DeprecationMessageKey(omitLegacyExtras), parameter.DeprecationReason);
                 }
             }
 
             // Array query/header parameters need style+explode for repeated key serialization
-            if (parameter.SchemaType == "array" && parameter.In is "query" or "header")
+            if (!omitLegacyExtras && parameter.SchemaType == "array" && parameter.In is "query" or "header")
             {
                 writer.WriteString("style", "form");
                 writer.WriteBoolean("explode", true);
@@ -489,6 +588,12 @@ public sealed record OpenApiOutputRenderingContext(
 
             writer.WritePropertyName("schema");
             writer.WriteStartObject();
+
+            if (parameter.SchemaTitle is { } title)
+            {
+                writer.WriteString("title", titleFormatter is null ? title : titleFormatter(title));
+            }
+
             writer.WriteString("type", parameter.SchemaType);
 
             if (parameter.SchemaFormat is not null)
@@ -498,9 +603,14 @@ public sealed record OpenApiOutputRenderingContext(
 
             // nullable and required are orthogonal in OpenAPI 3.0: a required parameter
             // can still accept null values, so emit nullable regardless of required status.
-            if (parameter.IsNullable)
+            if (parameter.IsNullable && !omitLegacyExtras)
             {
                 writer.WriteBoolean("nullable", true);
+            }
+
+            if (parameter.EnumDescription is not null)
+            {
+                writer.WriteString("description", parameter.EnumDescription);
             }
 
             // Array parameters: emit items sub-schema
@@ -508,18 +618,31 @@ public sealed record OpenApiOutputRenderingContext(
             {
                 writer.WritePropertyName("items");
                 writer.WriteStartObject();
-                writer.WriteString("type", parameter.ItemsType);
 
-                if (parameter.ItemsFormat is not null)
+                if (parameter.ItemsEnumSchemaRef is not null)
                 {
-                    writer.WriteString("format", parameter.ItemsFormat);
+                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(parameter.ItemsEnumSchemaRef, schemaNameFormatter)}");
+                }
+                else
+                {
+                    writer.WriteString("type", parameter.ItemsType);
+
+                    if (parameter.ItemsFormat is not null)
+                    {
+                        writer.WriteString("format", parameter.ItemsFormat);
+                    }
+
+                    if (!parameter.ItemsEnumValues.IsDefaultOrEmpty)
+                    {
+                        WriteEnumValues(writer, parameter.ItemsEnumValues);
+                    }
                 }
 
                 writer.WriteEndObject();
             }
 
-            WriteEnumValues(writer, parameter.EnumValues);
-            WriteNumericConstraints(writer, parameter.Minimum, parameter.Maximum, parameter.ExclusiveMinimum, parameter.ExclusiveMaximum);
+            WriteEnumValues(writer, parameter.EnumValues, includeVarNames: !omitLegacyExtras);
+            WriteNumericConstraints(writer, parameter.SchemaType, parameter.Minimum, parameter.Maximum, parameter.ExclusiveMinimum, parameter.ExclusiveMaximum);
 
             // For array parameters, [MinLength]/[MaxLength]/[NotEmptyList]/[MaxItemsList] map to
             // minItems/maxItems rather than minLength/maxLength.
@@ -545,7 +668,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteRequestBody(Utf8JsonWriter writer, string operationName, OpenApiRequestBodyModel? requestBody, Func<string, string>? schemaNameFormatter)
+    private static void WriteRequestBody(Utf8JsonWriter writer, string operationName, OpenApiRequestBodyModel? requestBody, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         if (requestBody is null)
         {
@@ -554,7 +677,12 @@ public sealed record OpenApiOutputRenderingContext(
 
         writer.WritePropertyName("requestBody");
         writer.WriteStartObject();
-        writer.WriteBoolean("required", requestBody.Required);
+
+        // Legacy never wrote a request body's "required" (see the omitLegacyExtras note in WriteDocument).
+        if (!omitLegacyExtras)
+        {
+            writer.WriteBoolean("required", requestBody.Required);
+        }
 
         writer.WritePropertyName("content");
         writer.WriteStartObject();
@@ -566,9 +694,9 @@ public sealed record OpenApiOutputRenderingContext(
 
         if (!requestBody.Properties.IsEmpty)
         {
-            // Emit a $ref to the corresponding component schema keyed by the operation name.
+            // Emit a $ref to the corresponding component schema, keyed by the body's schema name or else the operation name.
             // The request body schema component is assembled in OpenApiDocumentRenderingContext.
-            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(operationName, schemaNameFormatter)}");
+            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(requestBody.SchemaName ?? operationName, schemaNameFormatter)}");
         }
         else
         {
@@ -581,7 +709,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
     }
 
-    private static void WriteEnumValues(Utf8JsonWriter writer, ImmutableArray<string> enumValues)
+    private static void WriteEnumValues(Utf8JsonWriter writer, ImmutableArray<string> enumValues, bool includeVarNames = true)
     {
         if (enumValues.IsDefaultOrEmpty)
         {
@@ -604,8 +732,11 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WritePropertyName("x-enumNames");
         WriteStringArray(writer, enumValues);
 
-        writer.WritePropertyName("x-enum-varnames");
-        WriteStringArray(writer, enumValues);
+        if (includeVarNames)
+        {
+            writer.WritePropertyName("x-enum-varnames");
+            WriteStringArray(writer, enumValues);
+        }
     }
 
     private static void WriteStringArray(Utf8JsonWriter writer, ImmutableArray<string> values)
@@ -620,26 +751,25 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndArray();
     }
 
-    private static void WriteNumericConstraints(Utf8JsonWriter writer, decimal? minimum, decimal? maximum, bool exclusiveMinimum, bool exclusiveMaximum)
+    /// <summary>
+    /// Writes a numeric schema's <c>minimum</c> and <c>maximum</c>, and never an exclusive keyword (R147b): OpenAPI 3.0's
+    /// <c>exclusiveMinimum</c> is a boolean beside <c>minimum</c>, draft-07's (which a generated client's AJV reads) is the
+    /// bound itself, and no document is valid in both. An exclusive bound is written in the form both accept: an integer's
+    /// as the next integer (greater than 0 is at least 1, exactly), a number's as the inclusive bound, which rejects no value
+    /// the server accepts and merely admits the bound itself.
+    /// </summary>
+    private static void WriteNumericConstraints(Utf8JsonWriter writer, string? schemaType, decimal? minimum, decimal? maximum, bool exclusiveMinimum, bool exclusiveMaximum)
     {
+        var isInteger = string.Equals(schemaType, "integer", StringComparison.Ordinal);
+
         if (minimum.HasValue)
         {
-            writer.WriteNumber("minimum", minimum.Value);
-        }
-
-        if (exclusiveMinimum)
-        {
-            writer.WriteBoolean("exclusiveMinimum", true);
+            writer.WriteNumber("minimum", exclusiveMinimum && isInteger ? minimum.Value + 1 : minimum.Value);
         }
 
         if (maximum.HasValue)
         {
-            writer.WriteNumber("maximum", maximum.Value);
-        }
-
-        if (exclusiveMaximum)
-        {
-            writer.WriteBoolean("exclusiveMaximum", true);
+            writer.WriteNumber("maximum", exclusiveMaximum && isInteger ? maximum.Value - 1 : maximum.Value);
         }
     }
 
@@ -725,25 +855,55 @@ public sealed record OpenApiOutputRenderingContext(
         }
     }
 
-    private static void WriteResponses(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseObjectModel> responses, Func<string, string>? schemaNameFormatter)
+    private static void WriteResponses(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseObjectModel> responses, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName("responses");
         writer.WriteStartObject();
 
         foreach (var response in responses)
         {
-            WriteResponse(writer, response, schemaNameFormatter);
+            // Legacy never documented a 415 (none of the 21 documents it wrote for Signature365 at 8b40ecc961 has one), nor
+            // a 400, 401 or 403 of the pipeline's own (R156: only an ApiException factory's), so those the pipeline adds are
+            // left out under Legacy naming. A response an operation declares for itself, through a result type of its own,
+            // or one a factory contributes to, is still written.
+            if (omitLegacyExtras && IsSyntheticPipelineResponse(response))
+            {
+                continue;
+            }
+
+            WriteResponse(writer, response, schemaNameFormatter, omitLegacyExtras);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WriteResponse(Utf8JsonWriter writer, OpenApiResponseObjectModel response, Func<string, string>? schemaNameFormatter)
+    private static bool IsSyntheticPipelineResponse(OpenApiResponseObjectModel response)
+    {
+        return !response.ResultTypeNames.IsDefaultOrEmpty
+            && response.ResultTypeNames.All(static name => SyntheticPipelineResultTypeNames.Contains(name));
+    }
+
+    private static void WriteResponse(Utf8JsonWriter writer, OpenApiResponseObjectModel response, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(MapStatusCodeString(response.StatusCode));
         writer.WriteStartObject();
 
-        writer.WriteString("description", MapStatusDescription(response.StatusCode));
+        // Legacy documented an operation's ApiExceptionFactory fields (see WriteLegacyProblemExample); a Default consumer
+        // keeps the status's own description and no example map, which is not the shape OpenAPI defines for "example".
+        var legacyProblemExamples = omitLegacyExtras && !response.ProblemExamples.IsDefaultOrEmpty;
+
+        var description = legacyProblemExamples
+            ? DescribeLegacyProblemResponse(response)
+            : omitLegacyExtras ? MapLegacyStatusDescription(response.StatusCode) : MapStatusDescription(response.StatusCode);
+
+        if (description is null)
+        {
+            writer.WriteNull("description");
+        }
+        else
+        {
+            writer.WriteString("description", description);
+        }
 
         if (!response.Headers.IsDefault && !response.Headers.IsEmpty)
         {
@@ -752,10 +912,30 @@ public sealed record OpenApiOutputRenderingContext(
 
         if (!response.Content.IsEmpty)
         {
-            WriteResponseContent(writer, response.Content, schemaNameFormatter);
+            WriteResponseContent(writer, response.Content, schemaNameFormatter, legacyProblemExamples ? response : null);
         }
 
         writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Legacy's description of a response carrying <c>ApiExceptionFactory</c> fields: the factory's title when it is the
+    /// only description the status had, else <see langword="null"/>. Legacy nulled a status's description once two of its
+    /// responses disagreed (Signature365 8b40ecc961, <c>Blueprint.OpenApi/OpenApiDocumentBuilder.cs:196-201</c>), and
+    /// its documents carry that as JSON <c>null</c> (93 responses, none an empty string). Every operation also had
+    /// legacy's "Unexpected error" 500 and a validating one its "Validation failure" 422, so a factory at a status
+    /// another result type shares is described as <see langword="null"/>. The responses the pipeline itself adds
+    /// (<see cref="SyntheticPipelineResultTypeNames"/>) are not counted: legacy never documented them, and described 89
+    /// single-factory 400s, 10 403s and 2 401s by their title.
+    /// </summary>
+    private static string? DescribeLegacyProblemResponse(OpenApiResponseObjectModel response)
+    {
+        var onlyFactories = response.ResultTypeNames
+            .Where(static name => !SyntheticPipelineResultTypeNames.Contains(name))
+            .All(static name => name == ApiExceptionResultTypeName);
+        var titles = response.ProblemExamples.Select(static example => example.Title).Distinct(StringComparer.Ordinal).ToArray();
+
+        return onlyFactories && titles.Length == 1 ? titles[0] : null;
     }
 
     private static void WriteResponseHeaders(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseHeaderModel> headers)
@@ -781,7 +961,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
     }
 
-    private static void WriteResponseContent(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseContentModel> content, Func<string, string>? schemaNameFormatter)
+    private static void WriteResponseContent(Utf8JsonWriter writer, ImmutableArray<OpenApiResponseContentModel> content, Func<string, string>? schemaNameFormatter, OpenApiResponseObjectModel? legacyProblemResponse)
     {
         writer.WritePropertyName("content");
         writer.WriteStartObject();
@@ -794,6 +974,55 @@ public sealed record OpenApiOutputRenderingContext(
 
             WriteResponseSchema(writer, mediaEntry, schemaNameFormatter);
 
+            if (legacyProblemResponse is not null)
+            {
+                WriteLegacyProblemExample(writer, legacyProblemResponse);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Writes legacy's map of an operation's <c>ApiExceptionFactory</c> fields under the singular "example" key:
+    /// <c>{"MissingPartnerCompany":{"value":{"status":404,"title":"...","type":"missing_partner_company"}}}</c>, keyed by the
+    /// type in PascalCase (Signature365 8b40ecc961, <c>Blueprint.OpenApi/OpenApiDocumentBuilder.cs:246-262</c>; a later
+    /// factory with the same type replaces an earlier one, as legacy's dictionary did). Signature365's client generator
+    /// reads this map, not the standard "examples", to build each API's error catalogue.
+    /// </summary>
+    private static void WriteLegacyProblemExample(Utf8JsonWriter writer, OpenApiResponseObjectModel response)
+    {
+        var examples = new Dictionary<string, OperationProblemExample>(StringComparer.Ordinal);
+        var keys = new List<string>();
+
+        foreach (var example in response.ProblemExamples)
+        {
+            var key = example.Type.ToPascalCase();
+            if (!examples.ContainsKey(key))
+            {
+                keys.Add(key);
+            }
+
+            examples[key] = example;
+        }
+
+        writer.WritePropertyName("example");
+        writer.WriteStartObject();
+
+        foreach (var key in keys)
+        {
+            var example = examples[key];
+
+            writer.WritePropertyName(key);
+            writer.WriteStartObject();
+            writer.WritePropertyName("value");
+            writer.WriteStartObject();
+            writer.WriteNumber("status", response.StatusCode);
+            writer.WriteString("title", example.Title);
+            writer.WriteString("type", example.Type);
+            writer.WriteEndObject();
             writer.WriteEndObject();
         }
 
@@ -1039,6 +1268,12 @@ public sealed record OpenApiOutputRenderingContext(
 
         foreach (var discriminatorCase in discriminator.Cases)
         {
+            if (string.Equals(discriminator.PropertyName, OpenApiResponseObjectRenderingContext.ResourceObjectDiscriminatorPropertyName, StringComparison.Ordinal))
+            {
+                WriteLegacyResourceEventDiscriminatorCase(writer, discriminatorCase, schemaNameFormatter);
+                continue;
+            }
+
             writer.WriteStartObject();
             writer.WriteString("type", "object");
             writer.WritePropertyName("required");
@@ -1081,12 +1316,236 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
     }
 
+    /// <summary>
+    /// Writes one case of a response made only of legacy resource events: the event the host writes for it, by the
+    /// <c>resourceObject</c> that tells it apart and the <c>data</c> it carries, both of which the event always has
+    /// (<c>ResourceEventOf{Resource}</c>'s required members).
+    /// </summary>
+    private static void WriteLegacyResourceEventDiscriminatorCase(
+        Utf8JsonWriter writer,
+        OpenApiResponseDiscriminatorCaseModel discriminatorCase,
+        Func<string, string>? schemaNameFormatter)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("type", "object");
+        writer.WritePropertyName("required");
+        writer.WriteStartArray();
+        writer.WriteStringValue("resourceObject");
+        writer.WriteStringValue("data");
+        writer.WriteEndArray();
+        writer.WritePropertyName("properties");
+        writer.WriteStartObject();
+
+        writer.WritePropertyName("resourceObject");
+        writer.WriteStartObject();
+        writer.WriteString("type", "string");
+        writer.WritePropertyName("enum");
+        writer.WriteStartArray();
+        writer.WriteStringValue(discriminatorCase.Value);
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+
+        writer.WritePropertyName("data");
+        writer.WriteStartObject();
+        writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(discriminatorCase.SchemaComponent.BodyTypeName, schemaNameFormatter)}");
+        writer.WriteEndObject();
+
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Gives each schema component the key it is written under, as legacy Blueprint's NJsonSchema gave it: the first
+    /// component the document reaches keeps its name, and each later one whose name is taken is given it with the first
+    /// free counter from 2 appended.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Legacy reached schemas as it walked the document — an operation's request body, then its responses, and each type
+    /// before the types its properties reach — so this walks the operations in the order they are written, and a
+    /// component's references in the order its properties are. A component nothing reaches comes after, in the order it
+    /// is written. The name counted on is the one the schema projection would have given the type had no other type
+    /// shared it (<see cref="OpenApiSchemaProjectionContext.BaseNames"/>), through the formatter: two types can come to
+    /// share a key either way, and legacy counted on from the one name whichever way it was.
+    /// </para>
+    /// <para>
+    /// The well-known <c>Link</c> component is written under its own name, so no other takes it. A component itself
+    /// named <c>Link</c> is not assigned a key: <see cref="EnsureUniqueComponentKey"/> rejects it rather than let it take
+    /// the references every <c>$links</c> property makes to <c>Link</c>.
+    /// </para>
+    /// </remarks>
+    private static Dictionary<string, string> AssignComponentKeys(OpenApiDocumentRenderingContext document, Func<string, string>? schemaNameFormatter)
+    {
+        var baseNames = document.PathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.SchemaProjection.BaseNames;
+        var componentsByName = new Dictionary<string, OpenApiSchemaComponentModel>(StringComparer.Ordinal);
+
+        foreach (var component in document.SchemaComponents)
+        {
+            componentsByName.TryAdd(component.BodyTypeName, component);
+        }
+
+        componentsByName.Remove("Link");
+
+        var keys = new Dictionary<string, string>(StringComparer.Ordinal);
+        var takenKeys = new HashSet<string>(StringComparer.Ordinal) { "Link" };
+
+        foreach (var path in document.Paths)
+        {
+            foreach (var method in path.Methods)
+            {
+                if (method.Operations.IsEmpty)
+                {
+                    continue;
+                }
+
+                // The operation written for the method slot, as WriteMethodSlot writes it.
+                var operation = method.Operations[0];
+
+                if (operation.RequestBody is { Properties.IsEmpty: false } requestBody)
+                {
+                    Reach(requestBody.SchemaName ?? operation.OperationName);
+                }
+                else if (operation.BodylessRequestSchemaName is { } bodylessSchemaName)
+                {
+                    Reach(bodylessSchemaName);
+                }
+
+                foreach (var response in operation.Responses)
+                {
+                    foreach (var content in response.Content)
+                    {
+                        ReachResponseContent(content);
+                    }
+                }
+            }
+        }
+
+        foreach (var component in document.SchemaComponents)
+        {
+            Reach(component.BodyTypeName);
+        }
+
+        return keys;
+
+        // The components a response's content references, as WriteResponseSchema writes them.
+        void ReachResponseContent(OpenApiResponseContentModel content)
+        {
+            if (content.Discriminator is not null)
+            {
+                foreach (var discriminatorCase in content.Discriminator.Cases)
+                {
+                    Reach(discriminatorCase.SchemaComponent.BodyTypeName);
+                }
+            }
+            else if (content.IsResourceEventEnvelope && content.SchemaComponents.Length >= 1)
+            {
+                ReachResourceEventEnvelope(content.SchemaComponents[0].BodyTypeName);
+            }
+            else
+            {
+                foreach (var component in content.SchemaComponents)
+                {
+                    Reach(component.IsArrayWrapper ? component.Component.BodyTypeName : component.BodyTypeName);
+                }
+            }
+        }
+
+        // A ResourceEvent envelope's own key must be built from the inner type's *final* key — the one its "data"
+        // property's $ref actually resolves to — never from the inner's projection-time name embedded verbatim in the
+        // envelope's synthetic BodyTypeName. The two can differ: the projection's own walk can give one type of a
+        // shared simple name the base name and the other "…2", while this reach-order walk (over responses, in
+        // document order) can visit them in the other order and swap which one keeps the base name. Reaching the inner
+        // type first — through the ordinary Reach(), which every other reference already goes through — and reading
+        // back its resolved key is what keeps the envelope's name and its "data" $ref pointing at the same component
+        // (R28: without this, "ResourceEventOfX2" could wrap the component actually written under key "X").
+        void ReachResourceEventEnvelope(string innerRawName)
+        {
+            var envelopeRawName = OpenApiDocumentRenderingContext.BuildResourceEventEnvelopeBodyTypeName(innerRawName);
+
+            if (keys.ContainsKey(envelopeRawName) || !componentsByName.TryGetValue(envelopeRawName, out var envelopeComponent))
+            {
+                return;
+            }
+
+            Reach(innerRawName);
+
+            var innerFinalKey = keys.GetValueOrDefault(innerRawName)
+                ?? SanitiseSchemaKey(baseNames.GetValueOrDefault(innerRawName, innerRawName), schemaNameFormatter);
+
+            var key = "ResourceEventOf" + innerFinalKey;
+            var uniqueKey = key;
+
+            for (var counter = 2; !takenKeys.Add(uniqueKey); counter++)
+            {
+                uniqueKey = key + counter.ToString(CultureInfo.InvariantCulture);
+            }
+
+            keys[envelopeRawName] = uniqueKey;
+
+            foreach (var property in envelopeComponent.Properties)
+            {
+                Reach(property.SchemaRef);
+                Reach(property.EnumSchemaRef);
+                Reach(property.ItemsSchemaRef);
+                Reach(property.AdditionalPropertiesSchemaRef);
+                Reach(property.AdditionalPropertiesItemsSchemaRef);
+            }
+        }
+
+        void Reach(string? name)
+        {
+            if (name is null || keys.ContainsKey(name) || !componentsByName.TryGetValue(name, out var component))
+            {
+                return;
+            }
+
+            var key = SanitiseSchemaKey(baseNames.GetValueOrDefault(name, name), schemaNameFormatter);
+            var uniqueKey = key;
+
+            for (var counter = 2; !takenKeys.Add(uniqueKey); counter++)
+            {
+                uniqueKey = key + counter.ToString(CultureInfo.InvariantCulture);
+            }
+
+            keys[name] = uniqueKey;
+
+            foreach (var property in component.Properties)
+            {
+                Reach(property.SchemaRef);
+                Reach(property.EnumSchemaRef);
+                Reach(property.ItemsSchemaRef);
+                Reach(property.AdditionalPropertiesSchemaRef);
+                Reach(property.AdditionalPropertiesItemsSchemaRef);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Maps each schema component's name to the CLR type it was projected from, where it was, so that a clash between
+    /// two components can name the types involved rather than only the names they share.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> DescribeComponentSources(OpenApiDocumentRenderingContext document)
+    {
+        var sources = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // Both a type's backtick and angle-bracket full names map to its name; the angle-bracket one reads better.
+        foreach (var (fullName, name) in document.PathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.SchemaProjection.FullNameToShortName
+                     .OrderByDescending(static pair => pair.Key.Contains('<', StringComparison.Ordinal)))
+        {
+            sources.TryAdd(name, fullName);
+        }
+
+        return sources;
+    }
+
     private static void WriteComponents(
         Utf8JsonWriter writer,
         ImmutableArray<OpenApiSchemaComponentModel> schemaComponents,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
         List<OpenApiSecurityScheme> securitySchemes,
-        Func<string, string>? schemaNameFormatter)
+        Func<string, string>? schemaNameFormatter,
+        IReadOnlyDictionary<string, string> componentSources,
+        bool omitLegacyExtras)
     {
         if (schemaComponents.IsEmpty && securitySchemes.Count == 0)
         {
@@ -1106,14 +1565,33 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WritePropertyName("schemas");
             writer.WriteStartObject();
 
-            foreach (var component in objectSchemaComponents)
+            // Utf8JsonWriter writes a duplicate property name without complaint, and a parser then silently keeps one of
+            // the two schemas. AssignComponentKeys gives two types that share a name keys of their own, so what can still
+            // render to one key — two components under one name, such as a request body and a type both named for the one
+            // CLR type name — must fail here, naming both.
+            var sourcesByKey = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            var processedComponents = objectSchemaComponents
+                .Select(component => ProcessSchemaComponent(component, schemaProcessorOptions))
+                .ToList();
+
+            foreach (var processed in processedComponents)
             {
-                WriteSchemaComponent(writer, ProcessSchemaComponent(component, schemaProcessorOptions), schemaNameFormatter);
+                EnsureUniqueComponentKey(
+                    sourcesByKey,
+                    SanitiseSchemaKey(processed.BodyTypeName, schemaNameFormatter),
+                    componentSources.GetValueOrDefault(processed.BodyTypeName, processed.BodyTypeName));
+                WriteSchemaComponent(writer, processed, schemaNameFormatter, omitLegacyExtras);
             }
 
             // Emit the well-known "Link" schema for HATEOAS $links dictionary values.
-            // This enables TypeScript/client generators to produce typed link objects.
-            WriteLinkSchemaComponent(writer);
+            // This enables TypeScript/client generators to produce typed link objects. Legacy's NJsonSchema wrote a component
+            // only when something reached it, so under Legacy naming it is written only when a component references it.
+            if (!omitLegacyExtras || processedComponents.Any(static component => ReferencesLinkComponent(component)))
+            {
+                EnsureUniqueComponentKey(sourcesByKey, "Link", "Blueprint.Model.Link");
+                WriteLinkSchemaComponent(writer, omitLegacyExtras);
+            }
 
             writer.WriteEndObject();
         }
@@ -1132,6 +1610,22 @@ public sealed record OpenApiOutputRenderingContext(
         }
 
         writer.WriteEndObject();
+    }
+
+    private static bool ReferencesLinkComponent(OpenApiSchemaComponentModel component)
+    {
+        return component.Properties.Any(static property => string.Equals(property.AdditionalPropertiesSchemaRef, "Link", StringComparison.Ordinal));
+    }
+
+    private static void EnsureUniqueComponentKey(Dictionary<string, string> sourcesByKey, string key, string source)
+    {
+        if (!sourcesByKey.TryAdd(key, source))
+        {
+            throw new InvalidOperationException(
+                $"The OpenAPI schema components for '{sourcesByKey[key]}' and '{source}' are both named '{key}', and a document " +
+                "cannot hold both under one key. Rename one of the types, give one a name of its own with [OpenApiSchemaName], " +
+                "or change the SchemaNameFormatter that maps them together.");
+        }
     }
 
     private static void WriteSecurityScheme(Utf8JsonWriter writer, OpenApiSecurityScheme scheme)
@@ -1280,12 +1774,25 @@ public sealed record OpenApiOutputRenderingContext(
     /// objects in <c>$links</c> dictionary values. This allows TypeScript and other client generators
     /// to produce typed link objects rather than treating links as opaque <c>object</c>.
     /// </summary>
-    private static void WriteLinkSchemaComponent(Utf8JsonWriter writer)
+    private static void WriteLinkSchemaComponent(Utf8JsonWriter writer, bool omitLegacyExtras)
     {
         writer.WritePropertyName("Link");
         writer.WriteStartObject();
-        writer.WriteString("title", "Link");
+
+        // Legacy never wrote a schema component's title, this one's included (see WriteSchemaComponent).
+        if (!omitLegacyExtras)
+        {
+            writer.WriteString("title", "Link");
+        }
+
+        // Described by Link's documentation, as legacy described every schema.
+        if (OpenApiXmlDocs.GetSchemaSummary(typeof(Blueprint.Model.Link)) is { } description)
+        {
+            writer.WriteString("description", description);
+        }
+
         writer.WriteString("type", "object");
+        writer.WriteBoolean("additionalProperties", false);
 
         writer.WritePropertyName("required");
         writer.WriteStartArray();
@@ -1312,7 +1819,7 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject(); // Link
     }
 
-    private static void WriteSchemaComponent(Utf8JsonWriter writer, OpenApiSchemaComponentModel component, Func<string, string>? schemaNameFormatter)
+    private static void WriteSchemaComponent(Utf8JsonWriter writer, OpenApiSchemaComponentModel component, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(SanitiseSchemaKey(component.BodyTypeName, schemaNameFormatter));
         writer.WriteStartObject();
@@ -1322,16 +1829,28 @@ public sealed record OpenApiOutputRenderingContext(
         if (!component.ComponentEnumValues.IsDefaultOrEmpty)
         {
             writer.WriteString("type", "string");
-            WriteEnumValues(writer, component.ComponentEnumValues);
+
+            // Legacy's NJsonSchema wrote an enum component's description whether or not the enum had one, the empty string
+            // for one without (17 of Signature365's 192 enum components).
+            if (component.Description is not null || omitLegacyExtras)
+            {
+                writer.WriteString("description", component.Description ?? string.Empty);
+            }
+
+            WriteEnumValues(writer, component.ComponentEnumValues, includeVarNames: !omitLegacyExtras);
             writer.WriteEndObject();
             return;
         }
 
         // Prefer an explicit [DisplayName] title; fall back to the simplified CLR type name
-        // (which correctly handles generics via the "Of" convention).
-        var shortTitle = component.Title ?? SimplifyClrTypeName(component.BodyTypeName);
+        // (which correctly handles generics via the "Of" convention). Legacy's NJsonSchema never wrote a component's
+        // title at all, so this is omitted under Legacy naming.
+        if (!omitLegacyExtras)
+        {
+            var shortTitle = component.Title ?? SimplifyClrTypeName(component.BodyTypeName);
 
-        writer.WriteString("title", shortTitle);
+            writer.WriteString("title", shortTitle);
+        }
 
         if (component.Description is not null)
         {
@@ -1363,7 +1882,7 @@ public sealed record OpenApiOutputRenderingContext(
 
             foreach (var property in component.Properties)
             {
-                WriteSchemaProperty(writer, property, schemaNameFormatter);
+                WriteSchemaProperty(writer, property, schemaNameFormatter, omitLegacyExtras);
             }
 
             writer.WriteEndObject();
@@ -1372,11 +1891,28 @@ public sealed record OpenApiOutputRenderingContext(
             // NJsonSchema's convention. This prevents consumers (including TypeScript generators)
             // from allowing arbitrary extra properties on typed schema objects.
             // Exception: types with [JsonExtensionData] properties (e.g. ProblemDetails) accept
-            // arbitrary additional members per their contract, so additionalProperties stays open.
+            // arbitrary additional members per their contract, so additionalProperties is open to any value, or null
+            // too, as legacy documented it.
             if (!component.HasExtensionData)
             {
                 writer.WriteBoolean("additionalProperties", false);
             }
+            else
+            {
+                writer.WritePropertyName("additionalProperties");
+                writer.WriteStartObject();
+
+                if (component.AdditionalPropertiesAreNullable)
+                {
+                    writer.WriteBoolean("nullable", true);
+                }
+
+                writer.WriteEndObject();
+            }
+        }
+        else if (component.IsBodylessOperation)
+        {
+            writer.WriteBoolean("additionalProperties", false);
         }
 
         if (!component.Links.IsDefaultOrEmpty)
@@ -1403,7 +1939,7 @@ public sealed record OpenApiOutputRenderingContext(
 
             foreach (var conditional in component.Conditionals)
             {
-                WriteConditionalRequirement(writer, conditional);
+                WriteConditionalRequirement(writer, conditional, omitLegacyExtras);
             }
 
             writer.WriteEndArray();
@@ -1421,7 +1957,7 @@ public sealed record OpenApiOutputRenderingContext(
     /// never over-enforces — a generated client validator that blocks a payload the server would accept is a worse
     /// failure than one the server still rejects.
     /// </remarks>
-    private static void WriteConditionalRequirement(Utf8JsonWriter writer, OpenApiConditionalRequirement conditional)
+    private static void WriteConditionalRequirement(Utf8JsonWriter writer, OpenApiConditionalRequirement conditional, bool omitLegacyExtras)
     {
         writer.WriteStartObject();
 
@@ -1447,12 +1983,13 @@ public sealed record OpenApiOutputRenderingContext(
 
         // "required" alone carries the whole of a NonNull requirement, so that kind contributes no property constraint
         // and the properties block is omitted rather than filled with an empty schema.
-        if (conditional.TargetKind != OpenApiConditionalTargetKind.NonNull)
+        // Legacy wrote "not": { "type": "null" } for it all the same (R162).
+        if (conditional.TargetKind != OpenApiConditionalTargetKind.NonNull || omitLegacyExtras)
         {
             writer.WritePropertyName("properties");
             writer.WriteStartObject();
             writer.WritePropertyName(conditional.TargetPropertyName);
-            WriteConditionalTargetConstraint(writer, conditional.TargetKind);
+            WriteConditionalTargetConstraint(writer, conditional.TargetKind, omitLegacyExtras);
             writer.WriteEndObject();
         }
 
@@ -1513,20 +2050,30 @@ public sealed record OpenApiOutputRenderingContext(
     /// over <c>required</c> is rejecting an explicit <c>"x": null</c>, so omitting it under-enforces slightly, which is the
     /// safe direction.
     /// </remarks>
-    private static void WriteConditionalTargetConstraint(Utf8JsonWriter writer, OpenApiConditionalTargetKind targetKind)
+    private static void WriteConditionalTargetConstraint(Utf8JsonWriter writer, OpenApiConditionalTargetKind targetKind, bool omitLegacyExtras)
     {
         writer.WriteStartObject();
 
         switch (targetKind)
         {
+            // Legacy's string target carried no pattern, only its items did.
             case OpenApiConditionalTargetKind.NonBlankString:
-                WriteNonBlankStringConstraint(writer);
+                WriteNonBlankStringConstraint(writer, includePattern: !omitLegacyExtras);
                 break;
 
             // NonNull contributes nothing beyond the enclosing "required" entry, so it yields an empty schema. The
             // caller skips it entirely rather than emitting one; handling it here keeps this method total, so that
-            // skip stays an optimisation rather than something this method depends on.
+            // skip stays an optimisation rather than something this method depends on. Legacy wrote "not": { "type":
+            // "null" }, which the generated client's validators accept.
             case OpenApiConditionalTargetKind.NonNull:
+                if (omitLegacyExtras)
+                {
+                    writer.WritePropertyName("not");
+                    writer.WriteStartObject();
+                    writer.WriteString("type", "null");
+                    writer.WriteEndObject();
+                }
+
                 break;
 
             case OpenApiConditionalTargetKind.NonBlankStringItems:
@@ -1551,14 +2098,17 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject();
     }
 
-    private static void WriteNonBlankStringConstraint(Utf8JsonWriter writer)
+    private static void WriteNonBlankStringConstraint(Utf8JsonWriter writer, bool includePattern = true)
     {
         writer.WriteString("type", "string");
         writer.WriteNumber("minLength", 1);
 
         // minLength alone still admits "   ", which string.IsNullOrWhiteSpace rejects. The pattern is unanchored, so it
         // matches a non-whitespace character anywhere in the value.
-        writer.WriteString("pattern", @"\S");
+        if (includePattern)
+        {
+            writer.WriteString("pattern", @"\S");
+        }
     }
 
     /// <summary>
@@ -1637,18 +2187,59 @@ public sealed record OpenApiOutputRenderingContext(
         return processedComponent;
     }
 
-    private static void WriteSchemaProperty(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property, Func<string, string>? schemaNameFormatter)
+    /// <summary>
+    /// Returns the key a deprecation message of a property, a parameter or an operation is written under:
+    /// <c>x-deprecatedMessage</c> under Legacy naming, which is what legacy's NJsonSchema wrote, and otherwise
+    /// <c>x-deprecated-reason</c>.
+    /// </summary>
+    private static string DeprecationMessageKey(bool omitLegacyExtras)
+    {
+        return omitLegacyExtras ? "x-deprecatedMessage" : "x-deprecated-reason";
+    }
+
+    /// <summary>
+    /// Writes <c>deprecated</c> for a deprecated property, whatever form the property takes, with its message beside it
+    /// under <see cref="DeprecationMessageKey"/>.
+    /// </summary>
+    private static void WritePropertyDeprecation(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property, bool omitLegacyExtras)
+    {
+        if (!property.IsDeprecated)
+        {
+            return;
+        }
+
+        writer.WriteBoolean("deprecated", true);
+
+        if (property.DeprecationReason is not null)
+        {
+            writer.WriteString(DeprecationMessageKey(omitLegacyExtras), property.DeprecationReason);
+        }
+    }
+
+    private static void WriteSchemaProperty(Utf8JsonWriter writer, OpenApiSchemaComponentPropertyModel property, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
     {
         writer.WritePropertyName(property.Name);
         writer.WriteStartObject();
 
         // Direct schema reference: property IS a $ref to another component (e.g. the "data" property
-        // on a ResourceEvent envelope referencing the inner resource type).
+        // on a ResourceEvent envelope referencing the inner resource type). OpenAPI 3.0 ignores a $ref's siblings, so a
+        // property that is nullable or described wraps the reference in oneOf beside them, as legacy Blueprint did.
         if (property.SchemaRef is not null)
         {
-            if (property.IsNullable)
+            if (property.IsNullable || property.Description is not null || property.IsDeprecated)
             {
-                writer.WriteBoolean("nullable", true);
+                if (property.IsNullable)
+                {
+                    writer.WriteBoolean("nullable", true);
+                }
+
+                if (property.Description is not null)
+                {
+                    writer.WriteString("description", property.Description);
+                }
+
+                WritePropertyDeprecation(writer, property, omitLegacyExtras);
+
                 writer.WritePropertyName("oneOf");
                 writer.WriteStartArray();
                 writer.WriteStartObject();
@@ -1670,6 +2261,14 @@ public sealed record OpenApiOutputRenderingContext(
         // expected by TypeScript generators that resolve type names from $ref paths.
         if (property.EnumSchemaRef is not null)
         {
+            // Legacy left a property with nothing beside its reference as the bare reference (R163).
+            if (omitLegacyExtras && !property.IsNullable && property.Description is null && !property.IsDeprecated)
+            {
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.EnumSchemaRef, schemaNameFormatter)}");
+                writer.WriteEndObject();
+                return;
+            }
+
             if (property.IsNullable)
             {
                 writer.WriteBoolean("nullable", true);
@@ -1679,6 +2278,8 @@ public sealed record OpenApiOutputRenderingContext(
             {
                 writer.WriteString("description", property.Description);
             }
+
+            WritePropertyDeprecation(writer, property, omitLegacyExtras);
 
             writer.WritePropertyName("oneOf");
             writer.WriteStartArray();
@@ -1717,7 +2318,23 @@ public sealed record OpenApiOutputRenderingContext(
         {
             writer.WritePropertyName("items");
             writer.WriteStartObject();
-            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef, schemaNameFormatter)}");
+
+            // A nullable element wraps its reference in oneOf beside "nullable", as a nullable property does (R163).
+            if (property.ItemsAreNullable)
+            {
+                writer.WriteBoolean("nullable", true);
+                writer.WritePropertyName("oneOf");
+                writer.WriteStartArray();
+                writer.WriteStartObject();
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef, schemaNameFormatter)}");
+                writer.WriteEndObject();
+                writer.WriteEndArray();
+            }
+            else
+            {
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.ItemsSchemaRef, schemaNameFormatter)}");
+            }
+
             writer.WriteEndObject();
         }
         else if (property.ItemsType is not null)
@@ -1738,7 +2355,23 @@ public sealed record OpenApiOutputRenderingContext(
         {
             writer.WritePropertyName("additionalProperties");
             writer.WriteStartObject();
-            writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef, schemaNameFormatter)}");
+
+            // A nullable value wraps its reference in oneOf beside "nullable", as a nullable property does.
+            if (property.AdditionalPropertiesAreNullable)
+            {
+                writer.WriteBoolean("nullable", true);
+                writer.WritePropertyName("oneOf");
+                writer.WriteStartArray();
+                writer.WriteStartObject();
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef, schemaNameFormatter)}");
+                writer.WriteEndObject();
+                writer.WriteEndArray();
+            }
+            else
+            {
+                writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesSchemaRef, schemaNameFormatter)}");
+            }
+
             writer.WriteEndObject();
         }
         else if (property.AdditionalPropertiesType is not null)
@@ -1750,6 +2383,11 @@ public sealed record OpenApiOutputRenderingContext(
             if (property.AdditionalPropertiesFormat is not null)
             {
                 writer.WriteString("format", property.AdditionalPropertiesFormat);
+            }
+
+            if (property.AdditionalPropertiesAreNullable)
+            {
+                writer.WriteBoolean("nullable", true);
             }
 
             // When dictionary values are arrays, emit the nested items schema.
@@ -1806,37 +2444,13 @@ public sealed record OpenApiOutputRenderingContext(
             writer.WriteString("pattern", property.Pattern);
         }
 
-        if (property.Minimum.HasValue)
-        {
-            writer.WriteNumber("minimum", property.Minimum.Value);
-        }
+        WriteNumericConstraints(writer, property.Type, property.Minimum, property.Maximum, property.ExclusiveMinimum, property.ExclusiveMaximum);
 
-        if (property.ExclusiveMinimum)
-        {
-            writer.WriteBoolean("exclusiveMinimum", true);
-        }
+        WritePropertyDeprecation(writer, property, omitLegacyExtras);
 
-        if (property.Maximum.HasValue)
-        {
-            writer.WriteNumber("maximum", property.Maximum.Value);
-        }
-
-        if (property.ExclusiveMaximum)
-        {
-            writer.WriteBoolean("exclusiveMaximum", true);
-        }
-
-        if (property.IsDeprecated)
-        {
-            writer.WriteBoolean("deprecated", true);
-
-            if (property.DeprecationReason is not null)
-            {
-                writer.WriteString("x-deprecated-reason", property.DeprecationReason);
-            }
-        }
-
-        if (property.IsReadOnly)
+        // Legacy's Newtonsoft-based contract resolution never tracked a property's absent setter, so it never wrote
+        // readOnly; omitted under Legacy naming to match.
+        if (property.IsReadOnly && !omitLegacyExtras)
         {
             writer.WriteBoolean("readOnly", true);
         }
@@ -1882,6 +2496,21 @@ public sealed record OpenApiOutputRenderingContext(
             503 => "503",
             504 => "504",
             _ => statusCode.ToString(),
+        };
+    }
+
+    /// <summary>
+    /// The status description legacy wrote: its <c>HttpHost</c> gave every operation a 422 "Validation failure" and a 500
+    /// "Unexpected error" (Signature365 8b40ecc961, <c>Blueprint.Http/HttpHost.cs:90-94</c>), and the other statuses an
+    /// operation documents read as their standard ones.
+    /// </summary>
+    private static string MapLegacyStatusDescription(int statusCode)
+    {
+        return statusCode switch
+        {
+            422 => "Validation failure",
+            500 => "Unexpected error",
+            _ => MapStatusDescription(statusCode),
         };
     }
 

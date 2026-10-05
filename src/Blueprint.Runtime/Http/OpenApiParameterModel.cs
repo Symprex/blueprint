@@ -72,6 +72,35 @@ public sealed record OpenApiParameterModel(
 
     /// <summary>Gets the OpenAPI format of array element items when the items have a standard format mapping.</summary>
     public string? ItemsFormat { get; init; }
+
+    /// <summary>
+    /// Gets the enum member names when the parameter is an array whose items are an enum, or empty when its items are
+    /// not an enum. Rendered inline on the items sub-schema, as legacy's NJsonSchema still carried the member names for
+    /// a collection query parameter's items, however oddly it nested them (a path-local <c>definitions</c> block).
+    /// </summary>
+    public ImmutableArray<string> ItemsEnumValues { get; init; } = ImmutableArray<string>.Empty;
+
+    /// <summary>
+    /// Gets the name of the component of the enum the items are, or <see langword="null"/> for none: under
+    /// <see cref="OpenApiSchemaNaming.Legacy"/>, an enum array parameter's items reference the enum's component, as legacy's
+    /// referenced its definition of it, rather than repeat <see cref="ItemsEnumValues"/> inline.
+    /// </summary>
+    public string? ItemsEnumSchemaRef { get; init; }
+
+    /// <summary>
+    /// Gets the description of the enum the parameter is, which its schema carries, or <see langword="null"/> for none: under
+    /// <see cref="OpenApiSchemaNaming.Legacy"/>, as legacy's schema for an enum parameter carried the enum's own description.
+    /// </summary>
+    public string? EnumDescription { get; init; }
+
+    /// <summary>Gets the description of the enum <see cref="ItemsEnumSchemaRef"/> names, which its component carries, or null.</summary>
+    public string? ItemsEnumDescription { get; init; }
+
+    /// <summary>
+    /// Gets the title of the parameter's schema before the schema name formatter is applied, or <see langword="null"/> for
+    /// none: under <see cref="OpenApiSchemaNaming.Legacy"/>, the legacy name of the parameter's type, as legacy titled it.
+    /// </summary>
+    public string? SchemaTitle { get; init; }
 }
 
 /// <summary>
@@ -91,6 +120,17 @@ public sealed record OpenApiRequestBodyModel(
     /// Empty when no body property carries a conditional validator.
     /// </summary>
     public ImmutableArray<OpenApiConditionalRequirement> Conditionals { get; init; } = [];
+
+    /// <summary>
+    /// Gets the name of the schema component the body is rendered as and referenced by, or <see langword="null"/> to key
+    /// it by the operation's name.
+    /// </summary>
+    public string? SchemaName { get; init; }
+
+    /// <summary>
+    /// Gets the description of the body's schema component, or <see langword="null"/> for none.
+    /// </summary>
+    public string? Description { get; init; }
 }
 
 /// <summary>
@@ -171,6 +211,21 @@ public sealed record OpenApiRequestBodyPropertyModel(
     /// <summary>Gets the component schema name for complex dictionary values, rendered as a <c>$ref</c> instead of an inline type.</summary>
     public string? AdditionalPropertiesSchemaRef { get; init; }
 
+    /// <summary>Gets whether this property is a dictionary of any values, rendered as <c>additionalProperties: {}</c>.</summary>
+    public bool AllowsAdditionalProperties { get; init; }
+
+    /// <summary>Gets whether this property is a collection of references whose elements may be null, rendered with <c>"nullable": true</c> beside a <c>oneOf</c> wrapping the items' <c>$ref</c>.</summary>
+    public bool ItemsAreNullable { get; init; }
+
+    /// <summary>Gets whether this property is a dictionary whose values may be null, rendered with <c>"nullable": true</c> in its <c>additionalProperties</c>.</summary>
+    public bool AdditionalPropertiesAreNullable { get; init; }
+
+    /// <summary>Gets the description of the enum type <see cref="EnumSchemaRef"/> names, which its component carries, or null.</summary>
+    public string? EnumDescription { get; init; }
+
     /// <summary>Gets whether this property is write-only (annotated with <see cref="Blueprint.Model.Attributes.OpenApiWriteOnlyAttribute"/>).</summary>
     public bool IsWriteOnly { get; init; }
+
+    /// <summary>Gets the component schema name of the object this property holds, rendered as a <c>$ref</c> instead of an inline <c>object</c>.</summary>
+    public string? SchemaRef { get; init; }
 }

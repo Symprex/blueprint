@@ -432,8 +432,10 @@ public class PropertyOwnershipModuleIntegrationTests
     }
 
     [Fact]
-    public void When_delete_with_route_and_query_then_descriptor_has_both()
+    public void When_delete_with_route_and_other_properties_then_descriptor_has_route_and_body()
     {
+        // Legacy read the body of every request but a GET (Signature365 8b40ecc961,
+        // Blueprint.Http/MessagePopulation/HttpBodyMessagePopulationSource.cs:145-147).
         var descriptor = DeleteItemPopulationCommand.Configure();
 
         descriptor.TryGetFeatureData<OperationPropertyOwnershipFeatureData>(out var ownershipData)
@@ -442,7 +444,7 @@ public class PropertyOwnershipModuleIntegrationTests
         ownershipData!.Entries.Should().Contain(
             static e => e.PropertyName == "Id" && e.Source == PropertyBindingSource.Route);
         ownershipData.Entries.Should().Contain(
-            static e => e.PropertyName == "Force" && e.Source == PropertyBindingSource.Query);
+            static e => e.PropertyName == "Force" && e.Source == PropertyBindingSource.Body);
     }
 
     [Fact]
@@ -1058,7 +1060,7 @@ public partial class FilterPopulationQuery : IQuery<string>
 }
 
 /// <summary>
-/// DELETE with route + query params for testing DELETE query binding.
+/// DELETE with a route param and a body param for testing DELETE binding.
 /// </summary>
 [Blueprint.Model.Attributes.HttpDelete]
 [Blueprint.Model.Attributes.AllowAnonymous]

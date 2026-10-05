@@ -53,6 +53,6 @@ public partial class FooCommand : ICommand
 
 [BlueprintAppScan]
 public partial class TestBlueprintApp : BlueprintApp
-                     ^^^^^^^^^^^^^^^^ [Error:BP009] Operations FooQuery, FooCommand produce the same descriptor name 'Foo' after stripping Query/Command suffixes. Rename one of them to avoid an OpenAPI operationId collision.
+                     ^^^^^^^^^^^^^^^^ [Error:BP009] Operations FooQuery, FooCommand produce the same descriptor name 'Foo' once 'Query' and 'Command' are removed and the name is cased. Rename one of them to avoid an OpenAPI operationId collision.
 {
 }

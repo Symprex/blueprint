@@ -9,6 +9,14 @@ namespace Blueprint.SourceGenerator.Helpers;
 public static class OperationResultContractHelper
 {
     /// <summary>
+    /// Gets the statuses the HTTP host can write a <c>KeyOnlyResourceEventResult</c> with, each with no body: that of its
+    /// change type, which is only known at run time — 201 for created, 200 for updated, 204 for deleted
+    /// (<c>HttpOperationResultExecutor.MapChangeTypeToStatusCode</c>). <see cref="TryGetHttpOperationResultResponseShape"/>
+    /// gives the created one alone, the one the response metadata starts from.
+    /// </summary>
+    public static ImmutableArray<int> KeyOnlyResourceEventStatusCodes { get; } = ImmutableArray.Create(201, 200, 204);
+
+    /// <summary>
     /// Gets the declared operation result contract from the generic Blueprint operation interface, if one exists.
     /// </summary>
     /// <param name="operationType">The operation type.</param>
@@ -317,11 +325,11 @@ public static class OperationResultContractHelper
             return true;
         }
 
-        // Legacy Blueprint.Http.ResourceEvent<T>: runtime status depends on ChangeType (Created=201,
-        // Updated=200, Deleted=204). Use same sentinel shape as ResourceEventResult for compile-time modelling.
+        // Legacy Blueprint.Http.ResourceEvent<T>, ResourceCreated<T> and the rest: whatever the change type, the host sends
+        // a 200 with the event, as legacy's OkResult did.
         if (IsTypeOrDerivedFromOptional(resultType, resourceEventType))
         {
-            statusCode = 201;
+            statusCode = 200;
             hasResponseBody = true;
             return true;
         }

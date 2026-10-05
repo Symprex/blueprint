@@ -28,6 +28,21 @@ internal sealed record OpenApiValidationConstraints(
     public static OpenApiValidationConstraints None { get; } = new(false, null, null, null, null, null, false, false, null);
 
     /// <summary>
+    /// Gets a value indicating whether the property rejects an empty string for its <see cref="RequiredAttribute"/>, with
+    /// no <see cref="StringLengthAttribute"/> whose minimum legacy documented instead. See
+    /// <see cref="GetDocumentedMinLength"/>, which is its only reader.
+    /// </summary>
+    public bool RequiresNonEmptyString { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the property carries a <see cref="StringLengthAttribute"/>, whatever its
+    /// <see cref="StringLengthAttribute.MinimumLength"/> — including the default of 0, which <see cref="GetMinLength"/>
+    /// otherwise treats as "no minimum declared" since it constrains nothing. See <see cref="GetDocumentedMinLength"/>,
+    /// which is its only reader, for why a value of 0 still matters under legacy naming.
+    /// </summary>
+    public bool HasStringLengthAttribute { get; init; }
+
+    /// <summary>
     /// Returns <see langword="true"/> when at least one constraint value is non-default
     /// (excluding <see cref="IsRequired"/>, which is tracked separately by the parameter model).
     /// </summary>
@@ -66,8 +81,12 @@ internal sealed record OpenApiValidationConstraints(
     /// <c>GetProperty</c> calls when the caller already has the <see cref="PropertyInfo"/>.
     /// </summary>
     /// <param name="property">The CLR property to extract constraints from, or <c>null</c> when not found.</param>
+    /// <param name="includeComparisonBounds">
+    /// Whether the bounds Blueprint's own comparison attributes declare count (see <see cref="GetMinimum"/>). <see langword="false"/>
+    /// under <see cref="OpenApiSchemaNaming.Legacy"/>, whose NJsonSchema did not know them.
+    /// </param>
     /// <returns>The extracted validation constraints, or <see cref="None"/> when no attributes are found.</returns>
-    public static OpenApiValidationConstraints ExtractFromProperty(PropertyInfo? property)
+    public static OpenApiValidationConstraints ExtractFromProperty(PropertyInfo? property, bool includeComparisonBounds = true)
     {
         if (property is null)
         {
@@ -85,9 +104,9 @@ internal sealed record OpenApiValidationConstraints(
         var minLength = GetMinLength(attributes);
         var maxLength = GetMaxLength(attributes);
         var pattern = GetPattern(attributes);
-        var minimum = GetMinimum(attributes);
-        var maximum = GetMaximum(attributes);
-        var format = GetFormat(attributes);
+        var minimum = GetMinimum(attributes, includeComparisonBounds);
+        var maximum = GetMaximum(attributes, includeComparisonBounds);
+        var format = GetFormat(attributes, useLegacyRules: false);
 
         return new OpenApiValidationConstraints(
             isRequired,
@@ -98,7 +117,94 @@ internal sealed record OpenApiValidationConstraints(
             maximum.Value,
             minimum.IsExclusive,
             maximum.IsExclusive,
-            format);
+            format)
+        {
+            RequiresNonEmptyString = IsRequiredNonEmptyString(attributes),
+            HasStringLengthAttribute = attributes.Any(static a => a is StringLengthAttribute),
+        };
+    }
+
+    /// <summary>
+    /// Returns whether a property's validation attributes make it reject an empty string for its
+    /// <see cref="RequiredAttribute"/> (one that does not set <see cref="RequiredAttribute.AllowEmptyStrings"/>), with no
+    /// <see cref="StringLengthAttribute"/> on it.
+    /// </summary>
+    /// <remarks>
+    /// The <see cref="StringLengthAttribute"/> exception is legacy's: its NJsonSchema replaced the <c>[Required]</c> string's
+    /// minimum length with the attribute's own minimum, so a string bounded only above had a minimum of 0, which constrains
+    /// nothing and which this document leaves out, as it does for such a string that is not <c>[Required]</c>.
+    /// </remarks>
+    /// <param name="validationAttributes">The property's validation attributes.</param>
+    /// <returns><see langword="true"/> when a non-enum string property is documented with a minimum length of 1.</returns>
+    internal static bool IsRequiredNonEmptyString(IEnumerable<ValidationAttribute> validationAttributes)
+    {
+        var isRequired = false;
+
+        foreach (var attribute in validationAttributes)
+        {
+            switch (attribute)
+            {
+                case StringLengthAttribute:
+                    return false;
+                case RequiredAttribute { AllowEmptyStrings: false }:
+                    isRequired = true;
+                    break;
+            }
+        }
+
+        return isRequired;
+    }
+
+    /// <summary>
+    /// Gets the <c>minLength</c> a request body's or schema component's property is documented with: its declared minimum
+    /// length, or else 1 for a string, not an enum, that <see cref="IsRequiredNonEmptyString"/>, as legacy Blueprint's
+    /// NJsonSchema documented it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// NJsonSchema (11.1, which legacy used) gives a <see cref="RequiredAttribute"/> property <c>minLength: 1</c> when its
+    /// JSON type is <c>string</c> and it is not an enum, unless <see cref="RequiredAttribute.AllowEmptyStrings"/> is set;
+    /// a <see cref="StringLengthAttribute"/> or <see cref="MinLengthAttribute"/> replaces it with its own minimum. That
+    /// includes a GUID, a date and a URI, which are strings in the document too. A <c>[Required]</c> string rejects an empty
+    /// value whichever rule marks properties required, so the minimum cannot reject what the server accepts.
+    /// </para>
+    /// <para>
+    /// Not for a parameter: legacy described parameters without NJsonSchema's property rules, and no legacy parameter,
+    /// <c>[Required]</c> query strings among them, carries a <c>minLength</c> it was not declared with.
+    /// </para>
+    /// </remarks>
+    /// <param name="declaredMinLength">The minimum length the property's validation attributes declare, if any.</param>
+    /// <param name="requiresNonEmptyString">Whether the property <see cref="IsRequiredNonEmptyString"/>.</param>
+    /// <param name="isNonEnumString">Whether the property is documented as a string that is not an enum.</param>
+    /// <param name="hasStringLengthAttribute">
+    /// Whether the property carries a <see cref="StringLengthAttribute"/> at all (see <see cref="HasStringLengthAttribute"/>).
+    /// </param>
+    /// <param name="useLegacyStringLengthZero">
+    /// <see langword="true"/> under <see cref="OpenApiSchemaNaming.Legacy"/>: legacy's NJsonSchema echoed a
+    /// <see cref="StringLengthAttribute"/>'s <see cref="StringLengthAttribute.MinimumLength"/> verbatim, including its
+    /// default of 0 (Signature365's committed Portal document, e.g. a description bounded only by
+    /// <c>[StringLength(200)]</c>, carries <c>"minLength": 0</c>) — a fact this document otherwise leaves out under
+    /// Default naming, since a minimum of 0 constrains nothing.
+    /// </param>
+    /// <returns>The minimum length to document, or <see langword="null"/> for none.</returns>
+    internal static int? GetDocumentedMinLength(
+        int? declaredMinLength,
+        bool requiresNonEmptyString,
+        bool isNonEnumString,
+        bool hasStringLengthAttribute = false,
+        bool useLegacyStringLengthZero = false)
+    {
+        if (declaredMinLength is not null)
+        {
+            return declaredMinLength;
+        }
+
+        if (useLegacyStringLengthZero && hasStringLengthAttribute)
+        {
+            return 0;
+        }
+
+        return requiresNonEmptyString && isNonEnumString ? 1 : null;
     }
 
     /// <summary>
@@ -128,36 +234,54 @@ internal sealed record OpenApiValidationConstraints(
     /// </para>
     /// </remarks>
     /// <param name="property">The CLR property to extract conditional requirements from, or <c>null</c> when not found.</param>
+    /// <param name="useLegacyRules">
+    /// Whether to extract what legacy Blueprint's <c>RequiredIfSchemaProcessor</c> exported instead (R162): only
+    /// <c>RequiredIf</c> and <c>RequiredItemsIf</c>, and not one whose dependent value is <c>null</c>; a string target as a
+    /// non-blank string and any other target, of any type, as not null; every items target as non-blank strings whatever its
+    /// element type; the <c>RequiredIf</c> attributes before the <c>RequiredItemsIf</c> ones, in declaration order, unsorted.
+    /// </param>
     /// <returns>The conditional requirements declared on the property, in dependent-property name order; empty when none apply.</returns>
-    public static ImmutableArray<OpenApiConditionalRequirement> ExtractConditionalRequirements(PropertyInfo? property)
+    public static ImmutableArray<OpenApiConditionalRequirement> ExtractConditionalRequirements(PropertyInfo? property, bool useLegacyRules = false)
     {
         if (property is null)
         {
             return [];
         }
 
-        var scalarTargetKind = GetScalarTargetKind(property.PropertyType);
-        var itemsTargetKind = GetItemsTargetKind(property.PropertyType);
+        var scalarTargetKind = useLegacyRules
+            ? property.PropertyType == typeof(string) ? OpenApiConditionalTargetKind.NonBlankString : OpenApiConditionalTargetKind.NonNull
+            : GetScalarTargetKind(property.PropertyType);
+        var itemsTargetKind = useLegacyRules
+            ? OpenApiConditionalTargetKind.NonBlankStringItems
+            : GetItemsTargetKind(property.PropertyType);
 
         var builder = ImmutableArray.CreateBuilder<OpenApiConditionalRequirement>();
+        var itemsBuilder = useLegacyRules ? ImmutableArray.CreateBuilder<OpenApiConditionalRequirement>() : builder;
 
         foreach (var attribute in property.GetCustomAttributes(inherit: true))
         {
             switch (attribute)
             {
-                case RequiredIfAttribute requiredIf:
-                    Add(requiredIf.DependentProperty, requiredIf.DependentValues, negated: false, scalarTargetKind);
+                case RequiredIfAttribute requiredIf when !useLegacyRules || requiredIf.DependentValue is not null:
+                    Add(builder, requiredIf.DependentProperty, requiredIf.DependentValues, negated: false, scalarTargetKind);
                     break;
-                case RequiredIfNotAttribute requiredIfNot:
-                    Add(requiredIfNot.DependentProperty, requiredIfNot.DependentValues, negated: true, scalarTargetKind);
+                case RequiredIfNotAttribute requiredIfNot when !useLegacyRules:
+                    Add(builder, requiredIfNot.DependentProperty, requiredIfNot.DependentValues, negated: true, scalarTargetKind);
                     break;
-                case RequiredItemsIfAttribute requiredItemsIf:
-                    Add(requiredItemsIf.DependentProperty, requiredItemsIf.DependentValues, negated: false, itemsTargetKind);
+                case RequiredItemsIfAttribute requiredItemsIf when !useLegacyRules || requiredItemsIf.DependentValue is not null:
+                    Add(itemsBuilder, requiredItemsIf.DependentProperty, requiredItemsIf.DependentValues, negated: false, itemsTargetKind);
                     break;
-                case RequiredItemsIfNotAttribute requiredItemsIfNot:
-                    Add(requiredItemsIfNot.DependentProperty, requiredItemsIfNot.DependentValues, negated: true, itemsTargetKind);
+                case RequiredItemsIfNotAttribute requiredItemsIfNot when !useLegacyRules:
+                    Add(itemsBuilder, requiredItemsIfNot.DependentProperty, requiredItemsIfNot.DependentValues, negated: true, itemsTargetKind);
                     break;
             }
+        }
+
+        if (useLegacyRules)
+        {
+            builder.AddRange(itemsBuilder);
+
+            return builder.ToImmutable();
         }
 
         // Reflection does not guarantee an order for repeated attributes on one member, and the rendered document is a
@@ -175,14 +299,14 @@ internal sealed record OpenApiValidationConstraints(
                 .ThenBy(static requirement => FormatDependentValuesKey(requirement.DependentValues), StringComparer.Ordinal),
         ];
 
-        void Add(string dependentProperty, IEnumerable<object?> dependentValues, bool negated, OpenApiConditionalTargetKind? targetKind)
+        void Add(ImmutableArray<OpenApiConditionalRequirement>.Builder target, string dependentProperty, IEnumerable<object?> dependentValues, bool negated, OpenApiConditionalTargetKind? targetKind)
         {
             if (targetKind is not { } kind || !TryNormaliseDependentValues(dependentValues, out var normalisedValues))
             {
                 return;
             }
 
-            builder.Add(new OpenApiConditionalRequirement(
+            target.Add(new OpenApiConditionalRequirement(
                 dependentProperty,
                 normalisedValues,
                 negated,
@@ -378,7 +502,16 @@ internal sealed record OpenApiValidationConstraints(
             .FirstOrDefault(static pattern => string.IsNullOrWhiteSpace(pattern) == false);
     }
 
-    private static (decimal? Value, bool IsExclusive) GetMinimum(IReadOnlyList<ValidationAttribute> validationAttributes)
+    /// <summary>
+    /// Gets a property's lower bound from its <see cref="RangeAttribute"/> and, when <paramref name="includeComparisonBounds"/>
+    /// is set, Blueprint's <see cref="GreaterThanAttribute"/> and <see cref="GreaterThanOrEqualToAttribute"/>.
+    /// </summary>
+    /// <remarks>
+    /// Legacy documented none of the comparison attributes (R147): they are plain <c>ValidationAttribute</c>s, which its
+    /// NJsonSchema did not read, and no property of Signature365's twelve <c>[GreaterThan]</c> ones carries a bound in any
+    /// committed document. <see cref="GetMaximum"/> is the same for the upper bound.
+    /// </remarks>
+    private static (decimal? Value, bool IsExclusive) GetMinimum(IReadOnlyList<ValidationAttribute> validationAttributes, bool includeComparisonBounds)
     {
         decimal? minimum = null;
         var isExclusive = false;
@@ -390,10 +523,10 @@ internal sealed record OpenApiValidationConstraints(
                 case RangeAttribute rangeAttribute:
                     ApplyLowerBound(ref minimum, ref isExclusive, ConvertToDecimal(rangeAttribute.Minimum), isExclusiveCandidate: false);
                     break;
-                case GreaterThanAttribute greaterThanAttribute:
+                case GreaterThanAttribute greaterThanAttribute when includeComparisonBounds:
                     ApplyLowerBound(ref minimum, ref isExclusive, greaterThanAttribute.MinimumValue, isExclusiveCandidate: true);
                     break;
-                case GreaterThanOrEqualToAttribute greaterThanOrEqualToAttribute:
+                case GreaterThanOrEqualToAttribute greaterThanOrEqualToAttribute when includeComparisonBounds:
                     ApplyLowerBound(ref minimum, ref isExclusive, greaterThanOrEqualToAttribute.MinimumValue, isExclusiveCandidate: false);
                     break;
             }
@@ -402,7 +535,7 @@ internal sealed record OpenApiValidationConstraints(
         return (minimum, isExclusive);
     }
 
-    private static (decimal? Value, bool IsExclusive) GetMaximum(IReadOnlyList<ValidationAttribute> validationAttributes)
+    private static (decimal? Value, bool IsExclusive) GetMaximum(IReadOnlyList<ValidationAttribute> validationAttributes, bool includeComparisonBounds)
     {
         decimal? maximum = null;
         var isExclusive = false;
@@ -414,10 +547,10 @@ internal sealed record OpenApiValidationConstraints(
                 case RangeAttribute rangeAttribute:
                     ApplyUpperBound(ref maximum, ref isExclusive, ConvertToDecimal(rangeAttribute.Maximum), isExclusiveCandidate: false);
                     break;
-                case LessThanAttribute lessThanAttribute:
+                case LessThanAttribute lessThanAttribute when includeComparisonBounds:
                     ApplyUpperBound(ref maximum, ref isExclusive, lessThanAttribute.MaximumValue, isExclusiveCandidate: true);
                     break;
-                case LessThanOrEqualToAttribute lessThanOrEqualToAttribute:
+                case LessThanOrEqualToAttribute lessThanOrEqualToAttribute when includeComparisonBounds:
                     ApplyUpperBound(ref maximum, ref isExclusive, lessThanOrEqualToAttribute.MaximumValue, isExclusiveCandidate: false);
                     break;
             }
@@ -492,25 +625,50 @@ internal sealed record OpenApiValidationConstraints(
     }
 
     /// <summary>
+    /// Infers the OpenAPI <c>format</c> hint the validation attributes of <paramref name="property"/> imply, as
+    /// <see cref="GetFormat(IReadOnlyList{ValidationAttribute}, bool)"/> does.
+    /// </summary>
+    /// <param name="property">The CLR property, or <see langword="null"/> for none.</param>
+    /// <param name="useLegacyRules">Whether to imply only the formats legacy Blueprint's NJsonSchema wrote.</param>
+    /// <returns>The format, or <see langword="null"/> for none.</returns>
+    internal static string? GetFormat(PropertyInfo? property, bool useLegacyRules)
+    {
+        return property is null
+            ? null
+            : GetFormat(FilterValidationAttributes(property.GetCustomAttributes(inherit: true)), useLegacyRules);
+    }
+
+    /// <summary>
     /// Infers an OpenAPI <c>format</c> hint from well-known validation attributes
     /// (<c>EmailAddressAttribute</c> → <c>"email"</c>, <c>PhoneAttribute</c> → <c>"phone"</c>,
     /// <c>UrlAttribute</c> → <c>"uri"</c>, <c>CreditCardAttribute</c> → <c>"credit-card"</c>).
     /// </summary>
-    private static string? GetFormat(IReadOnlyList<ValidationAttribute> validationAttributes)
+    /// <remarks>
+    /// R183: legacy's NJsonSchema read a format only from a <see cref="DataTypeAttribute"/>, through a map of
+    /// <c>EmailAddress</c>, <c>PhoneNumber</c> and <c>Url</c> (with the date types), so under its rules Blueprint's own
+    /// <c>[EmailAddress]</c> and <c>[Url]</c>, which are <c>RegexAttribute</c>s, and <c>[CreditCard]</c> imply none. A
+    /// generated client turns a format into a validator, so one legacy never wrote changes what its forms accept.
+    /// </remarks>
+    /// <param name="validationAttributes">The property's validation attributes.</param>
+    /// <param name="useLegacyRules">Whether to imply only the formats legacy Blueprint's NJsonSchema wrote.</param>
+    /// <returns>The format, or <see langword="null"/> for none.</returns>
+    internal static string? GetFormat(IReadOnlyList<ValidationAttribute> validationAttributes, bool useLegacyRules)
     {
         foreach (var attribute in validationAttributes)
         {
             switch (attribute)
             {
                 case System.ComponentModel.DataAnnotations.EmailAddressAttribute:
-                case Blueprint.Validation.EmailAddressAttribute:
+                    return "email";
+                case Blueprint.Validation.EmailAddressAttribute when !useLegacyRules:
                     return "email";
                 case PhoneAttribute:
                     return "phone";
                 case System.ComponentModel.DataAnnotations.UrlAttribute:
-                case Blueprint.Validation.UrlAttribute:
                     return "uri";
-                case CreditCardAttribute:
+                case Blueprint.Validation.UrlAttribute when !useLegacyRules:
+                    return "uri";
+                case CreditCardAttribute when !useLegacyRules:
                     return "credit-card";
             }
         }

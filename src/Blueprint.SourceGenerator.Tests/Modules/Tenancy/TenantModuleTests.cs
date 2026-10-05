@@ -401,6 +401,74 @@ public class TenantModuleTests
     }
 
     [Fact]
+    public void When_TenantId_is_in_a_legacy_alternate_named_route_placeholder_then_pipeline_does_not_auto_populate_from_accessor()
+    {
+        // Legacy routed {TenantId:Id} as {TenantId} and bound TenantId from it as it bound {TenantId} (Signature365
+        // 8b40ecc961, Blueprint/ApiOperationLink.cs:53-78; HttpRouteMessagePopulationSource.cs:36-41), so the two are the
+        // same to tenant filling: the route supplies it. Signature365's GetDefaultProductForTenantQuery has this shape.
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public readonly struct ApiId : IParsable<ApiId>
+                {
+                    public string Value { get; }
+                    public ApiId(string value) => this.Value = value;
+                    public static ApiId Parse(string s, IFormatProvider? provider) => new(s);
+                    public static bool TryParse(string? s, IFormatProvider? provider, out ApiId result)
+                    {
+                        if (s is null) { result = default; return false; }
+                        result = new ApiId(s);
+                        return true;
+                    }
+                    public override string ToString() => this.Value;
+                }
+
+                public class TenantResource : ApiResource
+                {
+                    public override string Object => "tenant";
+                    public string Id { get; set; }
+                }
+
+                [Link(typeof(TenantResource), "/billing/tenants/{TenantId:Id}/products/default", Rel = "defaultProduct")]
+                [HttpGet]
+                public partial class GetDefaultProductForTenantQuery : IQuery<string>
+                {
+                    public ApiId TenantId { get; set; }
+
+                    public static Task<string> HandleAsync(GetDefaultProductForTenantQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSource = string.Join("\n", result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText));
+
+        pipelineSource.Should().Contain("ResolveTenant(");
+        pipelineSource.Should().NotContain("_parsedTenantId");
+    }
+
+    [Fact]
     public void When_TenantId_is_nullable_value_type_then_pipeline_uses_HasValue_guard()
     {
         const string source = """
@@ -466,7 +534,7 @@ public class TenantModuleTests
     }
 
     [Fact]
-    public void When_TenantId_not_in_route_then_descriptor_excludes_from_openapi()
+    public void When_TenantId_not_in_route_then_descriptor_binds_it_from_the_body()
     {
         const string source = """
             using Blueprint;
@@ -506,13 +574,10 @@ public class TenantModuleTests
         var descriptorSources = result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator));
         var descriptorSource = string.Join("\n", descriptorSources.Select(static s => s.SourceText));
 
-        // TenantId should be marked as AuthContext (excluded from OpenAPI) because tenancy is
-        // enabled and TenantId is not route-bound or explicitly bound via HTTP attribute.
-        descriptorSource.Should().Contain("PropertyBindingSource.AuthContext");
-        descriptorSource.Should().Contain("\"TenantId\"");
-
-        // Name should still be body-bound
-        descriptorSource.Should().Contain("PropertyBindingSource.Body");
+        // Legacy bound a command's TenantId from its body like any other property, and SetTenantMiddleware filled it only
+        // when that left it unset (Signature365 8b40ecc961, Common/Api/SetTenantMiddleware.cs:60-68).
+        descriptorSource.Should().Contain("new global::Blueprint.Model.OperationPropertyBindingEntry(\"TenantId\", global::Blueprint.Model.PropertyBindingSource.Body, \"tenantId\"");
+        descriptorSource.Should().NotContain("PropertyBindingSource.AuthContext");
     }
 
     [Fact]
@@ -655,5 +720,203 @@ public class TenantModuleTests
 
         // But should NOT auto-assign to operation.TenantId (explicit binding handles that)
         pipelineSource.Should().NotContain("operation.TenantId = this.TenantAccessor.Current");
+    }
+
+    // Legacy's SetTenantMiddleware (Signature365 8b40ecc961, Common/Api/SetTenantMiddleware.cs:63-70) filled only a TenantId
+    // whose type was ApiId or ApiId?, that CanWrite and that was not init-only (:77-90). An app declares that type with
+    // [BlueprintAppTenancy(TenantIdType = ...)]; one that does not keeps every supported kind filled.
+
+    [Fact]
+    public void When_app_declares_TenantIdType_and_TenantId_is_that_type_then_pipeline_fills_it()
+    {
+        var pipelineSource = GeneratePipeline(
+            "[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]",
+            "public ApiId TenantId { get; set; }");
+
+        // Legacy's `x != null ? x : ApiId.Hydrate(current)` bound ApiId.operator !=(ApiId, string), so an unset
+        // non-nullable ApiId was filled too.
+        pipelineSource.Should().Contain("EqualityComparer<global::TestNamespace.ApiId>.Default.Equals(operation.TenantId, default)");
+        pipelineSource.Should().Contain("operation.TenantId = (global::TestNamespace.ApiId)System.ComponentModel.TypeDescriptor.GetConverter(typeof(global::TestNamespace.ApiId)).ConvertFromInvariantString(this.TenantAccessor.Current!)!;");
+    }
+
+    [Fact]
+    public void When_app_declares_TenantIdType_and_TenantId_is_its_nullable_then_pipeline_fills_it()
+    {
+        var pipelineSource = GeneratePipeline(
+            "[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]",
+            "public ApiId? TenantId { get; set; }");
+
+        pipelineSource.Should().Contain("!operation.TenantId.HasValue");
+        pipelineSource.Should().Contain("ConvertFromInvariantString(this.TenantAccessor.Current!)");
+    }
+
+    [Fact]
+    public void When_app_declares_TenantIdType_as_a_nullable_then_TenantId_of_the_underlying_type_is_filled()
+    {
+        var pipelineSource = GeneratePipeline(
+            "[BlueprintAppTenancy(TenantIdType = typeof(ApiId?))]",
+            "public ApiId TenantId { get; set; }");
+
+        pipelineSource.Should().Contain("ConvertFromInvariantString(this.TenantAccessor.Current!)");
+    }
+
+    [Fact]
+    public void When_app_declares_TenantIdType_and_TenantId_is_a_string_then_pipeline_does_not_fill_it()
+    {
+        // Signature365's GenerateSignatureCommand, its IdentityServer TenantUsers operations and its AI analytics
+        // operations have a string TenantId, which legacy left null when the request did.
+        var pipelineSource = GeneratePipeline(
+            "[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]",
+            "public string TenantId { get; set; }");
+
+        ShouldNotFillTenantId(pipelineSource);
+    }
+
+    [Fact]
+    public void When_app_declares_TenantIdType_and_TenantId_is_another_parsable_type_then_pipeline_does_not_fill_it()
+    {
+        var pipelineSource = GeneratePipeline(
+            "[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]",
+            "public OtherId TenantId { get; set; }");
+
+        ShouldNotFillTenantId(pipelineSource);
+    }
+
+    [Fact]
+    public void When_app_declares_BlueprintAppTenancy_without_a_TenantIdType_then_pipeline_fills_a_string_TenantId()
+    {
+        var pipelineSource = GeneratePipeline(
+            "[BlueprintAppTenancy]",
+            "public string TenantId { get; set; }");
+
+        pipelineSource.Should().Contain("operation.TenantId = this.TenantAccessor.Current;");
+    }
+
+    [Fact]
+    public void When_app_does_not_declare_TenantIdType_and_TenantId_has_a_type_converter_then_pipeline_fills_it()
+    {
+        var pipelineSource = GeneratePipeline(
+            string.Empty,
+            "public ApiId TenantId { get; set; }");
+
+        pipelineSource.Should().Contain("ConvertFromInvariantString(this.TenantAccessor.Current!)");
+    }
+
+    [Fact]
+    public void When_TenantId_is_init_only_then_pipeline_does_not_fill_it()
+    {
+        // Legacy skipped an init-only TenantId whatever its type (SetTenantMiddleware.cs:65, :77-90).
+        var pipelineSource = GeneratePipeline(
+            string.Empty,
+            "public string TenantId { get; init; }");
+
+        ShouldNotFillTenantId(pipelineSource);
+    }
+
+    [Fact]
+    public void When_app_declares_TenantIdType_and_TenantId_of_that_type_is_init_only_then_pipeline_does_not_fill_it()
+    {
+        var pipelineSource = GeneratePipeline(
+            "[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]",
+            "public ApiId TenantId { get; init; }");
+
+        ShouldNotFillTenantId(pipelineSource);
+    }
+
+    [Fact]
+    public void When_TenantId_has_a_private_setter_then_pipeline_does_not_fill_it()
+    {
+        // Legacy's CanWrite held for a private setter, but its generated assignment could not have compiled against one.
+        var pipelineSource = GeneratePipeline(
+            string.Empty,
+            "public string TenantId { get; private set; }");
+
+        ShouldNotFillTenantId(pipelineSource);
+    }
+
+    /// <summary>
+    /// Generates the pipeline of a <c>TenantCommand</c> declaring <paramref name="tenantIdProperty"/>, hosted by an app
+    /// carrying <paramref name="appAttributes"/>, beside an <c>ApiId</c> shaped as Signature365's (a struct with only a
+    /// type converter) and an <c>OtherId</c> that is <c>IParsable</c>.
+    /// </summary>
+    private static string GeneratePipeline(string appAttributes, string tenantIdProperty)
+    {
+        var source = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using System;
+            using System.ComponentModel;
+            using System.Globalization;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                {{appAttributes}}
+                public partial class TestApp : BlueprintApp { }
+
+                [TypeConverter(typeof(ApiIdConverter))]
+                public readonly struct ApiId
+                {
+                    public ApiId(string value) => this.Value = value;
+                    public string Value { get; }
+                }
+
+                public sealed class ApiIdConverter : TypeConverter
+                {
+                    public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value) => new ApiId((string)value);
+                }
+
+                public readonly struct OtherId : IParsable<OtherId>
+                {
+                    public OtherId(string value) => this.Value = value;
+                    public string Value { get; }
+                    public static OtherId Parse(string s, IFormatProvider provider) => new(s);
+                    public static bool TryParse(string s, IFormatProvider provider, out OtherId result)
+                    {
+                        result = new OtherId(s);
+                        return s is not null;
+                    }
+                }
+
+                public partial class TenantCommand : ICommand<string>
+                {
+                    {{tenantIdProperty}}
+                    public string Name { get; set; }
+
+                    public static Task<string> HandleAsync(TenantCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSource = string.Join("\n", result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText));
+        pipelineSource.Should().Contain("class TenantCommandExecutorPipeline");
+
+        return pipelineSource;
+    }
+
+    /// <summary>
+    /// Asserts that the pipeline still resolves the tenant but fills <c>TenantId</c> by none of the three ways
+    /// <c>TenantModule</c> can: a string assignment, a <c>TryParse</c> or a type converter.
+    /// </summary>
+    private static void ShouldNotFillTenantId(string pipelineSource)
+    {
+        pipelineSource.Should().Contain("ResolveTenant(this.TenantResolver, this.TenantAccessor, context.UserPrincipal)");
+        pipelineSource.Should().NotContain("operation.TenantId = this.TenantAccessor.Current");
+        pipelineSource.Should().NotContain("_parsedTenantId");
+        pipelineSource.Should().NotContain("ConvertFromInvariantString(this.TenantAccessor.Current");
     }
 }

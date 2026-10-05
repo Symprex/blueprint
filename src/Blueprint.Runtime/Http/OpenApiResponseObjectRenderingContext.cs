@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using Blueprint.Model;
 
 namespace Blueprint.Runtime.Http;
@@ -25,6 +26,11 @@ public sealed record OpenApiResponseObjectRenderingContext(
     private const string FileStreamResultTypeName = "Blueprint.Runtime.Exec.FileStreamResult";
     private const string ProblemDetailsTypeName = "ProblemDetails";
     private const string ValidationProblemDetailsTypeName = "ValidationProblemDetails";
+
+    /// <summary>
+    /// The property a response made only of legacy resource events is discriminated by: the event's <c>resourceObject</c>.
+    /// </summary>
+    internal const string ResourceObjectDiscriminatorPropertyName = "resourceObject";
 
     /// <summary>
     /// Creates deterministic OpenAPI-style response objects from the supplied response-schema reference projection.
@@ -81,7 +87,8 @@ public sealed record OpenApiResponseObjectRenderingContext(
             response.Response.HasResponseBody,
             response.Response.ResultTypeNames,
             content,
-            headers);
+            headers,
+            response.Response.ProblemExamples);
     }
 
     private static ImmutableArray<OpenApiResponseContentModel> CreateContent(
@@ -95,7 +102,8 @@ public sealed record OpenApiResponseObjectRenderingContext(
             .OfType<OpenApiResponseContentSchemaComponent>()
             .ToImmutableArray();
         var discriminator = TryCreateResourceEventDiscriminator(operation, response.Response, schemaComponents);
-        var isResourceEventEnvelope = discriminator is null && IsResourceEventResultResponse(response.Response);
+        var isResourceEventEnvelope = discriminator is null
+                                      && (IsResourceEventResultResponse(response.Response) || ReturnsResourceEvent(operation, response.Response));
 
         return schemaComponents.IsEmpty
             ? TryCreateNonJsonContent(response.Response)
@@ -186,14 +194,27 @@ public sealed record OpenApiResponseObjectRenderingContext(
         OperationHttpResponseMetadata response,
         ImmutableArray<OpenApiResponseContentSchemaComponent> schemaComponents)
     {
-        if (schemaComponents.Length < 2
-            || operation.TryGetFeatureData<OperationResourceEventMetadataFeatureData>(out var metadata) == false)
+        if (schemaComponents.Length < 2)
         {
             return null;
         }
 
         var schemaComponentsByBodyTypeName = schemaComponents
             .ToFrozenDictionary(static component => component.BodyTypeName, StringComparer.Ordinal);
+
+        // A legacy event's eventId is "{resource}.{sub-id}", the sub-id its handler's to choose at run time, not its
+        // resource's [ResourceEvent] id, so a response one of them makes is told apart by the resourceObject or not at all.
+        var legacyEventMembers = ResolveLegacyResourceEventMembers(operation, response);
+        if (legacyEventMembers.Any(static member => member is not null))
+        {
+            return TryCreateLegacyResourceEventDiscriminator(legacyEventMembers, schemaComponentsByBodyTypeName, schemaComponents.Length);
+        }
+
+        if (operation.TryGetFeatureData<OperationResourceEventMetadataFeatureData>(out var metadata) == false)
+        {
+            return null;
+        }
+
         var distinctEventIds = new HashSet<string>(StringComparer.Ordinal);
         var cases = new List<OpenApiResponseDiscriminatorCaseModel>(response.ResultTypeNames.Length);
         foreach (var resultTypeName in response.ResultTypeNames)
@@ -212,6 +233,85 @@ public sealed record OpenApiResponseObjectRenderingContext(
         return cases.Count != schemaComponents.Length
             ? null
             : new OpenApiResponseDiscriminatorModel("eventId", cases.ToImmutableArray());
+    }
+
+    /// <summary>
+    /// Discriminates a response made only of legacy <see cref="Blueprint.Http.ResourceEvent{TResource}"/> members by the
+    /// <c>resourceObject</c> the host writes for each: its resource's type name (<see cref="ApiResource.GetTypeName"/>),
+    /// fixed by the event's type, as legacy Blueprint set it (Signature365 8b40ecc961, Blueprint.Http/ResourceEvent.cs:38,
+    /// :59). Returns <see langword="null"/> when a member is not a legacy event, when two resources share a type name — the
+    /// host would write the same value for either — or when the members do not cover the response's components.
+    /// </summary>
+    private static OpenApiResponseDiscriminatorModel? TryCreateLegacyResourceEventDiscriminator(
+        Type?[] legacyEventMembers,
+        FrozenDictionary<string, OpenApiResponseContentSchemaComponent> schemaComponentsByBodyTypeName,
+        int schemaComponentCount)
+    {
+        var distinctResourceObjects = new HashSet<string>(StringComparer.Ordinal);
+        var cases = new List<OpenApiResponseDiscriminatorCaseModel>(legacyEventMembers.Length);
+        foreach (var member in legacyEventMembers)
+        {
+            if (member is null
+                || GetLegacyEventResourceType(member) is not { } resourceType
+                || !schemaComponentsByBodyTypeName.TryGetValue(NormalizeBodyTypeName(OpenApiSchemaProjectionContext.FormatFullNameDisplayStyle(resourceType)), out var schemaComponent))
+            {
+                return null;
+            }
+
+            var resourceObject = ApiResource.GetTypeName(resourceType);
+            if (!distinctResourceObjects.Add(resourceObject))
+            {
+                return null;
+            }
+
+            cases.Add(new OpenApiResponseDiscriminatorCaseModel(resourceObject, schemaComponent));
+        }
+
+        return cases.Count != schemaComponentCount
+            ? null
+            : new OpenApiResponseDiscriminatorModel(ResourceObjectDiscriminatorPropertyName, cases.ToImmutableArray());
+    }
+
+    /// <summary>
+    /// Resolves each of the response's result types to the member of the operation's declared <c>Results</c> union it
+    /// names, where that member is a legacy <see cref="Blueprint.Http.ResourceEvent"/>, and to <see langword="null"/>
+    /// otherwise. The names are the generator's (Roslyn's display names), so each member is named the same way.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Operation types' interfaces are preserved by the source generator's generated pipeline code.")]
+    private static Type?[] ResolveLegacyResourceEventMembers(ApiOperationDescriptor operation, OperationHttpResponseMetadata response)
+    {
+        var declaredResultType = operation.OperationType.GetInterfaces()
+            .FirstOrDefault(static candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IReturn<>))
+            ?.GetGenericArguments()[0];
+        if (declaredResultType is not { IsGenericType: true } || declaredResultType.GetGenericTypeDefinition() != typeof(Results<,>))
+        {
+            return new Type?[response.ResultTypeNames.Length];
+        }
+
+        var members = declaredResultType.GetGenericArguments();
+
+        return response.ResultTypeNames
+            .Select(resultTypeName => members.FirstOrDefault(member =>
+                typeof(Blueprint.Http.ResourceEvent).IsAssignableFrom(member)
+                && string.Equals(OpenApiSchemaProjectionContext.FormatFullNameDisplayStyle(member), resultTypeName, StringComparison.Ordinal)))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// The resource type of a legacy <see cref="Blueprint.Http.ResourceEvent{TResource}"/>, or <see langword="null"/> for
+    /// the non-generic <see cref="Blueprint.Http.ResourceEvent"/>.
+    /// </summary>
+    private static Type? GetLegacyEventResourceType(Type eventType)
+    {
+        for (var current = eventType; current is not null; current = current.BaseType)
+        {
+            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(Blueprint.Http.ResourceEvent<>))
+            {
+                return current.GetGenericArguments()[0];
+            }
+        }
+
+        return null;
     }
 
     private const string CreatedResultTypeName = "Blueprint.Runtime.Exec.CreatedResult";
@@ -238,6 +338,27 @@ public sealed record OpenApiResponseObjectRenderingContext(
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when this is the success response of an operation whose handler returns a
+    /// <see cref="Blueprint.Http.ResourceEvent"/> — the legacy result type, a subclass of it included. The HTTP host writes
+    /// the whole event for it, as legacy Blueprint did, so the schema must describe the envelope rather than the event's
+    /// data, which is what the response metadata names as its body.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Operation types' interfaces are preserved by the source generator's generated pipeline code.")]
+    private static bool ReturnsResourceEvent(ApiOperationDescriptor operation, OperationHttpResponseMetadata response)
+    {
+        if (!response.HasResponseBody || response.StatusCode is < 200 or > 299)
+        {
+            return false;
+        }
+
+        var declaredResultType = operation.OperationType.GetInterfaces()
+            .FirstOrDefault(static candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IReturn<>))
+            ?.GetGenericArguments()[0];
+
+        return declaredResultType is not null && typeof(Blueprint.Http.ResourceEvent).IsAssignableFrom(declaredResultType);
     }
 
     /// <summary>
@@ -339,12 +460,61 @@ public sealed record OpenApiResponseObjectOperationContext(
 /// <param name="ResultTypeNames">The semantic result type names that collapse into this response family.</param>
 /// <param name="Content">The rendered response content keyed by media type when covered schema components exist.</param>
 /// <param name="Headers">Well-known response headers inferred from result types and status codes.</param>
+/// <param name="ProblemExamples">
+/// The title and type of each <c>ApiExceptionFactory</c> the operation declares at this status
+/// (<see cref="OperationHttpResponseMetadata.ProblemExamples"/>). Default or empty when there are none.
+/// </param>
 public sealed record OpenApiResponseObjectModel(
     int StatusCode,
     bool HasResponseBody,
     ImmutableArray<string> ResultTypeNames,
     ImmutableArray<OpenApiResponseContentModel> Content,
-    ImmutableArray<OpenApiResponseHeaderModel> Headers = default);
+    ImmutableArray<OpenApiResponseHeaderModel> Headers = default,
+    ImmutableArray<OperationProblemExample> ProblemExamples = default)
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OpenApiResponseObjectModel"/> class with no problem examples.
+    /// </summary>
+    /// <remarks>
+    /// The 1.0.2 signature, kept so that a binary built against it (an operation processor that makes a response, for
+    /// example) still binds: <see cref="ProblemExamples"/> was added in 1.0.3 as an optional parameter, which a recompile
+    /// fills in but an existing binary cannot.
+    /// </remarks>
+    /// <param name="statusCode">The HTTP status code emitted for this response family.</param>
+    /// <param name="hasResponseBody">Whether the response family writes a response body.</param>
+    /// <param name="resultTypeNames">The semantic result type names that collapse into this response family.</param>
+    /// <param name="content">The rendered response content keyed by media type when covered schema components exist.</param>
+    /// <param name="headers">Well-known response headers inferred from result types and status codes.</param>
+    public OpenApiResponseObjectModel(
+        int statusCode,
+        bool hasResponseBody,
+        ImmutableArray<string> resultTypeNames,
+        ImmutableArray<OpenApiResponseContentModel> content,
+        ImmutableArray<OpenApiResponseHeaderModel> headers)
+        : this(statusCode, hasResponseBody, resultTypeNames, content, headers, default)
+    {
+    }
+
+    /// <summary>Deconstructs the response into the five members it had in 1.0.2, kept for binaries built against that signature.</summary>
+    /// <param name="statusCode">The HTTP status code emitted for this response family.</param>
+    /// <param name="hasResponseBody">Whether the response family writes a response body.</param>
+    /// <param name="resultTypeNames">The semantic result type names that collapse into this response family.</param>
+    /// <param name="content">The rendered response content keyed by media type when covered schema components exist.</param>
+    /// <param name="headers">Well-known response headers inferred from result types and status codes.</param>
+    public void Deconstruct(
+        out int statusCode,
+        out bool hasResponseBody,
+        out ImmutableArray<string> resultTypeNames,
+        out ImmutableArray<OpenApiResponseContentModel> content,
+        out ImmutableArray<OpenApiResponseHeaderModel> headers)
+    {
+        statusCode = this.StatusCode;
+        hasResponseBody = this.HasResponseBody;
+        resultTypeNames = this.ResultTypeNames;
+        content = this.Content;
+        headers = this.Headers;
+    }
+}
 
 /// <summary>
 /// Captures one rendered media-type entry for an OpenAPI-style response object.

@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class PlaceOrderCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["MartenScopeModule", "RebusTransactionModule", "TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["MartenScopeModule", "TenantModule", "PropertyPopulationModule", "RebusTransactionModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
         readonly bool _hasRebus;
 
         internal PlaceOrderCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
@@ -62,8 +62,6 @@ namespace Blueprint.Generated
 
             global::Blueprint.Marten.MartenScopeAccessor.Current = context.ServiceProvider;
 
-            using var rebusTransactionScope = this._hasRebus ? new global::Rebus.Transport.RebusTransactionScope() : null;
-
             // Tenant resolution (compile-time, no reflection, cached services)
             if (this.TenantResolver != null && this.TenantAccessor != null)
             {
@@ -74,6 +72,12 @@ namespace Blueprint.Generated
             if (applicablePopulators.Length > 0)
             {
                 await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
+            }
+
+            using var rebusTransactionScope = this._hasRebus ? new global::Rebus.Transport.RebusTransactionScope() : null;
+            if (rebusTransactionScope != null && this.HasUnitOfWork)
+            {
+                await global::Blueprint.Rebus.RebusTransactionEnlistment.EnlistAsync(rebusTransactionScope.TransactionContext, context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
             }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.PlaceOrderCommand.HandleAsync(operation).ConfigureAwait(false));
 

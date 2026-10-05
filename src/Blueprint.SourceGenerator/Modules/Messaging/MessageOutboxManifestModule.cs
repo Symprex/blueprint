@@ -9,7 +9,7 @@ namespace Blueprint.SourceGenerator.Modules.Messaging;
 /// reflecting whether the message outbox commit stage is active for the operation.
 /// </summary>
 /// <remarks>
-/// Outbox commit is only active for command operations that do not carry <c>[DoNotPublishMessages]</c>.
+/// Outbox commit is only active for command and background task operations that do not carry <c>[DoNotPublishMessages]</c>.
 /// This module replicates the same eligibility check that <see cref="MessageOutboxModule"/> performs
 /// when deciding whether to contribute to the pipeline, so the manifest accurately reflects the
 /// runtime behavior without depending on pipeline plan metadata.
@@ -38,9 +38,9 @@ internal sealed class MessageOutboxManifestModule : IBlueprintSourceGeneratorMod
     public void ContributeToManifest(DebugManifestContributorContext context)
     {
         var operationType = context.GetOperationTypeSymbol();
-        var isCommand = IsCommand(operationType);
+        var participates = IsCommand(operationType) || IsBackgroundTask(operationType);
         var hasOptOut = HasDoNotPublishMessagesAttribute(operationType);
-        var enabled = isCommand && !hasOptOut;
+        var enabled = participates && !hasOptOut;
 
         context.AddEntry("messaging.outboxCommitEnabled", enabled.ToString());
     }
@@ -50,6 +50,13 @@ internal sealed class MessageOutboxManifestModule : IBlueprintSourceGeneratorMod
         return operationType.AllInterfaces.Any(static candidate =>
             candidate.Name is "ICommand"
             && candidate.IsInNamespace("Blueprint", "Model"));
+    }
+
+    private static bool IsBackgroundTask(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name is "IBackgroundTask"
+            && candidate.IsInNamespace("Blueprint", "Tasks"));
     }
 
     private static bool HasDoNotPublishMessagesAttribute(INamedTypeSymbol operationType)

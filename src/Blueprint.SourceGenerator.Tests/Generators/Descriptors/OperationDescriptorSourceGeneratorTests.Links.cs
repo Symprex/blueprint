@@ -25,8 +25,11 @@ public class OperationDescriptorSourceGeneratorTestsLinkTests
     }
 
     [Fact]
-    public async Task When_link_missing_rel_then_infers_from_resource_type()
+    public async Task When_link_missing_rel_then_keys_it_by_the_operations_descriptor_name()
     {
+        // Legacy keyed a Rel-less link `linkAttribute.Rel ?? descriptor.Name` (Signature365 8b40ecc961,
+        // Blueprint/Configuration/OperationScanner.cs:294-298), so this link's rel is "GetItemOperation", not a name made
+        // from its resource type.
         // language=csharp
         var source = """
                      [Link(typeof(ApiResourceWithProps), "/items/{Id}")]

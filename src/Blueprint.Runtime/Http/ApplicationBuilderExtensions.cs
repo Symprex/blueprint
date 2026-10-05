@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+using System.Collections.Immutable;
+using System.Diagnostics;
 using Blueprint;
 using Blueprint.Http;
 using Blueprint.Model;
@@ -47,8 +48,12 @@ public static class EndpointRouteBuilderExtensions
         Action<OpenApiOperationProcessorOptions>? configureOpenApiOperations = null) where T : BlueprintApp, new()
                          where TExec : BlueprintAppExecutor
     {
-        // Ensure ends with a slash, but only one
+        // Ensure ends with a slash, but only one, as legacy did (Signature365 8b40ecc961,
+        // Blueprint.Http/ApplicationBuilderExtensions.cs:45). Every route is this followed by a URL without its leading slash
+        // (RouteUnder), as legacy appended its leading-slash-trimmed link URLs (:105; Blueprint/ApiOperationLink.cs:48), and
+        // every absolute path is that with a leading slash: "", "/" -> "/"; "api", "api/", "/api/" -> "/api/".
         basePath = basePath.TrimEnd('/') + '/';
+        var absoluteBasePath = "/" + basePath.TrimStart('/');
 
         // Prefer the DI-registered singleton (set up by AddBlueprintApi with serializer options applied).
         // Fall back to direct construction for testing scenarios that build a manual service collection.
@@ -61,7 +66,7 @@ public static class EndpointRouteBuilderExtensions
             runtimeModel,
             endpoints.ServiceProvider.GetRequiredService<ILogger<BlueprintApiRouter<TExec>>>(),
             httpOptions,
-            basePath);
+            absoluteBasePath);
 
         // Pre-size based on expected operations (each may have 1-2 URLs plus fixed well-known endpoints).
         var builders = new List<IEndpointConventionBuilder>((runtimeModel.OperationCount * 2) + 8);
@@ -88,13 +93,23 @@ public static class EndpointRouteBuilderExtensions
             configureOpenApiOperations(operationProcessorOptions);
         }
 
-        var (openApiDelegate, openApiDocument) = OpenApiDocumentEndpoint.Create(runtimeModel, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions);
+        var (openApiDelegate, openApiDocument) = OpenApiDocumentEndpoint.Create(runtimeModel, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions, basePath);
 
         // Register the pre-rendered document in DI so development utilities (e.g. OutputOpenApi) can retrieve it
         endpoints.ServiceProvider.GetService<PreRenderedOpenApiDocumentHolder>()?.Set(openApiDocument);
 
+        // What the document could not describe is named once, when the API is mapped, for the consumer to act on.
+        if (openApiDocument.Warnings.Count > 0
+            && endpoints.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.OpenApi") is { } openApiLogger)
+        {
+            foreach (var warning in openApiDocument.Warnings)
+            {
+                openApiLogger.LogWarning("{OpenApiWarning}", warning);
+            }
+        }
+
         var openApiBuilder = endpoints.Map(
-            RoutePatternFactory.Parse(basePath.TrimEnd('/') + "/.blueprint/openapi.json"),
+            RoutePatternFactory.Parse(RouteUnder(basePath, ".blueprint/openapi.json")),
             openApiDelegate);
         openApiBuilder.WithDisplayName("GET Blueprint OpenAPI document");
         openApiBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
@@ -114,7 +129,7 @@ public static class EndpointRouteBuilderExtensions
         // RFC 9727 (June 2025) — api-catalog well-known endpoint for API discovery.
         // Returns a Linkset JSON document (application/linkset+json) pointing to the
         // OpenAPI spec, enabling standardised machine-readable API catalogue discovery.
-        var openApiPath = "/" + basePath.TrimStart('/').TrimEnd('/') + "/.blueprint/openapi.json";
+        var openApiPath = absoluteBasePath + ".blueprint/openapi.json";
         var apiCatalogTitle = infoOptions?.Title ?? "Blueprint API";
         var apiCatalogBuilder = endpoints.Map(
             RoutePatternFactory.Parse("/.well-known/api-catalog"),
@@ -134,6 +149,9 @@ public static class EndpointRouteBuilderExtensions
         var routeOwners = new Dictionary<(string Route, string Method), string>(runtimeModel.OperationCount * 2, RouteMethodComparer.Instance);
 
         var logger = endpoints.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.Routing");
+
+        // Whether one of the app's own operations answers GET at the base path, where the root-metadata document goes.
+        var baseRouteClaimedBy = default(string);
 
         foreach (var operation in runtimeModel.Operations)
         {
@@ -180,7 +198,12 @@ public static class EndpointRouteBuilderExtensions
                     }
                 }
 
-                var builder = endpoints.Map(RoutePatternFactory.Parse(basePath.TrimEnd('/') + url.UrlFormat), router.CreateRequestDelegate(operation));
+                if (url.UrlFormat.Trim('/').Length == 0 && httpMethods.Contains("GET", StringComparer.OrdinalIgnoreCase))
+                {
+                    baseRouteClaimedBy ??= operation.Name;
+                }
+
+                var builder = endpoints.Map(RoutePatternFactory.Parse(RouteUnder(basePath, url.UrlFormat)), router.CreateRequestDelegate(operation));
                 builder.WithMetadata(operation);
                 builder.WithMetadata(new HttpMethodMetadata(httpMethods));
                 builder.WithDisplayName(string.Concat(string.Join('|', httpMethods), " ", operation.Name));
@@ -189,9 +212,29 @@ public static class EndpointRouteBuilderExtensions
             }
         }
 
+        // Legacy answered GET at every HTTP app's base path with its root-metadata document (RootMetadataDocument). An app
+        // that routes an operation of its own there keeps it: legacy would have mapped the two to one route, ambiguously.
+        if (baseRouteClaimedBy is null)
+        {
+            var rootBuilder = endpoints.Map(
+                RoutePatternFactory.Parse(basePath),
+                router.CreateRootMetadataDocumentDelegate(RootMetadataDocument.CollectRootLinks(runtimeModel)));
+            rootBuilder.WithDisplayName("GET Blueprint root metadata document");
+            rootBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
+
+            builders.Add(rootBuilder);
+        }
+        else
+        {
+            logger?.LogInformation(
+                "The Blueprint root metadata document is not mapped at {BasePath}, because the operation '{Operation}' answers GET there.",
+                absoluteBasePath,
+                baseRouteClaimedBy);
+        }
+
         if (endpoints.ServiceProvider.GetService<IWebHostEnvironment>()?.IsDevelopment() == true)
         {
-            var manifestInspectionBasePath = basePath.TrimEnd('/') + "/.blueprint/manifests/operations";
+            var manifestInspectionBasePath = RouteUnder(basePath, ".blueprint/manifests/operations");
 
             if (!string.IsNullOrWhiteSpace(httpOptions.OperationsManifestResourceName))
             {
@@ -239,6 +282,15 @@ public static class EndpointRouteBuilderExtensions
     }
 
     /// <summary>
+    /// Gives the route pattern of <paramref name="relativeUrl"/> under a base path normalised to end with one slash: the
+    /// base path followed by the URL without its leading slash, so a URL declared with or without one routes the same.
+    /// </summary>
+    private static string RouteUnder(string basePath, string relativeUrl)
+    {
+        return basePath + relativeUrl.TrimStart('/');
+    }
+
+    /// <summary>
     /// Creates an RFC 9727 api-catalog endpoint delegate that returns a Linkset JSON document
     /// pointing to the OpenAPI specification. The response uses <c>application/linkset+json</c>
     /// content type with the RFC 9727 profile. The JSON body and Link header are pre-rendered
@@ -246,13 +298,11 @@ public static class EndpointRouteBuilderExtensions
     /// </summary>
     private static RequestDelegate CreateApiCatalogDelegate(string openApiPath, string title)
     {
-        // Pre-render cache: avoids per-request string interpolation for the common case
-        // where scheme/host/pathBase are stable across requests.
-        string? cachedScheme = null;
-        string? cachedHost = null;
-        PathString cachedPathBase = default;
-        byte[]? cachedJsonBytes = null;
-        string? cachedLinkHeader = null;
+        // Pre-render cache: avoids per-request string interpolation for the common case where scheme/host/pathBase are
+        // stable across requests. One immutable entry, read once per request, so a request is always answered with the
+        // catalog made from the scheme, host and path base it was compared with, whatever a concurrent request for another
+        // host writes, as the router's base-URI cache is.
+        ApiCatalogCacheEntry? cache = null;
 
         return context =>
         {
@@ -260,20 +310,18 @@ public static class EndpointRouteBuilderExtensions
             var scheme = request.Scheme;
             var host = request.Host.Value;
             var pathBase = request.PathBase;
+            var entry = Volatile.Read(ref cache);
 
-            if (cachedJsonBytes is null
-                || !string.Equals(scheme, cachedScheme, StringComparison.Ordinal)
-                || !string.Equals(host, cachedHost, StringComparison.Ordinal)
-                || pathBase != cachedPathBase)
+            // The path base is compared by its characters: PathString's own equality ignores case.
+            if (entry is null
+                || !string.Equals(scheme, entry.Scheme, StringComparison.Ordinal)
+                || !string.Equals(host, entry.Host, StringComparison.Ordinal)
+                || !string.Equals(pathBase.Value, entry.PathBase.Value, StringComparison.Ordinal))
             {
                 var baseUri = $"{scheme}://{host}{pathBase}";
                 var openApiHref = baseUri + openApiPath;
-
-                cachedScheme = scheme;
-                cachedHost = host;
-                cachedPathBase = pathBase;
-                cachedLinkHeader = $"<{openApiHref}>; rel=\"service-desc\"; type=\"application/openapi+json;version=3.0\"";
-                cachedJsonBytes = System.Text.Encoding.UTF8.GetBytes($$"""
+                var linkHeader = $"<{openApiHref}>; rel=\"service-desc\"; type=\"application/openapi+json;version=3.0\"";
+                var jsonBytes = System.Text.Encoding.UTF8.GetBytes($$"""
                     {
                       "linkset": [
                         {
@@ -295,19 +343,32 @@ public static class EndpointRouteBuilderExtensions
                       ]
                     }
                     """);
+
+                entry = new ApiCatalogCacheEntry(scheme, host, pathBase, linkHeader, jsonBytes);
+                Volatile.Write(ref cache, entry);
             }
 
             context.Response.ContentType = "application/linkset+json; profile=\"https://www.rfc-editor.org/info/rfc9727\"";
-            context.Response.Headers["Link"] = cachedLinkHeader;
+            context.Response.Headers["Link"] = entry.LinkHeader;
 
             if (HttpMethods.IsHead(request.Method))
             {
                 return Task.CompletedTask;
             }
 
-            return context.Response.Body.WriteAsync(cachedJsonBytes).AsTask();
+            return context.Response.Body.WriteAsync(entry.JsonBytes).AsTask();
         };
     }
+
+    /// <summary>
+    /// The api-catalog response made for one scheme, host and path base.
+    /// </summary>
+    /// <param name="Scheme">The request scheme.</param>
+    /// <param name="Host">The request host.</param>
+    /// <param name="PathBase">The request's path base.</param>
+    /// <param name="LinkHeader">The <c>Link</c> header made from them.</param>
+    /// <param name="JsonBytes">The Linkset document made from them.</param>
+    private sealed record ApiCatalogCacheEntry(string Scheme, string? Host, PathString PathBase, string LinkHeader, byte[] JsonBytes);
 
     private class BlueprintApiRouter<TExec> where TExec : BlueprintAppExecutor
     {
@@ -319,11 +380,10 @@ public static class EndpointRouteBuilderExtensions
         private readonly TExec _executor;
         private readonly HttpOperationResultExecutor? _resultExecutor;
 
-        // Cached base URI to avoid per-request string interpolation when scheme/host/path are stable
-        private string? _cachedBaseUri;
-        private string? _cachedScheme;
-        private string? _cachedHost;
-        private PathString _cachedRequestPathBase;
+        // Cached base URI to avoid per-request string interpolation when scheme/host/path are stable. One immutable entry,
+        // read once per request, so a request is always given the base URI made from the scheme, host and path base it was
+        // compared with, whatever a concurrent request for another host writes.
+        private volatile BaseUriCacheEntry? _baseUriCache;
 
         public BlueprintApiRouter(
             IServiceProvider rootServiceProvider,
@@ -359,6 +419,19 @@ public static class EndpointRouteBuilderExtensions
             };
         }
 
+        /// <summary>
+        /// Creates the delegate that answers <c>GET</c> at the app's base path with its root-metadata document, its hrefs
+        /// made under the same base URI as every link of an operation request.
+        /// </summary>
+        internal RequestDelegate CreateRootMetadataDocumentDelegate(
+            ImmutableArray<(ApiOperationDescriptor Operation, ImmutableArray<OperationRootLink> Links)> rootLinks)
+        {
+            return httpContext => HttpOperationResultExecutor.WriteOkJsonAsync(
+                httpContext,
+                this._app,
+                RootMetadataDocument.Create(this.GetBaseUri(httpContext.Request), rootLinks));
+        }
+
         public async Task RouteAsync(HttpContext httpContext)
         {
             var endpoint = httpContext.GetEndpoint()!;
@@ -392,31 +465,10 @@ public static class EndpointRouteBuilderExtensions
             {
                 HttpContext = httpContext,
                 UserPrincipal = httpContext.User,
+
+                // Computed per request, stable across requests from the same scheme, host and path base (GetBaseUri).
+                BaseUri = this.GetBaseUri(httpRequest),
             };
-
-            // Compute a stable base URI for link generation and redirect targets.
-            // Cache the result to avoid per-request string allocation. Check scheme and host
-            // first (cheapest comparisons) to skip PathBase.Add() allocation on the hot path.
-            var scheme = httpRequest.Scheme;
-            var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
-
-            if (this._cachedBaseUri is not null
-                && string.Equals(scheme, this._cachedScheme, StringComparison.Ordinal)
-                && string.Equals(host, this._cachedHost, StringComparison.Ordinal)
-                && httpRequest.PathBase == this._cachedRequestPathBase)
-            {
-                // Hot path: nothing changed, reuse cached URI with zero allocation.
-            }
-            else
-            {
-                var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
-                this._cachedScheme = scheme;
-                this._cachedHost = host;
-                this._cachedRequestPathBase = httpRequest.PathBase;
-                this._cachedBaseUri = $"{scheme}://{host}{basePath}";
-            }
-
-            apiContext.BaseUri = this._cachedBaseUri;
 
             // Pipeline.ExecuteAsync never throws in generated code — it wraps all exceptions in
             // OperationResult internally. However, guard defensively in case a custom or hand-rolled
@@ -437,6 +489,37 @@ public static class EndpointRouteBuilderExtensions
             }
 
             return this.RouteOperationSlowPathAsync(httpContext, apiContext, executionTask, operation);
+        }
+
+        /// <summary>
+        /// Gives the request's base URI, for link generation and redirect targets: the scheme, the public host when
+        /// configured, the request's path base and the app's base path.
+        /// </summary>
+        /// <remarks>
+        /// Cached to avoid per-request string allocation, checking scheme and host first (cheapest comparisons) to skip
+        /// the <c>PathBase.Add()</c> allocation on the hot path. The cache is one immutable entry, read once, so the URI
+        /// returned is always the one made from the scheme, host and path base it was compared with.
+        /// </remarks>
+        private string GetBaseUri(HttpRequest httpRequest)
+        {
+            var scheme = httpRequest.Scheme;
+            var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
+            var baseUriCache = this._baseUriCache;
+
+            // The path base is compared by its characters: PathString's own equality ignores case, and legacy wrote each
+            // request's own path base into its base URI (Signature365 8b40ecc961, ApplicationBuilderExtensions.cs:232).
+            if (baseUriCache is null
+                || !string.Equals(scheme, baseUriCache.Scheme, StringComparison.Ordinal)
+                || !string.Equals(host, baseUriCache.Host, StringComparison.Ordinal)
+                || !string.Equals(httpRequest.PathBase.Value, baseUriCache.RequestPathBase.Value, StringComparison.Ordinal))
+            {
+                var basePath = httpRequest.PathBase.Add(this._normalizedBasePath);
+                baseUriCache = new BaseUriCacheEntry(scheme, host, httpRequest.PathBase, $"{scheme}://{host}{basePath}");
+                this._baseUriCache = baseUriCache;
+            }
+
+            // Hot path: nothing changed, the cached URI is reused with zero allocation.
+            return baseUriCache.BaseUri;
         }
 
         /// <summary>
@@ -466,22 +549,92 @@ public static class EndpointRouteBuilderExtensions
             {
                 if (writeTask.Result == false)
                 {
-                    // Legacy self-executing results
-                    var legacyTask = result.ExecuteAsync(apiContext);
-                    return legacyTask.IsCompleted ? Task.CompletedTask : legacyTask;
+                    // Legacy self-executing results. A synchronous throw is taken as a faulted task, so that it and a task
+                    // that has faulted, already or later, reach the same catch the slow path gives this fault
+                    // (RouteOperationSlowPathAsync); only a task that completed successfully completes the request here.
+                    Task legacyTask;
+                    try
+                    {
+                        legacyTask = result.ExecuteAsync(apiContext);
+                    }
+                    catch (Exception ex)
+                    {
+                        legacyTask = Task.FromException(ex);
+                    }
+
+                    return legacyTask.IsCompletedSuccessfully ? Task.CompletedTask : this.AwaitSelfExecutingResultAsync(httpContext, legacyTask, operation);
                 }
 
                 return Task.CompletedTask;
             }
 
-            return AwaitWriteTaskAsync(writeTask, result, apiContext);
+            return this.AwaitWriteTaskAsync(httpContext, apiContext, writeTask, result, operation);
         }
 
-        private static async Task AwaitWriteTaskAsync(Task<bool> writeTask, OperationResult result, ApiOperationContext apiContext)
+        /// <summary>
+        /// Awaits a self-executing result's own execution that did not complete successfully at once, answering a fault
+        /// as <see cref="RouteOperationSlowPathAsync"/> answers the same fault: with the exception body while the response
+        /// has not started, and by propagating it, so the connection is aborted, once it has.
+        /// </summary>
+        /// <remarks>
+        /// Before this, the fast path returned <c>Task.CompletedTask</c> for a task that had already faulted, so its
+        /// exception was dropped and the request completed as if it had succeeded. Legacy's router awaited the result's
+        /// execution with no catch of its own (Signature365 <c>8b40ecc961</c>,
+        /// <c>Blueprint.Http/ApplicationBuilderExtensions.cs:244-247</c>); the exception body comes from its result
+        /// executor's catch, filtered to a response that has not started (<c>OkResultOperationExecutor.cs:48-65</c>), which
+        /// this router already applies to every other result fault (R105, R118).
+        /// </remarks>
+        private async Task AwaitSelfExecutingResultAsync(HttpContext httpContext, Task executionTask, ApiOperationDescriptor operation)
         {
-            if (await writeTask.ConfigureAwait(false) == false)
+            try
             {
-                await result.ExecuteAsync(apiContext).ConfigureAwait(false);
+                await executionTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (!httpContext.Response.HasStarted)
+            {
+                await this.HandleUnexpectedExceptionAsync(httpContext, operation, ex).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Awaits a result write that did not complete synchronously, matching the exception handling
+        /// <see cref="RouteOperationSlowPathAsync"/> gives a fault reached only after an <c>await</c>: legacy wrote the
+        /// exception a failed write threw (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/OkResultOperationExecutor.cs:48-65</c>).
+        /// Before this, a fault here had no <c>catch</c> on this path and escaped the request delegate unhandled, which
+        /// ASP.NET Core's own top-level handling turns into a bare 500 with no body.
+        /// </summary>
+        /// <remarks>
+        /// The catch is filtered to a response that has not started, matching legacy's own filter exactly
+        /// (<c>OkResultOperationExecutor.cs:48</c>, <c>when (httpContext.Response.HasStarted == false)</c>). A fault
+        /// reached after the response has started is not writable into a fresh problem body — some of the old response
+        /// is already on the wire — so it is left to propagate, as legacy left it (its router had no catch at all), and
+        /// ASP.NET Core's top-level handling aborts the connection instead of completing it as if nothing had failed.
+        /// </remarks>
+        private async Task AwaitWriteTaskAsync(
+            HttpContext httpContext,
+            ApiOperationContext apiContext,
+            Task<bool> writeTask,
+            OperationResult result,
+            ApiOperationDescriptor operation)
+        {
+            try
+            {
+                if (await writeTask.ConfigureAwait(false) == false)
+                {
+                    await result.ExecuteAsync(apiContext).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (!httpContext.Response.HasStarted)
+            {
+                await this.HandleUnexpectedExceptionAsync(httpContext, operation, ex).ConfigureAwait(false);
             }
         }
 
@@ -505,8 +658,12 @@ public static class EndpointRouteBuilderExtensions
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!httpContext.Response.HasStarted)
             {
+                // Same filter as AwaitWriteTaskAsync above, for the same reason: legacy caught a write fault only when
+                // the response had not started (OkResultOperationExecutor.cs:48), and had no router catch at all, so a
+                // fault reached here after the response started propagates instead of being swallowed into a response
+                // that looks complete.
                 await this.HandleUnexpectedExceptionAsync(httpContext, operation, ex).ConfigureAwait(false);
             }
         }
@@ -520,70 +677,24 @@ public static class EndpointRouteBuilderExtensions
             if (!httpContext.Response.HasStarted)
             {
                 httpContext.Response.StatusCode = 500;
-                httpContext.Response.ContentType = "application/problem+json";
+                httpContext.Response.ContentType = this._httpOptions.NegotiateErrorContentType
+                    ? LegacyErrorContentTypeNegotiation.Negotiate(httpContext.Request.Headers.Accept)
+                    : "application/problem+json";
 
-                var exposeDetails = this._httpOptions.ExposeExceptionDetailsInErrorResponses;
-                var detail = exposeDetails ? ex.ToString() : "An unexpected error occurred.";
+                // As legacy's writer wrote an exception its result writing threw (Signature365 8b40ecc961,
+                // Blueprint.Http/OkResultOperationExecutor.cs:48-65, UnhandledExceptionOperationResultExecutor.cs:30-68).
+                var problem = HttpOperationResultExecutor.CreateLegacyExceptionProblem(ex, this._httpOptions.ExposeExceptionDetailsInErrorResponses, activity);
 
-                await httpContext.Response.WriteAsync(
-                    $$"""{"type":"https://httpstatuses.com/500","title":"Internal Server Error","status":500,"detail":"{{EscapeJsonString(detail)}}"}""",
-                    httpContext.RequestAborted).ConfigureAwait(false);
+                await HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, this._app, problem).ConfigureAwait(false);
             }
         }
 
-        private static string EscapeJsonString(string value)
-        {
-            // Fast path: if no special characters, return unchanged (zero allocation).
-            if (!NeedsEscaping(value))
-            {
-                return value;
-            }
-
-            // Single-pass escape avoids 5 chained Replace allocations.
-            return string.Create(CountEscapedLength(value), value, static (span, src) =>
-            {
-                var pos = 0;
-                foreach (var c in src)
-                {
-                    switch (c)
-                    {
-                        case '\\': span[pos++] = '\\'; span[pos++] = '\\'; break;
-                        case '"': span[pos++] = '\\'; span[pos++] = '"'; break;
-                        case '\n': span[pos++] = '\\'; span[pos++] = 'n'; break;
-                        case '\r': span[pos++] = '\\'; span[pos++] = 'r'; break;
-                        case '\t': span[pos++] = '\\'; span[pos++] = 't'; break;
-                        default: span[pos++] = c; break;
-                    }
-                }
-            });
-
-            static bool NeedsEscaping(string s)
-            {
-                foreach (var c in s)
-                {
-                    if (c is '\\' or '"' or '\n' or '\r' or '\t')
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-
-            static int CountEscapedLength(string s)
-            {
-                var length = s.Length;
-                foreach (var c in s)
-                {
-                    if (c is '\\' or '"' or '\n' or '\r' or '\t')
-                    {
-                        length++;
-                    }
-                }
-
-                return length;
-            }
-        }
+        /// <summary>A request's scheme, host and path base, and the base URI made from them.</summary>
+        /// <param name="Scheme">The request's scheme.</param>
+        /// <param name="Host">The host, the public one when configured.</param>
+        /// <param name="RequestPathBase">The request's path base.</param>
+        /// <param name="BaseUri">The base URI made from them.</param>
+        private sealed record BaseUriCacheEntry(string Scheme, string? Host, PathString RequestPathBase, string BaseUri);
     }
 
     /// <summary>

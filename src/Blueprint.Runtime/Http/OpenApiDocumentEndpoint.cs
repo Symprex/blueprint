@@ -32,8 +32,12 @@ internal static class OpenApiDocumentEndpoint
     /// <param name="httpOptions">
     /// Optional Blueprint HTTP options consulted when no explicit <see cref="OpenApiInfoOptions.Servers"/> are
     /// configured, to populate a default <c>servers</c> entry from <see cref="BlueprintHttpOptions.PublicApiHost"/>
-    /// or <see cref="BlueprintHttpOptions.PublicHost"/>. When <see langword="null"/> the <c>servers</c> array stays
+    /// followed by <paramref name="basePath"/>. When <see langword="null"/> the <c>servers</c> array stays
     /// omitted unless <see cref="OpenApiInfoOptions.Servers"/> already carries entries.
+    /// </param>
+    /// <param name="basePath">
+    /// The base path the API's routes are mapped under, which the default <c>servers</c> entry ends with; the document's
+    /// <c>paths</c> are relative to that entry and do not carry it. <see langword="null"/> when unknown.
     /// </param>
     /// <returns>A request delegate that writes the rendered OpenAPI 3.x JSON to the response.</returns>
     public static (RequestDelegate Delegate, PreRenderedOpenApiDocument Document) Create(
@@ -41,12 +45,13 @@ internal static class OpenApiDocumentEndpoint
         OpenApiInfoOptions? infoOptions = null,
         OpenApiSchemaProcessorOptions? schemaProcessorOptions = null,
         OpenApiOperationProcessorOptions? operationProcessorOptions = null,
-        BlueprintHttpOptions? httpOptions = null)
+        BlueprintHttpOptions? httpOptions = null,
+        string? basePath = null)
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var json = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions);
-        var document = new PreRenderedOpenApiDocument(json);
+        var (json, warnings) = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions, basePath);
+        var document = new PreRenderedOpenApiDocument(json) { Warnings = warnings };
 
         // Compute a stable ETag from the document content so clients can use If-None-Match
         // to avoid redundant downloads of the static spec.
@@ -80,20 +85,27 @@ internal static class OpenApiDocumentEndpoint
         return (handler, document);
     }
 
-    private static string RenderDocument(
+    private static (string Json, IReadOnlyList<string> Warnings) RenderDocument(
         BlueprintApp app,
         OpenApiInfoOptions? infoOptions,
         OpenApiSchemaProcessorOptions? schemaProcessorOptions,
         OpenApiOperationProcessorOptions? operationProcessorOptions,
-        BlueprintHttpOptions? httpOptions)
+        BlueprintHttpOptions? httpOptions,
+        string? basePath)
     {
         var documentBuilderContext = OpenApiDocumentBuilderContext.Create(app);
-        var schemaProjectionContext = OpenApiSchemaProjectionContext.Create(documentBuilderContext);
+        var schemaProjectionContext = OpenApiSchemaProjectionContext.Create(
+            documentBuilderContext,
+            infoOptions?.SchemaNaming ?? OpenApiSchemaNaming.Default,
+            infoOptions?.RequiredProperties ?? OpenApiRequiredProperties.Declared);
         var responseSchemaProjectionContext = OpenApiResponseSchemaReferenceProjectionContext.Create(schemaProjectionContext);
         var responseObjectContext = OpenApiResponseObjectRenderingContext.Create(
             responseSchemaProjectionContext,
             infoOptions?.UsePlainJsonForErrorResponses ?? false);
-        var operationContext = OpenApiOperationRenderingContext.Create(responseObjectContext);
+        var operationContext = OpenApiOperationRenderingContext.Create(
+            responseObjectContext,
+            infoOptions?.RequestBodyNaming ?? OpenApiRequestBodyNaming.OperationName,
+            infoOptions?.QueryParameterNaming ?? OpenApiParameterNaming.BindingName);
 
         // Apply per-operation processors before path-item grouping so consumers can strip
         // auto-populated parameters, override summaries, etc.
@@ -111,8 +123,10 @@ internal static class OpenApiDocumentEndpoint
         }
 
         var pathItemContext = OpenApiPathItemRenderingContext.Create(operationContext);
-        var documentContext = OpenApiDocumentRenderingContext.Create(pathItemContext);
+        var documentContext = OpenApiDocumentRenderingContext.Create(
+            pathItemContext,
+            infoOptions?.SchemaNaming == OpenApiSchemaNaming.Legacy);
 
-        return OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions, httpOptions).Json;
+        return (OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions, httpOptions, basePath).Json, operationContext.Warnings);
     }
 }

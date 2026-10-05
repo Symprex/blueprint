@@ -33,9 +33,10 @@ public sealed record OpenApiSchemaComponentRenderingContext(
     private static OpenApiSchemaComponentModel CreateComponent(OpenApiSchemaModel schema)
     {
         // Extension data properties ([JsonExtensionData]) represent the catch-all bucket for
-        // arbitrary extra JSON members. They should not appear as named properties in the schema.
+        // arbitrary extra JSON members. One still marked as such does not appear as a named property in the schema; one the
+        // projection documented as a property of its own, as legacy did, no longer is, and the schema says so instead.
         // When present, the schema should NOT emit additionalProperties: false.
-        var hasExtensionData = schema.Properties.Any(static property => property.IsExtensionData);
+        var hasExtensionData = schema.HasExtensionData || schema.Properties.Any(static property => property.IsExtensionData);
 
         var requiredPropertyNames = schema.Properties
             .Where(static property => property.IsRequired && !property.IsExtensionData)
@@ -54,7 +55,10 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             schema.Description,
             schema.Title,
             HasExtensionData: hasExtensionData,
-            Conditionals: schema.Conditionals);
+            Conditionals: schema.Conditionals)
+        {
+            AdditionalPropertiesAreNullable = schema.AdditionalPropertiesAreNullable,
+        };
     }
 
     private static OpenApiSchemaComponentPropertyModel CreateProperty(OpenApiSchemaPropertyModel property)
@@ -99,7 +103,14 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             property.DefaultValue,
             property.ExampleValue,
             property.IsReadOnly,
-            property.IsWriteOnly);
+            property.IsWriteOnly,
+            SchemaRef: property.SchemaName,
+            AllowsAdditionalProperties: property.AllowsAdditionalProperties)
+        {
+            AdditionalPropertiesAreNullable = property.AdditionalPropertiesAreNullable,
+            ItemsAreNullable = property.ItemsAreNullable,
+            EnumDescription = property.EnumDescription,
+        };
     }
 
     private static string? MapType(OpenApiSchemaKind kind)
@@ -154,7 +165,21 @@ public sealed record OpenApiSchemaComponentModel(
     ImmutableArray<OpenApiSchemaLinkExtension> Links = default,
     bool HasExtensionData = false,
     ImmutableArray<string> ComponentEnumValues = default,
-    ImmutableArray<OpenApiConditionalRequirement> Conditionals = default);
+    ImmutableArray<OpenApiConditionalRequirement> Conditionals = default)
+{
+    /// <summary>
+    /// Gets a value indicating whether the component's extension data members may be null, which it documents with
+    /// <c>additionalProperties: {"nullable": true}</c>.
+    /// </summary>
+    public bool AdditionalPropertiesAreNullable { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the component is the schema of an operation type that has no request body, which
+    /// legacy wrote as a closed object with no properties (<c>additionalProperties: false</c>) though the operation
+    /// references none.
+    /// </summary>
+    public bool IsBodylessOperation { get; init; }
+}
 
 /// <summary>
 /// Represents one entry in the <c>x-links</c> vendor extension array for an OpenAPI schema component.
@@ -289,4 +314,24 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     bool IsReadOnly = false,
     bool IsWriteOnly = false,
     string? SchemaRef = null,
-    bool AllowsAdditionalProperties = false);
+    bool AllowsAdditionalProperties = false)
+{
+    /// <summary>
+    /// Gets a value indicating whether the property is a dictionary whose values may be null, written with
+    /// <c>"nullable": true</c> in its <c>additionalProperties</c> — beside the value's type, or beside a <c>oneOf</c> wrapping
+    /// the value's <c>$ref</c>, which OpenAPI 3.0 would otherwise not let it sit beside.
+    /// </summary>
+    public bool AdditionalPropertiesAreNullable { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the property is a collection of references to a component whose elements may be
+    /// null, written with <c>"nullable": true</c> beside a <c>oneOf</c> wrapping the items' <c>$ref</c>.
+    /// </summary>
+    public bool ItemsAreNullable { get; init; }
+
+    /// <summary>
+    /// Gets the description of the enum type <see cref="EnumSchemaRef"/> names, which its component carries, or
+    /// <see langword="null"/> when there is none.
+    /// </summary>
+    public string? EnumDescription { get; init; }
+}

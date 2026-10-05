@@ -20,6 +20,10 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
     where TApp : BlueprintApp
     where TExec : BlueprintAppExecutor
 {
+    // The base URI legacy Blueprint.Testing's ConfigureHttp gave every context it configured, under which a resource
+    // event's href and a resource's links are made as they are under a request's.
+    private const string TestingBaseUri = "https://api.blueprint-testing.com/api/";
+
     private readonly ServiceProvider _rootProvider;
     private bool _disposed;
 
@@ -92,8 +96,8 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
         using var scope = this._rootProvider.CreateScope();
         var httpContext = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
 
-        // Pre-populate route values from the operation so the generated pipeline's
-        // BindRouteValue calls succeed without a real ASP.NET routing pass.
+        // Pre-populate route values from the operation, as a real ASP.NET routing pass would. Without them the generated
+        // pipeline keeps the operation's own route property values, as legacy Blueprint did.
         PopulateRouteValues(httpContext, descriptor, operation);
 
         var context = new ApiOperationContext(
@@ -104,6 +108,7 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
         {
             Operation = operation,
             HttpContext = httpContext,
+            BaseUri = TestingBaseUri,
         };
 
         var testContext = new BlueprintTestContext(context, scope.ServiceProvider);
@@ -113,7 +118,33 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
 
         configure?.Invoke(testContext);
 
-        return await this.Executor.ExecuteAsync(context);
+        // As a real request's context is the accessor's for as long as the request runs, and as legacy Signature365's
+        // ApiFixture gave every HTTP operation (one HttpHost supported: a link attribute, Signature365 8b40ecc961,
+        // Blueprint.Http/HttpHost.cs:47-50) an HTTP context through ConfigureHttp (TestHelpers/ApiFixture.cs:270-279),
+        // with a loopback remote address, set on the scope's accessor (Blueprint.Testing/ApiOperationContextSetup.cs:46,
+        // :61). A dependency reading the accessor, such as an audit repository reading its user, then sees the executing
+        // user. An operation that is not an HTTP one was given no HTTP context there, so its accessor stays empty.
+        var accessor = descriptor.Urls.Count > 0
+            ? scope.ServiceProvider.GetService<IHttpContextAccessor>()
+            : null;
+
+        if (accessor is null)
+        {
+            return await this.Executor.ExecuteAsync(context);
+        }
+
+        httpContext.Connection.RemoteIpAddress ??= System.Net.IPAddress.Loopback;
+        accessor.HttpContext = httpContext;
+
+        try
+        {
+            return await this.Executor.ExecuteAsync(context);
+        }
+        finally
+        {
+            // As ASP.NET Core clears it when a request ends.
+            accessor.HttpContext = null;
+        }
     }
 
     /// <summary>
@@ -412,7 +443,9 @@ public sealed class BlueprintTestHost<TApp, TExec> : IDisposable, IAsyncDisposab
         }));
     }
 
-    private static readonly Regex RouteParameterRegex = new(@"\{\*{0,2}([A-Za-z0-9_]+)(?::[^}]*)?\}", RegexOptions.Compiled);
+    // Route-owned (RoutePlaceholderSyntax, R97/R111): the bound name is whatever is before a `:` (alternate resource
+    // property) or `(` (legacy format specifier) — either, both or neither.
+    private static readonly Regex RouteParameterRegex = new(@"\{\*{0,2}([A-Za-z0-9_]+)(?:[:(][^}]*)?\}", RegexOptions.Compiled);
 
     /// <summary>
     /// Extracts route parameter names from the descriptor's URL templates and populates

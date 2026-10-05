@@ -932,7 +932,9 @@ In addition to standard checks, Generation requires:
 
 3. **Key differences to document**:
    - Endpoint path: `/openapi` → `/api/.blueprint/openapi.json` (configurable)
-   - `operationId` format: New Blueprint uses the C# type name with a `Query`/`Command` suffix stripped (e.g. `GetTemplate` for `GetTemplateQuery`)
+   - `operationId` format: the same as legacy — `Query`/`Command` removed anywhere in the C# type name, then legacy's
+     PascalCasing, which folds acronyms (`GetTemplate` for `GetTemplateQuery`, `GetvCardConfiguration` for
+     `GetVCardConfigurationQuery`, `GetInvoicesv2` for `GetInvoicesV2Query`)
      — S365's `PortalOperationScannerConvention` strips app prefix; declare
      `[BlueprintAppOperationNames(Remove = "Portal")]` on the app root
    - Response shapes: `200 OK` vs `201 Created` — new Blueprint infers from result types
@@ -1090,12 +1092,14 @@ var result = await vCardClient.GenerateVCardAsync(
 **Step 3: Operation scanner convention replacement:**
 
 S365 gateways use `IOperationScannerConvention` to strip prefixes from operation names
-(e.g., `VCardGatewayGenerateVCardQuery` → `GenerateVCard` in the API surface).
+(e.g., `VCardGatewayGenerateVCardQuery` → `GeneratevCard` in the API surface: legacy's casing had already folded the
+second `VCard` to `vCard`, so only the leading `VCardGateway` matched).
 
-In new Blueprint, operation names come from the class name with the `Query`/`Command` suffix stripped.
-The convention is replicated by declaring `[BlueprintAppOperationNames(Remove = "VCardGateway")]` on the
-gateway's `BlueprintApp` root, which removes every occurrence of that text from each operation it hosts
-(`VCardGatewayGenerateVCardQuery` → `GenerateVCard`), for the descriptor and so for every reader of its name.
+In new Blueprint, operation names are formed as legacy formed them (`Query`/`Command` removed anywhere, then legacy's
+PascalCasing). The convention is replicated by declaring `[BlueprintAppOperationNames(Remove = "VCardGateway")]` on the
+gateway's `BlueprintApp` root, which removes every occurrence of that text from the cased name of each operation it hosts
+(`VCardGatewayGenerateVCardQuery` → `VCardGatewayGeneratevCard` → `GeneratevCard`), for the descriptor and so for every
+reader of its name.
 Renaming the gateway operations directly remains an alternative.
 
 #### S365 Gateway Inventory
@@ -1800,7 +1804,7 @@ Blueprint's `TenantModule` replaces `SetTenantMiddleware` entirely with compile-
 
 1. **Detects `TenantId` property** at compile time on each operation
 2. **Generates direct assignment** — no reflection, no property populator loop
-3. **Supports multiple types**: `string`, `IParsable<T>` (e.g. `ApiId`), `[TypeConverter]`
+3. **Supports multiple types**: `string`, `IParsable<T>`, `TryParse`, `[TypeConverter]` (e.g. `ApiId`); `[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]` on the app root fills only an `ApiId` or `ApiId?`, as `SetTenantMiddleware` did, and an init-only `TenantId` is never filled
 4. **Guards against route-bound override**: Only populates if property is default-valued
 5. **Sets OpenTelemetry tag** `enduser.tenant_id` (replaces Serilog enrichment)
 6. **Calls `ITenantResolver.ResolveTenantId(ClaimsPrincipal)`** for claim extraction
@@ -1818,7 +1822,13 @@ public class Signature365TenantResolver : ITenantResolver
 // 2. Register in DI (Blueprint registration handles ITenantAccessor automatically)
 blueprint.AddTenantResolver<Signature365TenantResolver>();
 
-// 3. Delete SetTenantMiddleware — it is no longer needed
+// 3. On each app root that ran SetTenantMiddleware, fill only an ApiId or ApiId? TenantId, as it did; a string
+//    TenantId the request leaves out then stays null, as it did
+[BlueprintAppScan]
+[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]
+public partial class PortalBlueprintApp : BlueprintApp;
+
+// 4. Delete SetTenantMiddleware — it is no longer needed
 ```
 
 ### What Changes

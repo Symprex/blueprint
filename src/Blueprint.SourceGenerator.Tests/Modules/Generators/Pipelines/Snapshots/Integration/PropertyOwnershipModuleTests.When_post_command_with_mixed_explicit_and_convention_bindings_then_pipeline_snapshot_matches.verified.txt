@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class CreateItemCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal CreateItemCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "CreateItemCommand", pipelineServices)
@@ -67,16 +67,17 @@ namespace Blueprint.Generated
                     return _bodyResult;
                 }
 
-                if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
-                {
-                    operation.OrgSlug = routeStr_OrgSlug;
-                }
-
                 var _qv_SearchFilter = httpContext.Request.Query["q"];
                 if (_qv_SearchFilter.Count > 0)
                 {
                     operation.SearchFilter = _qv_SearchFilter[0];
                 }
+
+                if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
+                {
+                    operation.OrgSlug = routeStr_OrgSlug;
+                }
+
                 var _hv_TenantId = httpContext.Request.Headers["X-Tenant-Id"];
                 if (_hv_TenantId.Count > 0)
                 {
@@ -147,6 +148,9 @@ namespace Blueprint.Generated
             {
                 await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
+
+            // Populate full HATEOAS links (skip 304 Not Modified)
+            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
 
             return handlerResult;
         }

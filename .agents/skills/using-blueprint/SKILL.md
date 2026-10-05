@@ -31,7 +31,7 @@ Do not use this skill to change Blueprint internals in `blueprint-source-gen`; u
 | App root | Create a `partial` `BlueprintApp` with `[BlueprintAppScan]`; use `FromAssemblyOf = typeof(...)` when operations live in another assembly |
 | Operation grouping | Use `[ApiOperations("Billing")]` on an HTTP-exposed operation when the OpenAPI tag/group should come from an explicit grouped-operation name instead of the namespace-derived fallback |
 | Serializer context | If the app maps Blueprint through the HTTP host (`MapBlueprintApi<...>()`) and any scanned operation can produce a body-bearing HTTP response contract, declare `[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(AppJsonContext))]` on the `BlueprintApp` root so the build can prove the app-owned `JsonSerializerContext` covers those generated HTTP contracts; missing declaration now fails with `BP007`, incomplete declared coverage fails with `BP006`, and the generated app now persists both the declared serializer-context type and the declared `JsonSerializable(...)` body-type inventory (`BlueprintApp.AppOwnedSerializerContextType` / `AppOwnedSerializerContextBodyTypeNames`) as the compile-time/OpenAPI ownership seam rather than a runtime serializer switch |
-| Operation names | Descriptor names are the operation type name with a `Query`/`Command` suffix stripped. When an app prefixes its operations (for example `PortalResetActiveUsersCommand`) but its API should expose `ResetActiveUsers`, declare `[BlueprintAppOperationNames(Remove = "Portal")]` on the `BlueprintApp` root rather than renaming the OpenAPI output: it renames the operations for every reader of `ApiOperationDescriptor.Name` in that app (`operationId`, request-body schema keys, `x-links`, and code reading `link.OperationDescriptor.Name` such as an auth-manifest query, but not the compile-time manifest artifacts, which are keyed by type), removes every occurrence after suffix stripping, leaves resource schema names alone, and fails with `BP011` if two operations end up with the same name or one ends up with none |
+| Operation names | Descriptor names are legacy Blueprint's: `Query` and then `Command` are removed wherever they occur in the type name, and the result is PascalCased with acronyms folded, so `GetSentEmailQuery` is `GetSentEmail` but `GenerateVCardQuery` is `GeneratevCard` and `GetHTMLPreviewQuery` is `GethtmlPreview` — expect those `operationId`s, and `BP009` when two operations end up with the same one. When an app prefixes its operations (for example `PortalResetActiveUsersCommand`) but its API should expose `ResetActiveUsers`, declare `[BlueprintAppOperationNames(Remove = "Portal")]` on the `BlueprintApp` root rather than renaming the OpenAPI output: it renames the operations for every reader of `ApiOperationDescriptor.Name` in that app (`operationId`, request-body schema keys, `x-links`, and code reading `link.OperationDescriptor.Name` such as an auth-manifest query, but not the compile-time manifest artifacts, which are keyed by type), removes every occurrence from that cased name, leaves resource schema names alone, and fails with `BP011` if two operations end up with the same name or one ends up with none |
 | Generator wiring | Reference Blueprint's generator as an analyzer so compile-time generation runs; in this repo the sample uses `ProjectReference` with `OutputItemType="Analyzer"` and `ReferenceOutputAssembly="false"` |
 | HTTP host | Map the generated surface with `MapBlueprintApi<TApp, TExec>()` |
 | Authorization | `[Resource("noun", "verb")]` for scope-pair auth; `[FromResource(typeof(X))]` for scope inheritance; `[AllowAnonymous]` for public access; `[MustBeAuthenticated]` for identity-only checks without scopes |
@@ -158,6 +158,8 @@ public partial class CreateTemplateCommand : ICommand<ResourceEventResult<Templa
 }
 ```
 
+Every root link — each `[RootLink]`, and each `[Link(null, ...)]` — of an exposed operation is also listed by the app's **root-metadata document**, which `MapBlueprintApi` serves anonymously at `GET <basePath>`, as legacy Blueprint's `RootMetadataOperation` did: `{"$object":"root","$links":{...},"$partial":false}`, each link keyed by its `Rel`, or by the operation's own descriptor name (before any `[BlueprintAppOperationNames]` removal) when it has none, with an absolute href whose placeholders are left as a template. It is not in the OpenAPI document. An app whose own operation answers `GET` at the base path keeps that operation there instead. A route may be declared with or without a leading slash; both route under the base path with one slash.
+
 ### ApiResource and ILinkableResource
 
 Response types that need `$links` should extend `ApiResource` (in `Blueprint.Model`):
@@ -195,6 +197,8 @@ Route patterns support `{PropertyName}` syntax. The placeholder binds to the ope
 ```csharp
 [Link(typeof(TemplateApiResource), "/templates/{Id}/versions", Rel = "versions")]
 ```
+
+A `[Link]` without a `Rel` is keyed — in the resource's `$links` and in `x-links` — by its operation's own descriptor name, before any `[BlueprintAppOperationNames]` removal, as legacy Blueprint keyed it: `DeleteGroupCommand`'s link is `DeleteGroup`, and `GetUserVCardQuery`'s is `GetUservCard`. Two Rel-less links on one resource therefore have two keys.
 
 ### Compile-time diagnostics
 
@@ -259,6 +263,7 @@ Blueprint supports deferred task execution through `IBackgroundTaskScheduler`:
 2. **Enqueue from a handler:** Inject `IBackgroundTaskScheduler` as a handler DI parameter, call `scheduler.Enqueue(new MyTask { ... })`.
 3. **Generated flush:** The `BackgroundTaskFlushModule` runs at Order=1000 in PostExecution — after UoW save and audit. It calls `scheduler.FlushAsync()` only on handler success.
 4. **Task host dispatch:** `BlueprintApp.GetOperationsForHost("tasks")` returns all task-marked operations. The executor finds and runs the matching pipeline when a scheduled task arrives.
+5. **Outside an operation:** a task enqueued from a Razor page, controller or other request-scoped service is released only when the host registers `app.UseBlueprintTaskRunner()`, which calls `RunNowAsync()` on the request's scheduler after the rest of the pipeline returns (not when it throws), and releases nothing for a request routed to a Blueprint operation. A plain Rebus `IHandleMessages<T>`'s tasks are released by `BlueprintApiActivator` straight after its unit-of-work save.
 
 ### Implementation pattern
 
@@ -282,13 +287,13 @@ The flush-on-success semantic guarantees tasks are only dispatched when the comm
 
 ## Persistence contract (Unit of Work)
 
-Blueprint's `UnitOfWorkModule` generates a `SaveChangesAsync` call for ICommand operations at Order=900 in PostExecution:
+Blueprint's `UnitOfWorkModule` generates a `SaveChangesAsync` call for every operation at Order=900 in PostExecution:
 
-- **Only commands:** Queries never trigger save. `[DoNotSaveChanges]` on a non-command triggers diagnostic `BPP001`.
+- **Every operation:** Commands, queries and background tasks all save, as legacy's save middleware did (queries since v1.0.3; `BPP001` is retired). A query run nested (a resource event's self query) does not.
 - **Only on success:** Save only runs when `handlerResult.WasSuccessful` is true.
 - **Optional DI:** If no `IUnitOfWork` is registered, the step is skipped gracefully.
 - **DI scope owns disposal:** The unit-of-work instance is disposed by the DI container scope, not by Blueprint. Register as scoped.
-- **Opt-out:** `[DoNotSaveChanges]` on a command suppresses the generated save call.
+- **Opt-out:** `[DoNotSaveChanges]` on any operation suppresses the generated save call.
 
 ### Implementation pattern
 
@@ -357,6 +362,7 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 - `AddBlueprintApi<TApp, TExec>()` registers the app and executor singletons
 - `BlueprintServiceBuilder` exposes typed methods for all Blueprint infrastructure contracts
 - Scoped services (UoW, task scheduler) are registered scoped; singletons (audit, auth) as singletons
+- `AddResourceEventAuditRepository<T>()` registers legacy's `IResourceEventAuditRepository` (scoped). The generated pipeline hands it every legacy `ResourceEvent` a command without `[DoNotAudit]` raises (a query's is passed on untouched, as legacy did), last of the post-execution steps (stamped, with its href, data expanded), beside any resource-event audit sink and best-effort (a repository that throws or cannot be constructed is logged at Error by the operation's pipeline logger; the operation still succeeds)
 - `ConfigureHttp` binds `BlueprintHttpOptions` for link generation base URI and error detail exposure
 
 ## ASP.NET Core infrastructure (consumer responsibility)
@@ -417,7 +423,7 @@ The `Blueprint.Migration.Analyzers` package flags legacy patterns at build time:
 | Diagnostic | What it flags | Action |
 | --- | --- | --- |
 | BPMIG001 | Redundant `AddOpenApi()` (parameterless) | Auto-fix: safe removal |
-| BPMIG002 | Redundant `AddHateoasLinks()` (parameterless) | Auto-fix: safe removal |
+| BPMIG002 | Redundant `AddHateoasLinks()` (parameterless) | Auto-fix: safe removal (links are on by default). An app that never called it generated no links: add `DisableHateoasLinks()` by hand — no diagnostic sees an absent call |
 | BPMIG003 | Redundant `AddAuthorisation()` (parameterless) | Auto-fix: safe removal |
 | BPMIG100 | Configured `AddOpenApi(Action<OpenApiOptions>)` | Config-required: migrate to `MapBlueprintApi(configureOpenApi: ...)` |
 | BPMIG101 | Configured `AddAuthentication(...)` | Config-required: migrate to ASP.NET Core auth middleware |
@@ -430,6 +436,7 @@ The `Blueprint.Migration.Analyzers` package flags legacy patterns at build time:
 | --- | --- |
 | `BlueprintApiBuilder.AddOpenApi()` | Built-in — remove call |
 | `BlueprintApiBuilder.AddHateoasLinks()` | Built-in — remove call |
+| No `AddHateoasLinks()` call (the app wrote `"$links":{}`) | `AddBlueprintApi<TApp, TExec>(b => b.DisableHateoasLinks())` |
 | `BlueprintApiBuilder.AddAuthorisation()` | Built-in — remove call |
 | `AddOpenApi(opts => ...)` | `MapBlueprintApi(..., configureOpenApi: info => ...)` |
 | `AddAuthentication(...)` | ASP.NET Core `UseAuthentication()` middleware |

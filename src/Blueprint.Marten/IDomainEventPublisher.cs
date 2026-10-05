@@ -5,7 +5,8 @@ namespace Blueprint.Marten;
 /// <summary>
 /// Publishes domain events to an external message bus (e.g. Rebus, MassTransit) during
 /// Marten's <c>BeforeSaveChangesAsync</c> lifecycle. Implementations are resolved from DI
-/// by the <see cref="OutboxPublishingSessionListener"/>.
+/// by the <see cref="DomainEventDispatchingSessionListener"/>, which publishes each event after dispatching it to
+/// in-process handlers (or by <see cref="OutboxPublishingSessionListener"/>, which only publishes).
 /// </summary>
 /// <remarks>
 /// <para>

@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
-/// Scans operation types for <c>public static readonly ApiExceptionFactory</c> fields and projects each discovered
+/// Scans operation types for static <c>ApiExceptionFactory</c> fields of any accessibility and projects each discovered
 /// factory as <see cref="ApiExceptionFactoryRegistration"/> metadata so <see cref="HttpResponseMetadataModule"/> can
 /// include the corresponding error status codes in OpenAPI response documentation.
 /// </summary>
@@ -74,7 +74,10 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
 
         foreach (var member in operationType.GetMembers())
         {
-            if (member is not IFieldSymbol { IsStatic: true, IsReadOnly: true, DeclaredAccessibility: Accessibility.Public } field)
+            // Every static field, whatever its accessibility and whether or not it is readonly: legacy's convention read
+            // GetFields(Static | NonPublic | Public) (Signature365 8b40ecc961, ApiExceptionFactoryResponseConvention.cs:16).
+            // The generated descriptor is nested in the operation's partial type, so it can read a private field.
+            if (member is not IFieldSymbol { IsStatic: true } field)
             {
                 continue;
             }
@@ -84,25 +87,27 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                 continue;
             }
 
+            // A static auto-property's compiler-generated backing field (<X>k__BackingField) is one of those fields, as
+            // legacy's GetFields returned it too. Generated code cannot name it, so the descriptor reads the property it
+            // backs, whose initializer is the one the field is given (TryExtractHttpStatusCore).
+            var memberName = field.AssociatedSymbol is IPropertySymbol property ? property.Name : field.Name;
+
             if (TryExtractHttpStatus(field, context, out var httpStatus))
             {
-                builder.Add(new ApiExceptionFactoryRegistration(field.Name, httpStatus));
+                builder.Add(new ApiExceptionFactoryRegistration(
+                    memberName,
+                    httpStatus,
+                    $"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{memberName}"));
             }
             else
             {
-                ReportNonEvaluableInitializer(context, field, operationType);
+                ReportNonEvaluableInitializer(context, field, memberName, operationType);
             }
         }
 
-        // Deterministic ordering: by status code, then by field name for same status.
-        builder.Sort(static (a, b) =>
-        {
-            var statusComparison = a.HttpStatus.CompareTo(b.HttpStatus);
-            return statusComparison != 0
-                ? statusComparison
-                : string.Compare(a.FieldName, b.FieldName, StringComparison.Ordinal);
-        });
-
+        // Declaration order, as legacy's GetFields returned the fields: it is the order of the example map a status
+        // documents (Signature365 8b40ecc961, e.g. Billing.Contract GetInvoiceQuery 404 {MissingStripeAccount,
+        // MissingInvoice}). It is deterministic, and HttpResponseMetadataModule groups the responses by status itself.
         return builder.ToImmutable();
     }
 
@@ -137,9 +142,11 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             return false;
         }
 
+        var declaringSyntaxReferences = GetDeclaringSyntaxReferences(field);
+
         // Cross-assembly fields have no syntax to inspect. Try assembly-attribute index first,
         // then fall back to matching the field name against well-known HttpStatusCode enum members.
-        if (field.DeclaringSyntaxReferences.Length == 0)
+        if (declaringSyntaxReferences.Length == 0)
         {
             if (TryResolveFromAssemblyAttributes(field, out httpStatus))
             {
@@ -149,12 +156,14 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             return WellKnownHttpStatusCodes.TryGetValue(field.Name, out httpStatus);
         }
 
-        var syntax = field.DeclaringSyntaxReferences[0].GetSyntax();
+        var syntax = declaringSyntaxReferences[0].GetSyntax();
 
-        // Walk through the syntax to find the initializer expression.
+        // Walk through the syntax to find the initializer expression: a field's, or, for an auto-property's backing field,
+        // the property's.
         var initializerExpression = syntax switch
         {
             VariableDeclaratorSyntax { Initializer.Value: var value } => value,
+            PropertyDeclarationSyntax { Initializer.Value: var propertyValue } => propertyValue,
             _ => null,
         };
 
@@ -304,19 +313,32 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
         return false;
     }
 
+    /// <summary>
+    /// Returns where <paramref name="field"/> is declared: its own declarator, or, for an auto-property's compiler-generated
+    /// backing field, which has no syntax of its own, the property declaration that carries its initializer.
+    /// </summary>
+    private static ImmutableArray<SyntaxReference> GetDeclaringSyntaxReferences(IFieldSymbol field)
+    {
+        return field.AssociatedSymbol is IPropertySymbol property && field.DeclaringSyntaxReferences.Length == 0
+            ? property.DeclaringSyntaxReferences
+            : field.DeclaringSyntaxReferences;
+    }
+
     private static void ReportNonEvaluableInitializer(
         DescriptorContributorContext context,
         IFieldSymbol field,
+        string memberName,
         INamedTypeSymbol operationType)
     {
-        var location = field.DeclaringSyntaxReferences.Length > 0
-            ? field.DeclaringSyntaxReferences[0].GetSyntax().GetLocation()
+        var declaringSyntaxReferences = GetDeclaringSyntaxReferences(field);
+        var location = declaringSyntaxReferences.Length > 0
+            ? declaringSyntaxReferences[0].GetSyntax().GetLocation()
             : operationType.Locations.FirstOrDefault();
 
         context.AddDiagnostic(new DiagnosticInfo(
             ApiExceptionFactoryDiagnosticDescriptors.NonEvaluableFactory,
             location,
-            new EquatableList<string>([field.Name, operationType.ToDisplayString()])));
+            new EquatableList<string>([memberName, operationType.ToDisplayString()])));
     }
 
     /// <summary>

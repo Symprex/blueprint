@@ -91,28 +91,35 @@ When adding or changing runtime behavior, ask:
 
 ## HTTP error response surface
 
-All error responses use [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) `application/problem+json` bodies, giving clients a consistent machine-readable error envelope across every failure path. The `HttpOperationResultExecutor` switch statement maps each `OperationResult` subclass to the appropriate HTTP response.
+All error responses use [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) problem bodies, giving clients a consistent machine-readable error envelope across every failure path. They are sent as `application/problem+json; charset=utf-8`. With `BlueprintHttpOptions.NegotiateErrorContentType` set, the content type is instead chosen from the request's `Accept` header as legacy Blueprint chose it: `application/json`, with no charset, for no `Accept` or one that includes `*/*`. The `HttpOperationResultExecutor` switch statement maps each `OperationResult` subclass to the appropriate HTTP response.
 
 ### Status codes and response shapes
 
 | Status | Result type | Body | Detail source |
 |--------|------------|------|---------------|
 | 400 | `BindingFailureResult` | `ProblemDetails` | Binding failure reason (e.g. "Invalid route parameter 'id'") |
-| 401 | `UnauthenticatedResult` | `ProblemDetails` | Fixed: "Authentication is required to access this resource." |
-| 403 | `ForbiddenResult` | `ProblemDetails` | Fixed: "You do not have permission to access this resource." |
+| 401 | `UnauthenticatedResult` | `ProblemDetails` | As legacy Blueprint wrote it: type `security_failure`; title the denying authoriser's `Message`, or "Access denied. Anonymous access is not allowed." for an anonymous caller; no detail |
+| 403 | `ForbiddenResult` | `ProblemDetails` | From an authoriser, as legacy wrote it: type `unauthorized`, title the authoriser's `Message`, no detail (its `Reason` is logged, never written). From a resource authorization provider: fixed "You do not have permission to access this resource." |
 | 415 | `UnsupportedMediaTypeResult` | `ProblemDetails` | Fixed: "The request content type is not supported. Expected 'application/json'." |
 | 422 | `ValidationFailedResult` | `ValidationProblemDetails` | Per-member validation errors from DataAnnotations / IValidatableObject |
-| 500 | `UnhandledExceptionResult` | `ProblemDetails` | Generic message unless `ExposeExceptionDetailsInErrorResponses` is true |
-| 4xx | `UnhandledExceptionResult` (via `ApiException`) | `ProblemDetails` | Exception message (intentionally developer-authored) |
+| 500 | `UnhandledExceptionResult` (not an `ApiException`) | `ProblemDetails` | As legacy wrote it: type `unknown_error`, title "Something has gone wrong, please try again", no detail; with `ExposeExceptionDetailsInErrorResponses`, title the exception's message and detail its stack trace |
+| any | `UnhandledExceptionResult` (an `ApiException`) | `ProblemDetails` | As legacy wrote it: the exception's own type, title, status, detail and extensions, a null one left out, whatever the status and the exposure setting |
+
+Every exception, and a 401 or an authoriser's 403, also carries a `traceId` extension (the operation activity's trace id),
+after any other, when the operation has an activity, as legacy's did, and an authoriser's denial is logged at Information under `Blueprint.Authorisation.AuthorisationMiddlewareBuilder`
+("Permission check failed. reason={0} authoriser={1}"). A denial whose failure type is not `Authorisation`, a default
+`ExecutionAllowed`'s included, is a 401, as legacy made it.
 
 ### Exception detail control
 
 `BlueprintHttpOptions.ExposeExceptionDetailsInErrorResponses` controls 500-level detail exposure:
 
-- **false (default/production)**: 500 responses show `"An unexpected error occurred."` — no stack traces or internal details leak.
-- **true (development)**: 500 responses include the exception message and stack trace in the `stackTrace` extension property.
+- **false (default/production)**: an exception that is not an `ApiException` is titled "Something has gone wrong, please
+  try again", with no detail — no message or stack trace leaks.
+- **true (development)**: it is titled with the exception's message, and its detail is the stack trace, as legacy wrote it.
 
-Non-500 `ApiException` responses always include the exception message because `ApiException` is designed for developer-authored, client-facing error messages.
+An `ApiException`, whatever its status, is always written with its own title and detail, because `ApiException` is
+designed for developer-authored, client-facing error messages. Legacy wrote it so too.
 
 ### OpenAPI alignment
 
@@ -188,14 +195,14 @@ This two-layer design means trace spans naturally carry the exception info (with
 
 ### Messaging outbox coordination
 
-The `MessageOutboxModule` contributes a PostExecution render step at Order 920 (after UnitOfWork save at 900, before auditing at 950) that commits enqueued messages via `IMessageOutbox.CommitAsync`. This replaces legacy Blueprint's `StartRebusTransactionScopeMiddleware` / `CommitRebusTransactionScopeMiddleware` pair.
+The `MessageOutboxModule` contributes a PostExecution render step at Order 920 (after UnitOfWork save at 900, before auditing at 950) that commits enqueued messages via `IMessageOutbox.CommitAsync`. `IMessageOutbox` is Blueprint's own seam, with no legacy equivalent; legacy Blueprint's `StartRebusTransactionScopeMiddleware` / `CommitRebusTransactionScopeMiddleware` pair is replaced by the `RebusTransactionModule`, and its Marten session outbox by a consumer's `IRebusTransactionEnlistment`.
 
 Key characteristics:
-- **Command-only**: only command operations participate (queries never have outbox commits)
+- **Commands and background tasks**: only command and background task operations participate (queries never have outbox commits); background tasks joined in v1.0.3
 - **Success-guarded**: `handlerResult.WasSuccessful` must be true for commit
 - **Opt-out**: `[DoNotPublishMessages]` suppresses outbox commit per-operation
 - **Optional resolution**: if no `IMessageOutbox` is registered, the step is a no-op
-- **Diagnostic**: `BPM001` warning for `[DoNotPublishMessages]` on non-command operations
+- **Diagnostic**: `BPM001` warning for `[DoNotPublishMessages]` on an operation that is neither a command nor a background task
 
 The `MessageOutboxManifestModule` contributes `messaging.outboxCommitEnabled` to the debug manifest.
 

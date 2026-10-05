@@ -108,7 +108,7 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
-    public async Task When_openapi_endpoint_invoked_then_page_parameter_has_exclusive_minimum()
+    public async Task When_openapi_endpoint_invoked_then_page_parameter_has_the_next_integer_as_its_minimum()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();
         using var doc = JsonDocument.Parse(json);
@@ -119,12 +119,12 @@ public class ReferenceAppOpenApiTests
             .Single(static p => p.GetProperty("name").GetString() == "page");
 
         var schema = pageParam.GetProperty("schema");
-        schema.GetProperty("minimum").GetDecimal().Should().Be(0);
-        schema.GetProperty("exclusiveMinimum").GetBoolean().Should().BeTrue();
+        schema.GetProperty("minimum").GetDecimal().Should().Be(1, "[GreaterThan(0)] of an integer is at least 1");
+        schema.TryGetProperty("exclusiveMinimum", out _).Should().BeFalse("no draft-07 validator accepts the OpenAPI 3.0 boolean");
     }
 
     [Fact]
-    public async Task When_openapi_endpoint_invoked_then_page_parameter_has_exclusive_maximum()
+    public async Task When_openapi_endpoint_invoked_then_page_parameter_has_the_previous_integer_as_its_maximum()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();
         using var doc = JsonDocument.Parse(json);
@@ -135,8 +135,8 @@ public class ReferenceAppOpenApiTests
             .Single(static p => p.GetProperty("name").GetString() == "page");
 
         var schema = pageParam.GetProperty("schema");
-        schema.GetProperty("maximum").GetDecimal().Should().Be(1001);
-        schema.GetProperty("exclusiveMaximum").GetBoolean().Should().BeTrue();
+        schema.GetProperty("maximum").GetDecimal().Should().Be(1000, "[LessThan(1001)] of an integer is at most 1000");
+        schema.TryGetProperty("exclusiveMaximum", out _).Should().BeFalse("no OpenAPI 3.0 document accepts the draft-07 number");
     }
 
     [Fact]
@@ -153,6 +153,28 @@ public class ReferenceAppOpenApiTests
         var schema = pageSizeParam.GetProperty("schema");
         schema.GetProperty("minimum").GetDecimal().Should().Be(1);
         schema.GetProperty("maximum").GetDecimal().Should().Be(100);
+    }
+
+    [Fact]
+    public async Task When_openapi_endpoint_invoked_under_legacy_naming_then_parameters_carry_no_validation_keywords()
+    {
+        // R44: legacy (NJsonSchema) parameters carried only a type schema — Signature365's committed Partners
+        // document's Page/PageSize query parameters are {"title": "Integer", "type": "integer", "format": "int32"},
+        // no minimum/maximum, despite the underlying properties having range attributes. Under Legacy naming this
+        // document must match: no minimum/maximum/minLength/maxLength/pattern on a parameter's schema, even though the
+        // same property's request-body rendering (a different code path, R44 does not touch it) keeps them.
+        var (json, _) = await InvokeOpenApiEndpointAsync(static info => info.SchemaNaming = OpenApiSchemaNaming.Legacy);
+        using var doc = JsonDocument.Parse(json);
+
+        var searchPath = doc.RootElement.GetProperty("paths").GetProperty("/templates/search");
+        var parameters = searchPath.GetProperty("get").GetProperty("parameters");
+
+        var pageSizeSchema = parameters.EnumerateArray().Single(static p => p.GetProperty("name").GetString() == "pageSize").GetProperty("schema");
+        pageSizeSchema.TryGetProperty("minimum", out _).Should().BeFalse("legacy's Page/PageSize parameters carried no minimum");
+        pageSizeSchema.TryGetProperty("maximum", out _).Should().BeFalse("legacy's Page/PageSize parameters carried no maximum");
+
+        var qSchema = parameters.EnumerateArray().Single(static p => p.GetProperty("name").GetString() == "q").GetProperty("schema");
+        qSchema.TryGetProperty("minLength", out _).Should().BeFalse("legacy parameters carried no minLength");
     }
 
     [Fact]
@@ -957,6 +979,31 @@ public class ReferenceAppOpenApiTests
         nameParam.Should().NotBeNull("NameFilter should appear as a query parameter");
         nameParam!.Value.TryGetProperty("deprecated", out _)
             .Should().BeFalse("NameFilter is not obsolete and should not have deprecated");
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Legacy, "x-deprecatedMessage", "x-deprecated-reason")]
+    [InlineData(OpenApiSchemaNaming.Default, "x-deprecated-reason", "x-deprecatedMessage")]
+    public async Task An_obsolete_operation_and_parameter_write_their_message_under_the_naming_s_key(OpenApiSchemaNaming naming, string written, string notWritten)
+    {
+        // R170: a property's message was already x-deprecatedMessage under Legacy (R160, NJsonSchema's key: its
+        // OpenApiParameter is a JsonSchema, so the key is the one legacy's NSwag wrote for a parameter); an operation's and a
+        // parameter's kept x-deprecated-reason there. GetTemplateVersionsQuery is [Obsolete] and its Id parameter is not;
+        // GetPagedTemplatesQuery.CategoryFilter is [Obsolete("Use NameFilter instead.")].
+        var (json, _) = await InvokeOpenApiEndpointAsync(info => info.SchemaNaming = naming);
+        using var doc = JsonDocument.Parse(json);
+        var paths = doc.RootElement.GetProperty("paths");
+
+        var operation = paths.GetProperty("/templates/{Id}/versions").GetProperty("get");
+        operation.GetProperty("deprecated").GetBoolean().Should().BeTrue();
+        operation.GetProperty(written).GetString().Should().Be("Use the new paginated template history endpoint instead.");
+        operation.TryGetProperty(notWritten, out _).Should().BeFalse();
+
+        var parameter = paths.GetProperty("/templates/paged").GetProperty("get").GetProperty("parameters").EnumerateArray()
+            .Single(static p => p.GetProperty("name").GetString() == "categoryFilter");
+        parameter.GetProperty("deprecated").GetBoolean().Should().BeTrue();
+        parameter.GetProperty(written).GetString().Should().Be("Use NameFilter instead.");
+        parameter.TryGetProperty(notWritten, out _).Should().BeFalse();
     }
 
     [Fact]

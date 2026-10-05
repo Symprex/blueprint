@@ -20,42 +20,23 @@ public class HttpOperationResultExecutor
 {
     private const string JsonContentType = "application/json; charset=utf-8";
     private const string ProblemJsonContentType = "application/problem+json; charset=utf-8";
-    private const string PlainTextContentType = "text/plain; charset=utf-8";
+
+    // The problem types and anonymous title legacy Blueprint's authorisation denials were written with (Signature365
+    // 8b40ecc961: Errors/UnauthorizedException.cs:16, Errors/ForbiddenException.cs:15,
+    // Authorisation/AuthorisationMiddlewareBuilder.cs:16).
+    private const string SecurityFailureProblemType = "security_failure";
+    private const string AuthorisationFailureProblemType = "unauthorized";
+    private const string AnonymousAccessDeniedTitle = "Access denied. Anonymous access is not allowed.";
 
     // Cached empty options for the rare case where no app-owned serializer context exists.
     private static readonly JsonSerializerOptions _emptyFallbackOptions = new();
 
-    // Pre-built ProblemDetails for fixed error responses, avoiding per-request allocation.
-    // These are safe to share because JsonSerializer reads but does not mutate them.
-    private static readonly MvcProblemDetails _unauthorizedProblem = new()
-    {
-        Status = StatusCodes.Status401Unauthorized,
-        Title = "Unauthorized",
-        Type = "https://tools.ietf.org/html/rfc7235#section-3.1",
-        Detail = "Authentication is required to access this resource.",
-    };
-
-    private static readonly MvcProblemDetails _forbiddenProblem = new()
-    {
-        Status = StatusCodes.Status403Forbidden,
-        Title = "Forbidden",
-        Type = "https://tools.ietf.org/html/rfc7231#section-6.5.3",
-        Detail = "You do not have permission to access this resource.",
-    };
-
-    private static readonly MvcProblemDetails _unsupportedMediaTypeProblem = new()
-    {
-        Status = StatusCodes.Status415UnsupportedMediaType,
-        Title = "Unsupported Media Type",
-        Type = "https://tools.ietf.org/html/rfc7231#section-6.5.13",
-        Detail = "The request content type is not supported. Expected 'application/json'.",
-    };
-
-    // Pre-serialized byte representations of the static error responses above.
+    // Pre-serialized bodies of the fixed error responses, the only copy of each.
     // Writing pre-serialized bytes eliminates per-request JSON serialization, buffer rental,
     // and Content-Length computation for the three most common error types.
+    // An anonymous caller's, as legacy wrote it when the operation had no activity (see WriteDenialAndReturnTrue).
     private static readonly byte[] _unauthorizedProblemBytes = System.Text.Encoding.UTF8.GetBytes(
-        """{"type":"https://tools.ietf.org/html/rfc7235#section-3.1","title":"Unauthorized","status":401,"detail":"Authentication is required to access this resource."}""");
+        """{"type":"security_failure","title":"Access denied. Anonymous access is not allowed.","status":401}""");
 
     private static readonly byte[] _forbiddenProblemBytes = System.Text.Encoding.UTF8.GetBytes(
         """{"type":"https://tools.ietf.org/html/rfc7231#section-6.5.3","title":"Forbidden","status":403,"detail":"You do not have permission to access this resource."}""");
@@ -68,8 +49,8 @@ public class HttpOperationResultExecutor
     private static readonly Task<bool> _trueTask = Task.FromResult(true);
     private static readonly Task<bool> _falseTask = Task.FromResult(false);
 
-    // Thread-local ArrayBufferWriter to avoid per-request allocation for resource event envelope
-    // serialization. Cleared after each use so the buffer is reusable within the same thread.
+    // Thread-local ArrayBufferWriter to avoid per-request allocation for response body serialization. Cleared before each
+    // use; a write that does not finish at once takes it and leaves the thread a new one (WriteThreadBufferAsync).
     [ThreadStatic]
     private static System.Buffers.ArrayBufferWriter<byte>? _threadLocalBuffer;
 
@@ -131,21 +112,25 @@ public class HttpOperationResultExecutor
                 return _trueTask;
 
             // Pre-serialized static error responses — Body.WriteAsync often completes synchronously.
-            case UnauthenticatedResult:
-                httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                httpContext.Response.ContentType = ProblemJsonContentType;
-                httpContext.Response.ContentLength = _unauthorizedProblemBytes.Length;
-                return WritePreserializedAndReturnTrue(httpContext, _unauthorizedProblemBytes);
+            case UnauthenticatedResult { Failure: { } authenticationFailure }:
+                return WriteDenialAndReturnTrue(httpContext, operationContext, httpOptions, StatusCodes.Status401Unauthorized, SecurityFailureProblemType, authenticationFailure.Message, preserialized: null);
 
+            case UnauthenticatedResult:
+                return WriteDenialAndReturnTrue(httpContext, operationContext, httpOptions, StatusCodes.Status401Unauthorized, SecurityFailureProblemType, AnonymousAccessDeniedTitle, _unauthorizedProblemBytes);
+
+            case ForbiddenResult { Failure: { } authorisationFailure }:
+                return WriteDenialAndReturnTrue(httpContext, operationContext, httpOptions, StatusCodes.Status403Forbidden, AuthorisationFailureProblemType, authorisationFailure.Message, preserialized: null);
+
+            // A denial with no authoriser's detail, a resource authorization provider's, which legacy did not have.
             case ForbiddenResult:
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-                httpContext.Response.ContentType = ProblemJsonContentType;
+                httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
                 httpContext.Response.ContentLength = _forbiddenProblemBytes.Length;
                 return WritePreserializedAndReturnTrue(httpContext, _forbiddenProblemBytes);
 
             case UnsupportedMediaTypeResult:
                 httpContext.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                httpContext.Response.ContentType = ProblemJsonContentType;
+                httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
                 httpContext.Response.ContentLength = _unsupportedMediaTypeProblemBytes.Length;
                 return WritePreserializedAndReturnTrue(httpContext, _unsupportedMediaTypeProblemBytes);
 
@@ -219,19 +204,92 @@ public class HttpOperationResultExecutor
     }
 
     /// <summary>
+    /// Writes an authorisation denial as legacy Blueprint wrote the <c>UnauthorizedException</c> or
+    /// <c>ForbiddenException</c> its <c>AuthorisationMiddlewareBuilder</c> threw for one: the exception's type, title and
+    /// status, in that order, a null title left out, and a <c>traceId</c> extension when the operation has an activity
+    /// (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/UnhandledExceptionOperationResultExecutor.cs:35-58</c>,
+    /// <c>ProblemDetailsJsonConverter.cs:107-139</c>). Legacy's exception carried no detail on this path, so a denial's
+    /// reason is never written.
+    /// </summary>
+    /// <param name="httpContext">The HTTP context.</param>
+    /// <param name="operationContext">The operation's context, whose activity gives the trace id.</param>
+    /// <param name="httpOptions">The active HTTP host options, which decide the content type.</param>
+    /// <param name="status">The response status.</param>
+    /// <param name="type">The problem's type.</param>
+    /// <param name="title">The problem's title, the denial's message.</param>
+    /// <param name="preserialized">The body written when there is no activity, if it is fixed.</param>
+    /// <returns><see langword="true"/> when the body has been written.</returns>
+    private static Task<bool> WriteDenialAndReturnTrue(HttpContext httpContext, ApiOperationContext operationContext, BlueprintHttpOptions httpOptions, int status, string type, string? title, byte[]? preserialized)
+    {
+        httpContext.Response.StatusCode = status;
+        httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
+
+        var activity = operationContext.Activity;
+
+        if (activity is null && preserialized is not null)
+        {
+            httpContext.Response.ContentLength = preserialized.Length;
+            return WritePreserializedAndReturnTrue(httpContext, preserialized);
+        }
+
+        var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+        buffer.Clear();
+
+        var writer = _threadLocalWriter;
+        if (writer is null)
+        {
+            writer = new Utf8JsonWriter(buffer);
+            _threadLocalWriter = writer;
+        }
+        else
+        {
+            writer.Reset(buffer);
+        }
+
+        writer.WriteStartObject();
+        writer.WriteString(_propType, type);
+
+        if (title is not null)
+        {
+            writer.WriteString(_propTitle, title);
+        }
+
+        writer.WriteNumber(_propStatus, status);
+
+        if (activity is not null)
+        {
+            writer.WriteString(_propTraceId, activity.TraceId.ToString());
+        }
+
+        writer.WriteEndObject();
+        writer.Flush();
+
+        httpContext.Response.ContentLength = buffer.WrittenCount;
+
+        var writeTask = WriteThreadBufferAsync(httpContext, buffer);
+        return writeTask.IsCompletedSuccessfully ? _trueTask : AwaitPreserializedWrite(writeTask);
+    }
+
+    /// <summary>
     /// Async slow path for less common result types that always require I/O (validation failures,
     /// file streams, resource events, etc.).
     /// </summary>
     private async Task<bool> TryExecuteSlowPathAsync(HttpContext httpContext, ApiOperationContext operationContext, OperationResult result, BlueprintHttpOptions httpOptions)
     {
+        if (TryGetBodilessStatusCode(result, out var bodilessStatusCode))
+        {
+            httpContext.Response.StatusCode = bodilessStatusCode;
+            return true;
+        }
+
         switch (result)
         {
             case ValidationFailedResult validationFailedResult when DescriptorSupportsFailureResult(operationContext.Descriptor, validationFailedResult):
-                await WriteValidationFailureAsync(httpContext, operationContext, validationFailedResult).ConfigureAwait(false);
+                await WriteValidationFailureAsync(httpContext, operationContext, validationFailedResult, httpOptions).ConfigureAwait(false);
                 return true;
             case BindingFailureResult bindingFailureResult:
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                httpContext.Response.ContentType = ProblemJsonContentType;
+                httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
                 await WriteJsonAsync(httpContext, operationContext, new MvcProblemDetails
                 {
                     Status = StatusCodes.Status400BadRequest,
@@ -285,10 +343,11 @@ public class HttpOperationResultExecutor
                 await WriteResourceEventEnvelopeAsync(httpContext, operationContext, resourceEventResult).ConfigureAwait(false);
                 return true;
             case PlainTextResult plainTextResult:
+                // Written exactly, with no charset appended, as legacy did (Signature365 8b40ecc961,
+                // Blueprint.Http/PlainTextResult.cs:57: response.ContentType = this.ContentType, verbatim, including its
+                // text/plain default).
                 httpContext.Response.StatusCode = (int)plainTextResult.StatusCode;
-                httpContext.Response.ContentType = string.Equals(plainTextResult.ContentType, "text/plain", StringComparison.Ordinal)
-                    ? PlainTextContentType
-                    : $"{plainTextResult.ContentType}; charset=utf-8";
+                httpContext.Response.ContentType = plainTextResult.ContentType;
                 await httpContext.Response.WriteAsync(plainTextResult.Content, httpContext.RequestAborted).ConfigureAwait(false);
                 return true;
             case FileStreamResult fileStreamResult:
@@ -302,13 +361,10 @@ public class HttpOperationResultExecutor
                 await fileStreamResult.Stream.CopyToAsync(httpContext.Response.Body, httpContext.RequestAborted).ConfigureAwait(false);
                 return true;
             case ResourceEvent resourceEvent:
-                httpContext.Response.StatusCode = MapResourceEventChangeTypeToStatusCode(resourceEvent.ChangeType);
+                // Whatever its change type, legacy sent a resource event as a 200 with the event and no Location: its
+                // generated pipeline wrapped every returned value that was not an OperationResult in an OkResult.
+                httpContext.Response.StatusCode = StatusCodes.Status200OK;
                 httpContext.Response.ContentType = JsonContentType;
-                if (resourceEvent.ChangeType == ResourceEventChangeType.Created && resourceEvent.Data is not null)
-                {
-                    TrySetLocationHeader(httpContext, resourceEvent.Data);
-                }
-
                 await WriteJsonAsync(httpContext, operationContext, resourceEvent).ConfigureAwait(false);
                 return true;
             case HttpResult httpResult:
@@ -320,6 +376,32 @@ public class HttpOperationResultExecutor
     }
 
     /// <summary>
+    /// Finds whether <paramref name="result"/> is one whose status is decided at run time — by a resource event result's
+    /// change type, or by a plain text result's own status — and that status is one a response must carry no body with.
+    /// </summary>
+    /// <remarks>
+    /// Kestrel refuses a body, and even a <c>Content-Length</c>, on a 204, 205 or 304 response, failing the request with a
+    /// 500, and a client could not read one anyway. Legacy Blueprint wrote none: its result executor wrote a body only for
+    /// content an operation returned, and set no status that forbids one. So such a result is written as its status alone,
+    /// with no <c>Content-Type</c>, <c>Content-Length</c> or <c>Location</c>.
+    /// </remarks>
+    /// <param name="result">The result being translated.</param>
+    /// <param name="statusCode">The status to write when the result is written without a body.</param>
+    /// <returns><see langword="true"/> when the result must be written as its status alone.</returns>
+    private static bool TryGetBodilessStatusCode(OperationResult result, out int statusCode)
+    {
+        statusCode = result switch
+        {
+            IDeferredResourceEventResult deferredEvent => MapChangeTypeToStatusCode(deferredEvent.ChangeType),
+            ResourceEventResult resourceEventResult => MapChangeTypeToStatusCode(resourceEventResult.ChangeType),
+            PlainTextResult plainTextResult => (int)plainTextResult.StatusCode,
+            _ => 0,
+        };
+
+        return statusCode is StatusCodes.Status204NoContent or StatusCodes.Status205ResetContent or StatusCodes.Status304NotModified;
+    }
+
+    /// <summary>
     /// Per-type cache key that binds a content <see cref="Type"/> to a specific
     /// <see cref="JsonSerializerContext"/> so the <see cref="JsonTypeInfo"/> lookup
     /// is performed at most once per (context, type) pair.
@@ -327,6 +409,41 @@ public class HttpOperationResultExecutor
     private readonly record struct TypeInfoCacheKey(JsonSerializerContext? Context, Type ContentType);
 
     private static readonly ConcurrentDictionary<TypeInfoCacheKey, JsonTypeInfo?> _typeInfoCache = new();
+
+    private static Task WriteJsonAsync(HttpContext httpContext, ApiOperationContext operationContext, object content)
+    {
+        return WriteJsonAsync(httpContext, operationContext.App, content);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="content"/> as a 200 JSON response exactly as an <see cref="OkResult"/>'s content is written,
+    /// for an endpoint the HTTP host serves without an operation pipeline, such as the root-metadata document, so its body
+    /// is serialised as every other response of <paramref name="app"/> is.
+    /// </summary>
+    /// <param name="httpContext">The HTTP context to write to.</param>
+    /// <param name="app">The app whose serializer context and options apply.</param>
+    /// <param name="content">The body to write.</param>
+    /// <returns>A task that completes when the body has been written.</returns>
+    internal static Task WriteOkJsonAsync(HttpContext httpContext, BlueprintApp app, object content)
+    {
+        httpContext.Response.StatusCode = StatusCodes.Status200OK;
+        httpContext.Response.ContentType = JsonContentType;
+
+        return WriteJsonAsync(httpContext, app, content);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="content"/> as the response body, serialised as every other response of
+    /// <paramref name="app"/> is, leaving the status and content type as the caller set them.
+    /// </summary>
+    /// <param name="httpContext">The HTTP context to write to.</param>
+    /// <param name="app">The app whose serializer context and options apply.</param>
+    /// <param name="content">The body to write.</param>
+    /// <returns>A task that completes when the body has been written.</returns>
+    internal static Task WriteJsonBodyAsync(HttpContext httpContext, BlueprintApp app, object content)
+    {
+        return WriteJsonAsync(httpContext, app, content);
+    }
 
     [UnconditionalSuppressMessage(
         "Trimming",
@@ -336,9 +453,9 @@ public class HttpOperationResultExecutor
         "AOT",
         "IL3050",
         Justification = "Fallback serialization path uses runtime JSON serialization when the app-owned serializer context does not cover the response type. AOT consumers must ensure their JsonSerializerContext covers all response types.")]
-    private static Task WriteJsonAsync(HttpContext httpContext, ApiOperationContext operationContext, object content)
+    private static Task WriteJsonAsync(HttpContext httpContext, BlueprintApp app, object content)
     {
-        var serializerContext = operationContext.App.AppOwnedSerializerContext;
+        var serializerContext = app.AppOwnedSerializerContext;
         var contentType = content.GetType();
 
         var jsonTypeInfo = _typeInfoCache.GetOrAdd(
@@ -370,7 +487,7 @@ public class HttpOperationResultExecutor
 
             // WriteAsync on response body completes synchronously for small payloads in Kestrel.
             // Avoid async state machine allocation by checking IsCompletedSuccessfully.
-            var writeTask = httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted);
+            var writeTask = WriteThreadBufferAsync(httpContext, buffer);
             return writeTask.IsCompletedSuccessfully
                 ? Task.CompletedTask
                 : writeTask.AsTask();
@@ -398,6 +515,12 @@ public class HttpOperationResultExecutor
     private static readonly JsonEncodedText _propChangedValues = JsonEncodedText.Encode("changedValues");
     private static readonly JsonEncodedText _propCorrelationId = JsonEncodedText.Encode("correlationId");
     private static readonly JsonEncodedText _valEvent = JsonEncodedText.Encode("event");
+
+    // Pre-encoded problem member names for an authorisation denial (WriteDenialAndReturnTrue).
+    private static readonly JsonEncodedText _propType = JsonEncodedText.Encode("type");
+    private static readonly JsonEncodedText _propTitle = JsonEncodedText.Encode("title");
+    private static readonly JsonEncodedText _propStatus = JsonEncodedText.Encode("status");
+    private static readonly JsonEncodedText _propTraceId = JsonEncodedText.Encode("traceId");
 
     /// <summary>
     /// Writes a <see cref="ResourceEventResult"/> as an event envelope directly via <see cref="Utf8JsonWriter"/>,
@@ -446,13 +569,8 @@ public class HttpOperationResultExecutor
         writer.WriteString(_propCreated, DateTimeOffset.UtcNow);
         writer.WriteString(_propResourceObject, ApiResource.GetTypeName(result.Content.GetType()));
 
-        // href: extract from self-link when the resource is linkable
-        string? href = null;
-        if (result.Content is ILinkableResource { Links: { } links } &&
-            links.TryGetValue("self", out var selfLink))
-        {
-            href = selfLink.Href;
-        }
+        // href: the content type's registered self link filled from the content, as legacy made a resource event's href
+        PipelineHelpers.TryCreateResourceEventHref(operationContext, result.Content.GetType(), result.Content, out var href);
 
         if (href is not null)
         {
@@ -504,7 +622,7 @@ public class HttpOperationResultExecutor
         writer.Flush();
 
         httpContext.Response.ContentLength = buffer.WrittenCount;
-        await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted).ConfigureAwait(false);
+        await WriteThreadBufferAsync(httpContext, buffer).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -554,12 +672,14 @@ public class HttpOperationResultExecutor
             writer.WriteString(_propResourceObject, ApiResource.GetTypeName(result.ResolvedContent.GetType()));
         }
 
-        // href: extract from self-link when the resolved resource is linkable
+        // href: the event's resource type's registered self link filled from the resolved content or, when the self query
+        // could not load it, the self query, as legacy made a resource event's href
         string? href = null;
-        if (result.ResolvedContent is ILinkableResource { Links: { } links } &&
-            links.TryGetValue("self", out var selfLink))
+        var resourceType = (result as IResourceEventResourceType)?.ResourceType ?? result.ResolvedContent?.GetType();
+
+        if (resourceType is not null)
         {
-            href = selfLink.Href;
+            PipelineHelpers.TryCreateResourceEventHref(operationContext, resourceType, result.ResolvedContent ?? result.SelfQuery, out href);
         }
 
         if (href is not null)
@@ -612,7 +732,33 @@ public class HttpOperationResultExecutor
         writer.Flush();
 
         httpContext.Response.ContentLength = buffer.WrittenCount;
-        await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted).ConfigureAwait(false);
+        await WriteThreadBufferAsync(httpContext, buffer).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes what the thread's serialization buffer holds to the response body and, when the write does not finish at
+    /// once, gives the buffer to that write: the thread's next response serializes into a new one.
+    /// </summary>
+    /// <remarks>
+    /// A body stream may read the memory it was given until its write completes, and a compressing wrapper such as
+    /// <c>BrotliStream</c> does, across awaits. While it waits the thread is free to serve another request; were that
+    /// request to serialize into the same buffer, the pending write would send its bytes, one user's response carrying
+    /// another's data. So memory handed to an unfinished write is never reachable from the thread again. A write that
+    /// finishes at once, the usual case under Kestrel, keeps the buffer on the thread, so that path still allocates nothing.
+    /// </remarks>
+    /// <param name="httpContext">The HTTP context whose response body is written.</param>
+    /// <param name="buffer">The thread's buffer, holding the serialized body.</param>
+    /// <returns>The body stream's write.</returns>
+    private static ValueTask WriteThreadBufferAsync(HttpContext httpContext, System.Buffers.ArrayBufferWriter<byte> buffer)
+    {
+        var writeTask = httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted);
+
+        if (!writeTask.IsCompleted)
+        {
+            _threadLocalBuffer = null;
+        }
+
+        return writeTask;
     }
 
     private static readonly ConcurrentDictionary<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptionsCache = new();
@@ -694,7 +840,7 @@ public class HttpOperationResultExecutor
         return false;
     }
 
-    private static async Task WriteValidationFailureAsync(HttpContext httpContext, ApiOperationContext operationContext, ValidationFailedResult validationFailedResult)
+    private static async Task WriteValidationFailureAsync(HttpContext httpContext, ApiOperationContext operationContext, ValidationFailedResult validationFailedResult, BlueprintHttpOptions httpOptions)
     {
         IDictionary<string, string[]> validationErrors;
 
@@ -747,7 +893,7 @@ public class HttpOperationResultExecutor
         };
 
         httpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
-        httpContext.Response.ContentType = ProblemJsonContentType;
+        httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
         await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
     }
 
@@ -782,7 +928,8 @@ public class HttpOperationResultExecutor
 
         if (!hasAny)
         {
-            return [(string.Empty, errorMessage)];
+            // Legacy keyed a result naming no member "form" (Signature365 8b40ecc961, Validation/ValidationFailures.cs:44-47).
+            return [(Blueprint.Validation.ValidationFailures.FormLevelPropertyName, errorMessage)];
         }
 
         return [(first!, errorMessage)];
@@ -805,42 +952,85 @@ public class HttpOperationResultExecutor
         }
     }
 
+    /// <summary>
+    /// Writes an exception an operation threw as legacy Blueprint's <c>UnhandledExceptionOperationResultExecutor</c> wrote
+    /// it (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/UnhandledExceptionOperationResultExecutor.cs:30-68</c>):
+    /// an <see cref="ApiException"/> as its own status, title, type, detail and extensions, whatever its status and the
+    /// exposure setting; any other exception as a 500 of type <c>unknown_error</c>, titled "Something has gone wrong, please
+    /// try again" with no detail, or, with details exposed, titled with its message and detailed with its stack trace; and
+    /// a <c>traceId</c> extension after the others when the operation has an activity. A null member is left out
+    /// (<c>ProblemDetailsJsonConverter.cs:107-139</c>).
+    /// </summary>
     private static async Task WriteUnhandledExceptionAsync(HttpContext httpContext, ApiOperationContext operationContext, UnhandledExceptionResult unhandledExceptionResult, BlueprintHttpOptions httpOptions)
     {
-        var exposeDetails = httpOptions.ExposeExceptionDetailsInErrorResponses;
-        var apiEx = unhandledExceptionResult.Exception as ApiException;
+        var problemDetails = CreateLegacyExceptionProblem(unhandledExceptionResult.Exception, httpOptions.ExposeExceptionDetailsInErrorResponses, operationContext.Activity);
+        var statusCode = problemDetails.Status!.Value;
 
-        var statusCode = apiEx?.HttpStatus ?? StatusCodes.Status500InternalServerError;
+        httpContext.Response.StatusCode = statusCode;
+        httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
+        await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
+    }
 
-        var problemDetails = new MvcProblemDetails
+    /// <summary>
+    /// Gets the content type an error response is written with: <c>application/problem+json; charset=utf-8</c>, or, with
+    /// <see cref="BlueprintHttpOptions.NegotiateErrorContentType"/>, what legacy Blueprint's content negotiation chose for
+    /// the request's <c>Accept</c> header (<see cref="LegacyErrorContentTypeNegotiation"/>).
+    /// </summary>
+    /// <param name="httpContext">The HTTP context, whose request carries the <c>Accept</c> header.</param>
+    /// <param name="httpOptions">The active HTTP host options.</param>
+    /// <returns>The content type to write.</returns>
+    internal static string GetErrorContentType(HttpContext httpContext, BlueprintHttpOptions httpOptions)
+    {
+        return httpOptions.NegotiateErrorContentType
+            ? LegacyErrorContentTypeNegotiation.Negotiate(httpContext.Request.Headers.Accept)
+            : ProblemJsonContentType;
+    }
+
+    /// <summary>
+    /// Makes the problem legacy Blueprint wrote for <paramref name="exception"/> (see <see cref="WriteUnhandledExceptionAsync"/>).
+    /// </summary>
+    /// <param name="exception">The exception the operation threw.</param>
+    /// <param name="exposeDetails">Whether exception details are exposed, which changes only a non-<see cref="ApiException"/>'s.</param>
+    /// <param name="activity">The operation's activity, whose trace id is carried when there is one.</param>
+    /// <returns>The problem to write.</returns>
+    internal static MvcProblemDetails CreateLegacyExceptionProblem(Exception exception, bool exposeDetails, System.Diagnostics.Activity? activity)
+    {
+        MvcProblemDetails problemDetails;
+
+        if (exception is ApiException apiException)
         {
-            Status = statusCode,
-            Title = apiEx?.Title ?? (statusCode >= 500 ? "Server error" : "Request error"),
-            Type = apiEx?.Type,
-            Detail = exposeDetails
-                ? apiEx?.Detail ?? unhandledExceptionResult.Exception.Message
-                : statusCode >= 500
-                    ? "An unexpected error occurred."
-                    : apiEx?.Detail ?? unhandledExceptionResult.Exception.Message,
-        };
+            problemDetails = new MvcProblemDetails
+            {
+                Status = apiException.HttpStatus,
+                Title = apiException.Title,
+                Type = apiException.Type,
+                Detail = apiException.Detail,
+            };
 
-        // Carry over any extension data from the ApiException into the ProblemDetails response.
-        if (apiEx?.Extensions is { Count: > 0 })
-        {
-            foreach (var kvp in apiEx.Extensions)
+            // Copied into this body's own dictionary, deliberately unlike legacy, whose exceptions without extensions
+            // shared one static dictionary that the traceId below was written into (see AuthorisationDenialWireTests).
+            foreach (var kvp in apiException.Extensions)
             {
                 problemDetails.Extensions[kvp.Key] = kvp.Value;
             }
         }
-
-        if (exposeDetails && statusCode >= 500)
+        else
         {
-            problemDetails.Extensions["stackTrace"] = unhandledExceptionResult.Exception.ToString();
+            problemDetails = new MvcProblemDetails
+            {
+                Status = StatusCodes.Status500InternalServerError,
+                Type = "unknown_error",
+                Title = exposeDetails ? exception.Message : "Something has gone wrong, please try again",
+                Detail = exposeDetails ? exception.StackTrace : null,
+            };
         }
 
-        httpContext.Response.StatusCode = statusCode;
-        httpContext.Response.ContentType = ProblemJsonContentType;
-        await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
+        if (activity is not null)
+        {
+            problemDetails.Extensions["traceId"] = activity.TraceId.ToString();
+        }
+
+        return problemDetails;
     }
 
     /// <summary>
@@ -862,17 +1052,6 @@ public class HttpOperationResultExecutor
             ChangeType.Created => StatusCodes.Status201Created,
             ChangeType.Updated => StatusCodes.Status200OK,
             ChangeType.Deleted => StatusCodes.Status204NoContent,
-            _ => StatusCodes.Status200OK,
-        };
-    }
-
-    private static int MapResourceEventChangeTypeToStatusCode(ResourceEventChangeType changeType)
-    {
-        return changeType switch
-        {
-            ResourceEventChangeType.Created => StatusCodes.Status201Created,
-            ResourceEventChangeType.Updated => StatusCodes.Status200OK,
-            ResourceEventChangeType.Deleted => StatusCodes.Status204NoContent,
             _ => StatusCodes.Status200OK,
         };
     }

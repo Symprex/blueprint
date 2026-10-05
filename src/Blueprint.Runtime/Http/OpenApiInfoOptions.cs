@@ -117,8 +117,43 @@ public sealed class OpenApiInfoOptions
     /// return a string safe for use as a JSON property key. Names must be unique across all
     /// schema components in the document.
     /// </para>
+    /// <para>
+    /// Under <see cref="OpenApiSchemaNaming.Legacy"/> it receives, instead, the name that naming gives every component —
+    /// a type's legacy name such as <c>PagedApiResourceOfTemplateApiResource</c>, a request body's, a ResourceEvent
+    /// envelope's — so that <c>name =&gt; name.Replace("ApiResource", "")</c> is all a consumer needs to reproduce
+    /// legacy keys that stripped a suffix.
+    /// </para>
     /// </remarks>
     public Func<string, string>? SchemaNameFormatter { get; set; }
+
+    /// <summary>
+    /// Gets or sets how schema components are named from the CLR types they describe. Defaults to
+    /// <see cref="OpenApiSchemaNaming.Default"/>; <see cref="OpenApiSchemaNaming.Legacy"/> reproduces the names legacy
+    /// Blueprint's NJsonSchema generator gave.
+    /// </summary>
+    public OpenApiSchemaNaming SchemaNaming { get; set; }
+
+    /// <summary>
+    /// Gets or sets how the schema component of an operation's request body is keyed. Defaults to
+    /// <see cref="OpenApiRequestBodyNaming.OperationName"/>; <see cref="OpenApiRequestBodyNaming.OperationType"/> keys
+    /// it by the operation's CLR type, as legacy Blueprint did. The key is passed to
+    /// <see cref="SchemaNameFormatter"/> like any other.
+    /// </summary>
+    public OpenApiRequestBodyNaming RequestBodyNaming { get; set; }
+
+    /// <summary>
+    /// Gets or sets how an operation's query parameters are named. Defaults to
+    /// <see cref="OpenApiParameterNaming.BindingName"/>; <see cref="OpenApiParameterNaming.PropertyName"/> names them
+    /// by their CLR properties, as legacy Blueprint did. Route, header and cookie parameters are unaffected.
+    /// </summary>
+    public OpenApiParameterNaming QueryParameterNaming { get; set; }
+
+    /// <summary>
+    /// Gets or sets which properties and parameters are marked required. Defaults to
+    /// <see cref="OpenApiRequiredProperties.Declared"/>; <see cref="OpenApiRequiredProperties.NonNullable"/> marks every one
+    /// whose type is not nullable, and every <c>[Required]</c> one, as legacy Blueprint did.
+    /// </summary>
+    public OpenApiRequiredProperties RequiredProperties { get; set; }
 }
 
 /// <summary>

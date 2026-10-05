@@ -236,6 +236,13 @@ public sealed class TestDepartmentExpander : IResourceExpander
     /// <summary>Gets the number of times <see cref="ExpandAsync"/> was called.</summary>
     public int ExpandCallCount { get; private set; }
 
+    /// <summary>Gets the <c>response</c> each call to <see cref="ExpandAsync"/> was given, in order.</summary>
+    /// <remarks>
+    /// <see cref="ResourceExpansionRuntime"/> caches the expander type it finds for each resource type for the life of the
+    /// process, so every test expanding <see cref="DepartmentResource"/> must use this one expander type.
+    /// </remarks>
+    public List<object> Responses { get; } = [];
+
     /// <inheritdoc />
     public bool CanExpand(Type type)
     {
@@ -250,6 +257,7 @@ public sealed class TestDepartmentExpander : IResourceExpander
         CancellationToken cancellationToken = default)
     {
         this.ExpandCallCount++;
+        this.Responses.Add(response);
 
         foreach (var entity in entities)
         {

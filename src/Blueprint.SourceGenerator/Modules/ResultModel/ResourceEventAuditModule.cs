@@ -5,16 +5,29 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
-/// Contributes a PostExecution render step that records a resource-event audit entry via
-/// <c>IResourceEventAuditSink</c> after successful handler execution returns a
-/// <c>ResourceEventResult</c> or <c>KeyOnlyResourceEventResult</c>.
+/// Contributes a PostExecution render step that stamps a legacy resource event, makes its href, and records a
+/// resource-event audit entry via <c>IResourceEventAuditSink</c> when handler execution returns a
+/// <c>ResourceEventResult</c>, <c>KeyOnlyResourceEventResult</c> or <c>ResourceEvent</c>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This module only activates for operations whose declared result contract includes a
-/// resource-event result type. It runs at Order=960, placing it after general auditing
-/// (Order=950) and after <see cref="UnitOfWorkModule"/> (Order=900), but before
-/// <see cref="BackgroundTaskFlushModule"/> (Order=1000).
+/// This module only activates for commands whose declared result contract includes a resource-event result type. A query
+/// that returns one, as Signature365's AdminPortal injection override queries return the event Subscriptions gave them,
+/// passes it on untouched: legacy's <c>ResourceEventHandlerMiddlewareBuilder</c> matched commands only (Signature365
+/// <c>8b40ecc961</c>, <c>ResourceEventHandlerMiddlewareBuilder.cs:12-15</c>), so a query's event was never stamped, given
+/// an href or audited. That covers the <c>IResourceEventAuditSink</c> too, which legacy did not have. It runs at
+/// Order=1020, last of the PostExecution steps: after
+/// <see cref="UnitOfWorkModule"/> (900), general auditing (950), <see cref="BackgroundTaskFlushModule"/> (1000) and
+/// <see cref="ResourceExpansionModule"/> (1010). That is where legacy's <c>ResourceEventHandlerMiddlewareBuilder</c> ran:
+/// after its save, background task runner and <c>ResourceExpandMiddleware</c> (Signature365 <c>8b40ecc961</c>,
+/// <c>AzureAdOauthReturnCommandExecutorPipeline.cs:136-149</c>), so the event it stamped and audited
+/// (<c>Blueprint.Http/Middleware/ResourceEventHandler.cs:38-39</c>, <c>:54-65</c>, <c>:72-77</c>) already had its data
+/// expanded.
+/// </para>
+/// <para>
+/// Its step is not success-guarded, so that it is emitted after the expansion step, which is not either: the generator
+/// renders every success-guarded step together, where the first of them falls. Guarding it would change nothing, as
+/// every result it acts on is a successful one.
 /// </para>
 /// <para>
 /// Resource-event auditing is best-effort: sink failures are caught and emitted as
@@ -38,7 +51,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
     public string ContributorId => nameof(ResourceEventAuditModule);
 
     /// <inheritdoc />
-    public int Order => 960;
+    public int Order => 1020;
 
     /// <inheritdoc />
     public bool IsUnique => true;
@@ -49,6 +62,11 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
     /// <inheritdoc />
     public void ContributeToPipeline(PipelineContributorContext context)
     {
+        if (!IsCommand(context.Operation.TypeSymbol))
+        {
+            return;
+        }
+
         var castTypeName = GetResourceEventCastType(context.Operation.TypeSymbol);
         if (castTypeName is null)
         {
@@ -62,7 +80,7 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
             requiredBy: PipelineStage.PostExecution);
 
         context.RequireAsync();
-        context.AddSuccessGuardedRenderStep(PipelineStage.PostExecution, ctx => RenderResourceEventAudit(ctx, operationTypeName));
+        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderResourceEventAudit(ctx, operationTypeName));
     }
 
     private static void RenderResourceEventAudit(PipelineRenderContext context, string operationTypeName)
@@ -70,9 +88,24 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
         context.WriteBlankLine();
 
         // Delegate to shared helper — avoids duplicating the pattern match, null check,
-        // try/catch, and activity event recording across every resource-event pipeline.
+        // try/catch, and activity event recording across every resource-event pipeline. The pipeline's own logger logs a
+        // failed audit repository, as legacy's pipeline logged the exception that escaped into its catch.
         context.WriteStatement(
-            $"await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, this.Logger, \"{operationTypeName}\").ConfigureAwait(false);");
+    }
+
+    /// <summary>
+    /// Whether the operation is a command, the only kind whose resource events legacy's
+    /// <c>ResourceEventHandlerMiddlewareBuilder</c> handled: it matched <c>operation.IsCommand</c> (Signature365
+    /// <c>8b40ecc961</c>, <c>ResourceEventHandlerMiddlewareBuilder.cs:12-15</c>), which is
+    /// <c>typeof(ICommand).IsAssignableFrom(OperationType)</c> (<c>ApiOperationDescriptor.cs:124</c>). A background task is
+    /// not one.
+    /// </summary>
+    private static bool IsCommand(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name is "ICommand"
+            && candidate.IsInNamespace("Blueprint", "Model"));
     }
 
     /// <summary>
@@ -81,6 +114,11 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
     /// <c>ResourceEventResult</c>, <c>KeyOnlyResourceEventResult</c>, and <c>ResourceEvent</c>
     /// are all supported resource-event result hierarchies that require audit sink execution.
     /// </summary>
+    /// <remarks>
+    /// A <c>Results&lt;T1, T2&gt;</c> declares one of its members, so it is a resource-event result when any member is: legacy's
+    /// <c>ResourceEventHandler</c> matched the event its command returned, not the command's declared type (Signature365
+    /// <c>8b40ecc961</c>, <c>ResourceEventHandler.cs:26-30</c>).
+    /// </remarks>
     private static string? GetResourceEventCastType(INamedTypeSymbol operationType)
     {
         var declaredResultType = OperationResultContractHelper.GetDeclaredOperationResultType(operationType);
@@ -89,6 +127,16 @@ public sealed class ResourceEventAuditModule : IBlueprintSourceGeneratorModule, 
             return null;
         }
 
+        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredResultType, out var unionMembers))
+        {
+            return unionMembers.Select(GetResourceEventCastTypeOf).FirstOrDefault(static castType => castType is not null);
+        }
+
+        return GetResourceEventCastTypeOf(declaredResultType);
+    }
+
+    private static string? GetResourceEventCastTypeOf(ITypeSymbol declaredResultType)
+    {
         for (var current = declaredResultType; current is not null; current = current.BaseType)
         {
             if (current.IsInNamespace("Blueprint", "Runtime", "Exec"))

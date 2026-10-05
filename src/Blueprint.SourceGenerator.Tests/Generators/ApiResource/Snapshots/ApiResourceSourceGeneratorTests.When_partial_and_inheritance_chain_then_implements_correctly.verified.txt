@@ -1,5 +1,7 @@
 ﻿Blueprint.SourceGenerator\Blueprint.SourceGenerator.Generators.ApiResources.ApiResourceSourceGenerator\TestNamespace.UserMembershipApiResource_ObjectProperty.g.cs:
 
+#nullable enable
+
 namespace TestNamespace
 {
     /// <remarks>
@@ -7,6 +9,8 @@ namespace TestNamespace
     /// </remarks>
     public partial class UserMembershipApiResource
     {
+        /// <inheritdoc />
+        [global::System.Text.Json.Serialization.JsonPropertyName("$object")]
         public override string Object => "userMembership";
     }
 }

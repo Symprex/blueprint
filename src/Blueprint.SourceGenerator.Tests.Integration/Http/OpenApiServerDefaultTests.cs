@@ -11,8 +11,9 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 /// Proves the OpenAPI <c>servers</c> array defaults to a gateway-reachable address when no explicit
 /// server list is configured, following the precedence: explicit <see cref="OpenApiInfoOptions.Servers" />,
 /// then <see cref="BlueprintHttpOptions.PublicApiHost" />. <see cref="BlueprintHttpOptions.PublicHost" /> is not a
-/// fallback: it is a bare host for link generation, not the complete address including mount prefix that a
-/// <c>servers</c> entry has to be.
+/// fallback. These render without a base path, as the renderer does when it is not told one, so the entry is
+/// <see cref="BlueprintHttpOptions.PublicApiHost" /> as given; <c>MapBlueprintApi</c> passes its base path, which
+/// <see cref="OpenApiServerFromHttpOptionsEndpointTests" /> proves is appended.
 /// The document is pre-rendered once at registration (<see cref="OpenApiDocumentEndpoint" />), so there is no
 /// per-request origin available here to fall back to beyond those two configured options.
 /// </summary>

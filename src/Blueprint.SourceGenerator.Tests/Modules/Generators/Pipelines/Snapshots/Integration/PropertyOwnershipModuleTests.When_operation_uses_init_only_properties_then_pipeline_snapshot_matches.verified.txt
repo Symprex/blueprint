@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class UpdateInitCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal UpdateInitCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "UpdateInitCommand", pipelineServices)
@@ -131,6 +131,9 @@ namespace Blueprint.Generated
             {
                 await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
+
+            // Populate full HATEOAS links (skip 304 Not Modified)
+            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
 
             return handlerResult;
         }

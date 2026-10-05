@@ -47,7 +47,7 @@ namespace Blueprint.Generated
     internal sealed partial class GetWidgetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal GetWidgetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "GetWidgetQuery", pipelineServices)
@@ -97,19 +97,11 @@ namespace Blueprint.Generated
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::TestNamespace.WidgetApiResource>(await global::TestNamespace.GetWidgetQuery.HandleAsync(operation).ConfigureAwait(false));
 
-            // Populate HATEOAS links (self + action rels) on the returned resource (skip 304 Not Modified)
-            if (handlerResult is Blueprint.Runtime.Exec.OkResult and not global::Blueprint.Runtime.Exec.INotModifiedResult)
+
+            if (this.HasUnitOfWork && !context.IsNested)
             {
-                var linkableResource = (global::TestNamespace.WidgetApiResource)((Blueprint.Runtime.Exec.OkResult)handlerResult).Content;
-                if (linkableResource is not null)
-                {
-                    linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/widgets/{linkableResource.Id}" });
-                }
+                await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
             }
-
-            // Populate full HATEOAS links (skip 304 Not Modified)
-            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
-
 
             if (this.AuditSink != null)
             {
@@ -120,6 +112,9 @@ namespace Blueprint.Generated
             {
                 await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
+
+            // Populate full HATEOAS links (skip 304 Not Modified)
+            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
 
             return handlerResult;
         }
@@ -153,7 +148,7 @@ namespace Blueprint.Generated
     internal sealed partial class UpdateWidgetCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "LinkGenerationModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "ResourceEventAuditModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceEventAuditModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal UpdateWidgetCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "UpdateWidgetCommand", pipelineServices)
@@ -209,19 +204,6 @@ namespace Blueprint.Generated
 
             var handlerResult = await global::TestNamespace.UpdateWidgetCommand.HandleAsync(operation).ConfigureAwait(false);
 
-            // Populate HATEOAS links (self + action rels) on the returned resource (skip 304 Not Modified)
-            if (handlerResult is global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.WidgetApiResource> and not global::Blueprint.Runtime.Exec.INotModifiedResult)
-            {
-                var linkableResource = (global::TestNamespace.WidgetApiResource)((global::Blueprint.Runtime.Exec.ResourceEventResult<global::TestNamespace.WidgetApiResource>)handlerResult).Content;
-                if (linkableResource is not null)
-                {
-                    linkableResource.AddLink("self", new global::Blueprint.Model.Link { Href = $"/widgets/{linkableResource.Id}" });
-                }
-            }
-
-            // Populate full HATEOAS links (skip 304 Not Modified)
-            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
-
             if (handlerResult.WasSuccessful)
             {
 
@@ -240,13 +222,16 @@ namespace Blueprint.Generated
                     await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "UpdateWidgetCommand").ConfigureAwait(false);
                 }
 
-                await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, "UpdateWidgetCommand").ConfigureAwait(false);
-
                 if (this.HasBackgroundTaskScheduler)
                 {
                     await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
                 }
             }
+
+            await ExecuteResourceEventAuditSinkAsync(this.ResourceEventAuditSink, context, handlerResult, this.Logger, "UpdateWidgetCommand").ConfigureAwait(false);
+
+            // Populate full HATEOAS links (skip 304 Not Modified)
+            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
 
             return handlerResult;
         }

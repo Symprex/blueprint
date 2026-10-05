@@ -121,6 +121,51 @@ public class MessageOutboxModuleIntegrationTests
             "outbox must NOT be committed when handler throws — uncommitted messages are discarded for data consistency");
     }
 
+    [Fact]
+    public async Task When_background_task_succeeds_then_message_outbox_commits()
+    {
+        // Legacy gave background tasks the same outbox as commands.
+        var (context, pipeline, outbox) = CreateTaskPipeline<MessagingBackgroundTask>();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<NoResultOperationResult>();
+        outbox.CommitCallCount.Should().Be(1, "a background task's messages are committed once it has succeeded");
+    }
+
+    [Fact]
+    public async Task When_background_task_throws_then_message_outbox_does_not_commit()
+    {
+        var (context, pipeline, outbox) = CreateTaskPipeline<ThrowingMessagingBackgroundTask>();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<UnhandledExceptionResult>();
+        outbox.CommitCallCount.Should().Be(0, "a failed background task's messages must be discarded");
+    }
+
+    [Fact]
+    public async Task When_background_task_has_DoNotPublishMessages_then_message_outbox_is_not_invoked()
+    {
+        var (context, pipeline, outbox) = CreateTaskPipeline<DoNotPublishMessagesBackgroundTask>();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<NoResultOperationResult>();
+        outbox.CommitCallCount.Should().Be(0);
+    }
+
+    private static (ApiOperationContext Context, IOperationExecutorPipeline Pipeline, TestMessageOutbox Outbox) CreateTaskPipeline<TTask>()
+        where TTask : Blueprint.Tasks.IBackgroundTask
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var outbox = new TestMessageOutbox();
+        var context = new ApiOperationContext(new MessagingTestServiceProvider(outbox), app, app.FindOperation(typeof(TTask)), CancellationToken.None);
+
+        return (context, executor.GetPipeline(typeof(TTask)), outbox);
+    }
+
     private sealed class MessagingTestServiceProvider : IServiceProvider
     {
         private readonly IMessageOutbox? _outbox;
@@ -226,5 +271,42 @@ public partial class ThrowingMessagingCommand : ICommand
     public static Task HandleAsync(ThrowingMessagingCommand operation)
     {
         throw new InvalidOperationException("Simulated handler failure for outbox rollback test");
+    }
+}
+
+/// <summary>A background task that succeeds, so its messages should be committed.</summary>
+public partial class MessagingBackgroundTask : Blueprint.Tasks.IBackgroundTask
+{
+    /// <summary>Handles the task.</summary>
+    /// <param name="operation">The task instance.</param>
+    /// <returns>A completed task.</returns>
+    public static Task HandleAsync(MessagingBackgroundTask operation)
+    {
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>A background task whose handler throws, so its messages must not be committed.</summary>
+public partial class ThrowingMessagingBackgroundTask : Blueprint.Tasks.IBackgroundTask
+{
+    /// <summary>Handles the task by throwing.</summary>
+    /// <param name="operation">The task instance.</param>
+    /// <returns>Never returns — always throws.</returns>
+    public static Task HandleAsync(ThrowingMessagingBackgroundTask operation)
+    {
+        throw new InvalidOperationException("Simulated background task failure for outbox rollback test");
+    }
+}
+
+/// <summary>A background task that opts out of the outbox with <c>[DoNotPublishMessages]</c>.</summary>
+[Blueprint.Messaging.DoNotPublishMessages]
+public partial class DoNotPublishMessagesBackgroundTask : Blueprint.Tasks.IBackgroundTask
+{
+    /// <summary>Handles the task.</summary>
+    /// <param name="operation">The task instance.</param>
+    /// <returns>A completed task.</returns>
+    public static Task HandleAsync(DoNotPublishMessagesBackgroundTask operation)
+    {
+        return Task.CompletedTask;
     }
 }

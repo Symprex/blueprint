@@ -18,7 +18,7 @@ namespace Blueprint.Generated
     internal sealed partial class TestQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["TenantModule", "PropertyPopulationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
 
         internal TestQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "TestQuery", pipelineServices)
@@ -44,12 +44,17 @@ namespace Blueprint.Generated
             var testQueryHandler = new global::TestNamespace.TestQueryHandler();
 
             testQueryHandler.Context = context;
-            testQueryHandler.Identity = context.UserAuthorisationContext ?? Blueprint.Authorization.AnonymousUserAuthorisationContext.Instance;
+            testQueryHandler.Identity = context.UserAuthorisationContext!;
             testQueryHandler.Logger = this.Logger;
             testQueryHandler.CancellationToken = context.OperationCancelled;
 
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await testQueryHandler.HandleAsync(operation).ConfigureAwait(false));
 
+
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            }
 
             if (this.AuditSink != null)
             {

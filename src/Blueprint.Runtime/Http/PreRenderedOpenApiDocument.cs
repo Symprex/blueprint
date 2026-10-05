@@ -21,6 +21,12 @@ public sealed class PreRenderedOpenApiDocument
     /// Gets the pre-rendered OpenAPI 3.x JSON document string.
     /// </summary>
     public string Json { get; }
+
+    /// <summary>
+    /// Gets what the document could not describe as it would have, each named for the consumer to act on: for example,
+    /// a request-body property whose type the app's serializer context does not describe.
+    /// </summary>
+    public IReadOnlyList<string> Warnings { get; init; } = [];
 }
 
 /// <summary>

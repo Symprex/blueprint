@@ -29,9 +29,11 @@ public sealed class ValidationFailures
         FrozenDictionary<string, string[]>.Empty;
 
     /// <summary>
-    /// The property key used for form-level (non-property-specific) validation messages.
+    /// The property key used for form-level (non-property-specific) validation messages: <c>form</c>, as legacy
+    /// Blueprint's <c>ValidationFailures.FormLevelPropertyName</c> was (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint/Validation/ValidationFailures.cs:14-18</c>).
     /// </summary>
-    public const string FormLevelPropertyName = "";
+    public const string FormLevelPropertyName = "form";
 
     /// <summary>
     /// A shared empty instance representing no failures. Must not be mutated.
@@ -79,7 +81,7 @@ public sealed class ValidationFailures
     /// </summary>
     /// <param name="propertyName">
     /// The property name this failure applies to. Use <see cref="FormLevelPropertyName"/>
-    /// (empty string) for form-level errors.
+    /// for form-level errors.
     /// </param>
     /// <param name="errorMessage">The human-readable error message.</param>
     public void AddFailure(string propertyName, string errorMessage)
@@ -102,7 +104,7 @@ public sealed class ValidationFailures
     /// Returns this collection as a read-only dictionary of property names to their error messages.
     /// </summary>
     /// <returns>
-    /// A dictionary keyed by property name (empty string for form-level errors) with arrays
+    /// A dictionary keyed by property name (<see cref="FormLevelPropertyName"/> for form-level errors) with arrays
     /// of error messages. Returns a shared empty dictionary when no failures exist.
     /// </returns>
     public IReadOnlyDictionary<string, string[]> AsDictionary()

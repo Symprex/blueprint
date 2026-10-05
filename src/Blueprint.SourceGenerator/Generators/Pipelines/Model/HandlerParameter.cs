@@ -14,9 +14,12 @@ public sealed record HandlerParameter(
     string? ContextPropertyName = null) : IEquatable<HandlerParameter>
 {
     /// <summary>
-    /// Gets the parameter name in camelCase for use as a local variable.
+    /// Gets the local the pipeline resolves this parameter into: the parameter's name behind a prefix no other generated local
+    /// uses. A handler's author chooses the name, so without the prefix it could be one the pipeline declares itself
+    /// (<c>context</c>, <c>operation</c>, <c>handlerResult</c>, ...), a keyword (<c>@event</c>), or one that differs from
+    /// another parameter's only in case, and the pipeline would not compile.
     /// </summary>
-    public string VariableName => char.ToLowerInvariant(this.ParameterName[0]) + this.ParameterName.Substring(1);
+    public string VariableName => "_handlerArg_" + this.ParameterName;
 
     /// <inheritdoc />
     public bool Equals(HandlerParameter? other)

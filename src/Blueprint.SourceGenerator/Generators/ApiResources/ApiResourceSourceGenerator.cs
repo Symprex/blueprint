@@ -125,7 +125,7 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
                 var name = attr.ConstructorArguments[0].Value as string;
                 if (!string.IsNullOrEmpty(name))
                 {
-                    return name!.Camelize();
+                    return name!.LegacyCamelize();
                 }
             }
         }
@@ -138,11 +138,9 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
         var namespaceName = classToGenerate.Namespace;
         var classNameWithGenerics = classToGenerate.FullClassName;
 
-        var objectType = classToGenerate.ExplicitName ?? classToGenerate.ClassName
-            .Replace("ApiResource", string.Empty)
-            .Replace("Resource", string.Empty)
-            .Replace("DTO", string.Empty)
-            .Camelize();
+        // Named as ApiResource.GetTypeName names a resource, which is legacy Blueprint's rule, so that a resource's $object
+        // and its events' eventId and resourceObject agree.
+        var objectType = classToGenerate.ExplicitName ?? classToGenerate.ClassName.ToLegacyResourceTypeName();
 
         if (classToGenerate.IsEnumerable)
         {
@@ -150,6 +148,8 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
         }
 
         return $$"""
+                 #nullable enable
+
                  namespace {{namespaceName}}
                  {
                      /// <remarks>
@@ -157,6 +157,8 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
                      /// </remarks>
                      public partial class {{classNameWithGenerics}}
                      {
+                         /// <inheritdoc />
+                         [global::System.Text.Json.Serialization.JsonPropertyName("$object")]
                          public override string Object => "{{objectType}}";
                      }
                  }

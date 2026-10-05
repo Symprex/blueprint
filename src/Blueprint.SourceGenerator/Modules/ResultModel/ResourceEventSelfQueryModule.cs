@@ -5,10 +5,11 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
-/// Contributes a PostExecution render step that resolves <c>ResourceEvent.SelfQuery</c> by
+/// Contributes a PostExecution render step that, for a command, resolves <c>ResourceEvent.SelfQuery</c> by
 /// executing the query through the generated pipeline when the handler returns a
 /// <c>ResourceEvent</c> with <c>Data == null</c> and <c>SelfQuery != null</c>, or a
-/// <c>DeferredResourceEventResult&lt;T&gt;</c> that carries a self-query for lazy resolution.
+/// <c>DeferredResourceEventResult&lt;T&gt;</c> that carries a self-query for lazy resolution. A query's self query is
+/// not run, as legacy ran none; its pipeline only marks data it hands on as its own to expand.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -62,6 +63,16 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
             new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
             requiredBy: PipelineStage.PostExecution);
 
+        // Legacy ran an event's self query in ResourceEventHandler (Signature365 8b40ecc961, ResourceEventHandler.cs:48-52),
+        // whose middleware matched commands only (ResourceEventHandlerMiddlewareBuilder.cs:12-15, `operation.IsCommand`). A
+        // query's event keeps the data its handler gave it, but data it hands on is still its own to expand, as legacy's
+        // ResourceExpandMiddleware matched every operation.
+        if (!IsCommand(context.Operation.TypeSymbol))
+        {
+            context.AddRenderStep(PipelineStage.PostExecution, RenderHandedOnDataMark);
+            return;
+        }
+
         context.RequireAsync();
         context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderSelfQueryResolution(ctx, operationTypeName));
     }
@@ -73,10 +84,31 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
             $"await ResolveResourceEventSelfQueryAsync(this.Executor, context, handlerResult, this.Logger, \"{operationTypeName}\").ConfigureAwait(false);");
     }
 
+    private static void RenderHandedOnDataMark(PipelineRenderContext context)
+    {
+        context.WriteBlankLine();
+        context.WriteStatement("MarkHandedOnResourceEventData(handlerResult);");
+    }
+
+    /// <summary>
+    /// Whether the operation is a command, the only kind whose event's self query legacy ran: its
+    /// <c>ResourceEventHandlerMiddlewareBuilder</c> matched <c>operation.IsCommand</c> (Signature365 <c>8b40ecc961</c>,
+    /// <c>ResourceEventHandlerMiddlewareBuilder.cs:12-15</c>), which is <c>typeof(ICommand).IsAssignableFrom(OperationType)</c>
+    /// (<c>ApiOperationDescriptor.cs:124</c>). A background task is not one.
+    /// </summary>
+    private static bool IsCommand(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name is "ICommand"
+            && candidate.IsInNamespace("Blueprint", "Model"));
+    }
+
     /// <summary>
     /// Determines whether the operation's declared result type includes a self-query-bearing result.
     /// Both legacy <c>ResourceEvent</c> (from <c>Blueprint.Http</c>) and new-style
-    /// <c>DeferredResourceEventResult&lt;T&gt;</c> are detected.
+    /// <c>DeferredResourceEventResult&lt;T&gt;</c> are detected, as is a <c>Results&lt;T1, T2&gt;</c> with such a member: legacy
+    /// resolved the self query of the event its command returned, whatever the command declared (Signature365
+    /// <c>8b40ecc961</c>, <c>ResourceEventHandler.cs:26-30</c>, <c>:49-52</c>).
     /// </summary>
     private static bool HasSelfQueryResult(INamedTypeSymbol operationType)
     {
@@ -86,6 +118,13 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
             return false;
         }
 
+        return OperationResultContractHelper.TryGetResultsUnionMembers(declaredResultType, out var unionMembers)
+            ? unionMembers.Any(IsSelfQueryResult)
+            : IsSelfQueryResult(declaredResultType);
+    }
+
+    private static bool IsSelfQueryResult(ITypeSymbol declaredResultType)
+    {
         for (var current = declaredResultType; current is not null; current = current.BaseType)
         {
             // Legacy ResourceEvent from Blueprint.Http

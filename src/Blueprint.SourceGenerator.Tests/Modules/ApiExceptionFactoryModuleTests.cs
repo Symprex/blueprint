@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace Blueprint.SourceGenerator.Tests.Modules;
 
 /// <summary>
-/// Proves the <c>ApiExceptionFactoryModule</c> discovers <c>public static readonly ApiExceptionFactory</c> fields
+/// Proves the <c>ApiExceptionFactoryModule</c> discovers static <c>ApiExceptionFactory</c> fields of any accessibility
 /// on operation types and projects them into the generated descriptor as additional HTTP response metadata entries
 /// for OpenAPI documentation.
 /// </summary>
@@ -208,7 +208,7 @@ public class ApiExceptionFactoryModuleTests
     }
 
     [Fact]
-    public void When_factory_field_is_not_public_then_it_is_ignored()
+    public void When_factory_field_is_not_public_then_it_is_included_as_legacy_included_it()
     {
         const string source = """
             using System.Net;
@@ -250,8 +250,78 @@ public class ApiExceptionFactoryModuleTests
         var descriptorSources = result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator));
         var descriptorSource = string.Join("\n", descriptorSources.Select(static s => s.SourceText));
 
-        // Private fields should not contribute to response metadata
-        descriptorSource.Should().NotContain("404");
+        // Legacy's convention read GetFields(Static | NonPublic | Public), so a private factory contributes its status and,
+        // since the descriptor is nested in the operation's partial type, its title and type. No diagnostic above proves
+        // the generated reference to the private field compiles.
+        descriptorSource.Should().Contain("404");
+        descriptorSource.Should().Contain("global::TestNamespace.PrivateFactoryQuery.Secret.Title");
+    }
+
+    [Fact]
+    public void When_factory_is_a_static_auto_property_then_its_property_is_referenced_as_legacy_documented_its_backing_field()
+    {
+        // R137: legacy's GetFields(Static | NonPublic | Public) returned an auto-property's compiler-generated backing field
+        // too (Signature365 8b40ecc961, ApiExceptionFactoryResponseConvention.cs:16), so a static ApiExceptionFactory
+        // auto-property was documented. The field is named <X>k__BackingField, which generated code cannot name, so the
+        // descriptor reads the property it backs. Public and private alike; the property keeps its declaration order
+        // beside a plain field at the same status (R133).
+        const string source = """
+            using System.Net;
+            using System.Threading.Tasks;
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Runtime.Exec;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [RootLink("/auto-property")]
+                [HttpGet]
+                public partial class AutoPropertyFactoryQuery : IQuery<OkResult<string>>
+                {
+                    public static ApiExceptionFactory Missing { get; } = new(
+                        "Missing thing",
+                        "missing_thing",
+                        HttpStatusCode.NotFound);
+
+                    public static readonly ApiExceptionFactory Vanished = new(
+                        "Vanished thing",
+                        "vanished_thing",
+                        HttpStatusCode.NotFound);
+
+                    private static ApiExceptionFactory Clash { get; } = new(
+                        "Clashing thing",
+                        "clashing_thing",
+                        409);
+
+                    public static Task<OkResult<string>> HandleAsync(AutoPropertyFactoryQuery operation) =>
+                        Task.FromResult(new OkResult<string>(Clash.Title));
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        // No BP010 for either property, and the generated references compile.
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSources = result.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator));
+        var descriptorSource = string.Join("\n", descriptorSources.Select(static s => s.SourceText));
+
+        descriptorSource.Should().Contain("409");
+        descriptorSource.Should().Contain("global::TestNamespace.AutoPropertyFactoryQuery.Missing.Title");
+        descriptorSource.Should().Contain("global::TestNamespace.AutoPropertyFactoryQuery.Clash.Title");
+        descriptorSource.Should().NotContain("k__BackingField");
+        descriptorSource.IndexOf("AutoPropertyFactoryQuery.Missing.Title", StringComparison.Ordinal)
+            .Should().BeLessThan(descriptorSource.IndexOf("AutoPropertyFactoryQuery.Vanished.Title", StringComparison.Ordinal));
     }
 
     [Fact]

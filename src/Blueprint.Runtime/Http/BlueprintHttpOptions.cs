@@ -15,6 +15,30 @@ public sealed class BlueprintHttpOptions
     public bool ExposeExceptionDetailsInErrorResponses { get; set; }
 
     /// <summary>
+    /// Whether an error response's <c>Content-Type</c> is chosen from the request's <c>Accept</c> header as legacy
+    /// Blueprint chose it, rather than always being <c>application/problem+json; charset=utf-8</c>. <see langword="false"/>
+    /// by default.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Legacy Blueprint wrote every error — a validation failure, an authorisation denial, an <see cref="ApiException"/>
+    /// or any other exception — through the same output formatter as a success, and chose its content type by content
+    /// negotiation. With no <c>Accept</c> header, or one that includes <c>*/*</c> anywhere, it wrote exactly
+    /// <c>application/json</c>, with no charset. Otherwise it took the accepted media types in descending quality. The
+    /// first that is <c>application/json</c>, <c>text/json</c> or an <c>application/*+json</c> type (including
+    /// <c>application/problem+json</c>) gave the content type. Its content type was the whole <c>Accept</c> header line
+    /// that media type came from. With none of them, it wrote <c>application/json</c>.
+    /// </para>
+    /// <para>
+    /// Turn this on for clients that read a body as JSON only when its content type contains <c>application/json</c>
+    /// and send no <c>Accept</c>, as legacy's own clients did. Pair it with
+    /// <see cref="OpenApiInfoOptions.UsePlainJsonForErrorResponses"/> so that the OpenAPI document describes what the
+    /// wire carries.
+    /// </para>
+    /// </remarks>
+    public bool NegotiateErrorContentType { get; set; }
+
+    /// <summary>
     /// Gets or sets the optional embedded resource name for the canonical operations manifest that hosted inspection
     /// surfaces should expose. Keeping this explicit avoids introducing a hidden runtime resource-discovery convention
     /// before the manifest emission story is widened deliberately.
@@ -46,19 +70,25 @@ public sealed class BlueprintHttpOptions
     public string? PublicHost { get; set; }
 
     /// <summary>
-    /// An optional address, which may carry a path prefix as well as a host, that this API should
-    /// advertise to its clients as its own address — used as the default OpenAPI <c>servers</c> entry.
+    /// An optional authority, which may carry a path prefix as well as a host (<c>gateway.example.com/import</c>), that
+    /// this API should advertise to its clients as its own address — the default OpenAPI <c>servers</c> entry, with the
+    /// base path the API is mapped at appended.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// By default this is <c>null</c>, which omits the <c>servers</c> array entirely (unless
     /// <see cref="OpenApiInfoOptions.Servers" /> is configured explicitly, which always wins).
-    /// <see cref="PublicHost" /> is not consulted as a fallback: it is a bare host that link generation composes a
-    /// scheme and the request's base path around, not the complete address a <c>servers</c> entry has to be.
-    /// Set this where the address clients should call differs from the
-    /// one links are built against — for example a gateway that fronts this API on a different host or
-    /// strips a path prefix before the request reaches it. The value is taken as the complete public
-    /// address, including any base path, since the OpenAPI document is rendered once at registration and
-    /// has no request or routing context to compose one from.
+    /// <see cref="PublicHost" /> is not consulted as a fallback, and neither is the incoming request, since the
+    /// OpenAPI document is rendered once at registration, before any request exists.
+    /// </para>
+    /// <para>
+    /// Set this where the address clients should call differs from the one links are built against — for example a
+    /// gateway that fronts this API on a different host or strips a path prefix before the request reaches it. Give
+    /// the gateway's authority and prefix only, not the base path passed to <c>MapBlueprintApi</c>: that is appended,
+    /// as legacy Blueprint appended it, so <c>gateway.example.com/import</c> for an API mapped at <c>api/</c> is
+    /// advertised as <c>https://gateway.example.com/import/api/</c>. The document's paths are relative to that
+    /// address and do not carry the base path.
+    /// </para>
     /// </remarks>
     public string? PublicApiHost { get; set; }
 }

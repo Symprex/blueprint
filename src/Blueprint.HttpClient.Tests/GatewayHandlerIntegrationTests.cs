@@ -47,17 +47,20 @@ public sealed class GatewayHandlerIntegrationTests : IClassFixture<SampleAppFixt
     }
 
     [Fact]
-    public async Task ListGatewayTemplatesQueryHandler_returns_empty_array_when_upstream_returns_null()
+    public async Task ListGatewayTemplatesQueryHandler_throws_response_empty_when_upstream_returns_json_null()
     {
+        // A JSON null is legacy's response_empty ApiException (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:21-24,
+        // :203-208), not a null the handler could turn into an empty list. A 204 is no TemplateApiResource[] either: the
+        // client throws for it, as legacy's did.
         var handler = new FakeHttpHandler(_ =>
-            new HttpResponseMessage(HttpStatusCode.NoContent));
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("null", System.Text.Encoding.UTF8, "application/json") });
 
         var client = this._fixture.CreateClient(handler);
         var sut = new ListGatewayTemplatesQueryHandler(client);
 
-        var result = await sut.Handle(new ListGatewayTemplatesQuery(), CancellationToken.None);
+        var act = () => sut.Handle(new ListGatewayTemplatesQuery(), CancellationToken.None);
 
-        result.Should().BeEmpty();
+        (await act.Should().ThrowAsync<BlueprintApiException>()).Which.Type.Should().Be("response_empty");
     }
 
     [Fact]

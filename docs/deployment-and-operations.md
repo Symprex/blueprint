@@ -40,11 +40,11 @@ services.Configure<BlueprintHttpOptions>(options =>
 });
 ```
 
-This is the only setting that controls whether exception messages and stack traces leak to clients. In production, all 500 responses return a generic `"An unexpected error occurred."` message via RFC 7807 `application/problem+json`.
+This is the only setting that controls whether exception messages and stack traces leak to clients. In production, a 500 for an exception that is not an `ApiException` is titled "Something has gone wrong, please try again" with no detail, as legacy Blueprint wrote it. An `ApiException` is always written with its own title and detail.
 
 ## Error response surface
 
-All error responses return RFC 7807 `application/problem+json` bodies. Clients can parse every error consistently:
+All error responses return RFC 7807 problem bodies, sent as `application/problem+json` unless `BlueprintHttpOptions.NegotiateErrorContentType` chooses the content type from the `Accept` header as legacy Blueprint did. Clients can parse every error consistently:
 
 | Status | Trigger | Body type |
 |--------|---------|-----------|
@@ -53,8 +53,8 @@ All error responses return RFC 7807 `application/problem+json` bodies. Clients c
 | 403 | `[Resource]` authorization denied | `ProblemDetails` |
 | 415 | Non-JSON content type on body-binding operation | `ProblemDetails` |
 | 422 | DataAnnotations / IValidatableObject validation failure | `ValidationProblemDetails` with per-member errors |
-| 500 | Unhandled exception | `ProblemDetails` (detail hidden unless `ExposeExceptionDetailsInErrorResponses`) |
-| 4xx | `ApiException` with custom status | `ProblemDetails` with developer-authored message |
+| 500 | Unhandled exception | `ProblemDetails` of type `unknown_error` (message and stack trace only with `ExposeExceptionDetailsInErrorResponses`) |
+| any | `ApiException` with custom status | `ProblemDetails` with its own type, title, detail and extensions |
 
 ## Middleware ordering
 

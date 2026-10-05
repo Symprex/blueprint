@@ -36,7 +36,7 @@ This document maps Signature 365's testing patterns to Blueprint.Testing equival
 | Component | Blueprint Implementation | Purpose |
 |---|---|---|
 | `BlueprintTestHostBuilder<TApp, TExec>` | Fluent builder for test host | Test host factory |
-| `BlueprintTestHost<TApp, TExec>` | In-memory operation executor | Per-test executor |
+| `BlueprintTestHost<TApp, TExec>` | In-memory operation executor; while an HTTP operation (one with a `[RootLink]`/`[SelfLink]`/`[Link]`) runs, `IHttpContextAccessor.HttpContext` is its HTTP context, carrying the executing user and a loopback remote address, as legacy's `ApiFixture`/`ConfigureHttp` gave it (a non-HTTP operation's accessor stays empty) | Per-test executor |
 | `BlueprintHttpTestHost<TApp, TExec>` | Full HTTP stack with TestServer | HTTP-level testing |
 | `BackgroundTaskCollector` | Same concept, captures tasks | Task assertions |
 | `NullRecurringTaskProvider` | No-op for recurring tasks | Test double |

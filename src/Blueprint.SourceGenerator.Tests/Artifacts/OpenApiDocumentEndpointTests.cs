@@ -206,6 +206,61 @@ public class OpenApiDocumentEndpointTests
         oneOf[1].GetProperty("properties").GetProperty("content").GetProperty("$ref").GetString().Should().Be("#/components/schemas/OpenApiUpdatedEventPayload");
     }
 
+    [Fact]
+    public async Task When_openapi_response_represents_a_union_of_legacy_resource_events_then_its_discriminator_is_what_the_host_writes()
+    {
+        // Not legacy-derived (legacy had no unions); the wire is legacy's. A legacy event's resourceObject is its resource's
+        // type name, fixed by the event's type, and its eventId is "{that name}.{sub-id}", the sub-id chosen by the handler
+        // at run time (legacy Blueprint.Http/ResourceEvent.cs:38, :59, :258-261; ApiResource.cs:68-76). The host writes the
+        // event through the serializer (HttpOperationResultExecutor, `case ResourceEvent`). So the resourceObject, not the
+        // resource types' [ResourceEvent] ids, tells the members apart. The second member is a subclass of ResourceUpdated.
+        var schema = await GetLegacyUnionResponseSchemaAsync<OpenApiLegacyResourceEventUnionBlueprintApp>("/legacy-resource-event-union");
+
+        schema.GetProperty("discriminator").GetProperty("propertyName").GetString().Should().Be("resourceObject");
+        var oneOf = schema.GetProperty("oneOf");
+        oneOf.GetArrayLength().Should().Be(2);
+        oneOf[0].GetProperty("type").GetString().Should().Be("object");
+        oneOf[0].GetProperty("required").EnumerateArray().Select(static item => item.GetString()).Should().Equal("resourceObject", "data");
+        oneOf[0].GetProperty("properties").EnumerateObject().Select(static property => property.Name).Should().Equal("resourceObject", "data");
+        oneOf[0].GetProperty("properties").GetProperty("resourceObject").GetProperty("type").GetString().Should().Be("string");
+        oneOf[0].GetProperty("properties").GetProperty("resourceObject").GetProperty("enum").EnumerateArray().Select(static item => item.GetString()).Should().Equal("openApiLegacyAlpha");
+        oneOf[0].GetProperty("properties").GetProperty("data").GetProperty("$ref").GetString().Should().Be("#/components/schemas/OpenApiLegacyAlphaApiResource");
+        oneOf[1].GetProperty("properties").GetProperty("resourceObject").GetProperty("enum").EnumerateArray().Select(static item => item.GetString()).Should().Equal("openApiLegacyBeta");
+        oneOf[1].GetProperty("properties").GetProperty("data").GetProperty("$ref").GetString().Should().Be("#/components/schemas/OpenApiLegacyBetaApiResource");
+    }
+
+    [Fact]
+    public async Task When_openapi_response_represents_a_union_of_legacy_resource_events_whose_resources_share_a_type_name_then_it_has_no_discriminator()
+    {
+        // OpenApiCollideApiResource and OpenApiCollideResource both have the type name "openApiCollide"
+        // (legacy ApiResource.cs:68-76), so the host writes the same resourceObject for either and nothing on the wire
+        // tells them apart; their distinct [ResourceEvent] ids are not written.
+        var schema = await GetLegacyUnionResponseSchemaAsync<OpenApiCollidingResourceEventUnionBlueprintApp>("/colliding-resource-event-union");
+
+        schema.TryGetProperty("discriminator", out _).Should().BeFalse();
+    }
+
+    private static async Task<JsonElement> GetLegacyUnionResponseSchemaAsync<TApp>(string path)
+        where TApp : BlueprintApp, new()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<TApp, BlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/.blueprint/openapi.json")!;
+        var response = await InvokeEndpointAsync(endpoint);
+
+        return JsonDocument.Parse(response.Body).RootElement
+            .GetProperty("paths")
+            .GetProperty(path)
+            .GetProperty("get")
+            .GetProperty("responses")
+            .GetProperty("200")
+            .GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema")
+            .Clone();
+    }
+
     private static async Task<TestEndpointInvocationResult> InvokeEndpointAsync(RouteEndpoint endpoint)
     {
         await using var body = new MemoryStream();
@@ -322,6 +377,62 @@ public class OpenApiDocumentEndpointTests
             this.Register(descriptor);
         }
     }
+
+    // The names are the ones the generator gives (Roslyn's display names; HttpResponseMetadataModule,
+    // ResourceEventMetadataModule), a nested subclass's with a dot. The ids stand for the resources' [ResourceEvent] ids.
+    private sealed class OpenApiLegacyResourceEventUnionBlueprintApp() : LegacyResourceEventUnionBlueprintApp(
+        typeof(LegacyResourceEventUnionOperation),
+        "/legacy-resource-event-union",
+        ("Blueprint.Http.ResourceCreated<Blueprint.SourceGenerator.Tests.Artifacts.OpenApiLegacyAlphaApiResource>", typeof(OpenApiLegacyAlphaApiResource), "alpha.created"),
+        ("Blueprint.SourceGenerator.Tests.Artifacts.OpenApiDocumentEndpointTests.OpenApiLegacyBetaUpdated", typeof(OpenApiLegacyBetaApiResource), "beta.updated"));
+
+    private sealed class OpenApiCollidingResourceEventUnionBlueprintApp() : LegacyResourceEventUnionBlueprintApp(
+        typeof(CollidingResourceEventUnionOperation),
+        "/colliding-resource-event-union",
+        ("Blueprint.Http.ResourceCreated<Blueprint.SourceGenerator.Tests.Artifacts.OpenApiCollideApiResource>", typeof(OpenApiCollideApiResource), "collide.one"),
+        ("Blueprint.Http.ResourceUpdated<Blueprint.SourceGenerator.Tests.Artifacts.OpenApiCollideResource>", typeof(OpenApiCollideResource), "collide.two"));
+
+    private abstract class LegacyResourceEventUnionBlueprintApp : BlueprintApp
+    {
+        protected LegacyResourceEventUnionBlueprintApp(
+            Type operationType,
+            string url,
+            (string ResultTypeName, Type ResourceType, string EventId) first,
+            (string ResultTypeName, Type ResourceType, string EventId) second)
+        {
+            var descriptor = new ApiOperationDescriptor(operationType, operationType.Name, "OpenApiDocumentEndpointTests");
+            descriptor.AddUrl(new ApiOperationUrl(url));
+            descriptor.SetFeatureData(new OperationHostExposureFeatureData(["http"]));
+            descriptor.SetFeatureData(new OperationHttpMethodMetadataFeatureData(["GET"]));
+            descriptor.SetFeatureData(new OperationHttpResponseMetadataFeatureData([
+                new OperationHttpResponseMetadata(
+                    200,
+                    true,
+                    [first.ResultTypeName, second.ResultTypeName],
+                    [first.ResourceType.FullName!, second.ResourceType.FullName!]),
+            ]));
+            descriptor.SetFeatureData(new OperationResourceEventMetadataFeatureData([
+                new OperationResourceEventMetadata(first.ResultTypeName, first.ResourceType.FullName!, first.EventId),
+                new OperationResourceEventMetadata(second.ResultTypeName, second.ResourceType.FullName!, second.EventId),
+            ]));
+            descriptor.SetFeatureData(new OperationSerializerContextCoverageFeatureData([first.ResourceType.FullName!, second.ResourceType.FullName!]));
+
+            this.AppOwnedSerializerContext = new OpenApiLegacyResourceEventUnionJsonContext(new JsonSerializerOptions());
+            this.AppOwnedSerializerContextType = typeof(OpenApiLegacyResourceEventUnionJsonContext);
+            this.AppOwnedSerializerContextBodyTypes = [first.ResourceType, second.ResourceType];
+            this.AppOwnedSerializerContextBodyTypeNames = [first.ResourceType.FullName!, second.ResourceType.FullName!];
+            this.Register(descriptor);
+        }
+    }
+
+    // IReturn only: an IOperation would have the generator in this project generate for it.
+    private sealed class LegacyResourceEventUnionOperation
+        : IReturn<Results<Blueprint.Http.ResourceCreated<OpenApiLegacyAlphaApiResource>, OpenApiLegacyBetaUpdated>>;
+
+    private sealed class OpenApiLegacyBetaUpdated(OpenApiLegacyBetaApiResource data) : Blueprint.Http.ResourceUpdated<OpenApiLegacyBetaApiResource>(data);
+
+    private sealed class CollidingResourceEventUnionOperation
+        : IReturn<Results<Blueprint.Http.ResourceCreated<OpenApiCollideApiResource>, Blueprint.Http.ResourceUpdated<OpenApiCollideResource>>>;
 
     private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
     {
@@ -531,6 +642,32 @@ public sealed class OpenApiUpdatedEventPayload
 [JsonSerializable(typeof(OpenApiCreatedEventPayload))]
 [JsonSerializable(typeof(OpenApiUpdatedEventPayload))]
 public partial class OpenApiResourceEventUnionJsonContext : JsonSerializerContext;
+
+public sealed partial class OpenApiLegacyAlphaApiResource : ApiResource
+{
+    public string? Name { get; init; }
+}
+
+public sealed partial class OpenApiLegacyBetaApiResource : ApiResource
+{
+    public int Version { get; init; }
+}
+
+public sealed partial class OpenApiCollideApiResource : ApiResource
+{
+    public string? Name { get; init; }
+}
+
+public sealed partial class OpenApiCollideResource : ApiResource
+{
+    public int Version { get; init; }
+}
+
+[JsonSerializable(typeof(OpenApiLegacyAlphaApiResource))]
+[JsonSerializable(typeof(OpenApiLegacyBetaApiResource))]
+[JsonSerializable(typeof(OpenApiCollideApiResource))]
+[JsonSerializable(typeof(OpenApiCollideResource))]
+public partial class OpenApiLegacyResourceEventUnionJsonContext : JsonSerializerContext;
 
 public sealed class GenericSchemaInner
 {

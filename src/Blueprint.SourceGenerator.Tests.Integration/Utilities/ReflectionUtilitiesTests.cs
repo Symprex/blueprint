@@ -19,6 +19,14 @@ public class ReflectionUtilitiesTests
     }
 
     [Fact]
+    public void GetUnderlyingTypeIfNullable_Returns_Null_For_Null()
+    {
+        // Legacy returned null for a null type (Blueprint/Utilities/ReflectionUtilities.cs:21-29 in Signature365
+        // origin/master); CompareNETObjects passes one.
+        ReflectionUtilities.GetUnderlyingTypeIfNullable(null).Should().BeNull();
+    }
+
+    [Fact]
     public void PrettyTypeName_Handles_Simple_Type()
     {
         ReflectionUtilities.PrettyTypeName(typeof(string)).Should().Be("String");

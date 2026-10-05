@@ -1,4 +1,7 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
+using Blueprint.Http;
 using Blueprint.Model;
 
 namespace Blueprint.Runtime.Http;
@@ -16,13 +19,34 @@ public sealed record OpenApiDocumentRenderingContext(
     ImmutableArray<OpenApiSchemaComponentModel> SchemaComponents)
 {
     /// <summary>
+    /// Creates a deterministic OpenAPI-style document model from the supplied path-item rendering context, with the
+    /// framework's own ResourceEvent envelope descriptions.
+    /// </summary>
+    /// <remarks>
+    /// The 1.0.2 signature, kept so that a binary built against it still binds: <c>useLegacyResourceEventText</c> was added
+    /// in 1.0.3 as an optional parameter, which a recompile fills in but an existing binary cannot.
+    /// </remarks>
+    /// <param name="pathItemRendering">The path-item rendering context to assemble into a document model.</param>
+    /// <returns>The assembled OpenAPI-style document model.</returns>
+    public static OpenApiDocumentRenderingContext Create(OpenApiPathItemRenderingContext pathItemRendering)
+    {
+        return Create(pathItemRendering, useLegacyResourceEventText: false);
+    }
+
+    /// <summary>
     /// Creates a deterministic OpenAPI-style document model from the supplied path-item rendering context.
     /// This seam intentionally stays model-only: it assembles the current path and schema inventories without widening
     /// into JSON serialization, endpoint exposure, titles, tags, or customization hooks.
     /// </summary>
     /// <param name="pathItemRendering">The path-item rendering context to assemble into a document model.</param>
+    /// <param name="useLegacyResourceEventText">
+    /// When <see langword="true"/>, the <c>changeType</c> and <c>href</c> properties of a synthesized ResourceEvent
+    /// envelope carry Signature365's legacy Blueprint's own worded descriptions (typo included) rather than the
+    /// framework's neutral ones — set from <c>infoOptions?.SchemaNaming == OpenApiSchemaNaming.Legacy</c> by the
+    /// caller, the same way every other Legacy-only rendering choice is gated.
+    /// </param>
     /// <returns>The assembled OpenAPI-style document model.</returns>
-    public static OpenApiDocumentRenderingContext Create(OpenApiPathItemRenderingContext pathItemRendering)
+    public static OpenApiDocumentRenderingContext Create(OpenApiPathItemRenderingContext pathItemRendering, bool useLegacyResourceEventText = false)
     {
         ArgumentNullException.ThrowIfNull(pathItemRendering);
 
@@ -39,11 +63,11 @@ public sealed record OpenApiDocumentRenderingContext(
             .ToImmutableArray();
 
         var schemaProjection = pathItemRendering.OperationRendering.ResponseObjects.SchemaComponents.SchemaProjection;
-        schemaComponents = EnrichWithResourceLinks(schemaComponents, schemaProjection.Document.App, schemaProjection.FullNameToShortName);
+        schemaComponents = EnrichWithResourceLinks(schemaComponents, schemaProjection.Document.App, schemaProjection.ProjectedFullNameToName, keepLinksToUnexposedOperations: schemaProjection.Naming == OpenApiSchemaNaming.Legacy);
 
         // Collect distinct enum types referenced across all schema component properties and emit them
         // as top-level component schemas so properties can use $ref instead of inline enum arrays.
-        var enumComponents = CollectEnumSchemaComponents(schemaComponents);
+        var enumComponents = CollectEnumSchemaComponents(schemaComponents, paths, schemaProjection.SchemaNamesByType);
 
         if (!enumComponents.IsEmpty)
         {
@@ -55,7 +79,7 @@ public sealed record OpenApiDocumentRenderingContext(
         // Promote ResourceEvent envelopes from inline response schemas to named component schemas so
         // TypeScript generators (which resolve types from $ref paths) can produce typed envelope classes
         // like ResourceEventOfTemplateApiResource instead of anonymous inline objects.
-        var (envelopeComponents, changeTypeEnum) = CollectResourceEventEnvelopeComponents(paths);
+        var (envelopeComponents, changeTypeEnum) = CollectResourceEventEnvelopeComponents(paths, useLegacyResourceEventText);
 
         if (!envelopeComponents.IsEmpty)
         {
@@ -86,13 +110,46 @@ public sealed record OpenApiDocumentRenderingContext(
     {
         var builder = ImmutableArray.CreateBuilder<OpenApiSchemaComponentModel>();
 
+        // An operation published at several URLs has one request body, which legacy wrote once, as the operation type's
+        // schema, and referenced from every URL (Signature365 8b40ecc961, Blueprint.OpenApi/OpenApiDocumentBuilder.cs:160-178).
+        // Only another operation's body under the same name is a clash, left for the component writer to report.
+        var operationsByBodyName = new Dictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var path in paths)
         {
             foreach (var method in path.Methods)
             {
                 var primaryOperation = method.Operations.IsEmpty ? null : method.Operations[0];
 
+                // R178: an operation with no body has the empty schema legacy registered for its type.
+                if (primaryOperation is { RequestBody: null, BodylessRequestSchemaName: { } bodylessName })
+                {
+                    if (operationsByBodyName.TryAdd(bodylessName, primaryOperation.OperationTypeName)
+                        || !string.Equals(operationsByBodyName[bodylessName], primaryOperation.OperationTypeName, StringComparison.Ordinal))
+                    {
+                        builder.Add(new OpenApiSchemaComponentModel(
+                            bodylessName,
+                            "object",
+                            ImmutableArray<string>.Empty,
+                            ImmutableArray<OpenApiSchemaComponentPropertyModel>.Empty,
+                            Description: primaryOperation.BodylessRequestSchemaDescription)
+                        {
+                            IsBodylessOperation = true,
+                        });
+                    }
+
+                    continue;
+                }
+
                 if (primaryOperation?.RequestBody is not { } requestBody || requestBody.Properties.IsEmpty)
+                {
+                    continue;
+                }
+
+                var bodyName = requestBody.SchemaName ?? primaryOperation.OperationName;
+
+                if (!operationsByBodyName.TryAdd(bodyName, primaryOperation.OperationTypeName)
+                    && string.Equals(operationsByBodyName[bodyName], primaryOperation.OperationTypeName, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -137,14 +194,22 @@ public sealed record OpenApiDocumentRenderingContext(
                         bodyProperty.DefaultValue,
                         bodyProperty.ExampleValue,
                         IsReadOnly: false,
-                        bodyProperty.IsWriteOnly));
+                        bodyProperty.IsWriteOnly,
+                        SchemaRef: bodyProperty.SchemaRef,
+                        AllowsAdditionalProperties: bodyProperty.AllowsAdditionalProperties)
+                    {
+                        AdditionalPropertiesAreNullable = bodyProperty.AdditionalPropertiesAreNullable,
+                        ItemsAreNullable = bodyProperty.ItemsAreNullable,
+                        EnumDescription = bodyProperty.EnumDescription,
+                    });
                 }
 
                 builder.Add(new OpenApiSchemaComponentModel(
-                    primaryOperation.OperationName,
+                    bodyName,
                     "object",
                     requiredNames.ToImmutable(),
                     properties.ToImmutable(),
+                    Description: requestBody.Description,
                     Conditionals: requestBody.Conditionals));
             }
         }
@@ -160,11 +225,13 @@ public sealed record OpenApiDocumentRenderingContext(
     private static ImmutableArray<OpenApiSchemaComponentModel> EnrichWithResourceLinks(
         ImmutableArray<OpenApiSchemaComponentModel> components,
         BlueprintApp app,
-        IReadOnlyDictionary<string, string> fullNameToShortName)
+        IReadOnlyDictionary<string, string> fullNameToShortName,
+        bool keepLinksToUnexposedOperations)
     {
         // Build a lookup of resource name → non-self links, keyed by the same BodyTypeName schema projection gives the
-        // resource's component: the short name it maps a covered type's CLR full name to. A resource with no mapping
-        // keeps its full name, so a component keyed by full name still matches. Any SchemaNameFormatter is applied to
+        // resource's component: the name it maps a projected type's CLR full name to, a type reached only through
+        // another's property, list or dictionary included. A resource with no mapping keeps its full name, so a
+        // component keyed by full name still matches. Any SchemaNameFormatter is applied to
         // that BodyTypeName later, when the component is written, so the links follow the component to its final key.
         var linksByResourceName = new Dictionary<string, List<OpenApiSchemaLinkExtension>>(StringComparer.Ordinal);
 
@@ -176,6 +243,14 @@ public sealed record OpenApiDocumentRenderingContext(
             }
 
             if (string.Equals(link.Rel, "self", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // The document leaves an unexposed operation out, so a link naming its operationId would dangle — and the
+            // runtime never adds such a link to a resource's $links either. Legacy's BlueprintLinkSchemaProcessor filtered
+            // nothing, and the generated client builds a stub for an operationId with no path.
+            if (!link.OperationDescriptor.IsExposed && !keepLinksToUnexposedOperations)
             {
                 continue;
             }
@@ -229,10 +304,22 @@ public sealed record OpenApiDocumentRenderingContext(
     /// <c>type: string</c> with <c>enum</c>, <c>x-enumNames</c>, and <c>x-enum-varnames</c> arrays, matching the
     /// standard pattern expected by TypeScript generators and other OpenAPI tooling.
     /// </summary>
+    /// <remarks>
+    /// An enum reached only as the items of an array, or the values of a dictionary, has no property of its own to carry
+    /// its members, yet the property writes a <c>$ref</c> to it (R143). Each such reference to a name that is one of
+    /// <paramref name="schemaNamesByType"/>'s enums gets its component too, or the reference dangles. So does an enum
+    /// an array parameter's items reference (R148, under Legacy naming only).
+    /// </remarks>
+    [UnconditionalSuppressMessage("Trimming", "IL2067", Justification = "Enum types used in STJ-serializable operations are preserved by the generated serializer context.")]
     private static ImmutableArray<OpenApiSchemaComponentModel> CollectEnumSchemaComponents(
-        ImmutableArray<OpenApiSchemaComponentModel> existingComponents)
+        ImmutableArray<OpenApiSchemaComponentModel> existingComponents,
+        ImmutableArray<OpenApiPathItemModel> paths,
+        FrozenDictionary<Type, string> schemaNamesByType)
     {
-        var enumSchemas = new Dictionary<string, ImmutableArray<string>>(StringComparer.Ordinal);
+        var enumSchemas = new Dictionary<string, (ImmutableArray<string> Values, string? Description)>(StringComparer.Ordinal);
+        var enumTypesByName = schemaNamesByType
+            .Where(static pair => pair.Key.IsEnum)
+            .ToDictionary(static pair => pair.Value, static pair => pair.Key, StringComparer.Ordinal);
 
         foreach (var component in existingComponents)
         {
@@ -240,7 +327,35 @@ public sealed record OpenApiDocumentRenderingContext(
             {
                 if (property.EnumSchemaRef is not null && !property.EnumValues.IsDefaultOrEmpty)
                 {
-                    enumSchemas.TryAdd(property.EnumSchemaRef, property.EnumValues);
+                    enumSchemas.TryAdd(property.EnumSchemaRef, (property.EnumValues, property.EnumDescription));
+                }
+
+                foreach (var reference in new[] { property.ItemsSchemaRef, property.AdditionalPropertiesSchemaRef, property.AdditionalPropertiesItemsSchemaRef })
+                {
+                    if (reference is not null && enumTypesByName.TryGetValue(reference, out var enumType))
+                    {
+                        enumSchemas.TryAdd(reference, (Enum.GetNames(enumType).ToImmutableArray(), OpenApiSchemaProjectionContext.GetTypeDescription(enumType)));
+                    }
+                }
+            }
+        }
+
+        // Only the operation written for a method slot has its parameters written, as OpenApiOutputRenderingContext does.
+        foreach (var path in paths)
+        {
+            foreach (var method in path.Methods)
+            {
+                if (method.Operations.IsEmpty)
+                {
+                    continue;
+                }
+
+                foreach (var parameter in method.Operations[0].Parameters)
+                {
+                    if (parameter.ItemsEnumSchemaRef is not null && !parameter.ItemsEnumValues.IsDefaultOrEmpty)
+                    {
+                        enumSchemas.TryAdd(parameter.ItemsEnumSchemaRef, (parameter.ItemsEnumValues, parameter.ItemsEnumDescription));
+                    }
                 }
             }
         }
@@ -252,13 +367,14 @@ public sealed record OpenApiDocumentRenderingContext(
 
         var builder = ImmutableArray.CreateBuilder<OpenApiSchemaComponentModel>(enumSchemas.Count);
 
-        foreach (var (name, values) in enumSchemas)
+        foreach (var (name, (values, description)) in enumSchemas)
         {
             builder.Add(new OpenApiSchemaComponentModel(
                 name,
                 "string",
                 ImmutableArray<string>.Empty,
                 ImmutableArray<OpenApiSchemaComponentPropertyModel>.Empty,
+                Description: description,
                 ComponentEnumValues: values));
         }
 
@@ -289,7 +405,7 @@ public sealed record OpenApiDocumentRenderingContext(
     /// enum component that the envelope's <c>changeType</c> property references via <c>$ref</c>.
     /// </summary>
     private static (ImmutableArray<OpenApiSchemaComponentModel> Envelopes, OpenApiSchemaComponentModel? ChangeTypeEnum)
-        CollectResourceEventEnvelopeComponents(ImmutableArray<OpenApiPathItemModel> paths)
+        CollectResourceEventEnvelopeComponents(ImmutableArray<OpenApiPathItemModel> paths, bool useLegacyResourceEventText)
     {
         // envelopeBodyTypeName → innerBodyTypeName (deduplicated by envelope key)
         var envelopes = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -328,7 +444,7 @@ public sealed record OpenApiDocumentRenderingContext(
 
         foreach (var (envelopeBodyTypeName, innerBodyTypeName) in envelopes)
         {
-            builder.Add(CreateResourceEventEnvelopeComponent(envelopeBodyTypeName, innerBodyTypeName));
+            builder.Add(CreateResourceEventEnvelopeComponent(envelopeBodyTypeName, innerBodyTypeName, useLegacyResourceEventText));
         }
 
         var changeTypeEnum = new OpenApiSchemaComponentModel(
@@ -346,42 +462,55 @@ public sealed record OpenApiDocumentRenderingContext(
     /// The component contains real properties so schema processors can inspect and modify them.
     /// </summary>
     private static OpenApiSchemaComponentModel CreateResourceEventEnvelopeComponent(
-        string envelopeBodyTypeName, string innerBodyTypeName)
+        string envelopeBodyTypeName, string innerBodyTypeName, bool useLegacyResourceEventText)
     {
+        var changeTypeDescription = useLegacyResourceEventText
+            ? LegacyChangeTypeDescription
+            : DescribeResourceEventProperty(nameof(ResourceEvent.ChangeType));
+        var hrefDescription = useLegacyResourceEventText
+            ? LegacyHrefDescription
+            : DescribeResourceEventProperty(nameof(ResourceEvent.Href));
+
         var properties = ImmutableArray.Create(
             new OpenApiSchemaComponentPropertyModel(
                 "$object",
                 "string",
                 IsExtensionData: false,
-                IsNullable: false),
+                IsNullable: false,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.Object))),
             new OpenApiSchemaComponentPropertyModel(
                 "eventId",
                 "string",
                 IsExtensionData: false,
-                IsNullable: false),
+                IsNullable: false,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.EventId))),
             new OpenApiSchemaComponentPropertyModel(
                 "changeType",
                 null,
                 IsExtensionData: false,
                 IsNullable: false,
                 EnumSchemaRef: "ResourceEventChangeType",
-                EnumValues: ImmutableArray.Create("Created", "Updated", "Deleted")),
+                EnumValues: ImmutableArray.Create("Created", "Updated", "Deleted"),
+                Description: changeTypeDescription),
             new OpenApiSchemaComponentPropertyModel(
                 "created",
                 "string",
                 IsExtensionData: false,
                 IsNullable: false,
-                Format: "date-time"),
+                Format: "date-time",
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.Created))),
             new OpenApiSchemaComponentPropertyModel(
                 "resourceObject",
                 "string",
                 IsExtensionData: false,
-                IsNullable: false),
+                IsNullable: false,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.ResourceObject))),
             new OpenApiSchemaComponentPropertyModel(
                 "href",
                 "string",
                 IsExtensionData: false,
-                IsNullable: true),
+                IsNullable: true,
+                Description: hrefDescription),
             new OpenApiSchemaComponentPropertyModel(
                 "data",
                 null,
@@ -393,31 +522,65 @@ public sealed record OpenApiDocumentRenderingContext(
                 "object",
                 IsExtensionData: false,
                 IsNullable: true,
-                AllowsAdditionalProperties: true),
+                AllowsAdditionalProperties: true,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.Metadata))),
             new OpenApiSchemaComponentPropertyModel(
                 "secureData",
                 "object",
                 IsExtensionData: false,
                 IsNullable: true,
-                AllowsAdditionalProperties: true),
+                AllowsAdditionalProperties: true,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.SecureData))),
             new OpenApiSchemaComponentPropertyModel(
                 "changedValues",
                 "object",
                 IsExtensionData: false,
                 IsNullable: true,
-                AllowsAdditionalProperties: true),
+                AllowsAdditionalProperties: true,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.ChangedValues))),
             new OpenApiSchemaComponentPropertyModel(
                 "correlationId",
                 "string",
                 IsExtensionData: false,
-                IsNullable: true));
+                IsNullable: true,
+                Description: DescribeResourceEventProperty(nameof(ResourceEvent.CorrelationId))));
+
+        // R165: legacy listed ResourceEvent's properties as declared, and the derived event's Data, which hides
+        // ResourceEvent's own, last.
+        if (useLegacyResourceEventText)
+        {
+            string[] legacyOrder = ["$object", "eventId", "changeType", "created", "resourceObject", "href", "changedValues", "metadata", "secureData", "correlationId", "data"];
+
+            properties = [.. properties.OrderBy(property => Array.IndexOf(legacyOrder, property.Name))];
+        }
 
         var required = ImmutableArray.Create("$object", "eventId", "changeType", "created", "resourceObject", "data");
 
+        // Legacy described the envelope by ResourceEvent<T>'s documentation and its members by ResourceEvent's; the
+        // payload's own description is the resource's.
         return new OpenApiSchemaComponentModel(
             envelopeBodyTypeName,
             "object",
             required,
-            properties);
+            properties,
+            Description: OpenApiXmlDocs.GetSchemaSummary(typeof(ResourceEvent<>)));
+    }
+
+    // Signature365's committed documents describe these two members in legacy's words: legacy's change-type summary
+    // had a stray "a" and named a Type property ResourceEvent does not have, and its href summary named the
+    // ResourceEventMiddleware that populated it. Under Legacy naming only, the document keeps the words, typo and
+    // all, for every consumer; a Default consumer gets the framework's own neutral summary instead (below), the same
+    // way every other Legacy-only text choice is opt-in rather than universal.
+    private const string LegacyChangeTypeDescription =
+        "Gets a the change type of this event, which is a higher-level version of the Type property,\n"
+        + "indicating whether the resource was updated, created or deleted.";
+
+    private const string LegacyHrefDescription =
+        "Gets or sets the href of the resource this event represents, to be populated by the ResourceEventMiddleware\n"
+        + "component from the resource type and id definition object.";
+
+    private static string? DescribeResourceEventProperty(string propertyName)
+    {
+        return typeof(ResourceEvent).GetProperty(propertyName) is { } property ? OpenApiXmlDocs.GetSchemaSummary(property) : null;
     }
 }

@@ -271,12 +271,9 @@ public class OpenApiConditionalValidationTests
     {
         // SetTemplateNotificationPriorityCommand.Rule is typed TemplateNotificationRuleApiResource — the same
         // nested DTO that carries two [RequiredIf] declarations and reaches the document as a response-side
-        // component. A request body property never emits a $ref for a complex type (ResolveCollectionSchema
-        // returns no schema ref in any branch, and MapClrTypeToOpenApiSchema sends a class straight to inline
-        // "object"), so the DTO's conditional cannot reach this component by that route — there is no $ref to
-        // carry it across, and the extraction pass never visits the nested type's own properties in the first
-        // place. This is a documented limitation, not a bug: it stays honest by asserting both halves in one
-        // document, rather than assuming the more capable behaviour a $ref would need.
+        // component. The request body property references that component, as legacy Blueprint's did (it used to
+        // render as a bare inline "object"), so the DTO's conditional stays on the DTO's own component, reached through
+        // the reference, and must not be copied onto the body that merely references it.
         var (json, _) = await InvokeOpenApiEndpointAsync();
         using var document = JsonDocument.Parse(json);
 
@@ -286,10 +283,11 @@ public class OpenApiConditionalValidationTests
             .GetProperty("SetTemplateNotificationPriority");
 
         var ruleProperty = bodySchema.GetProperty("properties").GetProperty("rule");
-        ruleProperty.GetProperty("type").GetString().Should().Be("object",
-            "a request-body property typed as a complex DTO renders inline, not by $ref");
-        ruleProperty.TryGetProperty("$ref", out _).Should().BeFalse(
-            "request-body complex types never reference a component schema in this framework");
+        var ruleReference = ruleProperty.TryGetProperty("$ref", out var bareReference)
+            ? bareReference
+            : ruleProperty.GetProperty("oneOf")[0].GetProperty("$ref");
+        ruleReference.GetString().Should().Be("#/components/schemas/TemplateNotificationRuleApiResource",
+            "a request-body property typed as a complex DTO references the DTO's component");
 
         // The body component's own allOf must carry only its own (Level/Reason) conditional — never one
         // belonging to the nested DTO the "rule" property happens to be typed as.
@@ -299,14 +297,14 @@ public class OpenApiConditionalValidationTests
         bodyAllOf.GetRawText().Should().NotContain("Subject",
             "TemplateNotificationRuleApiResource's conditional targets recipient/Subject; neither may leak onto the referencing body component");
 
-        // Meanwhile the DTO's own component, reached elsewhere by a response $ref, still carries its conditional —
-        // proving the gap is specifically about the request-body route, not about the conditional being lost.
+        // Meanwhile the DTO's own component, which the body references, still carries its conditional — it is where the
+        // conditional belongs, not lost.
         var dtoSchema = document.RootElement
             .GetProperty("components")
             .GetProperty("schemas")
             .GetProperty("TemplateNotificationRuleApiResource");
         dtoSchema.TryGetProperty("allOf", out _).Should().BeTrue(
-            "the DTO's own component must still carry its conditional via the response route");
+            "the DTO's own component must still carry its conditional");
     }
 
     [Fact]

@@ -282,6 +282,41 @@ public class BlueprintTestHostTests : IDisposable
             .Where(static ex => ex.IsValidationFailure);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_runs_the_operation_under_legacy_testing_base_uri()
+    {
+        // Legacy Blueprint.Testing's ConfigureHttp set this base URI on every context it configured, so that a resource
+        // event's href and a resource's links were made under it as they are under a request's.
+        string? baseUri = null;
+
+        await this._host.ExecuteAsync(
+            new HealthCheckQuery(),
+            ctx =>
+            {
+                ctx.SkipAuthorisation();
+                baseUri = ctx.OperationContext.BaseUri;
+            });
+
+        baseUri.Should().Be("https://api.blueprint-testing.com/api/");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_lets_a_test_run_the_operation_under_another_base_uri()
+    {
+        string? baseUri = null;
+
+        await this._host.ExecuteAsync(
+            new HealthCheckQuery(),
+            ctx =>
+            {
+                ctx.SkipAuthorisation();
+                ctx.OperationContext.BaseUri = "https://tenant.example.test/api/";
+                baseUri = ctx.OperationContext.BaseUri;
+            });
+
+        baseUri.Should().Be("https://tenant.example.test/api/");
+    }
+
     public void Dispose()
     {
         this._host.Dispose();

@@ -24,7 +24,7 @@ Do not use this skill for ordinary downstream app usage; use `using-blueprint`.
 
 | Change area | Start here | Also verify |
 | --- | --- | --- |
-| Operation contract and descriptors | `docs\architecture.md`, `OperationDescriptorSourceGenerator` | app registration, diagnostics, sample usage |
+| Operation contract and descriptors | `docs\architecture.md`, `OperationDescriptorSourceGenerator` | app registration, diagnostics, sample usage; the baked descriptor name and `BP009`/`BP011` must both come from `OperationNameHelpers.GetDescriptorName` (legacy's `Replace` + `ToPascalCase`), never a second copy of the rule |
 | App registration | `AppDataModelSourceGenerator` | generated `this.Register(Operation.Configure())`, runtime registry; with `[BlueprintAppOperationNames(Remove = ...)]` it wraps each call as `this.Register(ApplyOperationNameTransform(Operation.Configure()))`, whose emitted rename must stay in step with its compile-time mirror `OperationNameHelpers.RemoveFromOperationName`, because `BP011` checks collisions through it |
 | Pipelines and executors | `OperationExecutorPipelineSourceGenerator` | handler discovery, full pipeline snapshots, compile-time source checks, runtime integration harness, concurrent/startup stress harnesses, benchmark harness (`src\Blueprint.SourceGenerator.Benchmarks`) |
 | Diagnostics and validation | `docs\compile-time-validation.md` | precise source locations, stable IDs, tests |

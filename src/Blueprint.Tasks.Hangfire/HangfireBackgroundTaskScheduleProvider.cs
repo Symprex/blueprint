@@ -40,7 +40,7 @@ public sealed class HangfireBackgroundTaskScheduleProvider : IBackgroundTaskSche
 
         this._jobClient = jobClient;
         this._logger = logger;
-        this._defaultQueue = taskOptions.Value.DefaultQueue;
+        this._defaultQueue = taskOptions.Value.DefaultQueue ?? EnqueuedState.DefaultQueue;
     }
 
     /// <inheritdoc />

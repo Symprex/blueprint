@@ -16,7 +16,9 @@ namespace Blueprint.Validation;
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
 public sealed class RequiredItemsIfAttribute : ValidationAttribute
 {
-    private const string RequiredFieldMessage = "The {0} field must contain at least one item if {1} field is {2}.";
+    // Legacy's text, which says what IsValid checks: blank items fail too (Signature365 8b40ecc961,
+    // Blueprint/Validation/RequiredItemsIfAttribute.cs:24, :34, :98).
+    private const string RequiredFieldMessage = "The {0} field must contain at least one non-empty item if {1} field is {2}.";
     private readonly HashSet<string?> _dependentValueTexts;
 
     /// <summary>

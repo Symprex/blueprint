@@ -73,6 +73,33 @@ public sealed class BlueprintHttpClientCompatTests : IClassFixture<SampleAppFixt
     }
 
     [Fact]
+    public async Task HttpClient_is_the_inner_client_so_a_default_header_set_through_it_is_sent_with_the_next_call()
+    {
+        // Legacy's client exposed its HttpClient (Signature365 Common.Core/Api/BlueprintHttpClient.cs:47-50), and
+        // Signature365ProxyTests reads DefaultRequestHeaders.UserAgent from it.
+        HttpRequestMessage? captured = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            captured = req;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[]", Encoding.UTF8, "application/json"),
+            };
+        });
+
+        var client = BlueprintHttpClient.From(this._fixture.CreateClient(handler));
+
+        client.HttpClient.BaseAddress.Should().Be(new Uri("https://localhost"));
+
+        client.HttpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Signature365-Test/1.0");
+
+        await client.CallAsync<TemplateApiResource[]>(new SearchTemplatesQuery { Q = "compat", Page = 1, PageSize = 5 });
+
+        captured.Should().NotBeNull();
+        captured!.Headers.UserAgent.ToString().Should().Be("Signature365-Test/1.0");
+    }
+
+    [Fact]
     public async Task SendVoidAsync_without_options_dispatches_through_non_generic_client()
     {
         var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.NoContent));

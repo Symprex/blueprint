@@ -74,6 +74,17 @@ public sealed class AmbiguousHostTranslationModule : IBlueprintSourceGeneratorMo
                 return;
             }
 
+            if (SymbolEqualityComparer.Default.Equals(unionMember, keyOnlyResourceEventResultType))
+            {
+                // The host writes a key-only event as the empty response of its change type, known only at run time.
+                foreach (var keyOnlyStatusCode in OperationResultContractHelper.KeyOnlyResourceEventStatusCodes)
+                {
+                    translatedMembers.Add(new TranslatedResultMember(unionMember, keyOnlyStatusCode, HasResponseBody: false));
+                }
+
+                continue;
+            }
+
             translatedMembers.Add(new TranslatedResultMember(unionMember, statusCode, hasResponseBody));
         }
 

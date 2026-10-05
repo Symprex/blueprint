@@ -34,17 +34,17 @@ public static class ServiceCollectionExtensions
         where TApp : BlueprintApp, new()
         where TExec : BlueprintAppExecutor
     {
-        services.AddSingleton<TApp>(static sp =>
-        {
-            var app = new TApp();
-            var jsonOptions = sp.GetService<IOptions<BlueprintJsonOptions>>();
-            if (jsonOptions?.Value is { } opts)
-            {
-                app.ApplySerializerOptions(opts.SerializerOptions);
-            }
+        // Created first so the app's factory reads what configure (run below, before the app is ever resolved) sets on it.
+        var builder = new BlueprintServiceBuilder(services);
 
-            return app;
-        });
+        // The app's serializer context is installed on the shared BlueprintJsonOptions as they are made, whichever of the
+        // options and the app is asked for first: a client that shares the options may serialise, which makes them
+        // read-only, before the app is ever resolved.
+        services.AddSingleton(sp => new BlueprintAppSerializerContextInstaller<TApp>(
+            sp,
+            () => new TApp { HateoasLinksDisabled = builder.HateoasLinksDisabled }));
+        services.AddSingleton<IPostConfigureOptions<BlueprintJsonOptions>>(static sp => sp.GetRequiredService<BlueprintAppSerializerContextInstaller<TApp>>());
+        services.AddSingleton<TApp>(static sp => sp.GetRequiredService<BlueprintAppSerializerContextInstaller<TApp>>().ResolveApp());
         services.AddSingleton<BlueprintApp>(static sp => sp.GetRequiredService<TApp>());
         services.AddSingleton<TExec>();
 
@@ -94,10 +94,63 @@ public static class ServiceCollectionExtensions
         // Pre-rendered OpenAPI document holder — populated at endpoint mapping time
         services.TryAddSingleton<PreRenderedOpenApiDocumentHolder>();
 
-        var builder = new BlueprintServiceBuilder(services);
         configure?.Invoke(builder);
 
         return services;
+    }
+}
+
+/// <summary>
+/// Owns an app's construction and installs its serializer context on the <see cref="BlueprintJsonOptions"/> when they are
+/// made, so that the context does not depend on whether the app or the options are resolved first.
+/// </summary>
+/// <remarks>
+/// The options never resolve the app through the service provider (which would wait on the app's own resolution while the
+/// app's resolution waits on the options); both take the one instance from here.
+/// </remarks>
+/// <typeparam name="TApp">The app whose serializer context is installed.</typeparam>
+internal sealed class BlueprintAppSerializerContextInstaller<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TApp> : IPostConfigureOptions<BlueprintJsonOptions>
+    where TApp : BlueprintApp
+{
+    private readonly IServiceProvider _services;
+    private readonly Lazy<TApp> _app;
+    private int _installed;
+
+    /// <summary>
+    /// Initialises a new instance of the <see cref="BlueprintAppSerializerContextInstaller{TApp}"/> class.
+    /// </summary>
+    /// <param name="services">The service provider the options are resolved from.</param>
+    /// <param name="createApp">Creates the app, called once.</param>
+    public BlueprintAppSerializerContextInstaller(IServiceProvider services, Func<TApp> createApp)
+    {
+        this._services = services;
+        this._app = new Lazy<TApp>(createApp);
+    }
+
+    /// <summary>
+    /// Returns the app, having made the options first (unless something is making them already) so that its context is
+    /// installed whenever the app is resolved.
+    /// </summary>
+    /// <returns>The app.</returns>
+    public TApp ResolveApp()
+    {
+        var app = this._app.Value;
+
+        _ = this._services.GetService<IOptions<BlueprintJsonOptions>>()?.Value;
+
+        return app;
+    }
+
+    /// <inheritdoc />
+    public void PostConfigure(string? name, BlueprintJsonOptions options)
+    {
+        // Only once, and only for the options the app's host and its clients share: a named or snapshot copy is not theirs.
+        if (!string.IsNullOrEmpty(name) || Interlocked.Exchange(ref this._installed, 1) != 0)
+        {
+            return;
+        }
+
+        this._app.Value.ApplySerializerOptions(options.SerializerOptions);
     }
 }
 
@@ -381,6 +434,45 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Turns off HATEOAS link population for this app, so its resources are written with empty <c>$links</c>, as a
+    /// legacy Blueprint app that never called <c>AddHateoasLinks()</c> wrote them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Links are populated by default wherever link metadata exists. Legacy Blueprint linked only in an app that called
+    /// <c>AddHateoasLinks()</c> (Signature365 <c>8b40ecc961</c>, <c>Blueprint.Http/BlueprintApiBuilderExtensions.cs:101-111</c>);
+    /// any other app had no link step, so every resource it returned, and every one it audited, carried
+    /// <c>"$links":{}</c>. Call this when migrating such an app, to keep that output. The migration tooling cannot do
+    /// it for you: <c>BPMIG002</c> removes an <c>AddHateoasLinks()</c> that is present, which is safe because linking is
+    /// the default, but no tool can see a call that is absent.
+    /// </para>
+    /// <para>
+    /// Every pipeline of the app skips the link step, nested ones (such as a resource event's self query) included, and
+    /// no registered <c>IResourceLinkGenerator</c> runs. Links a handler adds itself are kept. A resource event's
+    /// <c>href</c>, the root-metadata document, the OpenAPI <c>x-links</c>, and <c>IApiLinkGenerator</c> for handlers are
+    /// unaffected, as legacy's were. A <c>201</c>'s <c>Location</c> header, which is taken from the created resource's
+    /// <c>self</c> link, is not written unless the handler adds that link; legacy's resource events were <c>200</c>s with
+    /// no <c>Location</c>.
+    /// </para>
+    /// <para>
+    /// The setting belongs to the app registered by this <c>AddBlueprintApi</c> call, one app per service provider (see
+    /// <see cref="BlueprintApp"/>'s <c>HateoasLinksDisabled</c>).
+    /// </para>
+    /// </remarks>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder DisableHateoasLinks()
+    {
+        this.HateoasLinksDisabled = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether <see cref="DisableHateoasLinks"/> has been called, which the app registered with
+    /// this builder is given when it is created.
+    /// </summary>
+    internal bool HateoasLinksDisabled { get; private set; }
+
+    /// <summary>
     /// Registers the <see cref="Blueprint.Http.ETagger"/> service that provides ETag-based conditional
     /// request handling for Blueprint HTTP operations. Requires <c>IHttpContextAccessor</c> to be
     /// registered (typically via <c>AddHttpContextAccessor()</c>).
@@ -394,9 +486,20 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
-    /// Registers a resource event audit repository that persists before/after state snapshots
-    /// for resource mutation operations.
+    /// Registers a resource event audit repository, which is handed every legacy <see cref="Blueprint.Http.ResourceEvent"/>
+    /// a command raises unless the command's type carries <see cref="Blueprint.Auditing.DoNotAuditAttribute"/>, as
+    /// legacy Blueprint's <c>ResourceEventHandler</c> handed it. A query's is not, as legacy's was not.
     /// </summary>
+    /// <remarks>
+    /// The repository is registered scoped and resolved from each operation's own services. The generated pipeline calls
+    /// <see cref="Blueprint.Http.IResourceEventAuditRepository.AddAsync"/> last of its post-execution steps, once the event
+    /// is stamped with its correlation id and operation, has its href and has its data expanded. It is called beside any
+    /// <see cref="Blueprint.Auditing.IResourceEventAuditSink"/>, not in place of one, and best-effort: a repository that
+    /// throws, or cannot be constructed, does not fail the operation, and is logged at Error by the operation's pipeline
+    /// logger, as legacy's generated pipeline logged it. An app that registers none audits nothing and is not told, as a
+    /// legacy app without <c>AddResourceEvents</c> was not: that call registered the repository with the pipeline step
+    /// that used it (Signature365 <c>8b40ecc961</c>, <c>BlueprintApiBuilderExtensions.cs:113-120</c>).
+    /// </remarks>
     /// <typeparam name="T">The <see cref="Blueprint.Http.IResourceEventAuditRepository"/> implementation type.</typeparam>
     /// <returns>This builder for chaining.</returns>
     public BlueprintServiceBuilder AddResourceEventAuditRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
@@ -423,12 +526,23 @@ public sealed class BlueprintServiceBuilder
     /// Registers a recurring task provider that bridges Blueprint's recurring task model to
     /// a concrete scheduler infrastructure (e.g., Hangfire's <c>IRecurringJobManager</c>).
     /// </summary>
+    /// <remarks>
+    /// Also registers <see cref="Blueprint.Runtime.Tasks.RecurringTaskManager"/>, which a provider's periodic re-run (the
+    /// Hangfire provider's <c>{DefaultQueue}:Scheduler</c> job) resolves through the job activator. Registering it here does
+    /// not decide where that re-run happens: the job runs in whichever process's Hangfire server listens to its queue, and
+    /// Hangfire.NetCore's activator builds the manager from that process's container even where it was never registered
+    /// (<c>ActivatorUtilities.GetServiceOrCreateInstance</c>), with that process's schedulers, possibly none. The provider
+    /// removes every job the current set no longer contains, so every process whose server listens to the default queue
+    /// must register the provider and every one of the app's recurring task schedulers; one with the provider and no
+    /// schedulers removes all of the app's recurring jobs.
+    /// </remarks>
     /// <typeparam name="T">The <see cref="Blueprint.Tasks.IRecurringTaskProvider"/> implementation type.</typeparam>
     /// <returns>This builder for chaining.</returns>
     public BlueprintServiceBuilder AddRecurringTaskProvider<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
         where T : class, Blueprint.Tasks.IRecurringTaskProvider
     {
         this.Services.AddSingleton<Blueprint.Tasks.IRecurringTaskProvider, T>();
+        this.Services.TryAddScoped<Blueprint.Runtime.Tasks.RecurringTaskManager>();
         this.Services.AddHostedService<Blueprint.Runtime.Tasks.RecurringTaskRegistrationService>();
         return this;
     }
@@ -508,7 +622,8 @@ public sealed class BlueprintServiceBuilder
     /// <para>
     /// The generated pipeline's <c>TenantModule</c> calls the resolver during the Population stage,
     /// sets the accessor, and directly assigns <c>TenantId</c> properties on operations that have one
-    /// — all without runtime reflection.
+    /// — all without runtime reflection. An app root with <c>[BlueprintAppTenancy(TenantIdType = ...)]</c> has only a
+    /// <c>TenantId</c> of that type assigned.
     /// </para>
     /// </summary>
     /// <typeparam name="TAccessor">The <see cref="Blueprint.Tenancy.ITenantAccessor"/> implementation type.

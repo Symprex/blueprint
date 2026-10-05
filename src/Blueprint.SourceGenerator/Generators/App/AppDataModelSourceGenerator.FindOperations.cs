@@ -4,6 +4,8 @@ using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Blueprint.SourceGenerator.Generators.App;
 
@@ -86,7 +88,7 @@ public sealed partial class AppDataModelSourceGenerator
             {
                 registrations.Add(operation.ToDisplayString());
 
-                var strippedName = OperationNameHelpers.StripOperationSuffix(operation.Name);
+                var strippedName = OperationNameHelpers.GetDescriptorName(operation.Name);
                 if (!strippedNameToOperations.TryGetValue(strippedName, out var operationNames))
                 {
                     operationNames = new List<string>();
@@ -570,8 +572,62 @@ public sealed partial class AppDataModelSourceGenerator
                 continue;
             }
 
+            if (IsNonPartialOwnOperationWithoutConfigure(type, compilation.Assembly))
+            {
+                continue;
+            }
+
             yield return type;
         }
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> for an operation class declared in this compilation without <c>partial</c> and
+    /// without a <c>static Configure()</c> of its own or inherited: the descriptor generator reports BP005 for it and
+    /// emits no <c>Configure()</c>, so registering it would add a second error, a missing <c>Configure()</c> in the
+    /// generated registration, that points away from the real one. BP005 still fails the build.
+    /// </summary>
+    /// <remarks>
+    /// Only a type BP005 reports is left out, so the build always fails for it. BP005 reports a class declaration with a
+    /// base list, as <c>OperationDescriptorSourceGenerator</c> selects them, and not a record. An operation from a
+    /// referenced assembly is always registered: it has the <c>Configure()</c> its own build generated, and if it has
+    /// none the registration's compile error is the only sign of that. So is a record.
+    /// </remarks>
+    private static bool IsNonPartialOwnOperationWithoutConfigure(INamedTypeSymbol type, IAssemblySymbol compilationAssembly)
+    {
+        if (!SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilationAssembly))
+        {
+            return false;
+        }
+
+        var reportedByBp005 = false;
+
+        foreach (var reference in type.DeclaringSyntaxReferences)
+        {
+            var declaration = reference.GetSyntax();
+
+            if (declaration is TypeDeclarationSyntax typeDeclaration && typeDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword))
+            {
+                return false;
+            }
+
+            reportedByBp005 |= declaration is ClassDeclarationSyntax { BaseList: not null };
+        }
+
+        if (!reportedByBp005)
+        {
+            return false;
+        }
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (current.GetMembers("Configure").Any(static m => m is IMethodSymbol { IsStatic: true, Parameters.Length: 0 }))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static IEnumerable<INamedTypeSymbol> GetTypesFromAssembly(IAssemblySymbol? assemblySymbol)

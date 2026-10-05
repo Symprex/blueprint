@@ -51,8 +51,11 @@ public class UnitOfWorkModuleTests
     }
 
     [Fact]
-    public void When_query_operation_then_pipeline_has_no_unit_of_work_contribution()
+    public void When_query_operation_then_pipeline_has_post_execution_contribution()
     {
+        // R138: legacy's SaveMartenChangesMiddleware matched any operation without [DoNotSaveChanges] (Signature365
+        // 8b40ecc961, Common/Data/Marten/SaveMartenChangesMiddleware.cs:24-29), queries included: Portal's
+        // Microsoft365AddOnConnectQueryExecutorPipeline.cs:133-134 saves the session after the handler.
         var compilation = CreateCompilation(
             """
             using Blueprint.Model;
@@ -79,8 +82,8 @@ public class UnitOfWorkModuleTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Value.Should().NotBeNull();
-        result.Value!.Contributions.Should().NotContain(
-            static c => c.Stage == PipelineStage.PostExecution && c.ContributorId == nameof(UnitOfWorkModule));
+        result.Value!.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.PostExecution, nameof(UnitOfWorkModule)));
     }
 
     [Fact]
@@ -153,8 +156,10 @@ public class UnitOfWorkModuleTests
     }
 
     [Fact]
-    public void When_query_has_DoNotSaveChanges_then_reports_BPP001_diagnostic()
+    public void When_query_has_DoNotSaveChanges_then_pipeline_has_no_unit_of_work_contribution_and_no_diagnostic()
     {
+        // R138: the opt-out has effect on a query now, as legacy's did (Signature365 8b40ecc961, Outlook
+        // GetAddInSignaturesQuery.cs:35 carried [DoNotSaveChanges]), so BPP001 ("no effect on queries") is retired.
         var compilation = CreateCompilation(
             """
             using Blueprint.Model;
@@ -181,8 +186,10 @@ public class UnitOfWorkModuleTests
         ]);
         var result = config.BuildPipelinePlan("TestNamespace.GetOrdersQuery", compilation);
 
-        result.Diagnostics.Should().ContainSingle()
-            .Which.Descriptor.Id.Should().Be("BPP001");
+        result.Diagnostics.Should().BeEmpty();
+        result.Value.Should().NotBeNull();
+        result.Value!.Contributions.Should().NotContain(
+            static c => c.ContributorId == nameof(UnitOfWorkModule));
     }
 
     [Fact]
@@ -278,8 +285,11 @@ public class UnitOfWorkModuleTests
     }
 
     [Fact]
-    public async Task When_query_then_pipeline_snapshot_does_not_include_unit_of_work()
+    public async Task When_query_then_pipeline_snapshot_includes_unit_of_work_save_unless_nested()
     {
+        // R138: a query saves as a command does, except in a nested execution (a resource event's self query), which
+        // legacy ran through a pipeline without the save (SaveMartenChangesMiddleware.SupportsNestedExecution => false,
+        // CodeGennedExecutor.cs:99-100 at Signature365 8b40ecc961).
         const string source = """
             using Blueprint;
             using Blueprint.Model;
@@ -329,7 +339,71 @@ public class UnitOfWorkModuleTests
             .UseDirectory("Snapshots");
     }
 
+    [Fact]
+    public void When_query_saves_then_the_save_is_skipped_in_a_nested_execution_and_a_commands_is_not()
+    {
+        // R138: legacy left the save out of every nested pipeline (SupportsNestedExecution => false). A query's is new, so it
+        // is skipped when nested, as a self query's was; a command's and a background task's save runs as it did before,
+        // nested or not.
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Tasks;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class GetOrdersQuery : IQuery<string>
+                {
+                    public static Task<string> HandleAsync(GetOrdersQuery operation) => Task.FromResult("result");
+                }
+
+                public partial class SaveOrderCommand : ICommand<string>
+                {
+                    public static Task<string> HandleAsync(SaveOrderCommand operation) => Task.FromResult("saved");
+                }
+
+                public partial class ProcessOrderTask : IBackgroundTask
+                {
+                    public static Task HandleAsync(ProcessOrderTask operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelines = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+
+        SaveGuardOf(pipelines, "GetOrdersQueryExecutorPipeline").Should().Be("if (this.HasUnitOfWork && !context.IsNested)");
+        SaveGuardOf(pipelines, "SaveOrderCommandExecutorPipeline").Should().Be("if (this.HasUnitOfWork)");
+        SaveGuardOf(pipelines, "ProcessOrderTaskExecutorPipeline").Should().Be("if (this.HasUnitOfWork)");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────
+
+    private static string SaveGuardOf(IEnumerable<GeneratedSourceSnapshot> pipelines, string pipelineName)
+    {
+        var lines = pipelines.Single(s => s.HintName.EndsWith(pipelineName + ".g.cs", StringComparison.Ordinal))
+            .SourceText.Split('\n')
+            .Select(static line => line.Trim())
+            .ToList();
+        var saveLine = lines.FindIndex(static line => line.StartsWith("await SaveUnitOfWorkAsync(", StringComparison.Ordinal));
+
+        saveLine.Should().BeGreaterThan(1, "the pipeline must save its unit of work");
+
+        return lines[saveLine - 2];
+    }
 
     private static CSharpCompilation CreateCompilation(string source)
     {

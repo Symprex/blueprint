@@ -20,4 +20,9 @@
         <ProjectReference Include="..\Blueprint.Marten.Rebus\Blueprint.Marten.Rebus.csproj" />
     </ItemGroup>
 
+    <!-- The [PostgresFact] convention and its per-test schema, shared with Blueprint.Marten.Tests rather than copied. -->
+    <ItemGroup>
+        <Compile Include="..\Blueprint.Marten.Tests\Postgres\*.cs" LinkBase="Postgres" />
+    </ItemGroup>
+
 </Project>

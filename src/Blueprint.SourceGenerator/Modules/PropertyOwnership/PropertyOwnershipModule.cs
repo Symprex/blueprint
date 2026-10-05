@@ -1,7 +1,6 @@
 using System.Text.RegularExpressions;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Helpers;
-using Blueprint.SourceGenerator.Modules.Tenancy;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -15,7 +14,7 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, IDescriptorContributor, IPipelineContributor
 {
-    private static readonly Regex PlaceholderRegex = new(@"\{\*{0,2}([A-Za-z0-9_]+)\}", RegexOptions.Compiled);
+    private static readonly Regex PlaceholderRegex = RoutePlaceholderSyntax.Placeholder;
 
     private sealed record RouteTemplateInfo(string Template, LocationInfo? Location);
 
@@ -48,13 +47,13 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         var routeTemplates = GetRouteTemplates(operationType);
         var routePlaceholders = ExtractRoutePlaceholders(routeTemplates);
+        var everyLinkPlaceholders = ExtractPlaceholdersPresentInEveryTemplate(routeTemplates);
         ValidateRoutePlaceholderSyntax(operationType, routeTemplates, context);
         ValidateRoutePlaceholdersResolveToProperties(operationType, routeTemplates, context);
         var httpMethods = ResolveHttpMethods(context, operationType);
 
         var diagnostics = new List<DiagnosticInfo>();
-        var isTenancyEnabled = TenantIdConventionHelper.IsTenancyEnabled(context.FindTypeByMetadataName);
-        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, httpMethods, diagnostics, isTenancyEnabled);
+        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, everyLinkPlaceholders, httpMethods, diagnostics);
 
         foreach (var diagnostic in diagnostics)
         {
@@ -71,7 +70,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
-        var hasBodyBinding = entries.Any(static e => e.Source == PropertyOwnershipSource.Body);
+        var hasBodyBinding = entries.Any(static e =>
+            e.Source == PropertyOwnershipSource.Body || e.FallbackSource == PropertyOwnershipSource.Body);
         var hasHeaderOrCookieBinding = entries.Any(static e =>
             e.Source is PropertyOwnershipSource.Header or PropertyOwnershipSource.Cookie);
 
@@ -91,20 +91,23 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
-        var routePlaceholders = ExtractRoutePlaceholders(GetRouteTemplates(operationType));
+        var routeTemplates = GetRouteTemplates(operationType);
+        var routePlaceholders = ExtractRoutePlaceholders(routeTemplates);
+        var everyLinkPlaceholders = ExtractPlaceholdersPresentInEveryTemplate(routeTemplates);
         var httpMethods = ResolveHttpMethods(operationType);
-        var isTenancyEnabled = TenantIdConventionHelper.IsTenancyEnabled(context.FindTypeByMetadataName);
-        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, httpMethods, diagnostics: null, isTenancyEnabled);
+        var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, everyLinkPlaceholders, httpMethods, diagnostics: null);
 
         if (entries.Count == 0)
         {
             return;
         }
 
-        var hasBodyProperties = entries.Any(static e => e.Source == PropertyOwnershipSource.Body);
+        var hasBodyProperties = entries.Any(static e =>
+            e.Source == PropertyOwnershipSource.Body || e.FallbackSource == PropertyOwnershipSource.Body);
         var hasNonStringNonBodyProperties = entries.Any(static e =>
-            e.Source is PropertyOwnershipSource.Query or PropertyOwnershipSource.Header or PropertyOwnershipSource.Cookie
-            && !IsStringType(e.TypeSymbol));
+            (e.Source is PropertyOwnershipSource.Query or PropertyOwnershipSource.Header or PropertyOwnershipSource.Cookie
+                && !IsStringType(e.TypeSymbol))
+            || (e.FallbackSource == PropertyOwnershipSource.Query && !IsStringType(e.TypeSymbol)));
 
         // Body reading requires async; typed non-body values with TryParse + early return also need async
         if (hasBodyProperties || hasNonStringNonBodyProperties)
@@ -139,6 +142,14 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             if (entry.Source == PropertyOwnershipSource.Body)
             {
                 (bodyEntries ??= []).Add(entry);
+            }
+
+            // A route placeholder that is not in every one of the operation's links is not owned exclusively by the
+            // route source (legacy's "every link" rule, HttpRouteMessagePopulationSource.cs:33-40 above): it also gets
+            // read from the body of a request through a placeholder-less link, as any other body property is.
+            if (entry.FallbackSource == PropertyOwnershipSource.Body)
+            {
+                (bodyEntries ??= []).Add(ToFallbackBodyEntry(entry));
             }
         }
 
@@ -185,6 +196,31 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
 
         return placeholders;
+    }
+
+    /// <summary>
+    /// Returns the placeholder names present in every one of the operation's route templates — legacy's "every link"
+    /// ownership rule (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint.Http/MessagePopulation/HttpRouteMessagePopulationSource.cs:33-40</c>): only a property the route
+    /// source owns in every link is excluded from the other sources. A property in only some links is bound from the
+    /// route when present (as any placeholder is) and falls back to the query string or body otherwise.
+    /// </summary>
+    private static HashSet<string> ExtractPlaceholdersPresentInEveryTemplate(List<RouteTemplateInfo> routeTemplates)
+    {
+        HashSet<string>? intersection = null;
+
+        foreach (var routeTemplate in routeTemplates)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (Match match in PlaceholderRegex.Matches(routeTemplate.Template))
+            {
+                names.Add(match.Groups[1].Value);
+            }
+
+            intersection = intersection is null ? names : new HashSet<string>(intersection.Where(names.Contains), StringComparer.Ordinal);
+        }
+
+        return intersection ?? [];
     }
 
     /// <summary>
@@ -301,7 +337,10 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 continue;
             }
 
-            routeTemplates.Add(new RouteTemplateInfo(template!, GetRouteTemplateLocation(attribute, argumentIndex)));
+            // Named after the property each placeholder finds (ignoring case), as legacy routed it (RoutePlaceholderSyntax).
+            routeTemplates.Add(new RouteTemplateInfo(
+                RoutePlaceholderSyntax.Canonicalise(template!, operationType),
+                GetRouteTemplateLocation(attribute, argumentIndex)));
         }
 
         return routeTemplates;
@@ -401,30 +440,31 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             && candidate.Name == "ICommand");
     }
 
+    /// <summary>
+    /// Returns true when the operation answers any method but GET, whose unowned properties therefore come from the body.
+    /// </summary>
+    /// <remarks>
+    /// Legacy Blueprint read the body of every request but a GET (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint.Http/MessagePopulation/HttpBodyMessagePopulationSource.cs:145-147</c>), a DELETE's included, and the
+    /// query string of a GET alone (<c>BlueprintApiBuilderExtensions.cs:68-73</c>).
+    /// </remarks>
     private static bool IsBodyMethod(string[] httpMethods)
     {
-        return httpMethods.Any(static m =>
-            string.Equals(m, "POST", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(m, "PUT", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(m, "PATCH", StringComparison.OrdinalIgnoreCase));
+        return httpMethods.Any(static m => !string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsQueryMethod(string[] httpMethods)
     {
-        return httpMethods.Any(static m =>
-            string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(m, "DELETE", StringComparison.OrdinalIgnoreCase));
+        return httpMethods.Any(static m => string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
-    /// Returns true when the operation is exclusively GET and/or DELETE — used for BPPO004 validation
-    /// of explicit [FromBody], which is semantically invalid on these methods.
+    /// Returns true when the operation is exclusively GET — used for BPPO004 validation
+    /// of explicit [FromBody], which is semantically invalid on this method.
     /// </summary>
-    private static bool IsGetOrDeleteMethod(string[] httpMethods)
+    private static bool IsGetOnlyMethod(string[] httpMethods)
     {
-        return httpMethods.Length > 0 && httpMethods.All(static m =>
-            string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(m, "DELETE", StringComparison.OrdinalIgnoreCase));
+        return httpMethods.Length > 0 && httpMethods.All(static m => string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -436,12 +476,12 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     private static List<PropertyOwnershipEntry> AnalyzePropertyOwnership(
         INamedTypeSymbol operationType,
         List<string> routePlaceholders,
+        HashSet<string> everyLinkPlaceholders,
         string[] httpMethods,
-        List<DiagnosticInfo>? diagnostics,
-        bool isTenancyEnabled = false)
+        List<DiagnosticInfo>? diagnostics)
     {
         var entries = new List<PropertyOwnershipEntry>();
-        var isGetOrDelete = IsGetOrDeleteMethod(httpMethods);
+        var isGetOnly = IsGetOnlyMethod(httpMethods);
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var member in operationType.GetAllMembers().OfType<IPropertySymbol>())
@@ -547,18 +587,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 // Fall through to route binding below — route wins over auth-context
             }
 
-            // Step 3b — Tenant convention: when first-class tenancy is enabled and a TenantId
-            // property has no explicit binding attribute, treat it as AuthContext so it is
-            // excluded from OpenAPI parameters/body and populated by TenantModule at runtime.
-            // This eliminates the need for [FromAuthContext] on every TenantId property.
-            if (isTenancyEnabled
-                && fromAuthContext == null
-                && httpBindingCount == 0
-                && TenantIdConventionHelper.IsTenantAutoPopulated(member, routePlaceholders, hasExplicitHttpBinding: false))
-            {
-                entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.AuthContext, null, isInitOnly));
-                continue;
-            }
+            // A TenantId has no rule of its own here: it is bound from the request like any other property, and
+            // TenantModule fills it from the caller's tenant only when the request left it unset, as legacy did
+            // (TenantModule's remarks). [FromAuthContext] is how an operation keeps its TenantId out of the request.
 
             // Step 4 — exactly one explicit HTTP binding attribute: validate and add entry
             if (httpBindingCount == 1)
@@ -573,7 +604,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 }
                 else if (fromBody != null)
                 {
-                    HandleExplicitFromBody(member, operationType, httpMethods, isGetOrDelete, entries, diagnostics, isInitOnly);
+                    HandleExplicitFromBody(member, operationType, httpMethods, isGetOnly, entries, diagnostics, isInitOnly);
                 }
                 else if (fromHeader != null)
                 {
@@ -601,7 +632,19 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 }
 
                 ReportNullableRouteParameter(member, operationType, diagnostics);
-                entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name, isInitOnly));
+
+                // Legacy's "every link" rule: a placeholder property is exclusively route-owned only when it appears in
+                // every one of the operation's route templates. One in only some links also falls back to the query
+                // string (GET) or body (any other method) for a request through a link that leaves it out.
+                var fallbackSource = everyLinkPlaceholders.Contains(member.Name)
+                    ? (PropertyOwnershipSource?)null
+                    : IsBodyMethod(httpMethods)
+                        ? PropertyOwnershipSource.Body
+                        : IsQueryMethod(httpMethods) && IsSupportedQueryType(member.Type)
+                            ? PropertyOwnershipSource.Query
+                            : null;
+
+                entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name, isInitOnly, FallbackSource: fallbackSource));
 
                 if (IsTypeConverterOnlyType(member.Type))
                 {
@@ -745,16 +788,16 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         IPropertySymbol member,
         INamedTypeSymbol operationType,
         string[] httpMethods,
-        bool isGetOrDelete,
+        bool isGetOnly,
         List<PropertyOwnershipEntry> entries,
         List<DiagnosticInfo>? diagnostics,
         bool isInitOnly)
     {
-        if (isGetOrDelete)
+        if (isGetOnly)
         {
             var methodList = string.Join("/", httpMethods.Distinct(StringComparer.OrdinalIgnoreCase));
             diagnostics?.Add(CreatePropertyDiagnostic(
-                PropertyOwnershipDiagnosticDescriptors.ExplicitBodyOnGetOrDelete,
+                PropertyOwnershipDiagnosticDescriptors.ExplicitBodyOnGet,
                 member,
                 operationType,
                 methodList));
@@ -1048,6 +1091,38 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         return name.Camelize();
     }
 
+    /// <summary>
+    /// Projects a partially route-owned entry's <see cref="PropertyOwnershipEntry.FallbackSource"/> of
+    /// <see cref="PropertyOwnershipSource.Body"/> into a synthetic body entry, so it is read by
+    /// <c>PopulateFromJsonBody</c> exactly as any other body property is — camel-case key included.
+    /// </summary>
+    private static PropertyOwnershipEntry ToFallbackBodyEntry(PropertyOwnershipEntry entry)
+    {
+        return entry with
+        {
+            Source = PropertyOwnershipSource.Body,
+            BindingName = GetCamelCaseName(entry.PropertyName),
+            FallbackSource = null,
+            VariableSuffix = entry.PropertyName + "Fallback",
+        };
+    }
+
+    /// <summary>
+    /// Projects a partially route-owned entry's <see cref="PropertyOwnershipEntry.FallbackSource"/> of
+    /// <see cref="PropertyOwnershipSource.Query"/> into a synthetic query entry, read exactly as any other query
+    /// property is — camel-case key included.
+    /// </summary>
+    private static PropertyOwnershipEntry ToFallbackQueryEntry(PropertyOwnershipEntry entry)
+    {
+        return entry with
+        {
+            Source = PropertyOwnershipSource.Query,
+            BindingName = GetCamelCaseName(entry.PropertyName),
+            FallbackSource = null,
+            VariableSuffix = entry.PropertyName + "Fallback",
+        };
+    }
+
     private static bool ImplementsIParsable(ITypeSymbol type)
     {
         return TypeConversionHelpers.ImplementsIParsable(type);
@@ -1239,6 +1314,21 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     (cookieEntries ??= []).Add(entry);
                     break;
             }
+
+            // A route placeholder not in every link also binds from its fallback source, as legacy's "every link"
+            // ownership rule left it to the query/body source too (HttpRouteMessagePopulationSource.cs:33-40 above).
+            // Legacy ran that source (Priority 0) before the route source (Priority 100), so its own value is
+            // read first here too, and the route extraction below overwrites it only when this request's route
+            // actually carries the placeholder.
+            switch (entry.FallbackSource)
+            {
+                case PropertyOwnershipSource.Body:
+                    (bodyEntries ??= []).Add(ToFallbackBodyEntry(entry));
+                    break;
+                case PropertyOwnershipSource.Query:
+                    (queryEntries ??= []).Add(ToFallbackQueryEntry(entry));
+                    break;
+            }
         }
 
         var operationExpr = context.GetOperationExpression();
@@ -1267,6 +1357,25 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 bindingBranch.WriteBlankLine();
             }
 
+            // Query binding: rendered before route binding so that, for a route placeholder not in every link
+            // (FallbackSource == Query above), the query-string value it may have set is still overwritten by the
+            // route below when this request's route does carry the placeholder — legacy's own source order
+            // (HttpPartMessagePopulationSource.cs Priority 0, HttpRouteMessagePopulationSource.cs Priority 100). This
+            // reorders nothing observable for an exclusively-owned property, since route and query never both write
+            // the same one.
+            if (queryEntries is not null)
+            {
+                foreach (var entry in queryEntries)
+                {
+                    WriteQueryExtraction(bindingBranch, operationExpr, entry, converterFieldMap);
+                }
+            }
+
+            if (queryEntries is { Count: > 0 } && routeEntries is { Count: > 0 })
+            {
+                bindingBranch.WriteBlankLine();
+            }
+
             // Route binding
             if (routeEntries is not null)
             {
@@ -1276,18 +1385,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 }
             }
 
-            if (routeEntries is { Count: > 0 } && (queryEntries is { Count: > 0 } || headerEntries is { Count: > 0 } || cookieEntries is { Count: > 0 }))
+            if ((routeEntries is { Count: > 0 } || queryEntries is { Count: > 0 }) && (headerEntries is { Count: > 0 } || cookieEntries is { Count: > 0 }))
             {
                 bindingBranch.WriteBlankLine();
-            }
-
-            // Query binding
-            if (queryEntries is not null)
-            {
-                foreach (var entry in queryEntries)
-                {
-                    WriteQueryExtraction(bindingBranch, operationExpr, entry, converterFieldMap);
-                }
             }
 
             // Header binding
@@ -1479,15 +1579,21 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var errVar = $"_routeErr_{entry.PropertyName}";
             var parsedVar = $"_parsed_{entry.PropertyName}";
 
-            context.WriteStatement(
-                $"var {errVar} = BindRouteValue(httpContext.Request.RouteValues, \"{entry.BindingName}\", out var {parsedVar}, {lambda});");
-
-            context.If($"{errVar} != null", errCtx =>
+            // As for a string: when the route value is absent (an operation executed in process, with no routing pass)
+            // the operation keeps the value it has, as legacy Blueprint kept it (Signature365 8b40ecc961,
+            // Blueprint.Http/MessagePopulation/HttpRouteMessagePopulationSource.cs:89-107).
+            context.If($"httpContext.Request.RouteValues.ContainsKey(\"{entry.BindingName}\")", ifCtx =>
             {
-                errCtx.Return(errVar);
-            });
+                ifCtx.WriteStatement(
+                    $"var {errVar} = BindRouteValue(httpContext.Request.RouteValues, \"{entry.BindingName}\", out var {parsedVar}, {lambda});");
 
-            context.WriteStatement(FormatPropertyAssignment(operationExpr, entry, parsedVar));
+                ifCtx.If($"{errVar} != null", errCtx =>
+                {
+                    errCtx.Return(errVar);
+                });
+
+                ifCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, parsedVar));
+            });
         }
     }
 
@@ -1513,7 +1619,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         if (effectiveDisplay.SpecialType == SpecialType.System_String)
         {
-            var queryVar = $"_qv_{entry.PropertyName}";
+            var queryVar = $"_qv_{entry.VariableName}";
             context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
 
             context.If($"{queryVar}.Count > 0", ifCtx =>
@@ -1523,7 +1629,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
         else if (IsTypeConverterOnlyType(effectiveType))
         {
-            var queryVar = $"_qv_{entry.PropertyName}";
+            var queryVar = $"_qv_{entry.VariableName}";
             var fqType = effectiveType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var converterFieldName = converterFieldMap[fqType];
 
@@ -1548,9 +1654,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         else
         {
             var lambda = TypeConversionHelpers.GetTryParseLambda(effectiveType);
-            var errVar = $"_qvErr_{entry.PropertyName}";
-            var parsedVar = $"_parsed_{entry.PropertyName}";
-            var foundVar = $"_qvFound_{entry.PropertyName}";
+            var errVar = $"_qvErr_{entry.VariableName}";
+            var parsedVar = $"_parsed_{entry.VariableName}";
+            var foundVar = $"_qvFound_{entry.VariableName}";
 
             context.WriteStatement(
                 $"var {errVar} = BindQueryValue(httpContext.Request.Query, \"{queryParamName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
@@ -1578,7 +1684,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         if (elementType.WithNullableAnnotation(NullableAnnotation.NotAnnotated).SpecialType == SpecialType.System_String)
         {
-            var queryVar = $"_qv_{entry.PropertyName}";
+            var queryVar = $"_qv_{entry.VariableName}";
             context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
 
             context.If($"{queryVar}.Count > 0", ifCtx =>
@@ -1589,8 +1695,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         else
         {
             var lambda = TypeConversionHelpers.GetTryParseLambda(elementType);
-            var errVar = $"_qaErr_{entry.PropertyName}";
-            var arrVar = $"_arr_{entry.PropertyName}";
+            var errVar = $"_qaErr_{entry.VariableName}";
+            var arrVar = $"_arr_{entry.VariableName}";
 
             context.WriteStatement(
                 $"var {errVar} = BindQueryArray(httpContext.Request.Query, \"{queryParamName}\", out var {arrVar}, {lambda});");
@@ -1785,7 +1891,18 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         PropertyOwnershipSource Source,
         string? BindingName,
         bool IsInitOnly = false,
-        string? ClaimType = null);
+        string? ClaimType = null,
+        PropertyOwnershipSource? FallbackSource = null,
+        string? VariableSuffix = null)
+    {
+        /// <summary>
+        /// The suffix used to build this entry's generated local variable names. A partially route-owned property is
+        /// rendered twice — once as its <see cref="Source"/>, once as its <see cref="FallbackSource"/> — and the two
+        /// renderings need distinct local variables even though they assign the same operation property
+        /// (<see cref="PropertyName"/>), or the second declaration is a compile error (CS0136).
+        /// </summary>
+        public string VariableName => this.VariableSuffix ?? this.PropertyName;
+    }
 
     /// <summary>
     /// The binding source for a property during the ownership analysis phase.

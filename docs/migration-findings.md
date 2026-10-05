@@ -12,8 +12,8 @@
 | Scope-pair provider | ✅ Done | `ScopePairClaimAuthorizationProvider` now matches S365 (`"::"`, CRUD hierarchy, ignored scopes, `allowWhenNoScopeClaims`) |
 | Claims-based auth removal | ✅ Done | Legacy claims-only authorization layer was removed; resource-based auth is the only path |
 | First-class tenancy | ✅ Done | `TenantModule` replaces runtime tenant population at compile time |
-| TenantId OpenAPI exclusion | ✅ Done | `TenantIdConventionHelper` classifies auto-populated `TenantId` as `AuthContext` and removes it from params/body |
-| Tenant spoofing prevention | ✅ Done | Query/body cannot override claim-derived `TenantId` unless route-owned or explicitly bound |
+| TenantId binding | ✅ Done | A `TenantId` is bound from the request and published like any other property, as legacy did; `[FromAuthContext]` takes it from the claims alone |
+| Caller-named tenant | ✅ Done | `TenantModule` fills `TenantId` only for an authenticated caller who left it unset (legacy `SetTenantMiddleware.cs:60-74`); refusing another tenant is the authorisers' job, as it was |
 | Testing host/executor parity | ✅ Verified | `BlueprintTestHost.ExecuteAsync()` maps 1:1 to S365 `TestApiOperationExecutor.ExecuteAsync()` |
 | Fixture/factory compatibility shims | ✅ Done | `BlueprintTestFixture`, factory, auth, bus, task, and Marten helpers cover S365-style test APIs |
 | OpenAPI base shape | ✅ Verified | `operationId`, tags, `x-links`, enum metadata, request/response `$ref`, and error schemas match S365 expectations |
@@ -154,10 +154,10 @@ The deeper audits all reached the same practical conclusion even when they used 
 S365’s legacy `SetTenantMiddleware` did four things: read the tenant claim, set the ambient tenant accessor, enrich Serilog diagnostic context, and populate `operation.TenantId` when possible. The compile-time `TenantModule` now replaces the first, second, and fourth pieces without reflection. Serilog enrichment is intentionally left as ordinary ASP.NET Core middleware because it is logging infrastructure, not operation-planning logic.
 
 ### Tenant ownership rules and spoofing prevention
-`TenantIdConventionHelper` is now shared between `TenantModule` and `PropertyOwnershipModule`, so auto-populated `TenantId` is treated as `AuthContext` consistently in both the pipeline and OpenAPI projection. When tenancy is enabled, properties named exactly `TenantId` are excluded from query/body ownership, kept out of OpenAPI inputs, and populated from the ambient tenant accessor unless the route owns the property or an explicit HTTP binding attribute says otherwise. That change also closed the spoofing hole where a query string could previously try to override the claim-derived tenant.
+A `TenantId` is bound from the request (route, query string or body) and published in the OpenAPI document like any other property, as legacy Blueprint bound it. `TenantModule` then fills it from the ambient tenant only when the caller is authenticated and the request left it unset, as S365's `SetTenantMiddleware` did (8b40ecc961, `Common/Api/SetTenantMiddleware.cs:60-74`): "we will NOT override any existing data because we want the auth system to ensure correct responses if the user does not have access to the tenant". A caller-named tenant is therefore refused by the authorisers, not ignored. Up to v1.0.2 a non-route `TenantId` was classified `AuthContext` and never read from the request, which broke callers that name a tenant (the Admin Portal asking the Portal about a tenant); v1.0.3 restores legacy's binding. `[FromAuthContext]` still takes a `TenantId` from the claims alone.
 
 ### Binding support for real S365 types
-Tenant auto-population is no longer limited to `string`. The generated code now supports `string`, `IParsable<T>`, `TryParse`, and `[TypeConverter]` types, which matters because S365 commonly uses `ApiId` for `TenantId`. A minimal resolver is enough for the migration:
+Tenant auto-population is no longer limited to `string`. The generated code now supports `string`, `IParsable<T>`, `TryParse`, and `[TypeConverter]` types, which matters because S365 commonly uses `ApiId` for `TenantId`. Legacy's `SetTenantMiddleware` filled only an `ApiId` or `ApiId?` that was writable and not init-only (8b40ecc961, `Common/Api/SetTenantMiddleware.cs:65`, `:77-90`), so an app root that ran it declares `[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]`, and a `string` `TenantId` the request leaves out stays null there, as it did. An init-only `TenantId` is never filled. A minimal resolver is enough for the migration:
 
 ```csharp
 public sealed class S365TenantResolver : ITenantResolver
@@ -174,7 +174,7 @@ The S365 property-population story is much narrower than the duplicated notes im
 S365’s `ICurrentTenantAccessor` pattern maps directly to Blueprint `ITenantAccessor`, and the wider tenant model stays consumer-owned. Marten conjoined tenancy (`TenancyStyle.Conjoined`, `IHaveTenantId`, `store.IdentitySession(tenantId)`), S365’s tenant-specific auth-resource expansion, and message-body tenant propagation all remain application concerns layered on top of Blueprint’s ambient tenant seam.
 
 ### Practical migration note
-The tenancy migration is small but important: register an `ITenantResolver`, keep any tenant-aware logging middleware, let `TenantModule` set the accessor and operation property, and remove legacy `SetTenantMiddleware` registrations from services that previously added it. Key facts: 9/18 services use `SetTenantMiddleware`, 281 operations have auto-populated `TenantId`, and `PartnerId`/`UserId` are ordinary route/body inputs not requiring middleware.
+The tenancy migration is small but important: register an `ITenantResolver`, keep any tenant-aware logging middleware, let `TenantModule` set the accessor and operation property, declare `[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]` on each app root that ran `SetTenantMiddleware`, and remove legacy `SetTenantMiddleware` registrations from services that previously added it. Key facts: 9/18 services use `SetTenantMiddleware`, 281 operations have auto-populated `TenantId`, and `PartnerId`/`UserId` are ordinary route/body inputs not requiring middleware.
 
 ## Testing
 
@@ -214,18 +214,18 @@ Claim-building helpers such as `AuthenticateAsTenantAdministrator`, user-signup/
 ## OpenAPI / TypeScript
 
 ### OpenAPI shape: what must match
-The migration gate is not NSwag compatibility; it is raw OpenAPI JSON compatibility with S365’s custom Handlebars generators. The good news is that the critical shape already matches: `operationId` strips `Query`/`Command` suffixes just like S365, tags come from the last namespace segment, `x-links` uses `{ rel, operationId, method }`, `x-enumNames` is emitted, request and response bodies use `$ref` to component schemas, and nullable properties stay in OpenAPI 3.0-style `nullable: true` form.
+The migration gate is not NSwag compatibility; it is raw OpenAPI JSON compatibility with S365’s custom Handlebars generators. The good news is that the critical shape already matches: `operationId` is formed as legacy formed it (`Query`/`Command` removed anywhere, then legacy's acronym-folding PascalCasing, so `GetVCardConfigurationQuery` is `GetvCardConfiguration`), tags come from the last namespace segment, `x-links` uses `{ rel, operationId, method }`, `x-enumNames` is emitted, request and response bodies use `$ref` to component schemas, and nullable properties stay in OpenAPI 3.0-style `nullable: true` form.
 
 | Aspect | Legacy S365 / NSwag | Blueprint source-gen | Migration note |
 |--------|---------------------|----------------------|----------------|
 | OpenAPI version | `3.0.0` | `3.0.4` by default | Set `OpenApiVersion = "3.0.0"` if tooling demands it |
-| `operationId` | Class name without `Query`/`Command` | Same | Required by TS generator |
+| `operationId` | Class name without `Query`/`Command`, legacy-PascalCased (`GetvCardConfiguration`) | Same | Required by TS generator and S365's route guards |
 | Tags | Last namespace segment | Same | Verified against AdminPortal and Portal tag inventories |
 | `x-links` | Present on schemas | Same structure | Required for HATEOAS client methods |
 | Enum metadata | `x-enumNames` | `x-enumNames` + `x-enum-varnames` | Superset |
 | Request body schema | Direct or `$ref` | `$ref` to components | Compatible |
 | Response schema | Usually `200` | Semantic `2xx` + optional synthetic `200` | Requires flag for TS return types |
-| Error content-type | `application/json` | `application/problem+json` by default | Use compat flag when needed |
+| Error content-type | Negotiated: `application/json` with no `Accept` or `*/*` | `application/problem+json` by default | Wire: `BlueprintHttpOptions.NegotiateErrorContentType`; document: `UsePlainJsonForErrorResponses` |
 | Generic schema naming | `TypeOfArg` pattern | Same after fixes | Critical for TS generation |
 | `additionalProperties: false` | Present on object schemas | Present after fix | Needed for strict TS schemas |
 
@@ -565,8 +565,21 @@ services.AddBlueprintHttpClient<BackendApp>((sp, client) =>
 ### Response handling and resilience
 BlueprintHttpClient now covers the S365 result surface that was duplicated across several findings. It recognizes `StatusCodeResult` subclasses by matching their static `Instance` singleton, handles `PlainTextResult` for non-JSON payloads such as `text/vcard`, maps `TaskCanceledException` to `RequestTimeout`, maps `HttpRequestException` to `InternalServerError`, and uses cached property metadata plus efficient query-string building to avoid per-request reflection churn.
 
+A 204 for `SendAsync<T>`/`CallAsync<T>` is read as legacy's client read it (v1.0.3; it was `default` before): as a result
+the host writes as an empty 204 (`HttpNoContentResult`, a deleted `KeyOnlyResourceEventResult`,
+`StatusCodeResult.NoContent`), as `StatusCodeResult.NoContent.Instance` when `T` can hold a `StatusCodeResult` (`object`,
+`OperationResult`), and otherwise as an `InvalidOperationException` ("Could not understand the response of calling …").
+An error problem's `type`, `title`, `detail`, `instance` and `status` are matched by their exact names, as legacy's
+converter matched them, so one written in another casing is an extension.
+
 ### ResourceEvent HTTP-client fix
-A real compatibility gap did exist for typed `ResourceEvent<T>` HTTP responses. Because the base `ResourceEvent.Data` property is `object?` and the typed `new TResource? Data` property is ignored during default STJ deserialization, the client could surface `JsonElement` instead of `TResource`. The fix is explicit envelope parsing in `SendResourceEventEnvelopeAsync<TResource>()`, which reconstructs a properly typed `ResourceEvent<TResource>` including `$object`, event metadata, and the typed `data` payload.
+A real compatibility gap did exist for typed `ResourceEvent<T>` HTTP responses. Because the base `ResourceEvent.Data` property is `object?` and the typed `new TResource? Data` property is ignored during default STJ deserialization, the client could surface `JsonElement` instead of `TResource`. The fix is explicit envelope parsing in `SendResourceEventEnvelopeAsync<TResource>()`, which reconstructs a properly typed `ResourceEvent<TResource>` including `$object`, event metadata, and the typed `data` payload. Its `metadata`, `secureData` and `changedValues` are read as `SendAsync` reads a resource event's (below): a number as an `int`, or a `double` when it is no `int` (v1.0.3; every number was a `double` before).
+
+`SendAsync<T>`/`CallAsync<T>` (and a `Results<,>` member) read every generic resource event type the host writes —
+`ResourceEvent<T>`, `ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>` — as legacy's
+`JsonConverterFactoryForResourceEventOfT` did (`ResourceEventReader`): an instance of the requested type with each wire
+property set by name, never through the subclasses' `eventSubId` constructor (which System.Text.Json cannot bind), and a
+dictionary's numbers, strings and booleans read as `int`, `string` and `bool`.
 
 ### Gateway patterns proven in S365
 The gateway architecture is not exotic and no longer needs to be treated as a risk area. The five confirmed gateway projects cover the main patterns the framework must support: plain forwarding, multi-service aggregation, fallback/error handling, file-upload forwarding, and response-header shaping such as cache control. `ProxyResult` is now a built-in `HttpResult` subtype for downstream pass-through responses, so gateway code does not need a private compatibility wrapper.
@@ -651,11 +664,11 @@ The return-type audit is stronger than the original document’s scattered notes
 The legacy ResourceEvent API surface survives in the new model. Convenience factories (`ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>`), self-query constructors, `ResourceEventDefinition.For(new Query())` inference from `IQuery<T>`, and `IResourceEventAuditRepository`-style sinks are all available. The runtime now recognizes `Blueprint.Http.ResourceEvent<T>` as a valid declared result contract, uses the full envelope schema in OpenAPI, and passes the full `OperationResult` into `IResourceEventAuditSink` so S365 can keep publishing audit events through its existing bus-aware repository logic.
 
 ### Control attributes and compile-time behavior
-The control-attribute story is complete and does not need to be rediscovered service-by-service. `[DoNotSaveChanges]` removes the UoW step and is guarded by `BPP001`, `[NoRebusTransaction]` skips the Rebus transaction wrapper, `[DoNotAudit]` strips audit work at compile time, `[Sensitive]` emits ordered sensitive-field metadata, `[AlwaysExpand]` forces resource expansion, `[AllowAnonymous]` short-circuits auth checks, and `[UnexposedOperation]` keeps internal operations out of the HTTP host and OpenAPI document.
+The control-attribute story is complete and does not need to be rediscovered service-by-service. `[DoNotSaveChanges]` removes the UoW step for any operation (its guard, `BPP001`, retired in v1.0.3 when queries began to save), `[NoRebusTransaction]` skips the Rebus transaction wrapper, `[DoNotAudit]` strips audit work at compile time, `[Sensitive]` emits ordered sensitive-field metadata, `[AlwaysExpand]` forces resource expansion, `[AllowAnonymous]` short-circuits auth checks, and `[UnexposedOperation]` keeps internal operations out of the HTTP host and OpenAPI document.
 
 | Attribute | Consolidated behavior |
 |-----------|------------------------|
-| `[DoNotSaveChanges]` | Compile-time UoW skip; guarded by `BPP001` |
+| `[DoNotSaveChanges]` | Compile-time UoW skip, for any operation (`BPP001` retired in v1.0.3) |
 | `[NoRebusTransaction]` | Compile-time Rebus transaction opt-out |
 | `[DoNotAudit]` | Compile-time audit-step removal |
 | `[Sensitive]` | Ordered sensitive-field metadata emitted at compile time |
@@ -723,10 +736,10 @@ The migration now fails early when auth metadata is wrong. `BPAU004` reports non
 The property-ownership diagnostics are important because they describe most migration mistakes precisely. `BPPO006` catches mixed ownership such as `[FromAuthContext]` plus `[FromBody]`, `BPPO009` flags claim-based auth mapping on non-string properties, `BPPO010` warns when auth and route ownership overlap, `BPPO011` points out TypeConverter-only binding paths that would be faster with `TryParse`, `BPPO012` fails unresolved route placeholders, and `BPPO013` warns about nullable route parameters that can never actually be omitted.
 
 ### HTTP and link diagnostics
-HTTP-shape conflicts are handled at compile time instead of by endpoint surprises. `BPOA002` reports conflicting HTTP method attributes, `BPLG001` and `BPLG006` validate link attributes and placeholder usage, and `BPLG007` now reports route collisions between different operations that claim the same route+method pair. That route-collision diagnostic aligns with the runtime endpoint-collision warning added during startup registration.
+HTTP-shape conflicts are handled at compile time instead of by endpoint surprises. `BPOA002` reports conflicting HTTP method attributes, `BPLG001` validates link attributes and placeholder usage, and `BPLG007` now reports route collisions between different operations that claim the same route+method pair. That route-collision diagnostic aligns with the runtime endpoint-collision warning added during startup registration.
 
 ### Validation, result, and serializer diagnostics
-The remaining migration-critical diagnostics cluster around operation definitions and serializer setup. `BPV012` warns about meaningless `[Required]` usage on non-nullable value types, `BPV013` highlights `IValidatableObject` participation, `BP001` / `BP002` / `BP005` / `BP104` / `BP108` cover invalid pipeline and result declarations, `BPP001` guards `[DoNotSaveChanges]`, `BP006` enforces serializer-context coverage for problem details, `BP009` catches duplicate descriptor names after suffix stripping, and `BP010` rejects unevaluable `ApiExceptionFactory` initializers.
+The remaining migration-critical diagnostics cluster around operation definitions and serializer setup. `BPV012` warns about meaningless `[Required]` usage on non-nullable value types, `BPV013` highlights `IValidatableObject` participation, `BP001` / `BP002` / `BP005` / `BP104` / `BP108` cover invalid pipeline and result declarations, `BP006` enforces serializer-context coverage for problem details, `BP009` catches duplicate descriptor names (as legacy named them: `Query`/`Command` removed anywhere, then cased), and `BP010` rejects unevaluable `ApiExceptionFactory` initializers.
 
 ### `ApiExceptionFactory` moved to compile time
 The `ApiExceptionFactory` work deserves to stay visible because it is a concrete migration win. `ApiExceptionFactoryModule` now scans operation fields at compile time, extracts status-code metadata from enum/int/cast initializers, projects those responses into OpenAPI, and raises `BP010` when it cannot evaluate an initializer safely. That replaces the old runtime reflection convention and directly benefits the handful of S365 operations that use `ApiExceptionFactory` patterns.
@@ -738,9 +751,9 @@ The diagnostic story is backed by actual IDE help. `Blueprint.SourceGenerator.Co
 |---|---|
 | Authorization | `BPAU003`, `BPAU004`, `BPAU008` |
 | Property ownership | `BPPO006`, `BPPO009`, `BPPO010`, `BPPO011`, `BPPO012`, `BPPO013` |
-| HTTP / links | `BPOA002`, `BPLG001`, `BPLG006`, `BPLG007` |
+| HTTP / links | `BPOA002`, `BPLG001`, `BPLG007` |
 | Validation | `BPV012`, `BPV013` |
-| Result / serializer / naming | `BP001`, `BP002`, `BP005`, `BP006`, `BP009`, `BP010`, `BP104`, `BP108`, `BPP001` |
+| Result / serializer / naming | `BP001`, `BP002`, `BP005`, `BP006`, `BP009`, `BP010`, `BP104`, `BP108` |
 
 ### Diagnostic philosophy after consolidation
 The best way to read the diagnostics section is that Blueprint now prefers compile-time proof over runtime repair. Invalid templates, bad route placeholders, duplicate names, unsupported ownership combinations, and missing serializer metadata now fail or warn close to the source rather than surfacing only after a service boots or a frontend consumes the wrong document.
@@ -752,7 +765,7 @@ The best way to read the diagnostics section is that Blueprint now prefers compi
 | Mixed property ownership sources | `BPPO006` / `BPPO010` |
 | Route placeholder mismatch | `BPPO012` / `BPLG001` |
 | TypeConverter-only binding path | `BPPO011` |
-| Duplicate operation names after suffix stripping | `BP009` |
+| Duplicate operation names once `Query`/`Command` is removed and the name cased | `BP009` |
 | Missing problem-details serializer metadata | `BP006` |
 | Invalid `ApiExceptionFactory` initializer | `BP010` |
 | Route/method collisions | `BPLG007` |
@@ -851,7 +864,7 @@ The migration is ready, but a few items still deserve explicit verification duri
 
 - **Per-service TypeScript verification**: generate the new OpenAPI document, run the existing Handlebars generator unchanged, and diff `api.ts`.
 - **Status-code compatibility flag**: enable `UseStatus200ForSuccessResponses` anywhere a frontend still assumes `responses["200"]` is the only success schema.
-- **Error content-type compatibility**: enable `UsePlainJsonForErrorResponses` when older clients assume `application/json` rather than `application/problem+json`.
+- **Error content-type compatibility**: enable `BlueprintHttpOptions.NegotiateErrorContentType` (the wire) and `UsePlainJsonForErrorResponses` (the document) when older clients assume `application/json` rather than `application/problem+json`. The OpenAPI flag alone changes only the document.
 - **Query-string casing**: legacy PascalCase query parameters become camelCase in the new client path; hand-built URLs must be updated.
 - **Serilog tenant enrichment**: keep it as standard ASP.NET Core middleware; it is not a `TenantModule` responsibility.
 - **`ApiId` performance**: add `TryParse` / `IParsable<ApiId>` if the info-level TypeConverter fallback warning becomes noise or invalid-input cost matters.
@@ -886,7 +899,7 @@ Resource events are already partially source-generated via `ResourceEventFamilyS
 - `@ResourceEventReason(ChangeType, reason)` marks nested event records
 - Source gen emits stable `EventId` constants and implicit conversion operators
 - `ResourceEventMetadataModule` (Order=56) extracts compile-time metadata for OpenAPI/discrimination
-- `ResourceEventAuditModule` (Order=960) injects post-execution auditing
+- `ResourceEventAuditModule` (Order=1020, after `ResourceExpansionModule` at 1010) injects post-execution auditing
 - `ResourceEventSelfQueryModule` (Order=-5) resolves `SelfQuery` before link generation
 
 ### S365 resource event usage

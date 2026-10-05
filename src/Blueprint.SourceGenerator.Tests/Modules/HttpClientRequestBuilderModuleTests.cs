@@ -279,8 +279,10 @@ public class HttpClientRequestBuilderModuleTests
     }
 
     [Fact]
-    public void When_delete_command_with_non_url_params_then_emits_query_string_builder()
+    public void When_delete_command_with_non_url_params_then_no_query_string_builder()
     {
+        // Legacy's client added the other properties as a query string for a GET alone and sent every other method's
+        // operation as its JSON body (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:79, :88-91).
         var result = CompileDescriptor(
             """
             [global::Blueprint.Model.Attributes.HttpDelete]
@@ -303,10 +305,64 @@ public class HttpClientRequestBuilderModuleTests
         var source = GetDescriptorSource(result, "DeleteWidgetCommand");
         source.Should().Contain("CompiledHttpRequestFeatureData");
 
-        // DELETE should build query strings for non-URL properties (like GET does)
-        source.Should().Contain("typed.Permanent");
-        source.Should().Contain("typed.Reason");
-        source.Should().Contain("sep = '&'");
+        // A DELETE's non-URL properties go in its body, as a POST's do.
+        source.Should().Contain(", null)");
+        source.Should().NotContain("typed.Permanent");
+        source.Should().NotContain("typed.Reason");
+    }
+
+    [Fact]
+    public void When_route_placeholder_has_a_legacy_format_specifier_then_its_property_is_still_bound()
+    {
+        // R111: {Name(format)} is route-owned via RoutePlaceholderSyntax (R97) — the bound name is whatever is before a
+        // `:` or `(`. The old regex here only excluded `:`, so "Id(N)" was taken whole as the property name, matched no
+        // property, and the placeholder was left in the built URL literally.
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id(N)}")]
+            public partial class GetFormattedWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetFormattedWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetFormattedWidgetQuery");
+        source.Should().Contain("CompiledHttpRequestFeatureData");
+        source.Should().Contain("typed.Id is null");
+        source.Should().Contain("EscapeDataString(typed.Id)");
+    }
+
+    [Fact]
+    public void When_route_has_a_catch_all_placeholder_then_its_property_is_not_url_escaped()
+    {
+        // R111: isCatchAll is now read off the placeholder's own text (RoutePlaceholderSyntax.Placeholder has no
+        // separate "star" group), not a regex group — guards that derivation.
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/files/{*FolderPath}")]
+            public partial class GetFileQuery : IQuery<string>
+            {
+                public string FolderPath { get; set; }
+
+                public static Task<string> HandleAsync(GetFileQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetFileQuery");
+        source.Should().Contain("typed.FolderPath");
+        source.Should().NotContain("EscapeDataString(typed.FolderPath");
     }
 
     private static GenerationResult CompileDescriptor(string source)

@@ -10,6 +10,20 @@ namespace Blueprint.Tasks.Hangfire;
 /// <see cref="IRecurringJobManager"/>. Automatically cleans up schedules that are no longer declared
 /// by any <see cref="IRecurringTaskScheduler"/>.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <b>Not safe for a host that runs more than one replica, or shares its Hangfire storage.</b> This provider is not an
+/// <see cref="IPeriodicRecurringTaskProvider"/>, so every host start registers the full set of schedules and then removes
+/// every recurring job in storage the set does not contain, with no filter on id: another app's jobs, other code's, and
+/// the jobs another replica has just registered from live data. A scheduler that fails at start-up is counted as
+/// declaring nothing, so its jobs are removed. Use <c>Blueprint.Hangfire</c>'s provider, which registers from a single
+/// recurring scheduler job instead, for any such host.
+/// </para>
+/// <para>
+/// Jobs are registered under <see cref="RecurringTaskSchedule.Name"/>, not <see cref="RecurringTaskSchedule.Id"/>, so two
+/// schedulers declaring the same name share one job.
+/// </para>
+/// </remarks>
 public sealed class HangfireRecurringTaskProvider : IRecurringTaskProvider
 {
     private readonly IRecurringJobManager _recurringJobManager;
@@ -32,7 +46,7 @@ public sealed class HangfireRecurringTaskProvider : IRecurringTaskProvider
 
         this._recurringJobManager = recurringJobManager;
         this._logger = logger;
-        this._defaultQueue = taskOptions.Value.DefaultQueue;
+        this._defaultQueue = taskOptions.Value.DefaultQueue ?? global::Hangfire.States.EnqueuedState.DefaultQueue;
     }
 
     /// <inheritdoc />

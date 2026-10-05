@@ -79,6 +79,61 @@ public class AppDataModelSourceGeneratorTests_DuplicateDescriptorNames
             .BeEmpty("BackgroundTask suffix is not stripped, so Foo != FooBackgroundTask");
     }
 
+    [Fact]
+    public void When_two_operations_share_a_name_only_once_it_is_cased_as_legacy_did_then_reports_BP009()
+    {
+        // Legacy ApiOperationDescriptor.cs:50 (S365 8b40ecc961) cased the name after removing "Query"/"Command", and its
+        // StringExtensions.ToPascalCase lower-cases a capital not followed by a lower-case letter: "GetVCard" and
+        // "GetvCard" are both "GetvCard".
+        var source = """
+                     public partial class GetVCardQuery : IQuery<string>
+                     {
+                     }
+
+                     public partial class GetvCardCommand : ICommand
+                     {
+                     }
+
+                     [BlueprintAppScan]
+                     public partial class TestBlueprintApp : BlueprintApp
+                     {
+                     }
+                     """;
+
+        var result = Compile(source);
+
+        result.Diagnostics
+            .Where(static d => d.Id == "BP009")
+            .Select(static d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture))
+            .Should()
+            .Equal(
+                "Operations GetVCardQuery, GetvCardCommand produce the same descriptor name 'GetvCard' once 'Query' and "
+                + "'Command' are removed and the name is cased. Rename one of them to avoid an OpenAPI operationId collision.");
+    }
+
+    [Fact]
+    public void When_Query_occurs_inside_two_names_then_reports_BP009_on_the_names_legacy_gave_them()
+    {
+        // Legacy replaced "Query" anywhere, not only as a suffix (ApiOperationDescriptor.cs:50): "GetQueryResultsQuery"
+        // and "GetResultsCommand" are both "GetResults".
+        var source = """
+                     public partial class GetQueryResultsQuery : IQuery<string>
+                     {
+                     }
+
+                     public partial class GetResultsCommand : ICommand
+                     {
+                     }
+
+                     [BlueprintAppScan]
+                     public partial class TestBlueprintApp : BlueprintApp
+                     {
+                     }
+                     """;
+
+        Compile(source).Diagnostics.Where(static d => d.Id == "BP009").Should().ContainSingle();
+    }
+
     private static GenerationResult Compile(string source)
     {
         return TestHelpers.Compile<AppDataModelSourceGenerator>(

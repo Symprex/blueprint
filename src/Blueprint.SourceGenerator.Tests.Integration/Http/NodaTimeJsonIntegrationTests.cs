@@ -86,6 +86,30 @@ public class NodaTimeJsonIntegrationTests
             "without NodaTime converters, NodaTime type deserialization should fail at body binding");
     }
 
+    [Fact]
+    public void A_request_body_Instant_property_documents_format_date_time()
+    {
+        // R45: legacy Portal's committed document gives ExtendLoggingSessionCommand.newExpirationDate (an Instant)
+        // {"type":"string","format":"date-time",...} — a request-body Instant property's format must not be dropped
+        // the way MapClrTypeToOpenApiSchema's generic string-convertible fallback drops it for any other unrecognised
+        // string-convertible type. This is a mapping bug in the request-body path specifically, not a legacy quirk:
+        // the response-schema path (OpenApiSchemaProjectionContext.MapFormat) already gets this right for the same
+        // CLR type (TemplateApiResource.CreatedAt, proven by ReferenceAppOpenApiTests) — so this fixes Default naming
+        // too, not just Legacy.
+        var (_, rendered) = Blueprint.Runtime.Http.OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new Blueprint.Runtime.Http.OpenApiInfoOptions());
+        using var document = System.Text.Json.JsonDocument.Parse(rendered.Json);
+
+        var requestBodySchemaRef = document.RootElement.GetProperty("paths").GetProperty("/e2e/nodatime-echo").GetProperty("post")
+            .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema")
+            .GetProperty("$ref").GetString()!;
+        var requestBody = document.RootElement.GetProperty("components").GetProperty("schemas")
+            .GetProperty(requestBodySchemaRef["#/components/schemas/".Length..]);
+        var createdAt = requestBody.GetProperty("properties").GetProperty("createdAt");
+
+        createdAt.GetProperty("type").GetString().Should().Be("string");
+        createdAt.GetProperty("format").GetString().Should().Be("date-time");
+    }
+
     // ──────────────────────────────────────────────
     //  Helpers
     // ──────────────────────────────────────────────

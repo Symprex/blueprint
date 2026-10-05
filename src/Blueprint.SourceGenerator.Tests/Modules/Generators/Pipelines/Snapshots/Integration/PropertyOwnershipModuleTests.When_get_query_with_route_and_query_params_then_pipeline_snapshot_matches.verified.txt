@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class GetUserItemsQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal GetUserItemsQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "GetUserItemsQuery", pipelineServices)
@@ -61,11 +61,6 @@ namespace Blueprint.Generated
 
             if (!context.IsNested)
             {
-                if (httpContext.Request.RouteValues["Id"] is string routeStr_Id)
-                {
-                    operation.Id = routeStr_Id;
-                }
-
                 var _qv_Filter = httpContext.Request.Query["filter"];
                 if (_qv_Filter.Count > 0)
                 {
@@ -88,6 +83,11 @@ namespace Blueprint.Generated
                 if (_arr_TagIds != null)
                 {
                     operation.TagIds = _arr_TagIds;
+                }
+
+                if (httpContext.Request.RouteValues["Id"] is string routeStr_Id)
+                {
+                    operation.Id = routeStr_Id;
                 }
             }
 
@@ -121,6 +121,11 @@ namespace Blueprint.Generated
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetUserItemsQuery.HandleAsync(operation).ConfigureAwait(false));
 
 
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            }
+
             if (this.AuditSink != null)
             {
                 await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "GetUserItemsQuery").ConfigureAwait(false);
@@ -130,6 +135,9 @@ namespace Blueprint.Generated
             {
                 await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
+
+            // Populate full HATEOAS links (skip 304 Not Modified)
+            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
 
             return handlerResult;
         }

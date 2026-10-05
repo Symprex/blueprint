@@ -150,7 +150,11 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                 && (SymbolEqualityComparer.Default.Equals(flattenedResult, keyOnlyResourceEventResultType)
                     || IsTypeOrDerivedFromOptional(flattenedResult, resourceEventResultType)))
             {
-                statusCode = AdjustResourceEventStatusCodeForHttpMethod(statusCode, httpMethod, hasResponseBody);
+                statusCode = AdjustResourceEventStatusCodeForHttpMethod(statusCode, httpMethod);
+
+                // The host sends a deleted event as a 204, which carries no body (HttpOperationResultExecutor's
+                // bodiless-status guard), so the document must not promise the event it would otherwise have written.
+                hasResponseBody &= statusCode != 204;
             }
 
             responses.Add(CreateResponse(
@@ -254,7 +258,10 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         // Each unique status code produces a ProblemDetails response in the OpenAPI document.
         foreach (var factory in context.GetMetadata<ApiExceptionFactoryRegistration>())
         {
-            responses.Add(CreateResponse(factory.HttpStatus, true, "Blueprint.ApiException", problemDetailsBody));
+            responses.Add(CreateResponse(factory.HttpStatus, true, "Blueprint.ApiException", problemDetailsBody) with
+            {
+                ProblemFactoryReferences = ImmutableArray.Create(factory.FieldReference),
+            });
         }
 
         return responses.ToImmutable();
@@ -437,12 +444,13 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     /// Maps the default <c>201 Created</c> status code to the correct runtime status based on the
     /// HTTP method. The runtime's <c>MapChangeTypeToStatusCode</c> produces 204 for <c>ChangeType.Deleted</c>
     /// and 200 for <c>ChangeType.Updated</c>; by convention DELETE → Deleted and PUT/PATCH → Updated.
+    /// A deleted event is sent as a 204 whether or not the event carries content, so a DELETE is documented as one.
     /// </summary>
-    private static int AdjustResourceEventStatusCodeForHttpMethod(int defaultStatusCode, string httpMethod, bool hasResponseBody)
+    private static int AdjustResourceEventStatusCodeForHttpMethod(int defaultStatusCode, string httpMethod)
     {
         return httpMethod switch
         {
-            "DELETE" => hasResponseBody ? 200 : 204,
+            "DELETE" => 204,
             "PUT" or "PATCH" => 200,
             _ => defaultStatusCode,
         };
@@ -462,6 +470,10 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                 .ToImmutableArray(),
             responseGroup
                 .SelectMany(static response => response.BodyTypeNames)
+                .Distinct(StringComparer.Ordinal)
+                .ToImmutableArray(),
+            responseGroup
+                .SelectMany(static response => response.ProblemFactoryReferences.IsDefault ? ImmutableArray<string>.Empty : response.ProblemFactoryReferences)
                 .Distinct(StringComparer.Ordinal)
                 .ToImmutableArray());
     }
@@ -490,7 +502,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             var leadEntries = responseList
                 .Take(responseList.Count - tailLength)
                 .Select(static response =>
-                    $"new global::Blueprint.Model.OperationHttpResponseMetadata({response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)})")
+                    RenderResponse(response))
                 .ToArray();
 
             codeWriter.AppendLine(
@@ -503,7 +515,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         // Fallback: emit all responses inline
         var renderedResponses = responseList
             .Select(static response =>
-                $"new global::Blueprint.Model.OperationHttpResponseMetadata({response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)})")
+                RenderResponse(response))
             .ToArray();
 
         codeWriter.AppendLine(
@@ -737,6 +749,26 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     private static string RenderStringLiteral(string value)
     {
         return CSharpSymbolDisplay.FormatLiteral(value, quote: true);
+    }
+
+    /// <summary>
+    /// Renders one <c>OperationHttpResponseMetadata</c> construction. A response with <c>ApiExceptionFactory</c> fields
+    /// also passes each field's title and type, read from the field itself when the descriptor is built, as legacy's
+    /// <c>ApiExceptionFactoryResponseConvention</c> read the field's value.
+    /// </summary>
+    private static string RenderResponse(HttpResponseMetadataRegistration response)
+    {
+        var arguments = $"{response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)}";
+
+        if (!response.ProblemFactoryReferences.IsDefaultOrEmpty)
+        {
+            var examples = response.ProblemFactoryReferences
+                .Select(static reference => $"new global::Blueprint.Model.OperationProblemExample({reference}.Title, {reference}.Type)");
+
+            arguments += $", global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", examples)})";
+        }
+
+        return $"new global::Blueprint.Model.OperationHttpResponseMetadata({arguments})";
     }
 
     private static string RenderStringArray(IEnumerable<string> values)

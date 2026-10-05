@@ -671,7 +671,7 @@
             "name": "categoryFilter",
             "in": "query",
             "required": false,
-            "description": "Legacy category filter \u2014 use instead.",
+            "description": "Legacy category filter \u2014 use NameFilter instead.",
             "deprecated": true,
             "x-deprecated-reason": "Use NameFilter instead.",
             "schema": {
@@ -693,6 +693,7 @@
             "name": "orderBy",
             "in": "query",
             "required": false,
+            "description": "The field to order by, if required.",
             "schema": {
               "type": "string",
               "nullable": true
@@ -702,6 +703,7 @@
             "name": "orderByDescending",
             "in": "query",
             "required": false,
+            "description": "Whether to order by descending (default: ascending when OrderBy is set).",
             "schema": {
               "type": "boolean",
               "nullable": true
@@ -711,6 +713,7 @@
             "name": "page",
             "in": "query",
             "required": false,
+            "description": "The 1-based index of the page to load.",
             "schema": {
               "type": "integer",
               "format": "int32",
@@ -723,6 +726,7 @@
             "name": "pageSize",
             "in": "query",
             "required": false,
+            "description": "The number of items to load per page.",
             "schema": {
               "type": "integer",
               "format": "int32",
@@ -849,10 +853,8 @@
             "schema": {
               "type": "integer",
               "format": "int32",
-              "minimum": 0,
-              "exclusiveMinimum": true,
-              "maximum": 1001,
-              "exclusiveMaximum": true
+              "minimum": 1,
+              "maximum": 1000
             }
           },
           {
@@ -2405,10 +2407,12 @@
     "schemas": {
       "AuthManifestApiResource": {
         "title": "AuthManifestApiResource",
+        "description": "Resource representing the authorization manifest \u2014 which operations the current user can access.",
         "type": "object",
         "properties": {
           "$links": {
             "type": "object",
+            "description": "The links for this resource, other endpoints that apply to this resource\nin it\u0027s current state.",
             "additionalProperties": {
               "$ref": "#/components/schemas/Link"
             },
@@ -2416,24 +2420,19 @@
           },
           "$object": {
             "type": "string",
+            "description": "The object type of this resource, used to indicate to clients what they\nare dealing with (i.e. \u0027user\u0027, \u0027account\u0027, \u0027group\u0027).",
             "readOnly": true
           },
           "$partial": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Gets or sets a value indicating whether or not this resource is \u0027partial\u0027, an indication that not all properties have been\npopulated for performance reasons and a client should reload from the \u0027self\u0027 link to retrieve all values."
           },
           "AccessibleOperations": {
             "type": "array",
+            "description": "Gets the list of operation names that the current user is authorized to access.",
             "items": {
               "type": "string"
             },
-            "readOnly": true
-          },
-          "Object": {
-            "type": "string",
-            "readOnly": true
-          },
-          "ResourceKey": {
-            "type": "string",
             "readOnly": true
           }
         },
@@ -2441,6 +2440,7 @@
       },
       "ResourceEventOfTemplateApiResource": {
         "title": "ResourceEventOfTemplateApiResource",
+        "description": "A typed subclass of ResourceEvent that redefines the Data type to\nbe of a specific type, useful for better type safety when dealing with events throughout the code\nbase.",
         "type": "object",
         "required": [
           "$object",
@@ -2452,12 +2452,15 @@
         ],
         "properties": {
           "$object": {
-            "type": "string"
+            "type": "string",
+            "description": "Gets the object of this \u0027resource\u0027, which is \u0022event\u0022."
           },
           "eventId": {
-            "type": "string"
+            "type": "string",
+            "description": "Gets the id of this event, for example \u0027timeEntry.updated\u0027 or \u0027account.approvals.enabled\u0027."
           },
           "changeType": {
+            "description": "Gets the change type of this event, indicating whether the resource was created, updated or deleted.",
             "oneOf": [
               {
                 "$ref": "#/components/schemas/ResourceEventChangeType"
@@ -2466,14 +2469,17 @@
           },
           "created": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Gets the created date of this event."
           },
           "resourceObject": {
-            "type": "string"
+            "type": "string",
+            "description": "Gets the type of resource represented."
           },
           "href": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "Gets or sets the href of the resource this event represents, populated by the framework from the resource type\u0027s\nself link and the event\u0027s data or self query."
           },
           "data": {
             "$ref": "#/components/schemas/TemplateApiResource"
@@ -2481,27 +2487,32 @@
           "metadata": {
             "type": "object",
             "nullable": true,
+            "description": "Gets the metadata dictionary of this resource event, a simple bag of key value pairs\nof useful information that can be stored free-form against an event.",
             "additionalProperties": {}
           },
           "secureData": {
             "type": "object",
             "nullable": true,
+            "description": "Gets a dictionary of security-related data that will NOT be persisted anywhere.",
             "additionalProperties": {}
           },
           "changedValues": {
             "type": "object",
             "nullable": true,
+            "description": "Gets or sets a dictionary of previous values, used to identify what has actually changed\nbetween two resources, keyed on the property name with the previous value of the resource\nbeing the value.",
             "additionalProperties": {}
           },
           "correlationId": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "Gets or sets the correlation id for this event, which can be used to tie it back to\nthe initial request that resulted in an event."
           }
         },
         "additionalProperties": false
       },
       "BulkArchiveTemplates": {
         "title": "BulkArchiveTemplates",
+        "description": "Queue a bulk archive of templates by ID. Returns 202 with no body.",
         "type": "object",
         "required": [
           "ids"
@@ -2527,6 +2538,7 @@
       },
       "ChangePassword": {
         "title": "ChangePassword",
+        "description": "Change the authenticated user\u0027s password.",
         "type": "object",
         "required": [
           "currentPassword",
@@ -2538,6 +2550,7 @@
             "type": "string",
             "nullable": true,
             "description": "The current password.",
+            "minLength": 1,
             "writeOnly": true
           },
           "newPassword": {
@@ -2552,6 +2565,7 @@
             "type": "string",
             "nullable": true,
             "description": "Re-enter the new password for confirmation.",
+            "minLength": 1,
             "writeOnly": true
           }
         },
@@ -2559,6 +2573,7 @@
       },
       "CloneTemplate": {
         "title": "CloneTemplate",
+        "description": "Clone a template with a new name.",
         "type": "object",
         "required": [
           "newName"
@@ -2568,6 +2583,7 @@
             "type": "string",
             "nullable": true,
             "description": "The display name for the new cloned template.",
+            "minLength": 1,
             "maxLength": 200
           }
         },
@@ -2575,6 +2591,7 @@
       },
       "CreateTemplate": {
         "title": "CreateTemplate",
+        "description": "Create a new template with name and optional content.",
         "type": "object",
         "required": [
           "name"
@@ -2584,6 +2601,7 @@
             "type": "string",
             "nullable": true,
             "description": "The display name for the template.",
+            "minLength": 1,
             "maxLength": 200,
             "example": "Welcome Email"
           },
@@ -2682,8 +2700,35 @@
         },
         "additionalProperties": false
       },
+      "ExpandableOfOwner": {
+        "title": "ExpandableOfOwner",
+        "description": "Represents an expandable resource property.",
+        "type": "object",
+        "properties": {
+          "ExpandError": {
+            "type": "string",
+            "nullable": true,
+            "description": "When set, indicates that expansion was attempted but failed for the given reason.\nValue will be null."
+          },
+          "Id": {
+            "type": "string",
+            "description": "The ID of this expandable value."
+          },
+          "Value": {
+            "nullable": true,
+            "description": "The value itself, which will be null if the value has not been expanded.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OwnerApiResource"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "ExportJobApiResource": {
         "title": "ExportJobApiResource",
+        "description": "Represents an accepted asynchronous export job with a tracking identifier and estimated completion time.\nReturned as the body of a 202 Accepted response to let callers poll for completion.",
         "type": "object",
         "required": [
           "JobId"
@@ -2691,16 +2736,19 @@
         "properties": {
           "EstimatedSeconds": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "description": "Gets or sets the estimated number of seconds until the export is ready for download."
           },
           "JobId": {
-            "type": "string"
+            "type": "string",
+            "description": "Gets or sets the unique job identifier that callers can use to check export status."
           }
         },
         "additionalProperties": false
       },
       "ExportTemplates": {
         "title": "ExportTemplates",
+        "description": "Queue a bulk export of templates and receive a job tracking reference.",
         "type": "object",
         "properties": {
           "nameFilter": {
@@ -2787,12 +2835,14 @@
           }
         ]
       },
-      "PagedApiResourceOfTemplate": {
-        "title": "PagedApiResourceOfTemplate",
+      "OwnerApiResource": {
+        "title": "OwnerApiResource",
+        "description": "Represents the owner (user) of a template. Used as an Expandable\u00601\nreference on TemplateApiResource to demonstrate compile-time resource\nexpansion: the generated pipeline discovers the Expandable\u003COwnerApiResource\u003E\nproperty at source-generation time and emits typed expansion calls that resolve the\nIResourceExpander from DI at runtime.",
         "type": "object",
         "properties": {
           "$links": {
             "type": "object",
+            "description": "The links for this resource, other endpoints that apply to this resource\nin it\u0027s current state.",
             "additionalProperties": {
               "$ref": "#/components/schemas/Link"
             },
@@ -2800,32 +2850,71 @@
           },
           "$object": {
             "type": "string",
+            "description": "The object type of this resource, used to indicate to clients what they\nare dealing with (i.e. \u0027user\u0027, \u0027account\u0027, \u0027group\u0027).",
             "readOnly": true
           },
           "$partial": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Gets or sets a value indicating whether or not this resource is \u0027partial\u0027, an indication that not all properties have been\npopulated for performance reasons and a client should reload from the \u0027self\u0027 link to retrieve all values."
+          },
+          "DisplayName": {
+            "type": "string",
+            "description": "The owner\u0027s display name."
+          },
+          "Email": {
+            "type": "string",
+            "description": "The owner\u0027s email address."
+          },
+          "Id": {
+            "type": "string",
+            "description": "The unique identifier of the owner."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PagedApiResourceOfTemplate": {
+        "title": "PagedApiResourceOfTemplate",
+        "description": "A specialisation of ListApiResource\u00601 that represents a list of resources\nthat can be paged on the server.",
+        "type": "object",
+        "properties": {
+          "$links": {
+            "type": "object",
+            "description": "The links for this resource, other endpoints that apply to this resource\nin it\u0027s current state.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Link"
+            },
+            "readOnly": true
+          },
+          "$object": {
+            "type": "string",
+            "description": "The object type of this resource, used to indicate to clients what they\nare dealing with (i.e. \u0027user\u0027, \u0027account\u0027, \u0027group\u0027).",
+            "readOnly": true
+          },
+          "$partial": {
+            "type": "boolean",
+            "description": "Gets or sets a value indicating whether or not this resource is \u0027partial\u0027, an indication that not all properties have been\npopulated for performance reasons and a client should reload from the \u0027self\u0027 link to retrieve all values."
           },
           "CurrentPage": {
             "type": "integer",
             "format": "int32",
+            "description": "The 1-based index of the page requested.",
             "readOnly": true
           },
           "PageSize": {
             "type": "integer",
             "format": "int32",
-            "readOnly": true
-          },
-          "ResourceKey": {
-            "type": "string",
+            "description": "The size of the page requested.",
             "readOnly": true
           },
           "Total": {
             "type": "integer",
             "format": "int64",
+            "description": "The total count of values in this list.",
             "readOnly": true
           },
           "Values": {
             "type": "array",
+            "description": "The values of this list.",
             "items": {
               "$ref": "#/components/schemas/TemplateApiResource"
             },
@@ -2836,6 +2925,7 @@
       },
       "PatchTemplateSettings": {
         "title": "PatchTemplateSettings",
+        "description": "Partially update a template\u0027s display settings.",
         "type": "object",
         "properties": {
           "opacity": {
@@ -2874,6 +2964,7 @@
       },
       "PreviewTemplate": {
         "title": "PreviewTemplate",
+        "description": "Preview a rendered template with sample merge data.",
         "type": "object",
         "required": [
           "mergeFields"
@@ -2892,10 +2983,18 @@
       "ProblemDetails": {
         "title": "ProblemDetails",
         "type": "object",
+        "required": [
+          "status"
+        ],
         "properties": {
           "detail": {
             "type": "string",
             "nullable": true
+          },
+          "extensions": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {}
           },
           "instance": {
             "type": "string",
@@ -2903,7 +3002,6 @@
           },
           "status": {
             "type": "integer",
-            "nullable": true,
             "format": "int32"
           },
           "title": {
@@ -2914,6 +3012,9 @@
             "type": "string",
             "nullable": true
           }
+        },
+        "additionalProperties": {
+          "nullable": true
         }
       },
       "ResourceEventChangeType": {
@@ -2936,6 +3037,7 @@
       },
       "SetTemplateNotificationPriority": {
         "title": "SetTemplateNotificationPriority",
+        "description": "Set the notification priority for a template, and optionally attach a notification rule.",
         "type": "object",
         "properties": {
           "level": {
@@ -2949,9 +3051,13 @@
             "description": "Reason for the priority change. Required unless Level is 5."
           },
           "rule": {
-            "type": "object",
             "nullable": true,
-            "description": "An optional notification rule to attach to the template."
+            "description": "An optional notification rule to attach to the template.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TemplateNotificationRuleApiResource"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -2986,10 +3092,12 @@
       },
       "TemplateApiResource": {
         "title": "Email Template",
+        "description": "Represents a single template.",
         "type": "object",
         "properties": {
           "$links": {
             "type": "object",
+            "description": "The links for this resource, other endpoints that apply to this resource\nin it\u0027s current state.",
             "additionalProperties": {
               "$ref": "#/components/schemas/Link"
             },
@@ -2997,10 +3105,12 @@
           },
           "$object": {
             "type": "string",
+            "description": "The object type of this resource, used to indicate to clients what they\nare dealing with (i.e. \u0027user\u0027, \u0027account\u0027, \u0027group\u0027).",
             "readOnly": true
           },
           "$partial": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Gets or sets a value indicating whether or not this resource is \u0027partial\u0027, an indication that not all properties have been\npopulated for performance reasons and a client should reload from the \u0027self\u0027 link to retrieve all values."
           },
           "CreatedAt": {
             "type": "string",
@@ -3038,10 +3148,6 @@
             "type": "string",
             "description": "The human-readable display name of this template."
           },
-          "Object": {
-            "type": "string",
-            "readOnly": true
-          },
           "OverrideSortOrder": {
             "nullable": true,
             "description": "An optional sort order override, or null for default.",
@@ -3052,17 +3158,17 @@
             ]
           },
           "Owner": {
-            "type": "object",
             "nullable": true,
-            "description": "The owner of this template, expandable via ?expand=Owner."
+            "description": "The owner of this template, expandable via ?expand=Owner.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExpandableOfOwner"
+              }
+            ]
           },
           "PlainTextSource": {
             "type": "string",
             "description": "The plain text fallback content of this template."
-          },
-          "ResourceKey": {
-            "type": "string",
-            "readOnly": true
           }
         },
         "additionalProperties": false,
@@ -3086,6 +3192,7 @@
       },
       "TemplateNotificationRuleApiResource": {
         "title": "TemplateNotificationRuleApiResource",
+        "description": "A single notification rule for a template: an on/off switch plus the two fields that switch makes\nmandatory. This is a nested DTO rather than an operation \u2014 it reaches the document only as the element\ntype of GetTemplateNotificationRulesQuery\u0027s response, so its schema component is built from\nserializer metadata rather than from a request body.",
         "type": "object",
         "properties": {
           "Enabled": {
@@ -3157,10 +3264,12 @@
       },
       "TemplatePreviewApiResource": {
         "title": "TemplatePreviewApiResource",
+        "description": "Represents the rendered preview output of a template with merge fields applied.",
         "type": "object",
         "properties": {
           "$links": {
             "type": "object",
+            "description": "The links for this resource, other endpoints that apply to this resource\nin it\u0027s current state.",
             "additionalProperties": {
               "$ref": "#/components/schemas/Link"
             },
@@ -3168,29 +3277,26 @@
           },
           "$object": {
             "type": "string",
+            "description": "The object type of this resource, used to indicate to clients what they\nare dealing with (i.e. \u0027user\u0027, \u0027account\u0027, \u0027group\u0027).",
             "readOnly": true
           },
           "$partial": {
-            "type": "boolean"
-          },
-          "Object": {
-            "type": "string",
-            "readOnly": true
+            "type": "boolean",
+            "description": "Gets or sets a value indicating whether or not this resource is \u0027partial\u0027, an indication that not all properties have been\npopulated for performance reasons and a client should reload from the \u0027self\u0027 link to retrieve all values."
           },
           "RenderedHtml": {
             "type": "string",
+            "description": "The rendered HTML output with merge fields applied.",
             "readOnly": true
           },
           "RenderedPlainText": {
             "type": "string",
-            "readOnly": true
-          },
-          "ResourceKey": {
-            "type": "string",
+            "description": "The rendered plain text output with merge fields applied.",
             "readOnly": true
           },
           "TemplateId": {
             "type": "string",
+            "description": "The source template identifier.",
             "readOnly": true
           }
         },
@@ -3198,6 +3304,7 @@
       },
       "TemplateSortOrder": {
         "type": "string",
+        "description": "Defines the available sort orders for template search results.\nUsed to demonstrate OpenAPI enum rendering for enum-typed properties.",
         "enum": [
           "Name",
           "CreatedDate",
@@ -3216,10 +3323,12 @@
       },
       "TemplateVersionApiResource": {
         "title": "TemplateVersionApiResource",
+        "description": "Represents a version/revision entry for a template.",
         "type": "object",
         "properties": {
           "$links": {
             "type": "object",
+            "description": "The links for this resource, other endpoints that apply to this resource\nin it\u0027s current state.",
             "additionalProperties": {
               "$ref": "#/components/schemas/Link"
             },
@@ -3227,31 +3336,28 @@
           },
           "$object": {
             "type": "string",
+            "description": "The object type of this resource, used to indicate to clients what they\nare dealing with (i.e. \u0027user\u0027, \u0027account\u0027, \u0027group\u0027).",
             "readOnly": true
           },
           "$partial": {
-            "type": "boolean"
-          },
-          "Object": {
-            "type": "string",
-            "readOnly": true
+            "type": "boolean",
+            "description": "Gets or sets a value indicating whether or not this resource is \u0027partial\u0027, an indication that not all properties have been\npopulated for performance reasons and a client should reload from the \u0027self\u0027 link to retrieve all values."
           },
           "PublishedAt": {
             "type": "string",
             "format": "date-time",
-            "readOnly": true
-          },
-          "ResourceKey": {
-            "type": "string",
+            "description": "When this version was published.",
             "readOnly": true
           },
           "TemplateId": {
             "type": "string",
+            "description": "The parent template identifier.",
             "readOnly": true
           },
           "Version": {
             "type": "integer",
             "format": "int32",
+            "description": "The version number (monotonically increasing per template).",
             "readOnly": true
           }
         },
@@ -3259,6 +3365,7 @@
       },
       "UpdateTemplate": {
         "title": "UpdateTemplate",
+        "description": "Update an existing template\u0027s name and content.",
         "type": "object",
         "required": [
           "name"
@@ -3268,6 +3375,7 @@
             "type": "string",
             "nullable": true,
             "description": "The new display name for the template.",
+            "minLength": 1,
             "maxLength": 200
           },
           "htmlSource": {
@@ -3287,6 +3395,7 @@
       },
       "UpdateTemplateSettings": {
         "title": "UpdateTemplateSettings",
+        "description": "Update template settings within a tenant-scoped resource key.",
         "type": "object",
         "properties": {
           "displayName": {
@@ -3299,12 +3408,13 @@
       },
       "ValidateTemplate": {
         "title": "ValidateTemplate",
+        "description": "A sample command that exercises handler-level exception translation by throwing\nValidationException or NotFoundException\ndepending on the input. Used by E2E tests to prove the generated pipeline correctly translates\nhandler-thrown exceptions into the appropriate HTTP responses.",
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
             "nullable": true,
-            "description": "Gets or sets the template name to validate. \u0022INVALID\u0022 triggers a validation exception, \u0022BAD\u0022 triggers a bad-request exception."
+            "description": "Gets or sets the template name to validate. \u0022INVALID\u0022 triggers a validation exception,\n\u0022BAD\u0022 triggers a bad-request exception."
           }
         },
         "additionalProperties": false
@@ -3312,6 +3422,9 @@
       "ValidationProblemDetails": {
         "title": "ValidationProblemDetails",
         "type": "object",
+        "required": [
+          "status"
+        ],
         "properties": {
           "detail": {
             "type": "string",
@@ -3319,6 +3432,7 @@
           },
           "errors": {
             "type": "object",
+            "nullable": true,
             "additionalProperties": {
               "type": "array",
               "items": {
@@ -3326,13 +3440,17 @@
               }
             }
           },
+          "extensions": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {}
+          },
           "instance": {
             "type": "string",
             "nullable": true
           },
           "status": {
             "type": "integer",
-            "nullable": true,
             "format": "int32"
           },
           "title": {
@@ -3343,11 +3461,16 @@
             "type": "string",
             "nullable": true
           }
+        },
+        "additionalProperties": {
+          "nullable": true
         }
       },
       "Link": {
         "title": "Link",
+        "description": "A link from one resource to another, that indicates what operations may be available\nfor a given ILinkableResource being returned from the API.",
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "href"
         ],

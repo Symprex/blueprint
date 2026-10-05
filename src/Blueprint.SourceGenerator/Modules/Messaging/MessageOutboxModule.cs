@@ -6,15 +6,23 @@ namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
 /// Contributes a PostExecution render step that calls <c>IMessageOutbox.CommitAsync</c> after
-/// successful command handler execution. Only participates for operations implementing
-/// <c>ICommand</c> (not queries or background tasks), and skips gracefully at runtime if no
+/// successful handler execution. Participates for operations implementing <c>ICommand</c> or
+/// <c>Blueprint.Tasks.IBackgroundTask</c> (not queries), and skips gracefully at runtime if no
 /// <c>IMessageOutbox</c> is registered in DI.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This module mirrors the legacy Blueprint Rebus transaction-scope middleware pattern:
-/// messages enqueued by the handler during execution are committed only when the handler
+/// <c>IMessageOutbox</c> is Blueprint's own seam: legacy Blueprint had no equivalent. It is not the outbox legacy gave
+/// its pipelines, which was the Marten session enlisted in the Rebus transaction by <c>UseMartenAsOutboxMiddleware</c>;
+/// that one is reached through <c>Blueprint.Rebus.IRebusTransactionEnlistment</c>. What this module shares with legacy's
+/// Rebus transaction scope is only the rule that messages enqueued during execution are committed only when the handler
 /// succeeds. On failure the DI scope disposes the outbox, discarding pending messages.
+/// </para>
+/// <para>
+/// Background tasks participate as commands do, so that messages a task enqueues through an <c>IMessageOutbox</c> are
+/// committed rather than discarded with the scope. There is no legacy precedent for the seam itself; the choice follows
+/// legacy treating the two alike for its own outbox, which it enlisted for background tasks as for commands (for example
+/// Signature365 <c>8b40ecc961</c>, Billing <c>BillingSoftDeleteBackgroundTaskExecutorPipeline.cs:50-55</c>).
 /// </para>
 /// <para>
 /// The module orders after <see cref="UnitOfWorkModule"/> (persistence) but before
@@ -47,9 +55,11 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
     public void ContributeToPipeline(PipelineContributorContext context)
     {
         var operationType = context.Operation.TypeSymbol;
-        var isCommand = IsCommand(operationType);
 
-        if (!isCommand && HasDoNotPublishMessagesAttribute(operationType))
+        // Commands and background tasks both commit the outbox; see the remarks for why tasks do.
+        var participates = IsCommand(operationType) || IsBackgroundTask(operationType);
+
+        if (!participates && HasDoNotPublishMessagesAttribute(operationType))
         {
             context.AddDiagnostic(
                 new DiagnosticInfo(
@@ -60,7 +70,7 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
             return;
         }
 
-        if (!isCommand)
+        if (!participates)
         {
             return;
         }
@@ -92,6 +102,13 @@ public sealed class MessageOutboxModule : IBlueprintSourceGeneratorModule, IPipe
         return operationType.AllInterfaces.Any(static candidate =>
             candidate.Name is "ICommand"
             && candidate.IsInNamespace("Blueprint", "Model"));
+    }
+
+    private static bool IsBackgroundTask(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name is "IBackgroundTask"
+            && candidate.IsInNamespace("Blueprint", "Tasks"));
     }
 
     private static bool HasDoNotPublishMessagesAttribute(INamedTypeSymbol operationType)

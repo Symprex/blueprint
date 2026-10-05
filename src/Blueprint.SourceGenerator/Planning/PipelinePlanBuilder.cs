@@ -19,13 +19,15 @@ internal static class PipelinePlanBuilder
     /// <param name="executionPlanResult">The configured contributor execution plan.</param>
     /// <param name="handler">An optional pre-resolved handler model to reuse when one is already known.</param>
     /// <param name="operationLookup">An optional pre-scoped operation lookup to reuse when one is already known (e.g. scoped to app-scanned assemblies).</param>
+    /// <param name="tenantIdTypeName">The fully qualified name of the hosting app's declared <c>TenantId</c> type, if any.</param>
     /// <returns>A successful pipeline plan or the diagnostics that prevented one from being built.</returns>
     public static Result<PipelinePlan> Build(
         string operationFullClassName,
         Compilation compilation,
         Result<BlueprintModuleExecutionPlan> executionPlanResult,
         OperationHandlerModel? handler = null,
-        CompilationOperationLookup? operationLookup = null)
+        CompilationOperationLookup? operationLookup = null,
+        string? tenantIdTypeName = null)
     {
         if (executionPlanResult.Value is null)
         {
@@ -59,7 +61,7 @@ internal static class PipelinePlanBuilder
 
         foreach (var contributor in executionPlanResult.Value.PipelineContributors)
         {
-            contributor.ContributeToPipeline(new PipelineContributorContext(contributor.ContributorId, operationModel, pipelinePlan, operationLookup, resolvedHandler?.Value));
+            contributor.ContributeToPipeline(new PipelineContributorContext(contributor.ContributorId, operationModel, pipelinePlan, operationLookup, resolvedHandler?.Value, tenantIdTypeName));
         }
 
         foreach (var unsatisfiedRequirement in pipelinePlan.VariableRegistry.GetUnsatisfiedRequirements())

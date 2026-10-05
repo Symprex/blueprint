@@ -5,12 +5,13 @@ using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.LinkGeneration;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
 /// A module that will configure URLs and links for operations (descriptor-level),
-/// and populate $links.self on returned resources at PostExecution (pipeline-level).
+/// and hand every HTTP operation's result to the runtime link population at PostExecution (pipeline-level).
 /// </summary>
 public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitializationContributor, IDescriptorContributor, IEnabledHostContributor, IPipelineContributor
 {
@@ -67,16 +68,15 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor _linkMissingRelError = new(
-        id: "BPLG006",
-        title: "Link missing Rel value",
-        messageFormat: "The [Link] attribute on '{0}' must specify a non-empty Rel value. Use [SelfLink] for self-links or provide Rel = \"relName\".",
-        category: "OperationLinks",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
     private static readonly Regex _placeholderRegex = new(@"\{\*{0,2}[A-Za-z0-9]+\}", RegexOptions.Compiled);
-    private static readonly Regex _mappedPlaceholderRegex = new(@"\{(?<catchAll>\*{0,2})(?<routeName>[A-Za-z0-9]+)(:(?<resourcePropName>.*?))?(\((?<format>.*)\))?\}", RegexOptions.Compiled);
+
+    // routeName allows '_' (unlike _placeholderRegex above, which only ever matches a bare, unmapped {Name}/{*Name}):
+    // legacy's own placeholder parser took the property name as-is before any ':' or '(' (Signature365 8b40ecc961,
+    // Blueprint/ApiOperationLink.cs:29, propName = ".*?", unrestricted), so a property named e.g. User_Id worked in a
+    // mapped placeholder there. RoutePlaceholderSyntax (R97) already allows '_' for the same reason; this pattern is
+    // kept separate rather than unified with it because it also parses the ':alternate'/'(format)' suffixes
+    // RoutePlaceholderSyntax deliberately strips instead of capturing.
+    private static readonly Regex _mappedPlaceholderRegex = new(@"\{(?<catchAll>\*{0,2})(?<routeName>[A-Za-z0-9_]+)(:(?<resourcePropName>.*?))?(\((?<format>.*)\))?\}", RegexOptions.Compiled);
 
     /// <inheritdoc/>
     public void RegisterMarkerAttributes(IncrementalGeneratorPostInitializationContext initializationContext)
@@ -89,14 +89,40 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     /// <inheritdoc />
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
-        LookForRootLinks(context);
-        LookForSelfLinks(context);
-        LookForLinks(context);
+        // Each kind of link attribute is read on its own, but what it registers is held until all three have been read and
+        // then added in the order the attributes are declared, as legacy's one pass over them registered them.
+        var registrations = new List<(int Position, object[] Metadata)>();
 
-        context.AddRenderStep(codeWriter => RenderDescriptor(codeWriter, context.GetMetadata<UrlRegistration>(), context.GetMetadata<LinkRegistration>()));
+        LookForRootLinks(context, registrations);
+        LookForSelfLinks(context, registrations);
+        LookForLinks(context, registrations);
+
+        foreach (var (_, metadata) in registrations.OrderBy(static r => r.Position))
+        {
+            foreach (var item in metadata)
+            {
+                context.AddMetadata(item);
+            }
+        }
+
+        context.AddRenderStep(codeWriter => RenderDescriptor(
+            codeWriter,
+            context.GetMetadata<UrlRegistration>(),
+            context.GetMetadata<LinkRegistration>(),
+            context.GetMetadata<RootLinkRegistration>()));
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Every HTTP-exposed operation's result is handed to the runtime link population, whatever its declared result, as
+    /// legacy's <c>LinkGeneratorMiddlewareBuilder</c> matched every operation (Signature365 <c>8b40ecc961</c>,
+    /// <c>LinkGeneratorMiddlewareBuilder.cs:17-20</c>) and its <c>LinkGeneratorHandler</c> decided at run time what to link:
+    /// a returned resource, a resource event's data whatever the event's subclass, and every item of a collection. Every
+    /// link, <c>self</c> included, is made there, by the registered <c>IResourceLinkGenerator</c>s, as legacy made it: absolute
+    /// under the request's base URI, its placeholders escaped, and shown only when the user may see it
+    /// (<c>EntityOperationResourceLinkGenerator.cs:59-108</c>). The generated pipeline no longer adds a <c>self</c> link of its
+    /// own, which was relative, unescaped and never authorised.
+    /// </remarks>
     public void ContributeToPipeline(PipelineContributorContext context)
     {
         var handler = context.Handler;
@@ -105,22 +131,36 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             return;
         }
 
-        var resourceBinding = ResolveLinkableResourceType(context, handler);
-        if (resourceBinding is null)
+        if (ResolveLinkableResourceType(context, handler) is { } resourceType)
+        {
+            ReportAmbiguousSelfLinks(context, resourceType);
+        }
+
+        if (!HttpHostExposureHelper.HasHttpHostExposure(context.Operation.TypeSymbol))
         {
             return;
         }
 
-        var selfLinks = context.FindSelfLinksForResourceType(resourceBinding.ResourceType);
-        if (selfLinks.Count == 0)
-        {
-            return;
-        }
+        // Links are added last, after every post-execution step and so after the resource-event audit, just before the
+        // return: legacy's LinkGeneratorMiddlewareBuilder ran after its ResourceEventHandlerMiddlewareBuilder (Signature365
+        // 8b40ecc961, AdminPortalCloseTenantCommandExecutorPipeline.cs:140-149), so the data Signature365 audited carried
+        // only the links its handler, or its self query's own pipeline, had given it.
+        context.RequireVariable(
+            new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
+            PipelineStage.Cleanup);
 
-        // Warn when multiple distinct URL templates target the same resource type with Rel="self"
-        // (custom-Rel links like "updateFields" are action links and don't conflict)
+        context.RequireAsync();
+        context.AddRenderStep(PipelineStage.Cleanup, RenderFullHateoasLinkPopulation);
+    }
+
+    /// <summary>
+    /// Warns when multiple distinct URL templates target the same resource type with <c>Rel="self"</c> (custom-Rel links
+    /// like <c>updateFields</c> are action links and don't conflict).
+    /// </summary>
+    private static void ReportAmbiguousSelfLinks(PipelineContributorContext context, INamedTypeSymbol resourceType)
+    {
         var distinctSelfUrlSet = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var link in selfLinks)
+        foreach (var link in context.FindSelfLinksForResourceType(resourceType))
         {
             if (string.Equals(link.Rel, "self", StringComparison.Ordinal))
             {
@@ -133,20 +173,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             context.AddDiagnostic(new DiagnosticInfo(
                 _ambiguousSelfLinkError,
                 context.Operation.TypeSymbol.Locations.FirstOrDefault(),
-                new EquatableList<string>([resourceBinding.ResourceType.Name, string.Join(", ", distinctSelfUrlSet.Select(static u => $"'{u}'"))])));
+                new EquatableList<string>([resourceType.Name, string.Join(", ", distinctSelfUrlSet.Select(static u => $"'{u}'"))])));
         }
-
-        // Require the handler result variable from Execution stage
-        context.RequireVariable(
-            new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
-            PipelineStage.PostExecution);
-
-        context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, renderContext =>
-        {
-            RenderLinkPopulation(renderContext, resourceBinding, selfLinks);
-            RenderFullHateoasLinkPopulation(renderContext);
-        });
     }
 
     // Normalise away the parameter names, so that we can compare URLs with different property names (as utimately they are
@@ -159,7 +187,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     private static void RenderDescriptor(
         ICodeWriter codeWriter,
         IEnumerable<UrlRegistration> urlRegistrations,
-        IEnumerable<LinkRegistration> linkRegistrations)
+        IEnumerable<LinkRegistration> linkRegistrations,
+        IEnumerable<RootLinkRegistration> rootLinkRegistrations)
     {
         var seenUrls = new HashSet<string>(StringComparer.Ordinal);
 
@@ -194,6 +223,29 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             linkIndex++;
         }
+
+        RenderRootLinks(codeWriter, rootLinkRegistrations);
+    }
+
+    /// <summary>
+    /// Records the operation's root links as <c>OperationRootLinksFeatureData</c>, which the app's root-metadata document
+    /// lists. They stay out of <c>this.AddLink</c>, whose links are indexed by resource type.
+    /// </summary>
+    private static void RenderRootLinks(ICodeWriter codeWriter, IEnumerable<RootLinkRegistration> rootLinkRegistrations)
+    {
+        var rootLinks = rootLinkRegistrations
+            .Select(static r => $"new global::Blueprint.Model.OperationRootLink({CSharpSymbolDisplay.FormatLiteral(r.Rel, quote: true)}, {CSharpSymbolDisplay.FormatLiteral(r.Url, quote: true)})")
+            .ToList();
+
+        if (rootLinks.Count == 0)
+        {
+            return;
+        }
+
+        codeWriter.AppendLine(
+            "this.SetFeatureData(new global::Blueprint.Model.OperationRootLinksFeatureData(global::System.Collections.Immutable.ImmutableArray.Create("
+            + string.Join(", ", rootLinks)
+            + ")));");
     }
 
     /// <summary>
@@ -343,52 +395,99 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         return $"static (obj) => obj switch {{ {resourceCase}, _ => null }}";
     }
 
-    private static void LookForRootLinks(DescriptorContributorContext context)
+    /// <summary>
+    /// Registers every <c>[RootLink]</c> on the operation, each with its own <c>Rel</c>, as legacy's
+    /// <c>OperationScanner</c> made a link of every link attribute (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint/Configuration/OperationScanner.cs:294-298</c>; <c>RootLinkAttribute</c> is <c>AllowMultiple</c>).
+    /// </summary>
+    private static void LookForRootLinks(DescriptorContributorContext context, List<(int Position, object[] Metadata)> registrations)
     {
         var operationType = context.GetOperationTypeSymbol();
-        var rootLinkAttribute = RootLinkAttributeDescriptor.Instance.ParseSingle(operationType);
 
-        if (rootLinkAttribute == null)
+        // ParseAll keeps the attributes' order and parses every RootLinkAttribute (its one constructor argument always
+        // matches), so the raw attribute at the same index is the one whose named Rel applies.
+        var rootLinkAttributes = RootLinkAttributeDescriptor.Instance.ParseAll(operationType).ToList();
+        var rawRootLinkAttributes = operationType.GetAttributes()
+            .Where(static a => a.AttributeClass?.Name == "RootLinkAttribute")
+            .ToList();
+        HashSet<string>? memberNames = null;
+
+        for (var index = 0; index < rootLinkAttributes.Count; index++)
         {
-            return;
-        }
+            var (_, locationInfo, url) = rootLinkAttributes[index].GetConstructorArgument(RootLinkAttributeDescriptor.UrlArgument);
 
-        var (_, locationInfo, url) = rootLinkAttribute.GetConstructorArgument(RootLinkAttributeDescriptor.UrlArgument);
-
-        if (string.IsNullOrWhiteSpace(url))
-        {
-            context.AddDiagnostic(
-                new DiagnosticInfo(
-                    _emptyRouteTemplateError,
-                    locationInfo,
-                    [operationType.Name]));
-
-            return;
-        }
-        if (url.Contains("{"))
-        {
-            var placeholders = _placeholderRegex.Matches(url);
-            HashSet<string>? memberNames = null;
-
-            foreach (var placeholder in placeholders.Cast<Match>())
+            if (string.IsNullOrWhiteSpace(url))
             {
-                var placeholderName = placeholder.Value.Trim('{', '}', '*');
-                memberNames ??= new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        _emptyRouteTemplateError,
+                        locationInfo,
+                        [operationType.Name]));
 
-                if (!memberNames.Contains(placeholderName))
+                continue;
+            }
+
+            // Registered under the property's own name, as legacy routed it (RoutePlaceholderSyntax).
+            url = RoutePlaceholderSyntax.Canonicalise(url, operationType);
+
+            if (url.Contains("{"))
+            {
+                var placeholders = _placeholderRegex.Matches(url);
+
+                foreach (var placeholder in placeholders.Cast<Match>())
                 {
-                    var argumentLocationInfo = locationInfo.WithSubRange(placeholder.Index + 2, placeholder.Length - 2);
-                    context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(operationType, placeholderName, argumentLocationInfo));
+                    var placeholderName = placeholder.Value.Trim('{', '}', '*');
+                    memberNames ??= new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
+
+                    if (!memberNames.Contains(placeholderName))
+                    {
+                        var argumentLocationInfo = locationInfo.WithSubRange(placeholder.Index + 2, placeholder.Length - 2);
+                        context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(operationType, placeholderName, argumentLocationInfo));
+                    }
                 }
             }
-        }
 
-        var urlRegistration = new UrlRegistration(url, locationInfo);
-        context.AddMetadata(urlRegistration);
-        context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
+            var rel = index < rawRootLinkAttributes.Count
+                ? rawRootLinkAttributes[index].NamedArguments.FirstOrDefault(static a => a.Key == "Rel").Value.Value as string
+                : null;
+
+            registrations.Add((
+                DeclarationPosition(operationType, index < rawRootLinkAttributes.Count ? rawRootLinkAttributes[index] : null),
+                [
+                    new UrlRegistration(url, locationInfo),
+                    HostExposureRegistration.HttpAt(locationInfo),
+                    CreateRootLinkRegistration(operationType, rel, url),
+                ]));
+        }
     }
 
-    private static void LookForSelfLinks(DescriptorContributorContext context)
+    /// <summary>
+    /// Records a root link under the key legacy Blueprint's root-metadata document gave it (<see cref="GetDefaultRel"/>).
+    /// </summary>
+    private static RootLinkRegistration CreateRootLinkRegistration(INamedTypeSymbol operationType, string? rel, string url)
+    {
+        return new RootLinkRegistration(rel ?? GetDefaultRel(operationType), url);
+    }
+
+    /// <summary>
+    /// Gives the key of a link whose attribute sets no <c>Rel</c>, root link or resource link alike, as legacy Blueprint
+    /// gave it: <c>linkAttribute.Rel ?? descriptor.Name</c>, taken when the link was built and so before an app's
+    /// conventions renamed the descriptor (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint/Configuration/OperationScanner.cs:294-303</c>), with the name legacy gave the operation
+    /// (<see cref="OperationNameHelpers.GetDescriptorName"/>). So an app's <c>[BlueprintAppOperationNames(Remove = ...)]</c>
+    /// renames the operation but not this key.
+    /// </summary>
+    /// <remarks>
+    /// The key is a resource's <c>$links</c> property and its <c>x-links</c> <c>rel</c>, which a consumer's client reads
+    /// (Signature365's Portal calls <c>DeleteGroupCommand</c> through the <c>DeleteGroup</c> link). Only a missing
+    /// <c>Rel</c> takes it: an empty one is kept as written, as legacy's <c>??</c> kept it.
+    /// </remarks>
+    private static string GetDefaultRel(INamedTypeSymbol operationType)
+    {
+        return OperationNameHelpers.GetDescriptorName(operationType.Name);
+    }
+
+    private static void LookForSelfLinks(DescriptorContributorContext context, List<(int Position, object[] Metadata)> registrations)
     {
         var operationType = context.GetOperationTypeSymbol();
         var selfLinkAttributes = SelfLinkAttributeDescriptor.Instance.ParseAll(operationType);
@@ -407,10 +506,10 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             // Resolve the effective rel: default is "self", but can be overridden via Rel = "..." on the attribute
             var effectiveRel = "self";
+            var rawAttr = parsedIndex < rawSelfLinkAttributes.Count ? rawSelfLinkAttributes[parsedIndex] : null;
 
-            if (parsedIndex < rawSelfLinkAttributes.Count)
+            if (rawAttr is not null)
             {
-                var rawAttr = rawSelfLinkAttributes[parsedIndex];
 
                 foreach (var namedArg in rawAttr.NamedArguments)
                 {
@@ -452,11 +551,17 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             // of (primary, fallback) must exist on resource for link URL generation.
             if (normalisedUrl.Contains("{"))
             {
+                // A placeholder finds the operation's and the resource's property ignoring case, and the URL is registered
+                // under the operation property's own name, as legacy routed it (RoutePlaceholderSyntax).
+                var operationMembers = operationType.GetAllMembers().ToList();
+                var resourceMembers = resourceTypeSymbol.GetAllMembers().ToList();
+
                 normalisedUrl = _mappedPlaceholderRegex.Replace(
                     normalisedUrl,
                     match =>
                     {
-                        var routePropertyName = match.Groups["routeName"].Value;
+                        var routePropertyName = RoutePlaceholderSyntax.ResolveMemberName(operationMembers, match.Groups["routeName"].Value)
+                                                ?? match.Groups["routeName"].Value;
                         var fallbackPropertyName = match.Groups["resourcePropName"]?.Value;
 
                         var argumentLocationInfo = urlLocation.WithSubRange(
@@ -470,23 +575,26 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                 argumentLocationInfo,
                                 context))
                         {
+                            var resourcePropertyName = RoutePlaceholderSyntax.ResolveMemberName(resourceMembers, routePropertyName);
+
                             if (string.IsNullOrEmpty(fallbackPropertyName))
                             {
                                 // Simple {Prop}: must exist on resource
-                                TryFindMember(
-                                    resourceTypeSymbol,
-                                    routePropertyName,
-                                    argumentLocationInfo,
-                                    context);
+                                if (resourcePropertyName is null)
+                                {
+                                    context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(
+                                        resourceTypeSymbol, routePropertyName, argumentLocationInfo));
+                                }
 
-                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, routePropertyName);
-                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, routePropertyName, isValueType));
+                                var isValueType = IsResourcePropertyValueType(resourceTypeSymbol, resourcePropertyName ?? routePropertyName);
+                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName ?? routePropertyName, isValueType));
                             }
                             else
                             {
                                 // Fallback {Prop:Alt}: try primary on resource, then fallback
-                                var primaryExists = HasMember(resourceTypeSymbol, routePropertyName);
-                                var fallbackExists = HasMember(resourceTypeSymbol, fallbackPropertyName!);
+                                var resourceFallbackName = RoutePlaceholderSyntax.ResolveMemberName(resourceMembers, fallbackPropertyName!);
+                                var primaryExists = resourcePropertyName is not null;
+                                var fallbackExists = resourceFallbackName is not null;
 
                                 if (!primaryExists && !fallbackExists)
                                 {
@@ -497,8 +605,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                 else
                                 {
                                     // At least one exists. Use the first that exists as primary.
-                                    var effectivePrimary = primaryExists ? routePropertyName : fallbackPropertyName!;
-                                    var effectiveFallback = primaryExists && fallbackExists ? fallbackPropertyName : null;
+                                    var effectivePrimary = primaryExists ? resourcePropertyName! : resourceFallbackName!;
+                                    var effectiveFallback = primaryExists && fallbackExists ? resourceFallbackName : null;
 
                                     var primaryIsValue = IsResourcePropertyValueType(resourceTypeSymbol, effectivePrimary);
                                     var fallbackIsValue = effectiveFallback != null && IsResourcePropertyValueType(resourceTypeSymbol, effectiveFallback);
@@ -521,9 +629,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             var urlRegistration = new UrlRegistration(normalisedUrl, urlLocation);
             var linkRegistration = new LinkRegistration(normalisedUrl, effectiveRel, resourceTypeSymbol, urlLocation, new EquatableList<LinkPlaceholderMapping>(placeholderMappings.ToArray()));
 
-            context.AddMetadata(urlRegistration);
-            context.AddMetadata(linkRegistration);
-            context.AddMetadata(HostExposureRegistration.HttpAt(urlLocation));
+            registrations.Add((
+                DeclarationPosition(operationType, rawAttr),
+                [urlRegistration, linkRegistration, HostExposureRegistration.HttpAt(urlLocation)]));
         }
     }
 
@@ -532,7 +640,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     /// the runtime model <c>LinkAttribute</c> base class.
     /// These represent non-self HATEOAS links that also register an HTTP endpoint.
     /// </summary>
-    private static void LookForLinks(DescriptorContributorContext context)
+    private static void LookForLinks(DescriptorContributorContext context, List<(int Position, object[] Metadata)> registrations)
     {
         var operationType = context.GetOperationTypeSymbol();
 
@@ -605,7 +713,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             // When resourceType is null, treat as root-link semantics (URL registration only)
             if (resourceTypeArg.IsNull)
             {
-                if (url!.Contains("{"))
+                url = RoutePlaceholderSyntax.Canonicalise(url!, operationType);
+
+                if (url.Contains("{"))
                 {
                     var placeholders = _placeholderRegex.Matches(url);
                     HashSet<string>? memberNames = null;
@@ -625,38 +735,24 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     }
                 }
 
-                context.AddMetadata(new UrlRegistration(url!, locationInfo));
-                context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
+                // A link without a resource type was a root link (Blueprint/ApiDataModel.cs:212-215, ApiOperationLink.cs:176).
+                registrations.Add((
+                    DeclarationPosition(operationType, attribute),
+                    [
+                        new UrlRegistration(url!, locationInfo),
+                        HostExposureRegistration.HttpAt(locationInfo),
+                        CreateRootLinkRegistration(operationType, rel, url!),
+                    ]));
 
                 continue;
-            }
-
-            // Non-null resourceType: infer Rel from resource type name when omitted
-            if (string.IsNullOrWhiteSpace(rel))
-            {
-                if (resourceTypeArg.Value is INamedTypeSymbol inferTarget && inferTarget.TypeKind != TypeKind.Error)
-                {
-                    rel = InferRelFromResourceType(inferTarget);
-                }
-                else
-                {
-                    var diagLocation = locationInfo ?? (operationType.Locations.FirstOrDefault() is { } fallbackLoc
-                        ? LocationInfo.CreateFrom(fallbackLoc) : null);
-
-                    context.AddDiagnostic(
-                        new DiagnosticInfo(
-                            _linkMissingRelError,
-                            diagLocation,
-                            [operationType.Name]));
-
-                    continue;
-                }
             }
 
             if (resourceTypeArg.Value is not INamedTypeSymbol resourceTypeSymbol || resourceTypeSymbol.TypeKind == TypeKind.Error)
             {
                 continue;
             }
+
+            rel ??= GetDefaultRel(operationType);
 
             // Verify resource type implements ILinkableResource
             if (!resourceTypeSymbol.AllInterfaces.Any(static i => i.Name == "ILinkableResource"))
@@ -678,15 +774,18 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             if (normalisedUrl.Contains("{"))
             {
+                var operationMembers = operationType.GetAllMembers().ToList();
                 var opMemberNames = BuildMemberNameSet(operationType);
                 var resMemberCache = BuildMemberCache(resourceTypeSymbol);
-                var resMemberNames = new HashSet<string>(resMemberCache.Keys, StringComparer.Ordinal);
 
                 normalisedUrl = _mappedPlaceholderRegex.Replace(
                     normalisedUrl,
                     match =>
                     {
-                        var routePropertyName = match.Groups["routeName"].Value;
+                        // A placeholder finds the operation's and the resource's property ignoring case, and the URL is
+                        // registered under the operation property's own name, as legacy routed it (RoutePlaceholderSyntax).
+                        var routePropertyName = RoutePlaceholderSyntax.ResolveMemberName(operationMembers, match.Groups["routeName"].Value)
+                                                ?? match.Groups["routeName"].Value;
                         var fallbackPropertyName = match.Groups["resourcePropName"]?.Value;
 
                         var argumentLocationInfo = locationInfo?.WithSubRange(
@@ -695,18 +794,25 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
                         if (TryFindMember(operationType, routePropertyName, opMemberNames, argumentLocationInfo, context))
                         {
+                            var resourcePropertyName = RoutePlaceholderSyntax.ResolveMemberName(resMemberCache.Values, routePropertyName);
+
                             if (string.IsNullOrEmpty(fallbackPropertyName))
                             {
-                                TryFindMember(resourceTypeSymbol, routePropertyName, resMemberNames, argumentLocationInfo, context);
+                                if (resourcePropertyName is null)
+                                {
+                                    context.AddDiagnostic(CreatePlaceholderMissingDiagnostic(
+                                        resourceTypeSymbol, routePropertyName, argumentLocationInfo));
+                                }
 
-                                var isValueType = IsResourcePropertyValueType(resMemberCache, routePropertyName);
-                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, routePropertyName, isValueType));
+                                var isValueType = IsResourcePropertyValueType(resMemberCache, resourcePropertyName ?? routePropertyName);
+                                placeholderMappings.Add(new LinkPlaceholderMapping(routePropertyName, resourcePropertyName ?? routePropertyName, isValueType));
                             }
                             else
                             {
                                 // Fallback semantics: try primary (route name) on resource, then fallback
-                                var primaryExists = resMemberNames.Contains(routePropertyName);
-                                var fallbackExists = resMemberNames.Contains(fallbackPropertyName!);
+                                var resourceFallbackName = RoutePlaceholderSyntax.ResolveMemberName(resMemberCache.Values, fallbackPropertyName!);
+                                var primaryExists = resourcePropertyName is not null;
+                                var fallbackExists = resourceFallbackName is not null;
 
                                 if (!primaryExists && !fallbackExists)
                                 {
@@ -715,8 +821,8 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                                 }
                                 else
                                 {
-                                    var effectivePrimary = primaryExists ? routePropertyName : fallbackPropertyName!;
-                                    var effectiveFallback = primaryExists && fallbackExists ? fallbackPropertyName : null;
+                                    var effectivePrimary = primaryExists ? resourcePropertyName! : resourceFallbackName!;
+                                    var effectiveFallback = primaryExists && fallbackExists ? resourceFallbackName : null;
 
                                     var primaryIsValue = IsResourcePropertyValueType(resMemberCache, effectivePrimary);
                                     var fallbackIsValue = effectiveFallback != null && IsResourcePropertyValueType(resMemberCache, effectiveFallback);
@@ -739,10 +845,26 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             var urlRegistration = new UrlRegistration(normalisedUrl, locationInfo);
             var linkRegistration = new LinkRegistration(normalisedUrl, rel!, resourceTypeSymbol, locationInfo!, new EquatableList<LinkPlaceholderMapping>(placeholderMappings.ToArray()));
 
-            context.AddMetadata(urlRegistration);
-            context.AddMetadata(linkRegistration);
-            context.AddMetadata(HostExposureRegistration.HttpAt(locationInfo));
+            registrations.Add((
+                DeclarationPosition(operationType, attribute),
+                [urlRegistration, linkRegistration, HostExposureRegistration.HttpAt(locationInfo)]));
         }
+    }
+
+    /// <summary>
+    /// Gives the position of a link attribute among the operation's attributes, so that what the three kinds of link
+    /// attribute register can be put back in declaration order. An attribute that cannot be found goes last.
+    /// </summary>
+    private static int DeclarationPosition(INamedTypeSymbol operationType, AttributeData? attribute)
+    {
+        if (attribute is null)
+        {
+            return int.MaxValue;
+        }
+
+        var position = operationType.GetAttributes().IndexOf(attribute);
+
+        return position < 0 ? int.MaxValue : position;
     }
 
     private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo? argumentLocationInfo, DescriptorContributorContext context)
@@ -855,7 +977,10 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             [placeholderName, namedType.Name]);
     }
 
-    private static LinkableResourceBinding? ResolveLinkableResourceType(PipelineContributorContext context, OperationHandlerModel handler)
+    /// <summary>
+    /// Finds the linkable resource type the operation declares it returns, for the ambiguous self link diagnostic.
+    /// </summary>
+    private static INamedTypeSymbol? ResolveLinkableResourceType(PipelineContributorContext context, OperationHandlerModel handler)
     {
         var linkableResourceInterface = context.FindTypeByMetadataName("Blueprint.Model.ILinkableResource");
         if (linkableResourceInterface is null)
@@ -869,13 +994,9 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             return null;
         }
 
-        if (!resourceType.AllInterfaces.Contains(linkableResourceInterface, SymbolEqualityComparer.Default))
-        {
-            return null;
-        }
-
-        var (contentAccess, guardType) = GetContentAccessInfo(context, handler);
-        return new LinkableResourceBinding(resourceType, contentAccess, guardType);
+        return resourceType.AllInterfaces.Contains(linkableResourceInterface, SymbolEqualityComparer.Default)
+            ? resourceType
+            : null;
     }
 
     private static INamedTypeSymbol? ExtractContentResourceType(PipelineContributorContext context, OperationHandlerModel handler)
@@ -978,136 +1099,6 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         return null;
     }
 
-    private static (string ContentAccess, string GuardTypeName) GetContentAccessInfo(PipelineContributorContext context, OperationHandlerModel handler)
-    {
-        if (OperationResultContractHelper.GetDeclaredOperationResultType(context.Operation.TypeSymbol) is not INamedTypeSymbol declaredResultType)
-        {
-            return ("((Blueprint.Runtime.Exec.OkResult)handlerResult).Content", "Blueprint.Runtime.Exec.OkResult");
-        }
-
-        var resourceEventResultGeneric = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.ResourceEventResult`1");
-        if (resourceEventResultGeneric is not null
-            && declaredResultType.IsGenericType
-            && SymbolEqualityComparer.Default.Equals(declaredResultType.OriginalDefinition, resourceEventResultGeneric))
-        {
-            var resourceTypeName = declaredResultType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var fullResultTypeName = declaredResultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            return ($"(({fullResultTypeName})handlerResult).Content", fullResultTypeName);
-        }
-
-        // DeferredResourceEventResult<T> — content accessed via .ResolvedContent (populated by SelfQuery module)
-        var deferredResourceEventResultGeneric = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.DeferredResourceEventResult`1");
-        if (deferredResourceEventResultGeneric is not null
-            && declaredResultType.IsGenericType
-            && SymbolEqualityComparer.Default.Equals(declaredResultType.OriginalDefinition, deferredResourceEventResultGeneric))
-        {
-            return ("((Blueprint.Runtime.Exec.IDeferredResourceEventResult)handlerResult).ResolvedContent", "Blueprint.Runtime.Exec.IDeferredResourceEventResult");
-        }
-
-        // Legacy ResourceEvent<T> — content is accessed via .Data, not .Content
-        var legacyResourceEventGeneric = context.FindTypeByMetadataName("Blueprint.Http.ResourceEvent`1");
-        if (legacyResourceEventGeneric is not null
-            && declaredResultType.IsGenericType
-            && SymbolEqualityComparer.Default.Equals(declaredResultType.OriginalDefinition, legacyResourceEventGeneric))
-        {
-            var fullResultTypeName = declaredResultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            return ($"(({fullResultTypeName})handlerResult).Data", fullResultTypeName);
-        }
-
-        var okResultGeneric = context.FindTypeByMetadataName("Blueprint.Runtime.Exec.OkResult`1");
-        if (okResultGeneric is not null
-            && declaredResultType.IsGenericType
-            && SymbolEqualityComparer.Default.Equals(declaredResultType.OriginalDefinition, okResultGeneric))
-        {
-            var resourceTypeName = declaredResultType.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var fullResultTypeName = declaredResultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            return ($"(({fullResultTypeName})handlerResult).Content", fullResultTypeName);
-        }
-
-        // Union case: look for first content-bearing member
-        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredResultType, out var unionMembers))
-        {
-            foreach (var member in unionMembers)
-            {
-                if (member is not INamedTypeSymbol namedMember)
-                {
-                    continue;
-                }
-
-                if (resourceEventResultGeneric is not null
-                    && namedMember.IsGenericType
-                    && SymbolEqualityComparer.Default.Equals(namedMember.OriginalDefinition, resourceEventResultGeneric))
-                {
-                    var resourceTypeName = namedMember.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var fullResultTypeName = namedMember.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    return ($"(({fullResultTypeName})handlerResult).Content", fullResultTypeName);
-                }
-
-                if (deferredResourceEventResultGeneric is not null
-                    && namedMember.IsGenericType
-                    && SymbolEqualityComparer.Default.Equals(namedMember.OriginalDefinition, deferredResourceEventResultGeneric))
-                {
-                    return ("((Blueprint.Runtime.Exec.IDeferredResourceEventResult)handlerResult).ResolvedContent", "Blueprint.Runtime.Exec.IDeferredResourceEventResult");
-                }
-
-                if (legacyResourceEventGeneric is not null
-                    && namedMember.IsGenericType
-                    && SymbolEqualityComparer.Default.Equals(namedMember.OriginalDefinition, legacyResourceEventGeneric))
-                {
-                    var fullResultTypeName = namedMember.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    return ($"(({fullResultTypeName})handlerResult).Data", fullResultTypeName);
-                }
-
-                if (okResultGeneric is not null
-                    && namedMember.IsGenericType
-                    && SymbolEqualityComparer.Default.Equals(namedMember.OriginalDefinition, okResultGeneric))
-                {
-                    var resourceTypeName = namedMember.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var fullResultTypeName = namedMember.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    return ($"(({fullResultTypeName})handlerResult).Content", fullResultTypeName);
-                }
-            }
-        }
-
-        // Fallback: non-generic OkResult
-        return ("((Blueprint.Runtime.Exec.OkResult)handlerResult).Content", "Blueprint.Runtime.Exec.OkResult");
-    }
-
-    private static void RenderLinkPopulation(
-        PipelineRenderContext context,
-        LinkableResourceBinding binding,
-        IReadOnlyList<SelfLinkBindingInfo> selfLinks)
-    {
-        var resourceTypeName = binding.ResourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-        context.WriteBlankLine();
-        context.WriteStatement("// Populate HATEOAS links (self + action rels) on the returned resource (skip 304 Not Modified)");
-        context.If(
-            $"handlerResult is {binding.GuardTypeName} and not global::Blueprint.Runtime.Exec.INotModifiedResult",
-            branch =>
-            {
-                // Content may be null (e.g. ResourceEvent.Data when SelfQuery resolution fails),
-                // so guard against NRE before accessing the resource's link surface.
-                branch.DeclareVariable("linkableResource", $"({resourceTypeName}){binding.ContentAccessExpression}");
-                branch.If("linkableResource is not null", innerBranch =>
-                {
-                    // Deduplicate by (Rel, URL) pair: multiple operations may declare [SelfLink] for the
-                    // same resource type with the same URL and rel, but we only emit AddLink once per unique pair.
-                    var emittedLinks = new HashSet<(string Rel, string Url)>();
-                    foreach (var selfLink in selfLinks)
-                    {
-                        if (!emittedLinks.Add((selfLink.Rel, selfLink.UrlTemplate)))
-                        {
-                            continue;
-                        }
-
-                        var hrefExpression = BuildHrefInterpolation(selfLink.UrlTemplate);
-                        innerBranch.WriteStatement($"linkableResource.AddLink(\"{selfLink.Rel}\", new global::Blueprint.Model.Link {{ Href = {hrefExpression} }});");
-                    }
-                });
-            });
-    }
-
     /// <summary>
     /// Generates a single call to <c>PipelineHelpers.PopulateHateoasLinksAsync</c> which resolves
     /// <c>IApiLinkGenerator</c> and <c>IResourceLinkGenerator</c> from DI and calls
@@ -1119,58 +1110,5 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         context.WriteBlankLine();
         context.WriteStatement("// Populate full HATEOAS links (skip 304 Not Modified)");
         context.WriteStatement("await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);");
-    }
-
-    private static string BuildHrefInterpolation(string urlTemplate)
-    {
-        var placeholders = _mappedPlaceholderRegex.Matches(urlTemplate);
-        if (placeholders.Count == 0)
-        {
-            return $"\"{urlTemplate}\"";
-        }
-
-        var interpolated = _mappedPlaceholderRegex.Replace(
-            urlTemplate,
-            match =>
-            {
-                var routeName = match.Groups["routeName"].Value;
-                var resourcePropName = match.Groups["resourcePropName"]?.Value;
-
-                // Use the resource property name if provided, otherwise use the route name
-                var propName = string.IsNullOrEmpty(resourcePropName) ? routeName : resourcePropName;
-                return $"{{linkableResource.{propName}}}";
-            });
-
-        return $"$\"{interpolated}\"";
-    }
-
-    private sealed record LinkableResourceBinding(INamedTypeSymbol ResourceType, string ContentAccessExpression, string GuardTypeName);
-
-    /// <summary>
-    /// Infers a rel name from a resource type symbol by stripping common suffixes
-    /// ("ApiResource", "Resource") and converting to camelCase.
-    /// For example: <c>TemplateApiResource</c> → <c>"template"</c>,
-    /// <c>GeneratedSignatureApiResource</c> → <c>"generatedSignature"</c>.
-    /// </summary>
-    private static string InferRelFromResourceType(INamedTypeSymbol resourceType)
-    {
-        var name = resourceType.Name;
-
-        if (name.EndsWith("ApiResource", StringComparison.Ordinal) && name.Length > "ApiResource".Length)
-        {
-            name = name.Substring(0, name.Length - "ApiResource".Length);
-        }
-        else if (name.EndsWith("Resource", StringComparison.Ordinal) && name.Length > "Resource".Length)
-        {
-            name = name.Substring(0, name.Length - "Resource".Length);
-        }
-
-        // camelCase: lowercase first char
-        if (name.Length > 0 && char.IsUpper(name[0]))
-        {
-            name = char.ToLowerInvariant(name[0]) + name.Substring(1);
-        }
-
-        return name;
     }
 }

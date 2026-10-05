@@ -26,6 +26,7 @@ namespace TestNamespace
                 : base(typeof(GetDocumentedWidgetQuery), "GetDocumentedWidget", "Source Generated")
             {
                 this.AddUrl(new global::Blueprint.Model.ApiOperationUrl("/widgets/{Id}"));
+                this.SetFeatureData(new global::Blueprint.Model.OperationRootLinksFeatureData(global::System.Collections.Immutable.ImmutableArray.Create(new global::Blueprint.Model.OperationRootLink("GetDocumentedWidget", "/widgets/{Id}"))));
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.RequiresAuthentication);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpGet);

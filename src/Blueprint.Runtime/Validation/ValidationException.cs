@@ -25,7 +25,7 @@ public class ValidationException : Exception
     {
         this.Errors = new Dictionary<string, string[]>
         {
-            [string.Empty] = [formLevelMessage],
+            [ValidationFailures.FormLevelPropertyName] = [formLevelMessage],
         };
     }
 
@@ -111,7 +111,7 @@ public class ValidationException : Exception
 
     /// <summary>
     /// Gets the validation errors as a dictionary of property names to their error messages.
-    /// An empty-string key represents form-level errors.
+    /// The <see cref="ValidationFailures.FormLevelPropertyName"/> key represents form-level errors.
     /// </summary>
     public IReadOnlyDictionary<string, string[]> Errors { get; }
 
@@ -145,7 +145,7 @@ public class ValidationException : Exception
         {
             var members = result.MemberNames.Any()
                 ? result.MemberNames
-                : [string.Empty];
+                : [ValidationFailures.FormLevelPropertyName];
 
             foreach (var member in members)
             {

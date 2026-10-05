@@ -19,19 +19,83 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
 
         componentContext.Components.Select(static component => component.BodyTypeName).Should().Equal(
             "AlwaysExpandTestEmployee",
+            "ArrayEnumParameterAuditApiResource",
+            "ArrayEnumParameterInvoiceApiResource",
+            "BodyFormatResult",
             "CatchAllFolderApiResource",
+            "CollisionHolderApiResource",
+            "CollisionItem",
+            "CollisionItem2",
+            "CollisionItemApiResource",
+            "CollisionKindApiResource",
+            "CollisionMatch",
+            "CollisionMatchApiResource",
+            "CollisionPreviewApiResource",
+            "CollisionTrailApiResource",
+            "ComparisonBoundApiResource",
+            "DeclaredCollectionBodyItem",
+            "DepartmentResource",
+            "DictionaryShapeApiResource",
+            "DictionaryShapeChild",
             "E2EConflictDetail",
             "E2EJobAcceptedPayload",
             "E2EWidgetResponse",
+            "EnumItemsResource",
+            "EnvelopeMatch",
+            "EnvelopeMatch2",
+            "EnvelopeMatch3",
+            "ExpandableOfDepartment",
+            "ExpandableOfLocation",
             "ExpandableTestEmployee",
+            "ExtensionBucketJsonElement",
+            "ExtensionBucketNonNullDictionary",
+            "ExtensionBucketNonNullValues",
+            "ExtensionBucketNullableValues",
+            "ExtensionShapeApiResource",
             "Guid",
+            "HrefUnlinkedApiResource",
+            "HrefWidgetApiResource",
+            "HrefWidgetSecretPartialApiResource",
+            "LegacyEventWidgetApiResource",
+            "LegacyShapeAddress",
+            "LegacyShapeBillingAccount",
+            "LegacyShapeClosedInfo",
+            "LegacyShapeContact",
+            "LegacyShapeCountryApiResource",
+            "LegacyShapeListApiResourceOfLegacyShapeCountry",
+            "LegacyShapeRun",
+            "LegacyShapeTenantApiResource",
             "LinkTestApiResource",
+            "LinkWireWidgetApiResource",
+            "ListApiResourceOfLinkWireWidget",
+            "LocationResource",
             "MappedLinkApiResource",
+            "MinLengthShapeApiResource",
+            "MinLengthShapeToken",
             "MultiExpandableTestEmployee",
+            "NestedLinkChildApiResource",
+            "NestedLinkHolderApiResource",
+            "NestedLinkInnerApiResource",
+            "NestedLinkListedItemApiResource",
             "NodaTimeEchoResponse",
+            "OperationIdMixedLinkApiResource",
+            "PagedApiResourceOfLegacyShapeTenant",
+            "ParameterTitlesApiResource",
             "ProblemDetails",
+            "RefWrapperApiResource",
+            "RelLessLinkWireWidgetApiResource",
+            "RequiredShapeApiResource",
+            "RequiredShapeChild",
             "SampleWidgetApiResource",
+            "SystemTypeApiResource",
+            "TypedIdWidgetApiResource",
+            "UnexposedFixtureApiResource",
             "ValidationProblemDetails",
+            "XmlDocChild",
+            "XmlDocDerived",
+            "XmlDocDescribedType",
+            "XmlDocGenericOfXmlDocChild",
+            "XmlDocShape",
             "string");
 
         var stringComponent = componentContext.Components.Single(static component => component.BodyTypeName == "string");
@@ -41,7 +105,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
 
         var problemDetailsComponent = componentContext.Components.Single(static component => component.BodyTypeName == "ProblemDetails");
         problemDetailsComponent.Type.Should().Be("object");
-        problemDetailsComponent.RequiredPropertyNames.Should().BeEmpty();
+        problemDetailsComponent.RequiredPropertyNames.Should().Equal("status");
         problemDetailsComponent.Properties.Select(static property => property.Name).Should().Contain(["detail", "status", "title"]);
 
         var validationProblemDetailsComponent = componentContext.Components.Single(static component => component.BodyTypeName == "ValidationProblemDetails");
@@ -75,7 +139,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         component.Type.Should().Be("object");
         component.RequiredPropertyNames.Should().Equal("Id");
         component.HasExtensionData.Should().BeTrue("because SchemaPropertyMetadataResponse has a [JsonExtensionData] property");
-        component.Properties.Select(static property => property.Name).Should().Equal("Child", "Count", "Enabled", "Id", "Metadata", "Tags");
+        component.Properties.Select(static property => property.Name).Should().Equal("Child", "Count", "Enabled", "Extensions", "Id", "Metadata", "Tags");
 
         var childProperty = component.Properties.Single(static property => property.Name == "Child");
         childProperty.Type.Should().Be("object");
@@ -88,6 +152,11 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
         var enabledProperty = component.Properties.Single(static property => property.Name == "Enabled");
         enabledProperty.Type.Should().Be("boolean");
         enabledProperty.IsExtensionData.Should().BeFalse();
+
+        // The [JsonExtensionData] bucket is documented as a property of its own, as legacy documented it.
+        var extensionsProperty = component.Properties.Single(static property => property.Name == "Extensions");
+        extensionsProperty.Type.Should().Be("object");
+        extensionsProperty.IsExtensionData.Should().BeFalse();
 
         var idProperty = component.Properties.Single(static property => property.Name == "Id");
         idProperty.Type.Should().Be("string");

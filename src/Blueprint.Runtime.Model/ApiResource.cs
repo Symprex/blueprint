@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using Blueprint.Model.Attributes;
 
 namespace Blueprint.Model;
@@ -15,11 +15,14 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     /// <summary>
     /// The object type of this resource, used to indicate to clients what they
     /// are dealing with (i.e. 'user', 'account', 'group').
+    /// </summary>
+    /// <remarks>
     /// Override in derived classes to supply a static string for zero-allocation serialization;
     /// the default implementation derives the name at runtime from the concrete type via
     /// <see cref="GetTypeName"/>.
     /// Derived classes may also assign this property in their constructor to override the default.
-    /// </summary>
+    /// The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
+    /// </remarks>
     [JsonPropertyName("$object")]
     public virtual string Object
     {
@@ -61,10 +64,18 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     }
 
     /// <summary>
-    /// Derives a conventional resource-type name from a CLR <paramref name="resourceType"/> by stripping
-    /// common suffixes (<c>ApiResource</c>, <c>Resource</c>, <c>DTO</c>) and camelCasing the first character.
-    /// Results are cached per type for zero-allocation repeated lookups.
+    /// Derives a conventional resource-type name from a CLR <paramref name="resourceType"/> by removing
+    /// <c>ApiResource</c>, then <c>Resource</c>, then <c>DTO</c>, each wherever it occurs in the type's name
+    /// (ordinal, case-sensitive), and camelizing what is left. Results are cached per type for zero-allocation
+    /// repeated lookups.
     /// </summary>
+    /// <remarks>
+    /// This is legacy Blueprint's rule (three <c>Replace</c> calls and <c>Camelize</c>), so that the names of resource
+    /// events (<c>eventId</c>, <c>resourceObject</c>) are the ones its clients were written against: a
+    /// <c>FooApiResourceBar</c> is <c>fooBar</c>. Camelizing raises the character at the start and after each underscore,
+    /// removing the underscore, then lowers the first character. A name that is nothing but markers, which legacy threw
+    /// on, is camelized as it is.
+    /// </remarks>
     /// <param name="resourceType">The CLR type to derive the name from.</param>
     /// <returns>A camelCase type name suitable for API serialization (e.g. <c>"tenant"</c> from <c>TenantApiResource</c>).</returns>
     public static string GetTypeName(Type resourceType)
@@ -73,33 +84,18 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
 
         return _typeNameCache.GetOrAdd(resourceType, static t =>
         {
-            var name = t.Name;
+            var name = t.Name
+                .Replace("ApiResource", string.Empty, StringComparison.Ordinal)
+                .Replace("Resource", string.Empty, StringComparison.Ordinal)
+                .Replace("DTO", string.Empty, StringComparison.Ordinal);
 
-            if (name.EndsWith("ApiResource", StringComparison.Ordinal) && name.Length > "ApiResource".Length)
-            {
-                name = name[..^"ApiResource".Length];
-            }
-            else if (name.EndsWith("Resource", StringComparison.Ordinal) && name.Length > "Resource".Length)
-            {
-                name = name[..^"Resource".Length];
-            }
-            else if (name.EndsWith("DTO", StringComparison.OrdinalIgnoreCase) && name.Length > 3)
-            {
-                name = name[..^3];
-            }
+            var pascal = _pascalizeUnderscores.Replace(name.Length > 0 ? name : t.Name, static match => match.Groups[1].Value.ToUpperInvariant());
 
-            if (name.Length > 0 && char.IsUpper(name[0]))
-            {
-                return string.Create(name.Length, name, static (span, src) =>
-                {
-                    span[0] = char.ToLowerInvariant(src[0]);
-                    src.AsSpan(1).CopyTo(span[1..]);
-                });
-            }
-
-            return name;
+            return char.ToLowerInvariant(pascal[0]) + pascal[1..];
         });
     }
+
+    private static readonly System.Text.RegularExpressions.Regex _pascalizeUnderscores = new("(?:^|_)(.)", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, string> _typeNameCache = new();
 

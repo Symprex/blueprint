@@ -26,7 +26,9 @@ public sealed class TypedHttpClientExtensionsTests : IClassFixture<SampleAppFixt
         var handler = new FakeHttpHandler(req =>
         {
             captured = req;
-            return new HttpResponseMessage(HttpStatusCode.NoContent);
+
+            // Only the request is under test; the answer is one the query's TemplateApiResource[] result reads.
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json") };
         });
 
         var client = this._fixture.CreateClient(handler);
@@ -52,18 +54,26 @@ public sealed class TypedHttpClientExtensionsTests : IClassFixture<SampleAppFixt
         {
             captured = req;
             capturedBody = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
-            return new HttpResponseMessage(HttpStatusCode.NoContent);
+
+            // Only the request is under test. A 204 is no ResourceEventResult<T> (the client throws for it, as legacy's did), so
+            // the fake answers with a not-found problem, which the client raises whatever the response type.
+            return new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent("{\"title\":\"Not Found\",\"status\":404}", System.Text.Encoding.UTF8, "application/problem+json"),
+            };
         });
 
         var client = this._fixture.CreateClient(handler);
 
-        await client.CreateTemplateAsync(
+        var act = () => client.CreateTemplateAsync(
             name: "My Template",
             priority: 42,
             htmlSource: "<p>Hi</p>",
             plainTextSource: "Hi",
             slug: "my-template",
             visibility: "public");
+
+        await act.Should().ThrowAsync<BlueprintApiException>();
 
         captured.Should().NotBeNull();
         captured!.Method.Should().Be(HttpMethod.Post);
@@ -103,16 +113,23 @@ public sealed class TypedHttpClientExtensionsTests : IClassFixture<SampleAppFixt
     [Fact]
     public async Task GetTemplateAsync_get_query_sends_get_request_to_url_with_id()
     {
+        // Only the request is under test. The query is a Results<,> of which a 204 is no member, so the fake answers with
+        // a not-found problem, which the client raises whatever the response type.
         HttpRequestMessage? captured = null;
         var handler = new FakeHttpHandler(req =>
         {
             captured = req;
-            return new HttpResponseMessage(HttpStatusCode.NoContent);
+            return new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent("{\"title\":\"Not Found\",\"status\":404}", System.Text.Encoding.UTF8, "application/problem+json"),
+            };
         });
 
         var client = this._fixture.CreateClient(handler);
 
-        await client.GetTemplateAsync("t-42");
+        var act = () => client.GetTemplateAsync("t-42");
+
+        await act.Should().ThrowAsync<BlueprintApiException>();
 
         captured.Should().NotBeNull();
         captured!.Method.Should().Be(HttpMethod.Get);

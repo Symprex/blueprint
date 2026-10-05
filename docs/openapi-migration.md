@@ -21,13 +21,17 @@ The new Blueprint pre-renders the OpenAPI document at startup and serves it as a
 
 | Aspect | Legacy Blueprint | Blueprint Source-Gen |
 |---|---|---|
-| Format | Class name with `Query`/`Command` stripped | Class name with `Query`/`Command` stripped (same) |
-| Example | `GetTemplate` (from `GetTemplateQuery`) | `GetTemplate` (from `GetTemplateQuery`) |
+| Format | Class name with `Query`/`Command` removed, then PascalCased | The same |
+| Example | `GetTemplate` (from `GetTemplateQuery`), `GeneratevCard` (from `GenerateVCardQuery`) | The same |
 
-Operation IDs are derived from the operation class name with trailing `Query` and `Command`
-suffixes removed. This matches legacy Blueprint convention and ensures TypeScript client
-generation compatibility. Operation types that do not end in `Query` or `Command` keep
-their full name as the operationId.
+Operation IDs are derived exactly as legacy Blueprint derived them
+(`ApiOperationDescriptor`: `Name.Replace("Query", "").Replace("Command", "").ToPascalCase()`): both words are removed
+wherever they occur in the class name, and legacy's `ToPascalCase` then lower-cases every capital after the first
+character that is not followed by a lower-case letter (except an `A` or `I` after a lower-case letter), so acronyms fold —
+`GetVCardConfigurationQuery` is `GetvCardConfiguration`, `GetItemsETagQuery` is `GetItemseTag`, `GetHTMLPreviewQuery` is
+`GethtmlPreview`. S365's
+generated TypeScript clients and route guards use those exact names. A type named only `Query` or `Command` keeps its
+name rather than legacy's empty one.
 
 ### 2. Path Conventions
 
@@ -265,6 +269,104 @@ app.MapBlueprintApi<MyApp, MyAppExecutor>(
 **Note:** For generic types, `FormatTypeName` is applied *before* `SanitiseSchemaKey`/`SchemaNameFormatter`,
 so generic types already produce clean names regardless of custom formatter configuration.
 
+### Legacy-compatible schema names
+
+A consumer whose generated clients import types by the names legacy Blueprint gave them can reproduce those names:
+
+```csharp
+configureOpenApi: options =>
+{
+    options.SchemaNaming = OpenApiSchemaNaming.Legacy;
+
+    // Signature365's own rule, as its legacy BlueprintSchemaNameGenerator applied it.
+    options.SchemaNameFormatter = name => name.Replace("ApiResource", "").Replace("PagedOf", "Paged");
+}
+```
+
+- `OpenApiSchemaNaming.Legacy` names types as NJsonSchema 11.1's `DefaultSchemaNameGenerator` did:
+  `PagedApiResource<PartnerCompanyApiResource>` is `PagedApiResourceOfPartnerCompanyApiResource`, recursively for
+  nested generics and joined with `And` for several arguments; `short`/`int`/`long` are `Short`/`Integer`/`Long`;
+  `int?` is `NullableInteger`; an array is `X[]`; a nested type is its own simple name.
+- Under it the formatter receives those names for every component — types, request bodies, ResourceEvent envelopes —
+  never CLR type names, so the rule above yields `PagedPartnerCompany`, `PartnerCompany` and
+  `ResourceEventOfPartnerCompany`.
+- `[OpenApiSchemaName("ImportRun")]` (`Blueprint.Model.Attributes`) gives a type a name of its own, as legacy's
+  `[JsonSchema("ImportRun")]` did.
+- Under it every parameter's schema is titled, as legacy's root parameter schemas were, with the legacy name of the type
+  a `Nullable<T>` wraps, passed through the formatter: an `ApiId` route parameter is `"ApiId"`, an `int?` query
+  parameter `"Integer"`, a `string[]` one `"String[]"`.
+- `options.QueryParameterNaming = OpenApiParameterNaming.PropertyName` names query parameters by their CLR properties
+  (`Page`), as legacy did, instead of the camel-case name the framework's client sends (`page`). Generators that use a
+  parameter's name as a method argument or query key need it; the host binds a query parameter whatever its case.
+- `options.RequiredProperties = OpenApiRequiredProperties.NonNullable` marks required what legacy marked required. That
+  is every property of a component or request body, and every query, header or cookie parameter, whose type is not
+  nullable: a value type that is not `Nullable<T>`, or a reference type annotated as not nullable. It also marks every
+  `[Required]` one, which it then does not document as nullable. The default marks required only what is declared so:
+  a serializer-required member of a response type, a `[Required]` request-body property or parameter, and a route
+  parameter. Generators that make an unrequired property optional (`?:`) need it to type properties as legacy clients
+  did.
+- `options.RequestBodyNaming = OpenApiRequestBodyNaming.OperationType` keys each request body by the operation's CLR
+  type (`CreatePartnerCompanyCommand`), as legacy did, instead of the operation's name (`CreatePartnerCompany`).
+  Generators that tell a command from a query by a `Command` suffix on the body's name need it.
+- Types that end up with one key — two types of one simple name, or two a formatter maps together, such as
+  `RuleMatchApiResource` and a `RuleMatch` of another namespace — each keep a component of their own, named as legacy
+  named them: the first the document reaches keeps the name and each later one takes it with the first free counter
+  from 2 (`RuleMatch2`). The document is read in the order it is written: path by path, a request body before the
+  responses, a type before the types its properties reach. Legacy read it in the order its assembly declared the
+  operations, which the document does not know, so where two operations reach a pair of such types in another order
+  than legacy did, the two names are the other way about. And where legacy documented a response whose type took a
+  name already in use as the schema already under it — a different type — this gives the response its own.
+- Two components that still end up with one key, such as a request body and a type both named for one CLR type name,
+  fail the render with an `InvalidOperationException` naming both, rather than producing a document in which one
+  silently replaces the other.
+
+Whatever the naming, an object nested in a body — a property, a collection's items, a dictionary's values, at any
+depth — is a component of its own that the property references (wrapped in `oneOf`, beside `nullable` or
+`description`, where it has either), as legacy made it. The graph is followed through the app's serializer context,
+so a type that context has no metadata for (for example one used only in a request body the context does not
+declare) is still an inline `object`; a type written by a converter, such as a strongly typed id, is not a
+component. A request-body property whose type is an operation's own type needs no metadata: it references that
+operation's request body, the one schema legacy made for the type (VCard's `PreviewVCardFieldsQuery.Body` references
+`UpdateVCardFieldsCommand`). For any other undescribed type in a request body, `MapBlueprintApi` logs a warning
+(category `Blueprint.OpenApi`) naming the operation, the property and the type to declare on the context. The warning
+is also listed on `PreRenderedOpenApiDocument.Warnings`.
+
+A type written by a converter is documented as legacy documented it, whatever the naming. One whose type converter
+converts it to string, such as Signature365's `ApiId`, is `{"type": "string"}` as a property, a parameter or a request
+body property, where it was an unknown `{}` or an `object`. A `byte[]` is `{"type": "string", "format": "byte"}`.
+Legacy took both from Newtonsoft.Json's contracts. One with only a System.Text.Json converter is still `{}`, because
+legacy described its CLR properties, which are not what the converter writes.
+
+An operation whose handler returns a legacy `Blueprint.Http.ResourceEvent<T>` (or a subclass of it) documents its
+success response as the `ResourceEventOf{T}` envelope component, since that is what the host writes, not `T` alone.
+Whatever the event's change type — `ResourceCreated<T>` and `ResourceDeleted<T>` included — the host sends it as a 200 with
+the envelope and no `Location`, as legacy did, and the document says 200.
+
+### Descriptions from XML documentation
+
+Legacy described a schema, a property and a parameter by its XML documentation's `summary`, read at runtime from the
+`{assembly}.xml` beside the declaring assembly. So does the document now: a response component, an enum and a request body
+by its type, and each property and parameter by its member, a `[Description]` attribute winning as it did for legacy's
+schemas. The text is formatted as legacy formatted it: line breaks kept and the first line's indentation removed, a
+`<see cref>` written as the last segment of its target, and an `<inheritdoc/>` taken from the base class or an interface.
+A request-body property or a parameter with no deployed documentation falls back to what the generator read at compile
+time.
+
+Two settings decide what there is to read:
+
+- `<GenerateDocumentationFile>true</GenerateDocumentationFile>` on the projects that declare the API's types, which
+  Signature365's `backend/src/Directory.Build.props` already sets, and which puts each `.xml` beside its assembly in the
+  build and publish output.
+- `<CopyDocumentationFilesFromPackages>true</CopyDocumentationFilesFromPackages>` in the consuming app (for Signature365,
+  `backend/Directory.Build.props`, so its test projects render the same documents). The framework's own members —
+  `$object`, `$links`, `$partial`, a list's and a page's members, `Link` and the resource event envelope — are
+  documented in Blueprint's packages, whose `.xml` files the SDK does not copy to the build or publish output otherwise.
+  Their summaries carry legacy's wording. Two envelope members, `changeType` and `href`, are described with legacy's
+  committed text, typo and all, which their corrected summaries no longer carry.
+
+`ProblemDetails` and `ValidationProblemDetails` stay undescribed: their documentation ships only in the SDK's reference
+packs, which a deployed app does not have.
+
 ### Issue: TenantId in Path Parameters
 
 S365 operations may expose `TenantId` as a path parameter in OpenAPI, but this is resolved from the JWT claim, not the URL.
@@ -360,13 +462,29 @@ instead: that changes only the rendered `operationId` and leaves every other rea
 Resource schema names keep the prefix, and `BP011` fails the build if the removal gives two operations
 the same name or leaves one with an empty name.
 
-### TenantId Auto-Exclusion
+### operationId of an operation at several URLs
 
-S365 uses a `ConfigureOperation` callback to remove `TenantId` from OpenAPI parameters for
-authenticated operations. Blueprint source-gen handles this automatically via the tenant
-convention — when `ITenantAccessor` and `ITenantResolver` are in the compilation, `TenantId`
-properties are treated as `AuthContext`-sourced and excluded from OpenAPI. No manual
-configuration needed.
+An operation published at more than one URL is given a distinct `operationId` at each, as legacy's
+NSwag 14.2.0 document gave it (`OpenApiDocument.GenerateOperationIds`):
+- a shared id gets `All` on a collection-returning operation, unless every operation sharing it
+  returns a collection;
+- then the upper-cased method, when the methods differ;
+- then numbers: the first URL declared keeps the name, the next is `{Name}2`, then `{Name}3`.
+
+S365's Portal `CheckTenantDomains` / `CheckTenantDomains2` and the Admin Portal's
+`GetAccountInjectionStatus` / `GetAccountInjectionStatus2` are named so, and a request body and an
+`x-links` entry keep the operation's own name. Up to v1.0.2 every URL carried the same id. An
+operation at several URLs with a request body also made the v1.0.3 document fail to render: two
+components under one name. It is now written once.
+
+### TenantId
+
+A `TenantId` is bound from the request like any other property, so it is published where the request
+carries it: a path parameter when the route has `{TenantId}`, a query parameter of a GET, a body
+property otherwise — as legacy Blueprint published it. S365's Portal removed it from its document for
+operations that do not allow anonymous access, with a `ConfigureOperation` callback; port that as a
+processor passed to `configureOpenApiOperations` (see the consumer migration guide). A `TenantId`
+marked `[FromAuthContext]` is not read from the request and is not published.
 
 ### Security Scheme
 

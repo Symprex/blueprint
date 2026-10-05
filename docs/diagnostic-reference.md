@@ -16,7 +16,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BP006 | Error | Serializer context is missing required response body coverage |
 | BP007 | Error | App is missing a serializer context declaration |
 | BP008 | Error | Serializer-covered body type uses unsupported OpenAPI validation shape |
-| BP009 | Error | Duplicate descriptor name after Query/Command suffix stripping |
+| BP009 | Error | Duplicate descriptor name once Query/Command is removed and the name is cased |
 | BP010 | Warning | Non-evaluable ApiExceptionFactory initializer |
 | BP011 | Error | Duplicate or empty descriptor name after the app's `[BlueprintAppOperationNames]` removal |
 
@@ -67,7 +67,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPLG003 | Error | Resource type is not `ILinkableResource` |
 | BPLG004 | Warning | Ambiguous self-link declarations |
 | BPLG005 | Error | Empty route template |
-| BPLG006 | Error | Link missing Rel value (only when resource type cannot be resolved for inference) |
+| BPLG006 | — | Retired in v1.0.3: a `[Link]` without a `Rel` is no longer an error anywhere; it is keyed by its operation's descriptor name, as legacy Blueprint keyed it |
 
 ## Validation (BPV)
 
@@ -117,9 +117,9 @@ These attributes inspect an item count, so they only make sense on a collection 
 | ID | Severity | Title |
 |----|----------|-------|
 | BPPO001 | Error | Unsupported route property type |
-| BPPO002 | Warning | Body-owned properties on GET/DELETE operation |
+| BPPO002 | Warning | Body-owned properties on GET operation |
 | BPPO003 | Error | Unsupported query property type |
-| BPPO004 | Error | `[FromBody]` on GET/DELETE operation |
+| BPPO004 | Error | `[FromBody]` on GET operation |
 | BPPO005 | Error | `[FromRoute]` without matching route placeholder |
 | BPPO006 | Error | Conflicting `[FromX]` binding attributes |
 | BPPO007 | Error | Unsupported header/cookie property type |
@@ -165,13 +165,13 @@ These attributes inspect an item count, so they only make sense on a collection 
 
 | ID | Severity | Title |
 |----|----------|-------|
-| BPP001 | Warning | `[DoNotSaveChanges]` on non-command operation (no effect) |
+| BPP001 | — | Retired in v1.0.3: `[DoNotSaveChanges]` on a query now has effect, as the unit of work is saved after any operation without it |
 
 ## Messaging (BPM)
 
 | ID | Severity | Title |
 |----|----------|-------|
-| BPM001 | Warning | `[DoNotPublishMessages]` on non-command operation (no effect) |
+| BPM001 | Warning | `[DoNotPublishMessages]` on an operation that is neither a command nor a background task (no effect) |
 
 ## Background tasks (BPT)
 
@@ -197,7 +197,7 @@ See also [consumer-migration-guide.md](consumer-migration-guide.md).
 | ID | Severity | Category | Title |
 |----|----------|----------|-------|
 | BPMIG001 | Info | Auto-fixable | Remove redundant `AddOpenApi()` activation |
-| BPMIG002 | Info | Auto-fixable | Remove redundant `AddHateoasLinks()` activation |
+| BPMIG002 | Info | Auto-fixable | Remove redundant `AddHateoasLinks()` activation (links are on by default; an app that never called it needs `DisableHateoasLinks()`, which no diagnostic can prompt) |
 | BPMIG003 | Info | Auto-fixable | Remove redundant `AddAuthorisation()` activation |
 | BPMIG100 | Warning | Config required | Migrate configured `AddOpenApi(...)` usage |
 | BPMIG101 | Warning | Config required | Migrate configured `AddAuthentication(...)` usage |

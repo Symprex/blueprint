@@ -47,7 +47,7 @@ namespace Blueprint.Generated
     internal sealed partial class AllTypesGetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "AllTypesGetQuery", pipelineServices)
@@ -62,17 +62,6 @@ namespace Blueprint.Generated
 
             if (!context.IsNested)
             {
-                if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
-                {
-                    operation.OrgSlug = routeStr_OrgSlug;
-                }
-                var _routeErr_CategoryId = BindRouteValue(httpContext.Request.RouteValues, "CategoryId", out var _parsed_CategoryId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-                if (_routeErr_CategoryId != null)
-                {
-                    return _routeErr_CategoryId;
-                }
-                operation.CategoryId = _parsed_CategoryId;
-
                 var _qv_Term = httpContext.Request.Query["term"];
                 if (_qv_Term.Count > 0)
                 {
@@ -182,6 +171,20 @@ namespace Blueprint.Generated
                 {
                     operation.CategoryIds = _arr_CategoryIds;
                 }
+
+                if (httpContext.Request.RouteValues["OrgSlug"] is string routeStr_OrgSlug)
+                {
+                    operation.OrgSlug = routeStr_OrgSlug;
+                }
+                if (httpContext.Request.RouteValues.ContainsKey("CategoryId"))
+                {
+                    var _routeErr_CategoryId = BindRouteValue(httpContext.Request.RouteValues, "CategoryId", out var _parsed_CategoryId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                    if (_routeErr_CategoryId != null)
+                    {
+                        return _routeErr_CategoryId;
+                    }
+                    operation.CategoryId = _parsed_CategoryId;
+                }
             }
 
             // Tenant resolution (compile-time, no reflection, cached services)
@@ -214,6 +217,11 @@ namespace Blueprint.Generated
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesGetQuery.HandleAsync(operation).ConfigureAwait(false));
 
 
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            }
+
             if (this.AuditSink != null)
             {
                 await ExecuteAuditSinkAsync(this.AuditSink, context, handlerResult, "AllTypesGetQuery").ConfigureAwait(false);
@@ -223,6 +231,9 @@ namespace Blueprint.Generated
             {
                 await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
+
+            // Populate full HATEOAS links (skip 304 Not Modified)
+            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
 
             return handlerResult;
         }
@@ -256,7 +267,7 @@ namespace Blueprint.Generated
     internal sealed partial class AllTypesPostCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal AllTypesPostCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "AllTypesPostCommand", pipelineServices)
@@ -281,18 +292,24 @@ namespace Blueprint.Generated
                 {
                     operation.OrgSlug = routeStr_OrgSlug;
                 }
-                var _routeErr_ProjectId = BindRouteValue(httpContext.Request.RouteValues, "ProjectId", out var _parsed_ProjectId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
-                if (_routeErr_ProjectId != null)
+                if (httpContext.Request.RouteValues.ContainsKey("ProjectId"))
                 {
-                    return _routeErr_ProjectId;
+                    var _routeErr_ProjectId = BindRouteValue(httpContext.Request.RouteValues, "ProjectId", out var _parsed_ProjectId, static (string _s, out int _v) => int.TryParse(_s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _v));
+                    if (_routeErr_ProjectId != null)
+                    {
+                        return _routeErr_ProjectId;
+                    }
+                    operation.ProjectId = _parsed_ProjectId;
                 }
-                operation.ProjectId = _parsed_ProjectId;
-                var _routeErr_ItemGuid = BindRouteValue(httpContext.Request.RouteValues, "ItemGuid", out var _parsed_ItemGuid, static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v));
-                if (_routeErr_ItemGuid != null)
+                if (httpContext.Request.RouteValues.ContainsKey("ItemGuid"))
                 {
-                    return _routeErr_ItemGuid;
+                    var _routeErr_ItemGuid = BindRouteValue(httpContext.Request.RouteValues, "ItemGuid", out var _parsed_ItemGuid, static (string _s, out System.Guid _v) => System.Guid.TryParse(_s, out _v));
+                    if (_routeErr_ItemGuid != null)
+                    {
+                        return _routeErr_ItemGuid;
+                    }
+                    operation.ItemGuid = _parsed_ItemGuid;
                 }
-                operation.ItemGuid = _parsed_ItemGuid;
             }
 
             // Tenant resolution (compile-time, no reflection, cached services)
@@ -344,6 +361,9 @@ namespace Blueprint.Generated
             {
                 await FlushBackgroundTasksAsync(context.ServiceProvider).ConfigureAwait(false);
             }
+
+            // Populate full HATEOAS links (skip 304 Not Modified)
+            await PopulateHateoasLinksAsync(context.ServiceProvider, context, handlerResult).ConfigureAwait(false);
 
             return handlerResult;
         }

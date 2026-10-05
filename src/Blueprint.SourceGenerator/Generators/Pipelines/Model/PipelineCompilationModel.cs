@@ -14,6 +14,12 @@ public sealed record PipelineCompilationModel(
     string AppNamespace,
     EquatableList<OperationHandlerModel> Handlers) : IEquatable<PipelineCompilationModel>
 {
+    /// <summary>
+    /// Gets the fully qualified name of the only <c>TenantId</c> type the app has filled from the caller's tenant, from its
+    /// <c>[BlueprintAppTenancy(TenantIdType = ...)]</c>, or <see langword="null"/> when it declares none.
+    /// </summary>
+    public string? TenantIdTypeName { get; init; }
+
     /// <inheritdoc />
     public bool Equals(PipelineCompilationModel? other)
     {
@@ -23,12 +29,13 @@ public sealed record PipelineCompilationModel(
             ? true
             : this.AppTypeName == other.AppTypeName &&
                this.AppNamespace == other.AppNamespace &&
-               this.Handlers == other.Handlers;
+               this.Handlers == other.Handlers &&
+               this.TenantIdTypeName == other.TenantIdTypeName;
     }
 
     /// <inheritdoc />
     public override int GetHashCode()
     {
-        return System.HashCode.Combine(this.AppTypeName, this.AppNamespace, this.Handlers);
+        return System.HashCode.Combine(this.AppTypeName, this.AppNamespace, this.Handlers, this.TenantIdTypeName);
     }
 }

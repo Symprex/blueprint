@@ -10,11 +10,34 @@ The current Blueprint resource event architecture is **already well-optimized** 
 
 ```
 Handler returns ResourceEvent<T>
-  → ResourceEventSelfQueryModule (stage -5): resolve SelfQuery if Data is null
-  → LinkGenerationModule (stage 0): populate $links.self on resource Data
-  → ResourceEventAuditModule (stage 960): extract EventId + ResourceId, invoke audit sink
+  → ResourceEventSelfQueryModule (stage -5, commands only): resolve SelfQuery if Data is null
+  → ResourceExpansionModule (stage 1010): expand the event's Expandable<T> data
+  → ResourceEventAuditModule (stage 1020, commands only): stamp, fill metadata, make Href, extract EventId + ResourceId, invoke audit sink
+  → LinkGenerationModule (Cleanup, before the return): hand the result to the runtime link population, which links Data (every link, self included, absolute)
   → PipelineReturnModule: serialize envelope to HTTP response
 ```
+
+Links are added after the audit, as legacy's `LinkGeneratorMiddlewareBuilder` ran after its
+`ResourceEventHandlerMiddlewareBuilder` (`AdminPortalCloseTenantCommandExecutorPipeline.cs:140-149`): the audited data
+carries only the links its handler, or its self query's own pipeline, gave it (Signature365 stored `"$links":{}` for
+handler-returned data). In an app registered with `DisableHateoasLinks()` — a legacy app that never called
+`AddHateoasLinks()` — no pipeline links, the self query's included, so the data is audited and written with
+`"$links":{}`; its `Href`, made from the resource type's self link, is unaffected.
+
+`ResourceEventAuditModule` activates for commands only, as legacy's `ResourceEventHandlerMiddlewareBuilder` matched
+`IsCommand` (Signature365 `8b40ecc961`, `ResourceEventHandlerMiddlewareBuilder.cs:12-15`). A query that returns a
+resource event, as Signature365's AdminPortal injection override queries return the one Subscriptions gave them, passes
+it on as its handler returned it: not stamped, no href made, and neither the audit sink nor the audit repository is given
+it. Nor is its self query run (legacy ran it inside the same handler, `ResourceEventHandler.cs:48-52`), for a legacy
+event or a `DeferredResourceEventResult<T>`: the event keeps the data its handler gave it. Data it hands on from another
+operation is still expanded, as legacy's `ResourceExpandMiddleware` matched every operation.
+
+A legacy `ResourceEvent`'s `Metadata` and `SecureData` begin empty, so every event is written with both, as legacy's were
+(`ResourceEvent.cs:140`, `:146`). For a command's event the module fills `Metadata` as legacy's `ResourceEventHandler`
+did (`ResourceEventHandler.cs:34-46`), each entry through the indexer: the user's authorisation context's entries, then
+the request's `IpAddress` (legacy's `GetClientIpAddress`, `HttpRequestExtensions.cs:16-98`) and, when the request has the
+header, `UserAgent`, then every registered `IContextMetadataProvider`'s. Signature365 stores the dictionary with every
+audited event (`EventMapper.cs:29`). Outside a request the request's entries are left out, where legacy threw.
 
 ### Key Types
 
@@ -36,6 +59,11 @@ Handler returns ResourceEvent<T>
 ## Source-Generation Opportunities
 
 ### ✅ Phase 1: Immediate Wins (Implemented)
+
+> **Superseded.** A resource event's `Href` is no longer made from the operation's URL, so `FillUrlTemplate` is gone.
+> It is made as legacy made it: the registered `self` link of the event's resource type, filled from `Data` or, failing
+> that, `SelfQuery`, under the request's base URI (`PipelineHelpers.TryCreateResourceEventHref`). The operation's URL was
+> another resource's for a create (the collection's), and relative. Items 1 and 2 below describe the removed fallback.
 
 **1. Inline Href from operation properties (eliminates reflection fallback)**
 

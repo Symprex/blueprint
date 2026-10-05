@@ -166,6 +166,74 @@ public sealed class QueryStringSerializationTests
         query.Should().Be("?Ids=a%20b&Ids=c%26d");
     }
 
+    // ──────────────────────────────────────────────
+    //  A DELETE: no query string, the operation as its body
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Fallback_delete_sends_no_query_string_and_the_operation_as_its_JSON_body()
+    {
+        // Legacy's client gave a GET alone a query string and sent every other method's operation as its JSON body
+        // (Signature365 8b40ecc961, Common.Core/Api/BlueprintHttpClient.cs:79, :88-91).
+        var (query, body) = await SendDeleteAsync(new ArrayQueryOperation { Ids = ["a", "b"] }, ownershipEntry: null);
+
+        query.Should().BeEmpty();
+        using var document = System.Text.Json.JsonDocument.Parse(body!);
+        document.RootElement.GetProperty("ids").EnumerateArray().Select(static e => e.GetString()).Should().Equal("a", "b");
+    }
+
+    [Fact]
+    public async Task Ownership_delete_sends_no_query_string_and_the_operation_as_its_JSON_body()
+    {
+        var (query, body) = await SendDeleteAsync(
+            new ArrayQueryOperation { Ids = ["a", "b"] },
+            new OperationPropertyBindingEntry(nameof(ArrayQueryOperation.Ids), PropertyBindingSource.Body, "ids", "string[]"));
+
+        query.Should().BeEmpty();
+        using var document = System.Text.Json.JsonDocument.Parse(body!);
+        document.RootElement.GetProperty("ids").EnumerateArray().Select(static e => e.GetString()).Should().Equal("a", "b");
+    }
+
+    /// <summary>
+    /// Sends <paramref name="operation"/> as a DELETE through a hand-built descriptor, with or without ownership data, and
+    /// captures the request's query string and body.
+    /// </summary>
+    private static async Task<(string Query, string? Body)> SendDeleteAsync<TOperation>(
+        TOperation operation, OperationPropertyBindingEntry? ownershipEntry)
+        where TOperation : IOperation
+    {
+        var descriptor = BuildDescriptor<TOperation>("DELETE");
+
+        if (ownershipEntry is not null)
+        {
+            descriptor.SetFeatureData(new OperationPropertyOwnershipFeatureData(ImmutableArray.Create(ownershipEntry)));
+        }
+
+        var app = new BlueprintApp();
+        app.Register(descriptor);
+
+        string? query = null;
+        string? body = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            query = req.RequestUri!.Query;
+            body = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            };
+        });
+
+        var httpClient = new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri("https://localhost") };
+        var client = new BlueprintHttpClient<BlueprintApp>(httpClient, app);
+
+        await client.SendAsync<System.Text.Json.JsonElement>(operation);
+
+        body.Should().NotBeNull("a DELETE carries the operation as its body");
+
+        return (query!, body);
+    }
+
     /// <summary>
     /// Sends <paramref name="operation"/> through a descriptor carrying
     /// <see cref="OperationPropertyOwnershipFeatureData"/> for the given <paramref name="queryEntry"/>,
@@ -193,11 +261,11 @@ public sealed class QueryStringSerializationTests
         return await SendAndCaptureQueryAsync(descriptor, operation);
     }
 
-    private static ApiOperationDescriptor BuildDescriptor<TOperation>()
+    private static ApiOperationDescriptor BuildDescriptor<TOperation>(string httpMethod = "GET")
     {
         var descriptor = new ApiOperationDescriptor(typeof(TOperation), typeof(TOperation).Name, "test");
         descriptor.AddUrl(new ApiOperationUrl("/query-string-test"));
-        descriptor.SetFeatureData(new OperationHttpMethodMetadataFeatureData(ImmutableArray.Create("GET")));
+        descriptor.SetFeatureData(new OperationHttpMethodMetadataFeatureData(ImmutableArray.Create(httpMethod)));
 
         return descriptor;
     }
@@ -227,5 +295,44 @@ public sealed class QueryStringSerializationTests
         captured.Should().NotBeNull();
 
         return captured!.RequestUri!.Query;
+    }
+
+    // ──────────────────────────────────────────────
+    //  R111: {Name(format)} route placeholders (ExtractPlaceholderNames :717, SubstitutePlaceholders :820)
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task A_route_placeholder_with_a_legacy_format_specifier_is_bound_from_the_route_and_excluded_from_the_query_string()
+    {
+        // {Name(format)} is route-owned via RoutePlaceholderSyntax (R97) — the bound name is whatever is before a `:` or
+        // `(`. These two reflection-based parsers only stripped `:`, so "Q(f)" was taken whole as the property name: the
+        // URL kept the literal placeholder unsubstituted (SubstitutePlaceholders returned null for the whole template,
+        // so ResolveUrl fell through to no URL at all), and "Q" was not recognised as route-owned by
+        // AppendQueryStringFallback, so it would also have been added to the query string.
+        var descriptor = new ApiOperationDescriptor(typeof(StringQueryOperation), nameof(StringQueryOperation), "test");
+        descriptor.AddUrl(new ApiOperationUrl("/x/{Q(f)}"));
+        descriptor.SetFeatureData(new OperationHttpMethodMetadataFeatureData(ImmutableArray.Create("GET")));
+
+        var app = new BlueprintApp();
+        app.Register(descriptor);
+
+        HttpRequestMessage? captured = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            captured = req;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            };
+        });
+
+        var httpClient = new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri("https://localhost") };
+        var client = new BlueprintHttpClient<BlueprintApp>(httpClient, app);
+
+        await client.SendAsync<System.Text.Json.JsonElement>(new StringQueryOperation { Q = "abc" });
+
+        captured.Should().NotBeNull();
+        captured!.RequestUri!.AbsolutePath.Should().Be("/x/abc");
+        captured.RequestUri.Query.Should().NotContain("Q=");
     }
 }

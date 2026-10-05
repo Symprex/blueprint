@@ -17,7 +17,7 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `BlueprintApiBuilder` references | `AddBlueprintApi<TApp, TExec>()` + `BlueprintServiceBuilder` | Consumer rewrite (BPMIG302) |
 | `IMiddlewareBuilder` implementations | `IBlueprintSourceGeneratorModule` companion generators | Consumer rewrite (BPMIG301) |
 | `AddOpenApi()` | Automatic with HTTP host | Auto-fixable (BPMIG001) |
-| `AddHateoasLinks()` | Automatic when `[SelfLink]`/`[RootLink]` exist | Auto-fixable (BPMIG002) |
+| `AddHateoasLinks()` | Automatic when `[SelfLink]`/`[RootLink]` exist; an app that never called it needs `DisableHateoasLinks()` | Auto-fixable (BPMIG002) where present; configuration-required where absent |
 | `AddAuthorisation()` | Automatic when `[Resource]`/`[MustBeAuthenticated]` exist | Auto-fixable (BPMIG003) |
 | `AddOpenApi(Action<OpenApiOptions>)` | `configureOpenApi:` parameter on `MapBlueprintApi` | Configuration-required (BPMIG100) |
 | `AddAuthentication(...)` | ASP.NET Core `AddAuthentication()` + `UseAuthentication()` | Configuration-required (BPMIG101) |
@@ -30,11 +30,12 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `ICommand` / `IQuery` | Same interfaces | No change |
 | `ValidationException` | `ValidationFailedResult` (no-exception fast path) | Transparent |
 | `IAuditSink` | Same interface, registered via `BlueprintServiceBuilder` | No change |
-| `SetTenantMiddleware` | `TenantModule` (compile-time) via `ITenantResolver` + `ITenantAccessor` DI registration | Registration change |
+| `SetTenantMiddleware` | `TenantModule` (compile-time) via `ITenantResolver` + `ITenantAccessor` DI registration, and `[BlueprintAppTenancy(TenantIdType = ...)]` on the app root to fill only legacy's `TenantId` type | Registration change |
 | `StartRebusTransactionScope` | `IMessageOutbox` via `AddMessageOutbox<T>()` | Consumer rewrite |
 | `SaveMartenChanges` middleware | `IUnitOfWork` via `AddUnitOfWork<T>()` | Registration change |
 | `IUnitOfWork` middleware | Built-in `UnitOfWorkModule` via `AddUnitOfWork<T>()` | No change |
 | `IBackgroundTaskScheduler` | Same interface via `AddBackgroundTaskScheduler<T>()` | No change |
+| `app.UseBlueprintTaskRunner()` (`Blueprint.Tasks.AspNetCore`) | `app.UseBlueprintTaskRunner()` in `Blueprint.Runtime`, which releases nothing for a request routed to a Blueprint operation | No change |
 | `IUserAuthorisationContext` | Same interface via `AddUserAuthorisationContextFactory<T>()` | No change |
 | `IApiAuthoriser` | Same interface via `AddApiAuthoriser<T>()`, or focused `IOperationAuthoriser` / `ILinkVisibilityAuthoriser` | Recommended split |
 | `StateBasedLinkChecker<T,R>` | Now implements `ILinkVisibilityAuthoriser` via `AddLinkVisibilityAuthoriser<T>()` | Registration change |
@@ -80,6 +81,21 @@ public partial class MyBlueprintApp : BlueprintApp { }
 ```
 
 The `partial` keyword is required — the source generator emits the `Register()` method, operation descriptors, and executor code into the other part of this class.
+
+**Behaviour change for operation names (v1.0.3).** Descriptor names — and so OpenAPI `operationId`s, request-body schema
+keys, `x-links` and anything reading `ApiOperationDescriptor.Name`, such as an authorisation manifest — are now formed
+exactly as legacy Blueprint formed them: `Query` and then `Command` are removed wherever they occur in the type name (not
+only as a suffix), and legacy's PascalCasing then folds acronyms. Coming from legacy Blueprint nothing changes. Coming
+from v1.0.2 or earlier, any operation whose name has adjacent capitals, a capital before a digit, or `Query`/`Command`
+mid-name is renamed: `GenerateVCardQuery` `GenerateVCard` → `GeneratevCard`, `GetInvoicesV2Query` `GetInvoicesV2` →
+`GetInvoicesv2`, `GetHTMLPreviewQuery` `GetHTMLPreview` → `GethtmlPreview`, `ExportCommandSample` `ExportCommandSample` →
+`ExportSample`. Regenerate clients from the new document, and rename an operation if `BP009` reports a new collision.
+
+**Behaviour change for an operation at several URLs (v1.0.3).** An operation published at more than one URL is given a
+distinct `operationId` at each — the first keeps the plain name, the second is named `{Name}2`, and so on — instead of
+the same `operationId` repeated. This is what legacy's NSwag document did. See `docs/openapi-migration.md`'s
+"operationId of an operation at several URLs" section for the full rule and the request-body de-duplication that goes
+with it. Regenerate clients that called a second or later URL by a duplicated `operationId`.
 
 ### 3. Generator wiring
 
@@ -141,6 +157,17 @@ app.UseEndpoints(endpoints =>
         });
 });
 ```
+
+The base path may be given as `""`, `"/"`, `"api"`, `"api/"` or `"/api/"`; each is normalised to end with one slash, and
+every route, whether declared with a leading slash or not, is mapped under it with one slash, as legacy mapped it.
+
+As legacy Blueprint's `RootMetadataOperation` did, `GET <basePath>` answers anonymously with the root-metadata document:
+`{"$object":"root","$links":{...},"$partial":false}`, one link per `[RootLink]` or `[Link(null, ...)]` of every exposed
+operation, keyed by the attribute's `Rel` or, without one, by the operation's own descriptor name before any
+`[BlueprintAppOperationNames]` removal, its href absolute with placeholders left as a template. It is mapped with the
+app's other endpoints, so conventions applied to the returned builder (for example `RequireAuthorization`) apply to it
+too; it is not described by the OpenAPI document; and an app that routes its own `GET` operation at the base path keeps
+that operation there instead.
 
 ### 6. Migrate authentication
 
@@ -238,10 +265,95 @@ public sealed class TenantIsolationAuthoriser : IOperationAuthoriser
 blueprint.AddOperationAuthoriser<TenantIsolationAuthoriser>();
 ```
 
+**Behaviour change for a `TenantId` (v1.0.3).** An operation's `TenantId` is bound from the request — route, query
+string or body — like any other property, and appears in the OpenAPI document where the request carries it. `TenantModule`
+fills it from the caller's tenant only when the caller is authenticated and the request left it unset; a tenant the
+caller names is what the authorisers see, so an authoriser such as the one above is what stops a caller using another
+tenant's. For a type-converter `TenantId` (such as Signature365's `ApiId`), an authenticated caller with no tenant that
+leaves it unset has the converter called with null, as legacy's `ApiId.Hydrate(null)` was. Mark a `TenantId`
+`[FromAuthContext]` to take it from the caller's claims alone. Coming from legacy Blueprint nothing changes. Coming from
+v1.0.2, a non-route `TenantId` was never read from the request, was left out of the OpenAPI document, and was filled from
+the caller's tenant whether or not the caller was authenticated.
+
+**Behaviour change for which `TenantId` is filled (v1.0.3).** Only a `TenantId` with a public setter that is not `init` is
+filled; an init-only one, or one whose setter is not public, is never filled, as legacy's `SetTenantMiddleware` skipped an
+init-only one. An app root can also restrict filling to one type:
+
+```csharp
+[BlueprintAppScan]
+[BlueprintAppTenancy(TenantIdType = typeof(ApiId))]
+public partial class PortalBlueprintApp : BlueprintApp;
+```
+
+With `TenantIdType` set, only a `TenantId` of that type or its `Nullable<T>` is filled, an unset non-nullable one
+included; a `TenantId` of any other type, such as a `string`, is bound from the request and otherwise left as the request
+left it. Without it, a `string`, `IParsable<T>`, `TryParse` or `[TypeConverter]` `TenantId` is filled. Coming from legacy
+Blueprint, set `TenantIdType = typeof(ApiId)` on every app root that ran `SetTenantMiddleware`: legacy filled only an
+`ApiId` or `ApiId?`, so a `string` `TenantId` the request left out stayed null. A `[FromAuthContext]` `TenantId` without
+a `ClaimType` is filled by the same rule, so in an app that declares another type it is never set: give it a `ClaimType`,
+or the app's type. Coming from v1.0.2, every supported type was filled whatever the app, and an init-only `TenantId`
+outside the route failed the build in its generated pipeline (CS8852), as did one with a private setter on an operation
+with no HTTP binding (CS0272).
+
 For authorisers that need **both** execution and link visibility, implement `IApiAuthoriser` (which extends both `IOperationAuthoriser` and `ILinkVisibilityAuthoriser`):
 
 ```csharp
 blueprint.AddApiAuthoriser<FullAuthoriser>();
+```
+
+**Behaviour change for authorisation denials (v1.0.3).** A denial is answered with the body legacy Blueprint wrote for it:
+`{"type":"unauthorized","title":"<Message>","status":403}` for an `Authorisation` failure,
+`{"type":"security_failure","title":"<Message>","status":401}` for any other, and
+`{"type":"security_failure","title":"Access denied. Anonymous access is not allowed.","status":401}` for an anonymous caller,
+each with a `traceId` when the operation has an activity. The `Reason` is never written; it is logged at Information under
+`Blueprint.Authorisation.AuthorisationMiddlewareBuilder`. The `ForbiddenResult` or `UnauthenticatedResult` a pipeline returns
+carries the denial as `Failure`. Coming from legacy Blueprint nothing changes in the body, except a `traceId` (see the
+exception bodies below); the content type is `application/problem+json` unless `NegotiateErrorContentType` is set (see
+"Error content type" below). Coming from v1.0.2, the fixed "Unauthorized" / "Forbidden" bodies are gone, and a denial
+whose failure type is not `Authorisation` (a `default` `ExecutionAllowed` included) is a 401 where it was a 403.
+
+**Behaviour change for exception bodies (v1.0.3).** An exception is written with the body legacy Blueprint wrote:
+- an `ApiException` with its own type, title, status, detail and extensions, a null one left out, whatever its status and
+  `ExposeExceptionDetailsInErrorResponses`;
+- any other exception as `{"type":"unknown_error","title":"Something has gone wrong, please try again","status":500}`, or,
+  with details exposed, titled with its message and detailed with its stack trace;
+- in each case a `traceId` extension last, when the operation has an activity.
+
+`UnauthorizedException(message)` puts the message in the title, with no detail. Coming from legacy Blueprint nothing
+changes in the body (for the content type see "Error content type" below), except one deliberate departure: a body
+without an activity never has a `traceId`. Legacy's could. An `ApiException` made without extensions shared one static
+dictionary, which legacy wrote each body's `traceId` into, so a later body with no activity carried another request's
+`traceId`, and concurrent requests raced on it. This applies to denials too. Coming from v1.0.2:
+- a null title or detail was filled in ("Server error", "Request error", the exception message);
+- a 5xx `ApiException`'s detail was replaced;
+- exposed stack traces went in a `stackTrace` extension;
+- no exception body carried `traceId`;
+- `UnauthorizedException` was titled "Unauthorized", with the message as its detail.
+
+**Behaviour change for a handler's `Identity` (v1.0.3).** A handler property of type `IUserAuthorisationContext`
+(`BlueprintApiOperations.Identity`, or a consumer base class's) is given the operation's user as it is:
+`null` when there is no authenticated user, as legacy Blueprint gave it. Coming from legacy Blueprint nothing changes.
+Coming from v1.0.2, it was `AnonymousUserAuthorisationContext.Instance`: empty ids and the name `Anonymous`.
+
+**Behaviour change for form-level validation errors (v1.0.3).** A validation failure that names no member — an
+`IValidatableObject` result without member names, `new ValidationException(message)`, or
+`ValidationFailures.AddFailure(new ValidationResult(message))` — is keyed `form` in a 422's `errors`, and
+`ValidationFailures.FormLevelPropertyName` is `"form"`, as in legacy Blueprint. Coming from legacy Blueprint nothing
+changes. Coming from v1.0.2, the key was `""`.
+
+**Error content type (v1.0.3, opt-in).** Every error is written as `application/problem+json; charset=utf-8` by default.
+Legacy Blueprint negotiated it:
+- no `Accept`, or one that includes `*/*`: exactly `application/json`;
+- otherwise the highest-quality accepted `application/json`, `text/json` or `application/*+json` type, written as the
+  `Accept` line it came from;
+- failing that: `application/json`.
+
+A client that reads a body as JSON only when its content type contains `application/json` needs legacy's behaviour. Set
+`BlueprintHttpOptions.NegotiateErrorContentType = true` for it, and `OpenApiInfoOptions.UsePlainJsonForErrorResponses =
+true` so the document agrees:
+
+```csharp
+services.Configure<BlueprintHttpOptions>(o => o.NegotiateErrorContentType = true);
 ```
 
 #### State-based link visibility
@@ -311,6 +423,11 @@ Blueprint-specific validators are also available:
 
 Invalid property references in cross-property validators are caught at build time (BPV001–BPV007).
 
+**Behaviour change for `RequiredItemsIfAttribute`'s message (v1.0.3).** Its failure message is "The `{0}` field must
+contain at least one non-empty item if `{1}` field is `{2}`.", legacy Blueprint's exact text — it rejects a blank or
+`null` item as well as an empty collection, and the message now says so. Before v1.0.3 it said "at least one item".
+`RequiredItemsIfNotAttribute` (new-only, no legacy equivalent) still says "at least one item".
+
 ### 8. Migrate result types
 
 Handler return types now use semantic result types instead of raw objects:
@@ -359,6 +476,24 @@ Available result types:
 | `KeyOnlyResourceEventResult` | 200/204 | Domain event without body |
 | `StatusCodeResult.*` | Various | Bodyless status code responses |
 | `NotModifiedResult<T>` | 304 | Conditional request matched (via `ETagger`) |
+
+**Behaviour change for a legacy resource event's status (v1.0.3).** A command returning a legacy
+`Blueprint.Http.ResourceEvent<T>` (or `ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>`) is answered with
+a 200 and the event, whatever its change type, with no `Location` header, and is documented as a 200. Before v1.0.3 it
+was a 201 with a `Location` taken from the event's self link when created, a 200 when updated and a 204 when deleted.
+Legacy Blueprint wrapped any returned value that was not an `OperationResult` in an `OkResult`, so it sent every resource
+event as a 200; coming from legacy nothing changes. `ResourceEventResult<T>` is unchanged: 201, 200 or 204 by change type.
+A client that relied on v1.0.2's 201/204 or its `Location` for a legacy event must read the 200 and the event's self link
+instead.
+
+**Behaviour change for a `PlainTextResult` with no content (v1.0.3).** `new PlainTextResult(null)` is written as an
+empty body at the result's status, as legacy Blueprint wrote it; before v1.0.3 its constructor threw
+`ArgumentNullException`. Its `Content` is then empty. A `?? string.Empty` added only to avoid that throw can go.
+
+**Behaviour change for a query's resource event (v1.0.3).** A resource event's `SelfQuery` runs only when the operation is
+a command, as legacy Blueprint ran it. A query that returns a resource event with a self query hands it on as it is:
+`Data` stays `null`, and `SelfQuery` is kept. A query's `DeferredResourceEventResult<T>` is not resolved either. Coming
+from legacy Blueprint nothing changes. Coming from v1.0.2, a query's self query ran and filled `Data`.
 
 #### Response header extensions
 
@@ -425,7 +560,37 @@ public partial class GetTemplateQuery : IQuery<OkResult<Template>>
 public partial class ListTemplatesQuery : IQuery<OkResult<TemplateList>> { }
 ```
 
-Link generation is automatic when link metadata exists — no `AddHateoasLinks()` call needed.
+**Behaviour change for a `[Link]` without a `Rel` (v1.0.3).** Such a link is keyed — in the resource's `$links` and in
+`x-links` — by its operation's descriptor name, taken before any `[BlueprintAppOperationNames]` removal, exactly as legacy
+Blueprint keyed it: `DeleteGroupCommand`'s link on `GroupApiResource` is `$links.DeleteGroup`. Coming from legacy Blueprint
+nothing changes. Coming from v1.0.2 or earlier, the key moves from one made from the resource type (`$links.group`) to the
+operation's, and a second Rel-less link on the same resource, which v1.0.2 silently dropped, is written again. Regenerate
+clients from the new document. `BPLG006` is retired.
+
+**Behaviour change for a link without a type (v1.0.3).** A link whose `Type` is null is written with `"type":null`:
+`{"href":"...","type":null}`. This covers a resource's own links, those of a resource event's data (and so what an audit
+stores), and the root-metadata document's. Legacy Blueprint wrote them that way. Coming from legacy nothing changes.
+Coming from v1.0.2 or earlier, each such link gains the member, which the OpenAPI document already described as
+nullable and not required.
+
+Link generation is automatic when link metadata exists — no `AddHateoasLinks()` call needed, and `BPMIG002` removes one
+that is present.
+
+**An app whose legacy `AddBlueprintApi(...)` never called `AddHateoasLinks()` generated no links at all**: legacy had no
+link step without it (`BlueprintApiBuilderExtensions.AddHateoasLinks`), so every resource it returned, and every
+resource-event payload it audited, carried `"$links":{}`. To keep that output, opt the app out when migrating it:
+
+```csharp
+services.AddBlueprintApi<MyBlueprintApp, MyBlueprintAppExecutor>(blueprint => blueprint.DisableHateoasLinks());
+```
+
+No tool can do this for you, because the call to look for is absent. `DisableHateoasLinks()` applies to that app only,
+to every one of its pipelines (a resource event's self query included), and to every registered `IResourceLinkGenerator`.
+Register one app per service provider. A message Rebus delivers, and `IApiLinkGenerator`, use the provider's last
+registered `BlueprintApp`, so two apps in one provider do not each keep their own setting for those.
+It keeps links a handler adds itself, a resource event's `href`, the root-metadata document, the OpenAPI `x-links` and
+`IApiLinkGenerator`, as legacy did. A `201`'s `Location` header, taken from the created resource's `self` link, is then
+not written unless the handler adds that link.
 
 ### 10. Migrate auditing
 
@@ -511,6 +676,36 @@ public class CreateTemplateHandler(IBackgroundTaskScheduler scheduler)
 }
 ```
 
+#### Scheduling outside an operation
+
+Only a generated pipeline releases the tasks enqueued during it. A task enqueued outside any operation — from a Razor
+page, a controller or a service resolved from the request's services — is released by the opt-in middleware legacy's
+`Blueprint.Tasks.AspNetCore` provided, under the same name (since v1.0.3):
+
+```csharp
+app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.UseBlueprintTaskRunner();
+
+app.UseEndpoints(endpoints => endpoints.MapRazorPages());
+```
+
+As legacy's `TaskRunnerMiddleware` did (`Blueprint.Tasks.AspNetCore/TaskRunnerMiddleware.cs:32-36` at Signature365
+`8b40ecc961`), it awaits the rest of the pipeline and then calls `RunNowAsync()` on the request's
+`IBackgroundTaskScheduler`, whatever status the request was answered with, and releases nothing when the rest of the
+pipeline throws. Two differences:
+
+- **A request routed to a Blueprint operation releases nothing.** Legacy ran each operation in a DI scope of its own
+  (`Blueprint.Http/ApplicationBuilderExtensions.cs:213`), so the request's scheduler never held an operation's tasks;
+  this host runs an operation in the request's scope. The operation's pipeline releases its tasks when it succeeds, and
+  an operation that failed after enqueuing — a validation failure, a handler that threw, a save that threw — must not
+  have them released. A task that code outside the operation enqueued during that same request, which legacy released,
+  is not released.
+- **No scheduler registered releases nothing.** Legacy's middleware took the scheduler as an `Invoke` parameter, so every
+  request failed without one.
+
 #### Background task operations
 
 Background tasks are regular operations with a `[Queue]` attribute:
@@ -526,35 +721,163 @@ public partial class SendWelcomeEmailTask : ICommand<NoResultOperationResult>
 
 The generated pipeline for background tasks includes validation, unit-of-work, message outbox, and audit stages just like HTTP operations.
 
+**Behaviour change for plain Rebus handlers (v1.0.3).** Before v1.0.3, a background task that a plain (non-operation)
+`IHandleMessages<T>` enqueued through its `IBackgroundTaskScheduler` was never released: only a generated pipeline
+flushed the scheduler, and `BlueprintApiActivator` ran no pipeline around such a handler, so the task was discarded with
+the message's scope. Legacy ran every subscribed message as an operation whose pipeline called `RunNowAsync()` after its
+save (`AccessTokenRenewalFailedEventExecutorPipeline.cs:74-82` at Signature365 `8b40ecc961`). The activator now releases
+the scope's tasks when Rebus commits the message's transaction, straight after it saves the scope's unit of work, and:
+
+- only when the delivery succeeded — not for a handler that threw, a save that threw, or a message moved to the error
+  queue;
+- with or without a registered `IUnitOfWork`, as legacy's runner matched every operation;
+- before the commit callbacks an `IRebusTransactionEnlistment` or the transport's first send registered, so, as for a
+  generated pipeline's flush, a task provider must not send a Rebus message.
+
+A consumer whose plain handlers enqueue tasks sees them dispatched. One with no `IBackgroundTaskScheduler` registered
+sees no change.
+
+**Behaviour change for recurring tasks on Hangfire (v1.0.3).** `Blueprint.Hangfire`'s `HangfireRecurringTaskProvider`
+now registers and removes recurring jobs as legacy Blueprint's provider did (Signature365 `8b40ecc961`,
+`Blueprint.Tasks.Hangfire/HangfireRecurringTaskProvider.cs:52-66,85-86`). Before v1.0.3 it registered every declared
+schedule at host start under a `blueprint:{Name}` id and removed nothing. Now:
+
+- **Registration runs from a scheduler job, not at start-up.** Start-up only installs the recurring job
+  `{DefaultQueue}:Scheduler` (`:Scheduler` when no default queue is set), which re-runs registration every 30 minutes
+  (`*/30 * * * *`). Schedules are therefore registered when that job first runs, on a Hangfire server that listens to the
+  default queue — up to 30 minutes after a deployment, and not at all in a process with no such server.
+- **Every undeclared recurring job is removed.** Each registration removes every recurring job the Hangfire storage
+  lists that is not a declared schedule and is not the scheduler job, whatever its id. In a storage shared with other
+  apps or with recurring jobs created outside Blueprint, those jobs are removed too, as they were under legacy;
+  partition the storage by app (as Signature365's `RecurringJobPartitionedSqlServerStorage` does) before upgrading.
+- **Job ids change** to legacy's `{SchedulerType}:{Name}`, so the jobs v1.0.2 registered under `blueprint:{Name}` are
+  removed by the first registration and replaced.
+- **A scheduler that throws declares nothing.** Its exception is logged ("Its recurring tasks will be removed") and its
+  jobs are removed by that registration; they come back at the next one that succeeds.
+- **Queues:** a recurring job runs on its schedule's `Queue`, or the app's default queue; the task's own `[Queue]` is no
+  longer used for it. `BlueprintTaskOptions.DefaultQueue` is now `string?` and unset by default (it was `"default"`);
+  Hangfire's `default` queue is used when it is unset.
+
+**Behaviour change for failed background tasks on Hangfire (v1.0.3).** Before v1.0.3, a background task whose pipeline
+threw completed its Hangfire job as succeeded, with the failure only logged. The exception now fails the job, so
+Hangfire records the failure and applies its retry policy (ten automatic retries by default): a task that partly
+succeeded before throwing can run again, and must be safe to. Any other non-successful result, such as a validation
+failure, is logged and completes the job as before.
+
 ### 13. Persistence
 
-Register a unit-of-work implementation to auto-save changes after successful command execution:
+Register a unit-of-work implementation to auto-save changes after an operation succeeds:
 
 ```csharp
 blueprint.AddUnitOfWork<MartenUnitOfWork>();
 ```
 
-The generated pipeline calls `SaveChangesAsync()` on `IUnitOfWork` after successful command execution. Opt out per-operation:
+The generated pipeline calls `SaveChangesAsync()` on `IUnitOfWork` after any operation — command, query or background
+task — succeeds. Opt out per-operation:
 
 ```csharp
 [DoNotSaveChanges]
 public partial class PreviewCommand : ICommand<OkResult<Preview>> { }
 ```
 
+**Behaviour change for queries (v1.0.3).** Before v1.0.3 only commands and background tasks saved the unit of work,
+opened a Rebus transaction scope and enlisted it (`IRebusTransactionEnlistment`); a query did none of them. Legacy
+Blueprint did all three after any operation: Signature365's `SaveMartenChangesMiddleware` and
+`UseMartenAsOutboxMiddleware` matched every operation without `[DoNotSaveChanges]`, and
+`StartRebusTransactionScopeMiddleware` every one without `[NoRebusTransaction]`
+(`Common/Data/Marten/SaveMartenChangesMiddleware.cs:24-29` at Signature365 `8b40ecc961`). A query now does too:
+
+- a document a query stores in the scope's session is saved, and a message it sends is held in its Rebus transaction
+  and sent when the query completes, rather than at once (through the enlisted outbox, where one is registered);
+- `[DoNotSaveChanges]` on a query stops the save and the enlistment (the scope still opens), and no longer raises
+  `BPP001`, which is retired; `[NoRebusTransaction]` on a query stops the scope;
+- a query run nested — a resource event's self query, which runs inside its command's scope and session — opens no
+  scope, enlists nothing and saves nothing, as legacy ran a nested operation through a pipeline without these steps. A
+  nested command or background task behaves as before: it saves, and opens and enlists a scope of its own.
+
+A query that stores or sends something it must not keep needs `[DoNotSaveChanges]`. A query that must not share a Rebus
+transaction needs `[NoRebusTransaction]`.
+
+**Behaviour change for Marten domain events (v1.0.3).** Before v1.0.3, domain events raised by Marten entities were
+dispatched to in-process `IDomainEventHandler<TEvent>` implementations and never published:
+`AddBlueprintMarten` registered `DomainEventDispatchingSessionListener` before `OutboxPublishingSessionListener`, and the
+first cleared every entity's events before the second could see them, so a registered `IDomainEventPublisher` was never
+called. `DomainEventDispatchingSessionListener` now dispatches each event to its handlers, then publishes it to the
+registered `IDomainEventPublisher` (when there is one), and only then clears it. `AddBlueprintMarten` no longer
+registers `OutboxPublishingSessionListener`; it remains for a consumer that wants publishing without in-process dispatch.
+
+A consumer that registered an `IDomainEventPublisher` now has every domain event published during the session's save,
+after the in-process handlers have run. Publishing through the transactional outbox keeps that inside the save's
+transaction; a publisher that sends directly does so before the transaction commits. One with no
+`IDomainEventPublisher` registered sees no change.
+
 ### 14. Messaging
 
-Register a message outbox to publish messages after successful command execution:
+Register a message outbox to publish messages after successful command or background task execution:
 
 ```csharp
 blueprint.AddMessageOutbox<RebusMessageOutbox>();
 ```
 
-The generated pipeline calls `FlushAsync()` on `IMessageOutbox` after successful command execution (and after unit-of-work save). Opt out per-operation:
+The generated pipeline calls `CommitAsync()` on `IMessageOutbox` after a command or background task succeeds (and after unit-of-work save). Opt out per-operation:
 
 ```csharp
 [DoNotPublishMessages]
 public partial class InternalSyncCommand : ICommand<NoResultOperationResult> { }
 ```
+
+`IMessageOutbox` is Blueprint's own seam; legacy Blueprint had nothing like it, and it is not the Marten session outbox
+legacy's `UseMartenAsOutboxMiddleware` enlisted (for that, see `IRebusTransactionEnlistment` in
+[integration-packages.md](integration-packages.md#transactional-outbox)).
+
+**Behaviour change for background tasks (v1.0.3).** Before v1.0.3, only `ICommand` pipelines committed the
+`IMessageOutbox`, so every message a background task enqueued through it was discarded with the task's scope. Background
+tasks (`Blueprint.Tasks.IBackgroundTask`) now commit it as commands do, after the unit of work save and only on
+success. For a consumer that registers an `IMessageOutbox`:
+
+- messages its background tasks enqueue through it are now published;
+- `[DoNotPublishMessages]` on a background task now opts that task out, and no longer raises `BPM001`;
+- `BPM001` still warns for `[DoNotPublishMessages]` on any operation that is neither a command nor a background task.
+
+A task that relied on its outbox messages being dropped needs `[DoNotPublishMessages]`. A consumer with no
+`IMessageOutbox` registered sees no change.
+
+**Behaviour change for handlers of a base message type (v1.0.3).** Before v1.0.3, `AddBlueprintRebusConsumer`
+registered each scanned `IHandleMessages<T>` for its own `T` only, and `BlueprintApiActivator` resolves a message's
+handlers by the message's exact type, so a handler of a base class or interface never ran for a derived message:
+Signature365's `SurveyThankYouKvPushHandler`, an `IHandleMessages<SurveyEditedEvent>`, did nothing for a
+`SurveyPausedEvent : SurveyEditedEvent`, which Rebus then failed to dispatch. Legacy made every subscribed message an
+operation and gave it every scanned handler of a type it could be assigned to
+(`Symprex.Signature365.BlueprintRebus/RebusHandleMessageOperationExecutorBuilderScanner.cs:50-75` at Signature365
+`8b40ecc961`). `AddBlueprintRebusConsumer` now does the same when it scans the calling assembly:
+
+- a scanned `IHandleMessages<TBase>` is also registered as the handler of every subscribed message type assignable to
+  `TBase`, whether `TBase` is a base class or an interface;
+- a subscribed message's handlers run in the order legacy's scanner gave them, by handler type as the assembly lists
+  them, not its own type's first;
+- a message type that is not subscribed gets only its own handlers, as before (legacy ran none for it);
+- a handler of a type derived from the message's type is not registered for it, as it cannot be given the message.
+
+A handler that implements both `IHandleMessages<TBase>` and `IHandleMessages<TDerived>` now runs twice for a subscribed
+`TDerived`, both times through its `TDerived` method, as legacy's pipeline called it twice: its scanner matched the
+handler once per interface and kept both (`RebusHandleMessageOperationExecutorBuilderScanner.cs:54-74`,
+`ApiOperationDescriptor.cs:179-194`). Handlers registered by hand rather than by the scan are unchanged.
+
+**A host with no operations.** A host that uses Blueprint only for Rebus — it declares no operations and maps no
+Blueprint routes, as Signature365's GraphProxy does — registers its app directly and does not call `AddBlueprintApi`:
+
+```csharp
+services.AddSingleton<BlueprintApp, GraphProxyBlueprintApp>();
+services.AddBlueprintRebusConsumer(_ => { });
+services.AddBlueprintRebus(/* the host's Rebus configuration */);
+```
+
+`AddBlueprintApi<TApp, TExec>` needs the executor the generator emits for an app with a `[BlueprintAppScan]`, and a scan
+that finds no operations is `BP003`, so such an app has no executor to name. `BlueprintApiActivator` needs only the app,
+plus the `BlueprintRebusConfiguration` that `AddBlueprintRebusConsumer` registers. The executor is needed only to run an
+operation, and this host has none, so it sends, publishes and handles plain `IHandleMessages<T>` messages without one.
+Legacy's activator needed the same. `[BlueprintAppSerializerContext]` does nothing on an app without a
+`[BlueprintAppScan]`.
 
 ### 15. Property population
 
@@ -580,6 +903,122 @@ blueprint.AddPropertyPopulator<TenantPropertyPopulator>();
 ```
 
 Property populators run at the Authentication stage, after user context is loaded but before validation and authorization.
+
+**Behaviour change for absent route values (v1.0.3).** When a route property's value is not in the request's route
+values, and the property is a placeholder in *every* one of the operation's route templates, the operation keeps the
+value it already has, whatever the property's type. This is what legacy Blueprint did. It is what happens when an
+operation is executed in process with a fresh `HttpContext`, as an `ApiFixture` or a CLI executes one. Before v1.0.3
+that was only true of `string` and `[TypeConverter]` properties: a typed one (`int`, `Guid`, …) was a binding failure,
+so an in-process caller had to fill `HttpContext.Request.RouteValues` itself. It no longer has to. A route value that
+is present but cannot be parsed is still a binding failure.
+
+**Behaviour change for a placeholder in only some of an operation's links (v1.0.3).** A property that is a route
+placeholder in some of the operation's links but not all of them is not exclusively route-owned: through a link that
+carries the placeholder it still binds from the route, but through one that leaves it out it now falls back to the
+query string (a GET) or the body (any other method) instead of keeping its type's default (`0`, `Guid.Empty`, an unset
+`TenantId`, …). This is what legacy Blueprint did — its route source only ever owned a placeholder property
+exclusively when every link carried it; otherwise the query/body source read it too, and ran first, so a route value
+present for the matched link still won. Before v1.0.3 the property was left at its default through a placeholder-less
+link and the operation still ran, silently answering for the wrong (or no) value. `TenantId` is filled from the
+caller's tenant only when neither the route nor the fallback sets it, as before.
+
+**Behaviour change for alternate-named route placeholders (v1.0.3).** A `[SelfLink]` or `[Link]` placeholder that names
+an alternate resource property, `{UserTenantId:TenantId}`, binds the operation's `UserTenantId` from the path, as
+`{UserTenantId}` does. This is what legacy Blueprint did. Before v1.0.3 the property was read from the query string (a
+GET) or the body instead, and filled from the caller's tenant if it was a `TenantId`, although the URL it was routed at,
+and the URL the generated client sent, carried it in the path. `[FromRoute]` on such a property now compiles (it reported
+BPPO005), and the OpenAPI document publishes it as a path parameter. A root link's URL is still routed as declared, so a
+colon there is ASP.NET's inline constraint syntax.
+
+**Behaviour change (v1.0.3).** A route placeholder finds its operation property ignoring case, and the route is registered,
+linked and documented under the property's own name: `[RootLink("/track/{type}")]` on a property named `Type` compiles
+(it reported BPPO012 and BPLG001), routes `/track/{Type}`, binds `Type` from the path and publishes a `Type` path
+parameter. This is what legacy Blueprint did (`ApiOperationLink.cs:59-61` read the property with
+`BindingFlags.IgnoreCase`; `:76` routed `"{" + property.Name + "}"`). A `[SelfLink]` or `[Link]` placeholder, and its
+`:AlternateName`, likewise finds the resource's property ignoring case, and the generated link reads it by the name
+the resource spells it. A placeholder that matches no property even ignoring case is still reported. Where two
+properties differ only in case, the placeholder takes the one spelled exactly as it (legacy threw on the ambiguity).
+
+**Behaviour change (v1.0.3).** A client registered with `AddBlueprintClient<TInterface, TImplementation>` serialises and
+deserialises through the app's configured `BlueprintJsonOptions` (`services.AddOptions<BlueprintJsonOptions>()` or
+`ConfigureJson`), as legacy's did: its `BlueprintHttpClient` took `IOptions<BlueprintJsonOptions>` from DI
+(`Common.Core/Api/BlueprintHttpClientRegistration.cs:83`, `BlueprintHttpClient.cs:40-44` in Signature365). Before v1.0.3
+it always used Blueprint's defaults, so a NodaTime `Instant` (or any other converter-dependent type) in a
+service-to-service request or response could not be read (`JsonException`) or was written in another format. An app that
+configures no options gets the defaults, as before. `AddBlueprintHttpClient<TApp>` is unchanged: it takes its
+`JsonSerializerOptions` as an argument.
+
+**Behaviour change (v1.0.3).** `AddBlueprintApi` installs the app's source-generated serializer context on
+`BlueprintJsonOptions` as the options are made (an `IPostConfigureOptions<BlueprintJsonOptions>`), not when the app is
+first resolved. Legacy configured those options only through `services.Configure`, and clients now share them (above), so
+a client that read or wrote JSON before the app was resolved made the app's own installation throw ("This
+JsonSerializerOptions instance is read-only or has already been used") and every later resolution of the app rethrow.
+Resolving the app still makes the options, so it still finds the context installed; only the first options made for the
+default name are given it, not a named or per-scope copy. Options you configure in `services.Configure` still run first.
+
+**Behaviour change (v1.0.3).** Under `OpenApiSchemaNaming.Legacy`, a non-GET operation whose request body has no properties
+still has a schema component in the document, though it references none and the operation has no `requestBody`: a closed
+empty object, `{"type":"object","description":…,"additionalProperties":false}`, keyed as the operation type's own schema
+is (by `OpenApiRequestBodyNaming` and the `SchemaNameFormatter`) and described by the type's XML summary. Legacy
+registered the schema of the operation's type as it generated it and only then dropped the empty body
+(`Blueprint.OpenApi/OpenApiDocumentBuilder.cs:347`, `:357-360`, `:601-611` in Signature365); Signature365's 18 legacy
+documents carry 128 such operations and 128 such components, and no GET has one. A client generated from the document
+gets a factory and a validator for each (a form built around a body-less command needs one). Default naming writes none,
+as before.
+
+The same holds for an operation published as GET and another method (legacy generated per method, so it had the
+component from the non-GET one), and for a body an operation processor (`OpenApiOperationProcessorOptions`) empties and
+drops: legacy's `ConfigureOperation` edited the registered schema in place and then removed the body, so the emptied
+component stayed. Signature365's Portal drops an auto-populated `TenantId` this way from 22 commands whose only body
+property it is.
+
+**Behaviour change (v1.0.3).** Under `OpenApiSchemaNaming.Legacy`, a validation attribute implies a schema `format` only
+where legacy's NJsonSchema derived one: from a `DataTypeAttribute` through its `EmailAddress`, `PhoneNumber` and `Url`
+map, so `System.ComponentModel.DataAnnotations.EmailAddress`, `Phone` and `Url` give `email`, `phone` and `uri`, while
+Blueprint's own `[EmailAddress]` and `[Url]` (which are `RegexAttribute`s) and `[CreditCard]` give none. A client
+generated from the document turns a format into a validator, so a format legacy never wrote would reject input its forms
+accept. This applies to request-body and component properties alike; a parameter already had no validation-derived
+format under Legacy. Default naming keeps every format, as before.
+**Behaviour change (v1.0.3).** `ReflectionUtilities.GetUnderlyingTypeIfNullable(null)` returns `null`, as legacy's did
+(`Blueprint/Utilities/ReflectionUtilities.cs:21-29`); it threw an `ArgumentNullException`. The parameter is now `Type?`,
+and the return is not null whenever the argument is not, so callers that pass a real type see no change. A call site that
+guarded a null type only to avoid the exception can drop the guard.
+
+**Behaviour change (v1.0.3).** A partial resource's generated `$object` is named by legacy's rule, the one
+`ApiResource.GetTypeName` follows and the `eventId` and `resourceObject` of its events use: `ApiResource`, `Resource` and
+`DTO` removed wherever they occur, underscores PascalCased away, and the first character alone lowered. A name that starts
+with an acronym therefore keeps it: `SMSMessageApiResource` is `sMSMessage` (as legacy's was), no longer the generator's
+`smsMessage`, which disagreed with its events' `sMSMessage`. An explicit `[JsonSchema("Name")]` is camelized the same way;
+`[ResourceObjectName("name")]` is used as written. Both override `$object` alone, as legacy's constructor override
+(`GatewayImportRunApiResource`) did: `GetTypeName`, and so the events' names, stay the type-name rule's. A client that
+read a resource whose name starts with an acronym as `smsMessage` must read `sMSMessage`.
+
+**Behaviour change for a DELETE (v1.0.3).** A DELETE's properties that are not in its route are read from its JSON body,
+as a POST's are, and no longer from its query string. `BlueprintHttpClient` sends a DELETE's operation as its JSON body
+with no query string, and the OpenAPI document describes those properties as its request body. This is what legacy
+Blueprint did: it read the body of every request but a GET, and the query string of a GET alone. A DELETE with no body
+is bound from its route alone, as before. `[FromBody]` on a DELETE property now compiles; BPPO004 applies to a GET only.
+A caller that sent a DELETE's properties in the query string must send them in the body.
+
+**Behaviour change (v1.0.3).** A request whose `Content-Type` is set but is not JSON no longer gets a 415 for any
+method: the operation's body properties are simply left unpopulated, for every request but a GET — legacy Blueprint
+never rejected a body it could not parse; it silently left the operation as it was
+(`HttpBodyMessagePopulationSource.cs:80-86`). A body-less DELETE, HEAD or OPTIONS that nonetheless carries a stray,
+non-JSON `Content-Type` (a proxy or client default) is bound from its route alone, not 415'd, as before v1.0.3
+brought DELETE/HEAD/OPTIONS under the same check as POST/PUT/PATCH. POST, PUT and PATCH now match too: a stray or
+wrong content type on one of those leaves the operation's body properties unset rather than short-circuiting to a
+415 — if those properties are required, validation reports them missing instead.
+
+This is *not* what legacy Blueprint did in one respect: legacy registered a `FormBodyParser` by default for exactly
+`application/x-www-form-urlencoded` and `multipart/form-data`, and bound form fields and `IFormFile` properties from a
+request carrying one of those (`BlueprintHttpOptionsSetup.cs:25`, `Formatters/FormBodyParser.cs:29-30`). This
+framework has no form binding, so it cannot reproduce that behaviour; silently ignoring the body would let the
+handler run with those properties unset instead. A request with one of those two content types and a body still gets
+a 415, on any method that reads a body — this is the one non-JSON content type family this framework refuses rather
+than ignores. One with no body (`Content-Length: 0`, or an empty chunked body) runs the handler with the operation as
+it was, as legacy did for `Content-Length: 0` and for an empty chunked urlencoded body: it read those as an empty form
+and bound nothing (an empty chunked multipart body, which legacy's form reader failed on with a 500, runs the handler
+too). Every other non-JSON content type (`text/plain`, `application/xml`, …) is ignored as described above.
 
 ## Development-time inspection
 
@@ -620,6 +1059,114 @@ endpoints.MapBlueprintApi<MyApp, MyAppExecutor>(
 
 Processors run once at startup and receive both the rendered `OpenApiOperationModel` and the source `ApiOperationDescriptor`, so you can filter by descriptor metadata (e.g. only strip parameters from authenticated operations).
 
+### OpenAPI document changes in v1.0.3 that apply under every schema naming
+
+These change the document a consumer on `OpenApiSchemaNaming.Default` reads too, not only one on `Legacy` naming. Coming
+from v1.0.2 or earlier, regenerate the clients from the new document and expect the differences below.
+
+**Behaviour change for two enums of one simple name (v1.0.3).** Two distinct enum types with the same simple name (two
+nested `Status` enums, or two apps' own `AuthEnforcementType`) are now named apart by the same counter that names two
+same-named classes: the second is `X2`, with its own member list. Before, both properties referenced the one component and
+the second enum's members were lost, so a client saw the wrong values. A single enum is named as before.
+
+**Behaviour change for an enum-array query parameter (v1.0.3).** A collection query parameter of an enum
+(`InvoiceStatus[]? Statuses`) now describes its `items` inline with the member names — `type: string`, `enum`,
+`x-enumNames` and `x-enum-varnames` — where it was a bare `{"type": "string"}` and a generated client lost the enum. The
+enum is written inline, as a scalar enum query parameter already is, not as a `$ref` to a component. A `Header` or
+`Cookie` array parameter is unchanged.
+
+**Behaviour change for a NodaTime request-body or query property (v1.0.3).** A NodaTime property of a request body or a
+parameter now carries its ISO-8601 `format`, as the same type already did in a response schema: `Instant`,
+`OffsetDateTime`, `ZonedDateTime` and `LocalDateTime` are `date-time`, `LocalDate` is `date`, `LocalTime` is `time`, and
+`Duration`, `Period` and `Offset` are `duration`. Before, they were a bare `string`, so a generated client typed the field
+as a plain string.
+
+**Behaviour change for the ResourceEvent envelope's text (v1.0.3).** The `changeType` and `href` properties of a
+`ResourceEvent` envelope are now described by the framework's own summaries ("Gets the change type of this event,
+indicating whether the resource was created, updated or deleted." and the `href` one) unless `SchemaNaming` is `Legacy`,
+where they keep legacy Blueprint's wording (typo included). Before, every consumer got legacy's wording, which refers to
+a `Type` property `ResourceEvent` does not have. The wording is the only difference. A caller of
+`OpenApiDocumentRenderingContext.Create` chooses it with its new optional `useLegacyResourceEventText` argument, which
+defaults to `false`.
+
+**Behaviour change for a non-public `ApiExceptionFactory` (v1.0.3).** An operation's error statuses now come from every
+`static` field of type `ApiExceptionFactory` the operation declares, whatever its accessibility and whether or not it is
+`readonly`, as legacy Blueprint's `GetFields(Static | NonPublic | Public)` read them. Before, only `public static
+readonly` fields counted, so a private factory's status was missing from the document, from the operation's
+response metadata and from a client's error catalogue. Expect responses (for example a `410`) to appear on operations that
+declare their factories privately.
+
+**Behaviour change for when an operation's factories are read (v1.0.3).** The generated descriptor reads each factory's
+`Title` and `Type` when it is built — in the generated app's constructor, for every operation that declares a factory,
+under either naming — as legacy read each field's value. Reading a `static` field runs the static initialisation of the
+type that declares it, so an operation's static initialiser (and that of a class it borrows a factory from, such as
+`= PartnerApiExceptions.NotFound`) now runs when the app is constructed instead of on first use. An initialiser that
+throws, or a factory that is still `null` then, fails at construction. Declare a factory as a `static readonly` field with
+a plain initialiser, and keep other work out of an operation's static initialiser.
+
+**Behaviour change for an enum reached only as an array's items or a dictionary's values (v1.0.3).** A response
+resource's `IEnumerable<SignatureUsage>` property (or a `Dictionary<string, SignatureUsage>`, or a dictionary of arrays of
+it) wrote `items.$ref` to the enum's component, but the component was collected only from a property's own enum, so it was
+not written and the reference dangled: a generated client could not resolve the type. Such an enum now has its component,
+with its members and the description of its type, as a property's own enum has. Regenerate clients: expect components such
+as `SignatureUsage` to appear.
+
+**Behaviour change for a property typed as `IEnumerable<T>` (v1.0.3).** A request-body property declared as the interface
+itself (`IEnumerable<string>? ApplyTo`) is now an array with typed `items`. Before, only a type that implements the
+interface (`List<T>`, an array, a read-only list) was recognised, and the interface was documented `"type": "string"`, so a
+generated client typed the field as a string.
+
+**Behaviour change for a `System.Type` property (v1.0.3).** A property of `System.Type`, which an app's converter writes as
+the type's name, is now documented `"type": "string"`, and an `IEnumerable<Type>` as an array of string `items`. Before, a
+response property had no schema type at all, a collection of them was an array with no `items` (which is not valid OpenAPI
+3.0 and stopped client generators that cannot type it), and a request-body property was an `object`.
+
+**Behaviour change for an exclusive numeric bound under `Default` naming (v1.0.3).** `[GreaterThan]` and `[LessThan]` are
+no longer written as `"minimum": 0, "exclusiveMinimum": true` (and the maximum's pair): that is OpenAPI 3.0's form, and
+draft-07 validators, such as the AJV a generated client uses, reject the boolean as an invalid schema and stop. No document
+is valid in both, so none is written. An integer's exclusive bound is written as the next integer (`[GreaterThan(0)]` is
+`"minimum": 1`, `[LessThan(1001)]` is `"maximum": 1000`), which is the same set of values; a number's (`decimal`, `double`,
+`float`) as the inclusive bound (`"minimum": 0`), which rejects nothing the server accepts and admits the bound itself.
+`Legacy` naming writes neither, as legacy Blueprint's NJsonSchema did not know the attributes. Check a validator built on
+these bounds if it relied on the exclusive keyword.
+
+**Behaviour change for path keys (v1.0.3).** Every key of `paths` now has exactly one leading slash. A link declared
+without one (`[Link(..., "signatures/{SignatureId}/publish")]`) was a key without one, which is not a valid OpenAPI path
+and which a client generator cannot join to a base URL, as legacy Blueprint's `"/" + route` never was. A route declared both
+with and without the slash is now one path item, not two. Regenerate clients that called those operations.
+
+**Behaviour change for the order of an operation's link attributes (v1.0.3).** The URLs, resource links and root links of an
+operation are now registered in the order its `[SelfLink]`, `[RootLink]` and `[Link]` attributes are declared, whichever
+kinds they are, as legacy Blueprint's scanner registered them. Before, every root link came before every self link, and
+those before every `[Link]`. It changes the order of the operation's URLs, of its resource links and of its root links,
+which the root document lists. The first URL declared also keeps the operation's plain `operationId` in every naming (see
+the note above on an operation at several URLs), so an operation declaring a `[SelfLink]` before a `[RootLink]` now
+numbers them the other way round: `GetAccountInjectionStatus` at the self link's URL and `GetAccountInjectionStatus2` at
+the root link's.
+
+**Behaviour change for `x-links` on a resource reached through another (v1.0.3).** A resource that only ever appears as the
+items of a list, or as a nested property, of another resource (a `Product` in a list) now carries the `x-links` of the
+action links declared against it. Before, links were attached only to a type the app returned directly, so a generated
+client lost the `canExecute` actions of a resource it received nested. A resource that is itself a nested class is found
+by its full name too. Regenerate clients and expect more resource components to carry `x-links`.
+
+**Behaviour change for a deprecated property that references a component (v1.0.3).** A deprecated property written as a
+reference to a component (an enum, or an object that is nullable or described) now carries `deprecated: true` and its
+message (`x-deprecated-reason`, or `x-deprecatedMessage` under `Legacy` naming), beside the `oneOf` around the `$ref`.
+Before, only a plain property did, and the deprecation was dropped from a
+reference. A deprecated reference that is neither nullable nor described was a bare `$ref`, which cannot carry either, so
+it is now wrapped in `oneOf` too.
+
+**Behaviour change for an operation's and a parameter's deprecation message under `Legacy` naming (v1.0.3).** Under
+`SchemaNaming = Legacy`, a deprecated operation's or parameter's message is written as `x-deprecatedMessage`, as a
+deprecated property's is, and no longer as `x-deprecated-reason`; `deprecated: true` is unchanged. Legacy Blueprint's own
+document generator never marked an operation or parameter deprecated (none of Signature365's 18 legacy documents has
+one), so this follows the key NJsonSchema wrote for a schema, which NSwag's parameter is. `Default` naming still writes
+`x-deprecated-reason`.
+
+**Behaviour change for the `Link` component (v1.0.3).** The well-known `Link` schema component now has
+`"additionalProperties": false`, as every other object component the framework writes has. Before it allowed further
+properties, so a client that generates strict types from `additionalProperties` got a looser `Link` than every other model.
 ## Compile-time diagnostics
 
 The source generator catches contract errors at build time. Key diagnostics:
@@ -629,13 +1176,21 @@ The source generator catches contract errors at build time. Key diagnostics:
 | BP001–BP008 | Core contracts | Missing partial, missing handler, unsupported return type |
 | BP101–BP104 | Validation | Invalid CompareAttribute, GreaterThanProperty, LessThanProperty references |
 | BPA001 | Auditing | [Sensitive] on non-public property |
-| BPM001 | Messaging | [DoNotPublishMessages] on non-command |
-| BPP001 | Persistence | [DoNotSaveChanges] on non-command |
+| BPM001 | Messaging | [DoNotPublishMessages] on an operation that is neither a command nor a background task |
+| BPP001 | Persistence | Retired in v1.0.3 ([DoNotSaveChanges] now has effect on a query) |
 | BPT001 | Background tasks | BackgroundTask operation not a command |
 | BPMOD001–004 | Module system | Ordering conflicts, duplicate contributors, missing variables |
 | BPMIG001–201 | Migration | Legacy patterns requiring attention |
 
 See `docs/compile-time-validation.md` for the full diagnostic reference.
+
+**Behaviour change for `BP109`/`BP110` and a `KeyOnlyResourceEventResult` union (v1.0.3).** The host writes a
+`KeyOnlyResourceEventResult` as the empty 201, 200 or 204 of its change type, known only at run time, so `BP109`
+(same host response shape) and `BP110` (same HTTP status, no discrimination strategy) now judge it against all three
+statuses, not only 201. A union that passed before v1.0.3 — for example `Results<KeyOnlyResourceEventResult,
+NoResultOperationResult>`, indistinguishable on an update's empty 200 — now fails to build. See
+`docs/compile-time-validation.md`'s `BP109`/`BP110` entries for the full rule. `KeyOnlyResourceEventResult` is
+new-only, so no legacy Blueprint consumer is affected.
 
 ## Running the migration tooling
 
@@ -704,8 +1259,9 @@ After migration, verify:
 - [ ] Authentication returns 401/403 with ProblemDetails bodies
 - [ ] Audit events fire with correct trace correlation
 - [ ] Background tasks flush after successful commands
-- [ ] Unit of work saves after successful commands
-- [ ] Resource events emit with correct change types (201 Created, 200 Updated, 204 Deleted)
+- [ ] Unit of work saves after successful commands and queries (not after `[DoNotSaveChanges]` ones)
+- [ ] Resource events emit with correct change types: a `ResourceEventResult<T>` as 201 Created, 200 Updated or 204
+  Deleted; a legacy `Blueprint.Http.ResourceEvent<T>` as a 200 with the event, whatever its change type
 - [ ] Self-link URLs appear in response `_links` and 201 Location headers
 
 ## Consumer-space companion packages
@@ -737,7 +1293,7 @@ The `ConsumerModuleCompositionTests` in this repository prove that companion gen
 
 ### Rebus messaging
 
-Blueprint includes a built-in `IMessageOutbox` pipeline module that commits enqueued messages after successful command execution. This replaces legacy Blueprint's `StartRebusTransactionScopeMiddleware` / `CommitRebusTransactionScopeMiddleware` pair:
+Blueprint includes a built-in `IMessageOutbox` pipeline module that commits enqueued messages after a command or background task succeeds. It does not replace legacy Blueprint's `StartRebusTransactionScopeMiddleware` / `CommitRebusTransactionScopeMiddleware` pair; the generated `RebusTransactionModule` does that, opening and completing a `RebusTransactionScope` itself. `IMessageOutbox` is an additional seam legacy did not have, for example:
 
 ```csharp
 public class RebusMessageOutbox : IMessageOutbox
@@ -757,7 +1313,7 @@ Register it via the builder:
 blueprint.AddMessageOutbox<RebusMessageOutbox>();
 ```
 
-The generated pipeline calls `CommitAsync` in the PostExecution stage (after UnitOfWork save, before auditing) only when `handlerResult.WasSuccessful` is true. Operations decorated with `[DoNotPublishMessages]` are excluded.
+The generated pipeline calls `CommitAsync` in the PostExecution stage of a command or background task (after UnitOfWork save, before auditing) only when `handlerResult.WasSuccessful` is true. Operations decorated with `[DoNotPublishMessages]` are excluded.
 
 For Rebus handler discovery, create a companion generator that:
 
@@ -852,7 +1408,7 @@ This section documents what has been optimized and what remains runtime by desig
 | Authorization checks (`CanShowLinkAsync`) | Depend on current user's claims and context |
 | `IApiAuthoriser` / `IOperationAuthoriser` | Business-rule authorizers are DI-resolved by design |
 | `ResourceKeyTemplateExpander` | Resource key expansion depends on runtime data and the current principal/context |
-| HATEOAS link population (non-self) | Auth-gated link visibility requires runtime user context |
+| HATEOAS link population (self included, as legacy made it) | Auth-gated link visibility requires runtime user context; every link is absolute under the request's base URI |
 | `IUnitOfWork.SaveChangesAsync` | Database persistence is inherently runtime |
 | `IMessageOutbox.CommitAsync` | Message bus interaction is runtime |
 | `IAuditSink.RecordAsync` | Audit recording targets runtime sinks |
@@ -986,6 +1542,51 @@ Blueprint provides clean interfaces for third-party infrastructure integration. 
 the legacy middleware-builder pattern with DI-resolved contracts that the generated pipeline
 calls at the correct stage.
 
+### Service-to-service calls (BlueprintHttpClient)
+
+**Behaviour change for a 204 (v1.0.3).** `SendAsync<T>` (and `CallAsync<T>`) read a 204 No Content as legacy Blueprint's
+client read it: as a result the host writes as an empty 204 (`HttpNoContentResult`, a deleted
+`KeyOnlyResourceEventResult`, `StatusCodeResult.NoContent`), as `StatusCodeResult.NoContent.Instance` when `T` can hold a
+`StatusCodeResult` (`object`, `OperationResult`), and otherwise by throwing `InvalidOperationException` ("Could not
+understand the response of calling …"). Coming from legacy Blueprint nothing changes. Coming from v1.0.2, where a 204
+returned `default`, a caller that checked for `null` after a 204 must declare a result that can hold one.
+
+**Behaviour change for a JSON `null` success body (v1.0.3).** A success response whose JSON body reads as `null` (a
+`null` body for a reference type, a nullable value type or a resource event) throws a `BlueprintApiException` with
+legacy Blueprint's `response_empty` problem: title "Response deserialisation failed", detail "The response could not be
+deserialised", status 502. Its `StatusCode` and `ResponseBody` are the response's own. This is what legacy's client did.
+A `JsonElement` is still the `null` element. Coming from v1.0.2, where such a body returned `null`, a caller that checked
+for `null` must catch the exception instead.
+
+**Behaviour change for a 422's `errors` (v1.0.3).** A 422 is read into a `ValidationException` from the member named
+exactly `errors` (the name the host writes) — not any other casing. With no such member, or a JSON `null` body, the
+exception's dictionary is empty rather than a form-level entry made up from the response's detail. This is what
+legacy Blueprint's client did (`ValidationProblemDetailsJsonConverter`, `ValueTextEquals` on the exact name). Coming
+from v1.0.2, where the read was case-insensitive and a missing/`null` `errors` produced a form-level message, a caller
+relying on either must not.
+
+**Behaviour change for a resource's type name (v1.0.3, all modes).** `ApiResource.GetTypeName`, which names a
+resource event's `eventId` (`<name>.created`) and `resourceObject` and the resource's own `$object`, removes
+`ApiResource`, then `Resource`, then `DTO` from the type's name wherever each occurs (ordinal, case-sensitive), then
+camelizes, as legacy Blueprint did. Before, it removed one suffix only, so `EventStoreTestApiResourceWithDoNotAuditProperties`
+was `eventStoreTestApiResourceWithDoNotAuditProperties` and is now `eventStoreTestWithDoNotAuditProperties`; and `DTO`
+was matched ignoring case, so `TenantDto` was `tenant` and is now `tenantDto`. A resource whose name carries a marker
+somewhere other than its end, or a `Dto` suffix, has a different event id and `resourceObject` than under v1.0.2 (a
+consumer that stored or matched the old ones must update them); coming from legacy Blueprint nothing changes.
+
+**Behaviour change for a failed call's exception (v1.0.3).** `BlueprintApiException` now derives from
+`Blueprint.ApiException` and carries the upstream's problem, as legacy Blueprint's client threw an `ApiException`; in
+v1.0.2 it was a plain `Exception` with only `StatusCode` and `ResponseBody`, which it still has. So:
+
+- **A `catch (ApiException)` now catches failed client calls too.** A caller that caught both separately must order the
+  `BlueprintApiException` handler first or merge them.
+- **A failed call that escapes an operation keeps its status.** The host writes an `ApiException` as its problem, so a
+  gateway that lets an upstream 404 escape now answers its caller with that 404 and problem, where v1.0.2 answered a 500.
+- **The problem is mapped as legacy mapped it:** problem details are carried through with their extensions, except that
+  a 5xx's detail becomes "The remote server returned an internal error response" (the original goes to the inner
+  exception); a 404 with a body that is not JSON becomes `not_found`; any other body that is not JSON becomes
+  `invalid_json`; an unreachable server becomes `service_unavailable` (500) and a timeout `service_timeout` (408).
+
 ### Hangfire (background task scheduling)
 
 Blueprint provides the `Blueprint.Tasks.Hangfire` package with ready-to-use implementations:
@@ -1034,9 +1635,9 @@ blueprint.AddMessageOutbox<RebusMessageOutbox>();
 // Register in startup:
 blueprint.AddUnitOfWork<MartenUnitOfWork>();
 
-// The generated pipeline calls SaveChangesAsync() after successful
-// command execution, before background task flush. Skipped for queries,
-// validation failures, and [DoNotSaveChanges] operations.
+// The generated pipeline calls SaveChangesAsync() after any operation
+// succeeds, before background task flush. Skipped for validation failures,
+// [DoNotSaveChanges] operations, and a query run nested (a self query).
 ```
 
 ### Pipeline execution order
@@ -1048,7 +1649,7 @@ The generated pipeline executes consumer seams in this order:
 3. **Authorization** → `[Resource]`, `IApiAuthoriser`
 4. **Validation** → data annotation + `IValidator` checks
 5. **Handler execution** → `HandleAsync()`
-6. **Unit of work** → `IUnitOfWork.SaveChangesAsync()` (commands only, on success)
+6. **Unit of work** → `IUnitOfWork.SaveChangesAsync()` (any operation without `[DoNotSaveChanges]`, on success)
 7. **Message outbox** → `IMessageOutbox.CommitAsync()` (on success)
 8. **Background task flush** → `IBackgroundTaskScheduleProvider.EnqueueAsync()`
 9. **Resource expansion** → `IResourceExpander` (for `?expand=` parameters)
@@ -1092,6 +1693,16 @@ blueprint.AddResourceExpander<DepartmentExpander>();
 Supported query formats: `?expand=Department`, `?expand=Department,Manager` (comma-separated),
 `?expand=Department&expand=Manager` (repeated keys), and `?expand[]=Department&expand[]=Manager`
 (array syntax).
+
+A command returning a legacy `Blueprint.Http.ResourceEvent<T>` (or `ResourceCreated<T>` and its siblings) has
+the `Expandable<T>` properties of its data expanded too, as legacy did: the paths are rooted at the event
+(`?expand=Data.Department`), and the expander receives the event itself as its `response`. Data the event's
+`SelfQuery` loaded is expanded only by that query's own pipeline, as legacy expanded before resolving it.
+
+An expander that cannot expand because the upstream system failed (for example an authentication
+error calling Microsoft Graph) leaves `Value` null and sets `Expandable<T>.ExpandError` to a reason
+such as `"authentication_error"`. It is serialised as `expandError` and written as `null` when unset,
+the same wire shape as Signature365's legacy `Expandable<T>`.
 
 ## Source-generation optimization notes
 

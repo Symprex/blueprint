@@ -327,7 +327,7 @@ public class HandlerDiscoveryTests
         injections.Should().Contain(
             static p => p.PropertyName == "Context" && p.SourceExpression == "context");
         injections.Should().Contain(
-            static p => p.PropertyName == "Identity" && p.SourceExpression == "context.UserAuthorisationContext ?? Blueprint.Authorization.AnonymousUserAuthorisationContext.Instance");
+            static p => p.PropertyName == "Identity" && p.SourceExpression == "context.UserAuthorisationContext!");
         injections.Should().Contain(
             static p => p.PropertyName == "Logger" && p.SourceExpression == "this.Logger");
         injections.Should().Contain(

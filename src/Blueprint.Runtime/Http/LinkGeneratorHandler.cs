@@ -29,6 +29,7 @@ public static class LinkGeneratorHandler
         {
             OkResult okResult => okResult.Content,
             ResourceEventResult resourceEventResult => resourceEventResult.Content,
+            IDeferredResourceEventResult deferredResourceEventResult => deferredResourceEventResult.ResolvedContent,
             ResourceEvent resourceEvent => resourceEvent.Data,
             _ => null,
         };

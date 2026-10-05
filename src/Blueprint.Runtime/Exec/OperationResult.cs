@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Text.Json.Serialization;
 using Blueprint.Runtime.Exec;
 
 namespace Blueprint;
@@ -21,7 +22,12 @@ public abstract class OperationResult
     /// Semantic non-2xx responses like <c>NotFoundResult</c> or <c>ConflictResult</c> are still considered
     /// successful because they carry a valid response payload. Only pipeline-level failures (validation,
     /// authentication, binding, unhandled exceptions) are excluded.
+    /// <para>
+    /// It is not part of any result's JSON: a legacy <c>ResourceEvent</c>, a result that is itself written as the response,
+    /// was a plain object with no such member.
+    /// </para>
     /// </remarks>
+    [JsonIgnore]
     public virtual bool WasSuccessful => true;
 
     /// <summary>

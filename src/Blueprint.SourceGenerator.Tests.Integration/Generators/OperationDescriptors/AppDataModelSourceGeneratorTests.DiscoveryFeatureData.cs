@@ -20,13 +20,13 @@ public class AppDataModelSourceGeneratorDiscoveryFeatureDataTests
     [Fact]
     public void When_ICommand_then_Configure_sets_command_kind_feature_data()
     {
-        var descriptor = DiscoveryCommandOp.Configure();
+        var descriptor = DiscoveryWriteCommand.Configure();
 
         descriptor.TryGetFeatureData<OperationDiscoveryFeatureData>(out var data).Should().BeTrue();
         data.Should().Be(new OperationDiscoveryFeatureData(
             "command",
             "Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors",
-            nameof(DiscoveryCommandOp)));
+            nameof(DiscoveryWriteCommand)));
     }
 
     [Fact]
@@ -49,7 +49,9 @@ public partial class DiscoveryBareOperation : IOperation
     }
 }
 
-public partial class DiscoveryCommandOp : ICommand
+// Not "DiscoveryCommandOp": legacy removed "Command" anywhere in a name (ApiOperationDescriptor.cs:50), which would
+// name it "DiscoveryOp", as DiscoveryQueryOp is, and fail the build with BP009.
+public partial class DiscoveryWriteCommand : ICommand
 {
     public OkResult Handle()
     {

@@ -102,11 +102,16 @@ public sealed class ApiOperationContext : IHttpOperationContext
     }
 
     /// <summary>
-    /// Gets the stable base URI for this request (e.g. <c>https://api.example.com/v1</c>).
-    /// Computed once per request from the HTTP host, scheme, and path base. Used by link generators
-    /// and redirect targets.
+    /// Gets or sets the stable base URI for this request (e.g. <c>https://api.example.com/v1/</c>).
+    /// Computed once per request from the HTTP host, scheme, and path base. Used by link generators,
+    /// a resource event's href and redirect targets.
     /// </summary>
-    public string? BaseUri { get; internal set; }
+    /// <remarks>
+    /// The router sets it. A host that executes operations without the router, such as a test harness, sets it to the
+    /// base URI links and hrefs should be made under, as legacy Blueprint's testing harness did; left unset, no href is
+    /// made. A nested context takes its parent's.
+    /// </remarks>
+    public string? BaseUri { get; set; }
 
     /// <summary>
     /// Gets or sets the <see cref="Microsoft.AspNetCore.Http.HttpContext"/> associated with this operation

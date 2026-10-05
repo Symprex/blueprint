@@ -365,10 +365,11 @@ public class LinkPopulationModuleTests
     }
 
     [Fact]
-    public void When_multiple_operations_declare_same_self_link_url_for_resource_then_pipeline_emits_single_AddLink()
+    public void When_multiple_operations_declare_same_self_link_url_for_resource_then_pipeline_hands_its_result_to_the_runtime_link_population_once()
     {
-        // Two operations declare [SelfLink] for the same resource type with the same URL.
-        // The generated pipeline for either operation should emit only ONE AddLink("self", ...) call.
+        // Two operations declare [SelfLink] for the same resource type with the same URL. The generated pipeline makes no
+        // link itself: it hands its result, once, to the runtime link population, which makes every link, self included, as
+        // legacy's EntityOperationResourceLinkGenerator did (Signature365 8b40ecc961, EntityOperationResourceLinkGenerator.cs:59-108).
         const string source = """
             using Blueprint;
             using Blueprint.Model;
@@ -430,7 +431,9 @@ public class LinkPopulationModuleTests
         updatePipeline.Should().NotBeNull("UpdateItemCommand pipeline should be generated");
 
         var pipelineText = updatePipeline!.SourceText;
-        var selfLinkCount = System.Text.RegularExpressions.Regex.Matches(pipelineText, @"AddLink\(""self""").Count;
-        selfLinkCount.Should().Be(1, "only one AddLink(\"self\", ...) should be emitted even when multiple operations declare the same self-link URL");
+        pipelineText.Should().NotContain("AddLink(", "the pipeline makes no link of its own");
+        System.Text.RegularExpressions.Regex.Matches(pipelineText, @"await PopulateHateoasLinksAsync\(").Count.Should().Be(
+            1,
+            "the result is handed to the runtime link population once, however many operations declare its self link");
     }
 }
