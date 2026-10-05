@@ -9,7 +9,7 @@ This document covers how Blueprint source-gen renders OpenAPI documents, differe
 | Stack | Endpoint |
 |---|---|
 | Legacy Blueprint (S365) | `/api/openapi.json` or configured path |
-| Blueprint Source-Gen | `/{basePath}/.blueprint/openapi.json` |
+| Blueprint Source-Gen | `/{basePath}/.blueprint/openapi.json`, and legacy's `/{basePath}/openapi` (the same document, or a Scalar page for a browser) |
 
 The new Blueprint pre-renders the OpenAPI document at startup and serves it as a static response, making it faster than runtime-generated documents.
 

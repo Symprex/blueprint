@@ -22,13 +22,16 @@ public class ManifestInspectionEndpointStressTests
     public async Task When_mapping_blueprint_api_repeatedly_then_stress_harness_reports_shared_synthetic_fixture_endpoint_counts_and_all_hosted_manifest_routes()
     {
         var descriptors = BlueprintAppBenchmarkScenarioFactory.CreateDescriptors(operationCount: 10);
-        var expectedEndpointCount = descriptors.Count + 8;
+        var expectedEndpointCount = descriptors.Count + 9;
         var requiredRoutePatterns = new[]
         {
             // The root-metadata document legacy served at every HTTP app's base path (Signature365 8b40ecc961,
             // Blueprint.Http/BlueprintApiBuilderExtensions.cs:84-92, RootMetadataOperation.cs:13).
             "api/",
             "api/.blueprint/openapi.json",
+
+            // Legacy's OpenApiQuery address, serving the same document or its Scalar documentation page.
+            "api/openapi",
             "api/.blueprint/manifests/operations.json",
             "api/.blueprint/manifests/operations.md",
             "api/.blueprint/manifests/operations.schema.json",

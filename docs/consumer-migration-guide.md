@@ -1027,6 +1027,7 @@ Blueprint exposes development-only endpoints for inspecting the generated API su
 | Endpoint | Description |
 |---|---|
 | `/.blueprint/openapi.json` | Generated OpenAPI 3.0 document |
+| `/openapi` | Legacy's address: the same document, or a Scalar API reference page for a browser (`Accept: text/html` without `?json`) |
 | `/.blueprint/manifests/operations.json` | Full operations manifest with all metadata (JSON) |
 | `/.blueprint/manifests/operations.html` | Interactive diagnostics page |
 | `/.blueprint/manifests/operations.md` | Markdown-formatted manifest |
