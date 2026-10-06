@@ -53,5 +53,7 @@ Supported: `name`, `description`, `model`, `effort`, `maxTurns`, `tools`, `disal
 
 `skills:` preloads the **full content** of a skill into the agent at startup, not just its description — a deliberate spend of context load on a worker that will definitely need it.
 
+An agent that needs MCP tools omits `tools:` and constrains its role with `disallowedTools:` instead. An explicit `tools:` allowlist is exhaustive and never includes MCP tools, whatever the agent's brief instructs it to `ToolSearch` for (adr/0027 in the source marketplace).
+
 ---
 *The invocation trade-off, the splitting-by-invocation cut and the router-skill pattern are adapted from [mattpocock/skills](https://github.com/mattpocock/skills) `productivity/writing-for-agents` (MIT).*
