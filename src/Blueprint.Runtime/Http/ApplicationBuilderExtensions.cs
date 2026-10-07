@@ -93,20 +93,32 @@ public static class EndpointRouteBuilderExtensions
             configureOpenApiOperations(operationProcessorOptions);
         }
 
-        var (openApiDelegate, openApiDocument) = OpenApiDocumentEndpoint.Create(runtimeModel, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions, basePath);
+        // What the document could not describe is named once, when the document is rendered, for the consumer to act on.
+        var openApiLogger = endpoints.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.OpenApi");
+
+        var (openApiDelegate, openApiDocument) = OpenApiDocumentEndpoint.CreateDeferrable(
+            runtimeModel,
+            infoOptions,
+            schemaProcessorOptions,
+            operationProcessorOptions,
+            httpOptions,
+            basePath,
+            httpOptions.RenderOpenApiDocumentOnFirstRequest,
+            document =>
+            {
+                if (openApiLogger is null)
+                {
+                    return;
+                }
+
+                foreach (var warning in document.Warnings)
+                {
+                    openApiLogger.LogWarning("{OpenApiWarning}", warning);
+                }
+            });
 
         // Register the pre-rendered document in DI so development utilities (e.g. OutputOpenApi) can retrieve it
         endpoints.ServiceProvider.GetService<PreRenderedOpenApiDocumentHolder>()?.Set(openApiDocument);
-
-        // What the document could not describe is named once, when the API is mapped, for the consumer to act on.
-        if (openApiDocument.Warnings.Count > 0
-            && endpoints.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.OpenApi") is { } openApiLogger)
-        {
-            foreach (var warning in openApiDocument.Warnings)
-            {
-                openApiLogger.LogWarning("{OpenApiWarning}", warning);
-            }
-        }
 
         var openApiBuilder = endpoints.Map(
             RoutePatternFactory.Parse(RouteUnder(basePath, ".blueprint/openapi.json")),
