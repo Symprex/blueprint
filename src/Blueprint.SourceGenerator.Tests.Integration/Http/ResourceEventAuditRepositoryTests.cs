@@ -264,6 +264,24 @@ public sealed class ResourceEventAuditRepositoryTests
     }
 
     [Fact]
+    public async Task A_commands_self_query_reuses_the_user_context_the_command_loaded()
+    {
+        // Legacy's ExecuteNestedAsync ran the self query's pipeline on a context copied from the command's, user context
+        // included, so the user was loaded once per request. A second load is a wasted factory call (Signature365's builds
+        // a claims-expanded context, about 28 KB) and, as the nested context is copied from the parent, an identical one.
+        var factory = new CountingUserContextFactory();
+        await using var host = await AuditingHost.StartAsync(
+            new AuditRecords(),
+            blueprint => blueprint.Services.AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory>(factory));
+
+        using var body = JsonDocument.Parse(await host.PutAsync("api/audited-events/widgets/widget-11", (AuditingHost.TestUserHeader, "user-1")));
+
+        body.RootElement.GetProperty("data").GetProperty("id").GetString().Should().Be("widget-11", "the event's self query ran");
+        factory.Calls.Should().Be(1, "the self query's nested pipeline reuses the user context copied from the command's");
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task An_anonymous_commands_resource_event_carries_only_the_requests_ip_address_as_metadata()
     {
         // Legacy loaded no user context for an anonymous caller, so ResourceEventHandler.cs:36's
@@ -466,6 +484,21 @@ public sealed class ResourceEventAuditRepositoryTests
         }
     }
 
+    /// <summary>A user context factory that counts how often it is asked for a context.</summary>
+    public sealed class CountingUserContextFactory : Blueprint.Authorization.IUserAuthorisationContextFactory
+    {
+        private int _calls;
+
+        public int Calls => Volatile.Read(ref this._calls);
+
+        public Task<Blueprint.Authorization.IUserAuthorisationContext?> CreateContextAsync(System.Security.Claims.ClaimsIdentity identity, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref this._calls);
+
+            return Task.FromResult<Blueprint.Authorization.IUserAuthorisationContext?>(new MetadataUserContext(identity.Name!));
+        }
+    }
+
     /// <summary>A user whose metadata is Signature365's user's: its Id, then its TenantId.</summary>
     public sealed class MetadataUserContext(string id) : Blueprint.Authorization.IUserAuthorisationContext
     {
@@ -641,9 +674,9 @@ public sealed class ResourceEventAuditRepositoryTests
             return this.SendAsync(System.Net.Http.HttpMethod.Get, path, []);
         }
 
-        public Task<string> PutAsync(string path)
+        public Task<string> PutAsync(string path, params (string Name, string Value)[] headers)
         {
-            return this.SendAsync(System.Net.Http.HttpMethod.Put, path, []);
+            return this.SendAsync(System.Net.Http.HttpMethod.Put, path, headers);
         }
 
         private async Task<string> SendAsync(System.Net.Http.HttpMethod method, string path, (string Name, string Value)[] headers)
