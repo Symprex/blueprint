@@ -43,6 +43,23 @@ public sealed class LegacyResourceEventWireShapeTests
     }
 
     [Fact]
+    public async Task A_legacy_resource_event_with_no_changed_values_is_written_without_a_changedValues_key()
+    {
+        // Legacy's converter wrote changedValues only when set (Signature365 8b40ecc961, JsonConverterFactoryForResourceEventOfT.cs),
+        // so Signature365's CreateSignature response had no key where this one carried "changedValues": null.
+        await using var host = await KestrelTestHost.StartAsync();
+
+        using var response = await host.Client.PostAsync("api/href-events/legacy/widgets", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "the server raised: {0}", string.Join(" | ", host.ServerErrors.Select(static e => e.Message)));
+        using var envelope = JsonDocument.Parse(body);
+        envelope.RootElement.EnumerateObject().Select(static p => p.Name).Should().NotContain(
+            static name => string.Equals(name, "changedValues", StringComparison.OrdinalIgnoreCase));
+        host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
     public void A_legacy_resource_event_is_documented_with_legacy_envelope_members_only()
     {
         var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());

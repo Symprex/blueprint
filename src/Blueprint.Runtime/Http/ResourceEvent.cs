@@ -109,6 +109,7 @@ public class ResourceEvent : OperationResult
     /// self link and the event's data or self query.
     /// </summary>
     [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Href { get; set; }
 
     /// <summary>
@@ -136,6 +137,7 @@ public class ResourceEvent : OperationResult
     /// The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
     /// </remarks>
     [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, object>? ChangedValues { get; set; }
 
     /// <summary>
@@ -171,6 +173,7 @@ public class ResourceEvent : OperationResult
     /// The summary is legacy Blueprint's, which the OpenAPI document describes the property with.
     /// </remarks>
     [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? CorrelationId { get; set; }
 
     /// <summary>
