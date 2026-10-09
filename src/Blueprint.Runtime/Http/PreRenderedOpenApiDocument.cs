@@ -36,18 +36,20 @@ public sealed class PreRenderedOpenApiDocument
 /// </summary>
 public sealed class PreRenderedOpenApiDocumentHolder
 {
-    private PreRenderedOpenApiDocument? _document;
+    private Lazy<PreRenderedOpenApiDocument>? _document;
 
     /// <summary>
-    /// Gets the pre-rendered OpenAPI document, or <see langword="null"/> if the API has not been mapped yet.
+    /// Gets the pre-rendered OpenAPI document, or <see langword="null"/> if the API has not been mapped yet. When
+    /// <see cref="BlueprintHttpOptions.RenderOpenApiDocumentOnFirstRequest" /> is set and nothing has requested the
+    /// document yet, reading this renders it.
     /// </summary>
-    public PreRenderedOpenApiDocument? Document => this._document;
+    public PreRenderedOpenApiDocument? Document => this._document?.Value;
 
     /// <summary>
-    /// Stores the pre-rendered document. Called once during endpoint mapping.
+    /// Stores the document, rendered or to be rendered on first read. Called once during endpoint mapping.
     /// </summary>
-    /// <param name="document">The pre-rendered OpenAPI document to store.</param>
-    internal void Set(PreRenderedOpenApiDocument document)
+    /// <param name="document">The OpenAPI document to store.</param>
+    internal void Set(Lazy<PreRenderedOpenApiDocument> document)
     {
         this._document = document;
     }

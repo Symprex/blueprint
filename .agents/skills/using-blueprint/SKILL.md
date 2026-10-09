@@ -129,6 +129,7 @@ Blueprint generates a complete OpenAPI document from source-generated descriptor
 - **Enum values:** Enum-typed operation properties are projected into OpenAPI schemas with their declared values.
 - **Security schemes:** Operations carrying `[Resource]` or `[MustBeAuthenticated]` automatically project a security requirement in the OpenAPI document. The default scheme is `Bearer` (`http`/`bearer`/`JWT`).
 - **OpenAPI document info:** Use `BlueprintHttpOptions` to configure top-level document metadata (`Contact`, `License`, `TermsOfService`) via `ConfigureHttp(...)` at registration time.
+- **When the document is rendered:** by default `MapBlueprintApi` renders it as the API is mapped, so a document that cannot be rendered fails startup. A test suite that builds a host per test should set `BlueprintHttpOptions.RenderOpenApiDocumentOnFirstRequest` so hosts that never read the document never pay for rendering it.
 - **Validation constraint projection:** validation attributes automatically project into OpenAPI parameter and request body schemas (see Validation section above).
 - **Format hints:** `EmailAddress` → `format: "email"`, `Url` → `format: "uri"`, `Phone` → `format: "phone"`.
 

@@ -2200,8 +2200,6 @@ public static class PipelineHelpers
         return null;
     }
 
-    private static readonly ConcurrentDictionary<(System.Text.Json.Serialization.JsonSerializerContext?, Type), System.Text.Json.Serialization.Metadata.JsonTypeInfo?> _inlineTypeInfoCache = new();
-
     // Thread-local buffer and writer for inline JSON response writing from generated pipelines.
     // These are the same pattern as HttpOperationResultExecutor's fields — thread locality eliminates contention, and a
     // write that does not finish at once takes the buffer from the thread.
@@ -2245,9 +2243,7 @@ public static class PipelineHelpers
         var serializerContext = operationContext.App.AppOwnedSerializerContext;
         var contentType = content.GetType();
 
-        var jsonTypeInfo = _inlineTypeInfoCache.GetOrAdd(
-            (serializerContext, contentType),
-            static key => key.Item1?.GetTypeInfo(key.Item2));
+        var jsonTypeInfo = Http.SerializerContextTypeInfoCache.Get(serializerContext, contentType);
 
         if (jsonTypeInfo is not null)
         {

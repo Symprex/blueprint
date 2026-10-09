@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -401,15 +402,6 @@ public class HttpOperationResultExecutor
         return statusCode is StatusCodes.Status204NoContent or StatusCodes.Status205ResetContent or StatusCodes.Status304NotModified;
     }
 
-    /// <summary>
-    /// Per-type cache key that binds a content <see cref="Type"/> to a specific
-    /// <see cref="JsonSerializerContext"/> so the <see cref="JsonTypeInfo"/> lookup
-    /// is performed at most once per (context, type) pair.
-    /// </summary>
-    private readonly record struct TypeInfoCacheKey(JsonSerializerContext? Context, Type ContentType);
-
-    private static readonly ConcurrentDictionary<TypeInfoCacheKey, JsonTypeInfo?> _typeInfoCache = new();
-
     private static Task WriteJsonAsync(HttpContext httpContext, ApiOperationContext operationContext, object content)
     {
         return WriteJsonAsync(httpContext, operationContext.App, content);
@@ -458,9 +450,7 @@ public class HttpOperationResultExecutor
         var serializerContext = app.AppOwnedSerializerContext;
         var contentType = content.GetType();
 
-        var jsonTypeInfo = _typeInfoCache.GetOrAdd(
-            new TypeInfoCacheKey(serializerContext, contentType),
-            static key => key.Context?.GetTypeInfo(key.ContentType));
+        var jsonTypeInfo = SerializerContextTypeInfoCache.Get(serializerContext, contentType);
 
         if (jsonTypeInfo is not null)
         {
@@ -581,9 +571,7 @@ public class HttpOperationResultExecutor
         writer.WritePropertyName(_propData);
 
         var dataType = result.Content.GetType();
-        var dataTypeInfo = _typeInfoCache.GetOrAdd(
-            new TypeInfoCacheKey(serializerContext, dataType),
-            static key => key.Context?.GetTypeInfo(key.ContentType));
+        var dataTypeInfo = SerializerContextTypeInfoCache.Get(serializerContext, dataType);
 
         if (dataTypeInfo is not null)
         {
@@ -693,9 +681,7 @@ public class HttpOperationResultExecutor
             writer.WritePropertyName(_propData);
 
             var dataType = result.ResolvedContent.GetType();
-            var dataTypeInfo = _typeInfoCache.GetOrAdd(
-                new TypeInfoCacheKey(serializerContext, dataType),
-                static key => key.Context?.GetTypeInfo(key.ContentType));
+            var dataTypeInfo = SerializerContextTypeInfoCache.Get(serializerContext, dataType);
 
             if (dataTypeInfo is not null)
             {
@@ -761,7 +747,9 @@ public class HttpOperationResultExecutor
         return writeTask;
     }
 
-    private static readonly ConcurrentDictionary<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptionsCache = new();
+    // Keyed weakly, as SerializerContextTypeInfoCache is: the key is an app's context options, and this static must not
+    // keep a dropped app's options alive.
+    private static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptionsCache = new();
 
     // Shared singleton avoids allocating a new resolver each time the fallback cache is populated.
     [UnconditionalSuppressMessage(
@@ -784,7 +772,7 @@ public class HttpOperationResultExecutor
         Justification = "Fallback options use DefaultJsonTypeInfoResolver which requires dynamic code. AOT consumers must ensure their JsonSerializerContext covers all serialized types.")]
     private static JsonSerializerOptions CreateFallbackSerializerOptions(JsonSerializerOptions serializerOptions)
     {
-        return _fallbackOptionsCache.GetOrAdd(serializerOptions, static opts =>
+        return _fallbackOptionsCache.GetValue(serializerOptions, static opts =>
             new JsonSerializerOptions(opts)
             {
                 TypeInfoResolver = opts.TypeInfoResolver is null

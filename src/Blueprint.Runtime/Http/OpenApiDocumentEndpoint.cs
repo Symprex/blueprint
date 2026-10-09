@@ -48,28 +48,86 @@ internal static class OpenApiDocumentEndpoint
         BlueprintHttpOptions? httpOptions = null,
         string? basePath = null)
     {
+        var (handler, document) = CreateDeferrable(
+            app,
+            infoOptions,
+            schemaProcessorOptions,
+            operationProcessorOptions,
+            httpOptions,
+            basePath,
+            renderOnFirstRequest: false,
+            onRendered: null);
+
+        return (handler, document.Value);
+    }
+
+    /// <summary>
+    /// Creates the request delegate as <see cref="Create" /> does, but renders the document either now or when it is
+    /// first needed, as <see cref="BlueprintHttpOptions.RenderOpenApiDocumentOnFirstRequest" /> chooses.
+    /// </summary>
+    /// <param name="app">The Blueprint app whose registered operations should be projected into the OpenAPI document.</param>
+    /// <param name="infoOptions">Customises the document's <c>info</c> block; the defaults apply when <see langword="null"/>.</param>
+    /// <param name="schemaProcessorOptions">Schema processors applied to the rendered components, if any.</param>
+    /// <param name="operationProcessorOptions">Per-operation processors applied to the rendered operations, if any.</param>
+    /// <param name="httpOptions">HTTP options consulted for the default <c>servers</c> entry, if any.</param>
+    /// <param name="basePath">The base path the routes are mapped under, which the default <c>servers</c> entry ends with.</param>
+    /// <param name="renderOnFirstRequest">
+    /// <see langword="false" /> to render before returning, so a document that cannot be rendered throws here;
+    /// <see langword="true" /> to render on the first request or the first read of the returned document.
+    /// </param>
+    /// <param name="onRendered">Called once with the document when it has been rendered, whenever that is.</param>
+    /// <returns>
+    /// The request delegate, and the document, whose value is rendered on first read when it has not been already. Both
+    /// share one rendering, made at most once; a rendering that throws throws again for every later reader.
+    /// </returns>
+    public static (RequestDelegate Delegate, Lazy<PreRenderedOpenApiDocument> Document) CreateDeferrable(
+        BlueprintApp app,
+        OpenApiInfoOptions? infoOptions,
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions,
+        OpenApiOperationProcessorOptions? operationProcessorOptions,
+        BlueprintHttpOptions? httpOptions,
+        string? basePath,
+        bool renderOnFirstRequest,
+        Action<PreRenderedOpenApiDocument>? onRendered)
+    {
         ArgumentNullException.ThrowIfNull(app);
 
-        var (json, warnings) = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions, basePath);
-        var document = new PreRenderedOpenApiDocument(json) { Warnings = warnings };
+        var rendered = new Lazy<RenderedOpenApiDocument>(
+            () =>
+            {
+                var (json, warnings) = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions, basePath);
+                var document = new PreRenderedOpenApiDocument(json) { Warnings = warnings };
 
-        // Compute a stable ETag from the document content so clients can use If-None-Match
-        // to avoid redundant downloads of the static spec.
-        var jsonBytes = Encoding.UTF8.GetBytes(json);
-        var hashBytes = SHA256.HashData(jsonBytes);
-        var etag = new EntityTagHeaderValue($"\"{Convert.ToHexString(hashBytes)[..16]}\"");
+                // Compute a stable ETag from the document content so clients can use If-None-Match
+                // to avoid redundant downloads of the static spec.
+                var jsonBytes = Encoding.UTF8.GetBytes(json);
+                var hashBytes = SHA256.HashData(jsonBytes);
+                var etag = new EntityTagHeaderValue($"\"{Convert.ToHexString(hashBytes)[..16]}\"").ToString();
+
+                onRendered?.Invoke(document);
+
+                return new RenderedOpenApiDocument(document, etag);
+            },
+            LazyThreadSafetyMode.ExecutionAndPublication);
+
+        if (!renderOnFirstRequest)
+        {
+            _ = rendered.Value;
+        }
 
         var handler = new RequestDelegate(async httpContext =>
         {
+            var (document, etag) = rendered.Value;
+
             // Support conditional GET: if the client sends If-None-Match matching our ETag, return 304.
             if (httpContext.Request.Headers.IfNoneMatch.Count > 0)
             {
                 foreach (var clientEtag in httpContext.Request.Headers.IfNoneMatch)
                 {
-                    if (string.Equals(clientEtag, etag.ToString(), StringComparison.Ordinal))
+                    if (string.Equals(clientEtag, etag, StringComparison.Ordinal))
                     {
                         httpContext.Response.StatusCode = StatusCodes.Status304NotModified;
-                        httpContext.Response.Headers.ETag = etag.ToString();
+                        httpContext.Response.Headers.ETag = etag;
                         return;
                     }
                 }
@@ -77,12 +135,12 @@ internal static class OpenApiDocumentEndpoint
 
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
             httpContext.Response.ContentType = "application/json; charset=utf-8";
-            httpContext.Response.Headers.ETag = etag.ToString();
+            httpContext.Response.Headers.ETag = etag;
             httpContext.Response.Headers.CacheControl = "public, max-age=3600";
-            await httpContext.Response.WriteAsync(json, httpContext.RequestAborted).ConfigureAwait(false);
+            await httpContext.Response.WriteAsync(document.Json, httpContext.RequestAborted).ConfigureAwait(false);
         });
 
-        return (handler, document);
+        return (handler, new Lazy<PreRenderedOpenApiDocument>(() => rendered.Value.Document, LazyThreadSafetyMode.ExecutionAndPublication));
     }
 
     private static (string Json, IReadOnlyList<string> Warnings) RenderDocument(
@@ -129,4 +187,9 @@ internal static class OpenApiDocumentEndpoint
 
         return (OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions, httpOptions, basePath).Json, operationContext.Warnings);
     }
+
+    /// <summary>The one rendering a delegate and its document share: the document and the ETag made from it.</summary>
+    /// <param name="Document">The rendered document.</param>
+    /// <param name="ETag">The document's entity tag, as the <c>ETag</c> header carries it.</param>
+    private sealed record RenderedOpenApiDocument(PreRenderedOpenApiDocument Document, string ETag);
 }
