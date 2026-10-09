@@ -312,8 +312,10 @@ so its user is the context's `UserPrincipal`, from which the registered `IUserAu
 - executed by a user, each applicable `IApiAuthoriser` and `IOperationAuthoriser` is asked once, the first denial
   answering as it does for an HTTP operation, with a `ForbiddenResult` or `UnauthenticatedResult`.
 
-A descriptor allows anonymous access for an `[AllowAnonymous]` operation, for every background task (a recurring one
-included) as its descriptor is made, and for every message an `AddBlueprintRebusConsumer` subscribes to, from the moment
+A descriptor allows anonymous access for an `[AllowAnonymous]` operation, for every background task not marked
+`[MustBeAuthenticated]` (a recurring one included) as its descriptor is made — legacy's convention marked even one that
+was, so such a task executed with no user is now refused where legacy ran it — and for every message an
+`AddBlueprintRebusConsumer` subscribes to, from the moment
 the app is made, whether the consumer is registered before or after `AddBlueprintApi` — as legacy's
 `BackgroundTaskAllowAnonymousConvention` and Signature365's `RebusScannerConvention` marked them at start-up. An
 integration can mark descriptors the same way with an `IOperationDescriptorConvention`. Coming from legacy Blueprint
