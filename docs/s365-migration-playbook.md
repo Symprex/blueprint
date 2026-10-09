@@ -1331,6 +1331,17 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 });
 ```
 
+Since v1.0.6 every operation is authorised as legacy's `AuthorisationMiddlewareBuilder` authorised it, including one with
+no `[RootLink]`, `[SelfLink]` or `[Link]` executed in process (its user is the context's `UserPrincipal`): with no user it
+is refused ("Access denied. Anonymous access is not allowed.", which `ApiFixture` throws as legacy's
+`UnauthorizedException`), and by a user these authorisers are asked. Neither happens for an operation whose descriptor
+allows anonymous access or an execution that skips authorisation. A background task's descriptor allows it as it is made,
+and every message subscribed in a Startup's `AddBlueprintRebusConsumer` allows it from start-up, as legacy's
+`RebusScannerConvention` made it — so a message runs without reaching `S365ClaimsApiAuthoriser` whether `ApiFixture`
+executes it with no user or with the ambient one. An unlinked operation that is neither, executed in a test with no user,
+must be given one, as it had to be under legacy. See the v1.0.6 behaviour change in
+[consumer-migration-guide.md](consumer-migration-guide.md).
+
 #### 2. Populate `ResourcePermissionsFeatureData` at Startup
 
 S365's legacy Blueprint populated this during `DataModel.Build()`. In the new model, populate it after registration:

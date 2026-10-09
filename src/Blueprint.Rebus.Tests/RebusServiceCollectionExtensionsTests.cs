@@ -29,6 +29,31 @@ public class RebusServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddBlueprintRebusConsumer_registers_a_convention_marking_only_subscribed_messages_as_anonymous_and_unexposed()
+    {
+        // As legacy Signature365's RebusScannerConvention marked a subscribed message at start-up; AddBlueprintApi applies
+        // the convention as the app is made.
+        var services = new ServiceCollection();
+        services.AddBlueprintRebusConsumer(static config => config.Subscribe<TestMessage>());
+        using var sp = services.BuildServiceProvider();
+
+        var subscribed = new Model.ApiOperationDescriptor(typeof(TestMessage), nameof(TestMessage), "test");
+        var other = new Model.ApiOperationDescriptor(typeof(OtherMessage), nameof(OtherMessage), "test");
+
+        foreach (var convention in sp.GetServices<IOperationDescriptorConvention>())
+        {
+            convention.Apply(subscribed);
+            convention.Apply(other);
+        }
+
+        subscribed.AnonymousAccessAllowed.Should().BeTrue();
+        subscribed.IsExposed.Should().BeFalse();
+        subscribed.TryGetFeatureData<RebusMessageFeature>(out _).Should().BeTrue();
+        other.AnonymousAccessAllowed.Should().BeFalse("only a subscribed message is marked");
+        other.IsExposed.Should().BeTrue();
+    }
+
+    [Fact]
     public void AddBlueprintRebus_when_non_fake_bus_already_registered_throws()
     {
         var services = new ServiceCollection();
@@ -78,4 +103,6 @@ public class RebusServiceCollectionExtensionsTests
     }
 
     private class TestMessage;
+
+    private class OtherMessage;
 }

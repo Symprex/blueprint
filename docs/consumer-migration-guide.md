@@ -301,6 +301,42 @@ For authorisers that need **both** execution and link visibility, implement `IAp
 blueprint.AddApiAuthoriser<FullAuthoriser>();
 ```
 
+**Behaviour change for an operation with no link (v1.0.6).** An operation is authorised whether or not it has a
+`[RootLink]`, `[SelfLink]` or `[Link]`, as legacy Blueprint authorised every operation it executed. One with no link is
+executed in process only — as a background task, a Rebus message, through `ExecuteWithNewScopeAsync` or by a test host —
+so its user is the context's `UserPrincipal`, from which the registered `IUserAuthorisationContextFactory` makes its
+`UserAuthorisationContext`. Unless its descriptor allows anonymous access or the context skips authorisation:
+- executed with no user (no authenticated principal and no `UserAuthorisationContext`), it is refused with
+  `UnauthenticatedResult.Instance`, legacy's `UnauthorizedException("Access denied. Anonymous access is not allowed.")`,
+  before any authoriser is asked, whether or not any is registered;
+- executed by a user, each applicable `IApiAuthoriser` and `IOperationAuthoriser` is asked once, the first denial
+  answering as it does for an HTTP operation, with a `ForbiddenResult` or `UnauthenticatedResult`.
+
+A descriptor allows anonymous access for an `[AllowAnonymous]` operation, for every background task not marked
+`[MustBeAuthenticated]` (a recurring one included) as its descriptor is made — legacy's convention marked even one that
+was, so such a task executed with no user is now refused where legacy ran it — and for every message an
+`AddBlueprintRebusConsumer` subscribes to, from the moment
+the app is made, whether the consumer is registered before or after `AddBlueprintApi` — as legacy's
+`BackgroundTaskAllowAnonymousConvention` and Signature365's `RebusScannerConvention` marked them at start-up. An
+integration can mark descriptors the same way with an `IOperationDescriptorConvention`. Coming from legacy Blueprint
+nothing changes. Coming from v1.0.5 or earlier, an operation with no link was neither refused nor authorised, and was given
+no user's context, so its handler's `Identity` was `null` whoever executed it; a subscribed message was marked anonymous
+only when Rebus first delivered it. A test or host that executes an unlinked operation in process with no user must now
+give it a user, or skip authorisation (`context.SkipAuthorisation`, or `BlueprintTestContext.SkipAuthorisation()`), as
+legacy required; `BlueprintTestHost`'s `MessageAsync` and `BackgroundTaskAsync` already skip it.
+
+**Behaviour change for a nested operation (v1.0.6).** `ApiOperationContext.CreateNested(operation)` authorises the nested
+operation by default (`skipAuthorisation` defaults to `false`): it is refused with no user and asked of its authorisers
+with the user's context it inherits, which is reused rather than loaded again. The parent's `SkipAuthorisation` is not
+inherited. A resource event's self query is still executed skipping authorisation, as the framework passes
+`skipAuthorisation: true` for it. This is what legacy Blueprint did: its `CreateNested` left `SkipAuthorisation` false and
+its nested pipeline kept the authorisation middleware (Signature365 `8b40ecc961`, `Blueprint/ApiOperationContext.cs:163-180`,
+`Authorisation/AuthorisationMiddlewareBuilder.cs:21`), while its `ResourceEventHandler` set `SkipAuthorisation = true` on
+the self query's nested context (`Blueprint.Http/Middleware/ResourceEventHandler.cs:113-121`). Coming from legacy Blueprint
+nothing changes. Coming from v1.0.5 or earlier, `CreateNested` skipped authorisation unless told otherwise; a caller that
+relied on that must pass `skipAuthorisation: true`. A call compiled against v1.0.5 keeps the old default until it is
+recompiled, as an optional parameter's default is compiled into the call.
+
 **Behaviour change for authorisation denials (v1.0.3).** A denial is answered with the body legacy Blueprint wrote for it:
 `{"type":"unauthorized","title":"<Message>","status":403}` for an `Authorisation` failure,
 `{"type":"security_failure","title":"<Message>","status":401}` for any other, and
@@ -494,6 +530,15 @@ empty body at the result's status, as legacy Blueprint wrote it; before v1.0.3 i
 a command, as legacy Blueprint ran it. A query that returns a resource event with a self query hands it on as it is:
 `Data` stays `null`, and `SelfQuery` is kept. A query's `DeferredResourceEventResult<T>` is not resolved either. Coming
 from legacy Blueprint nothing changes. Coming from v1.0.2, a query's self query ran and filled `Data`.
+
+**Behaviour change for a resource event with no data (v1.0.6).** A resource event with no data — a deleted event, whose
+self query is never run, a query's event, or a `DeferredResourceEventResult<T>` whose self query was not run or loaded
+nothing — is written with no `data` key, as legacy Blueprint wrote it, and as `changedValues`, `href` and `correlationId`
+have been left out when null since v1.0.5. The OpenAPI document is unchanged: it lists `data` as required, as legacy's
+did. `BlueprintHttpClient.SendResourceEventAsync<T>` reads an event envelope with no `data` (and no legacy `content`) as no
+resource, `null`, as it read `"data": null`, rather than reading the envelope itself as the resource. Coming from legacy
+Blueprint nothing changes. Coming from v1.0.5 or earlier, such an event was written with `"data": null`; a client that
+tested for the key rather than for a null value must test for its absence.
 
 #### Response header extensions
 

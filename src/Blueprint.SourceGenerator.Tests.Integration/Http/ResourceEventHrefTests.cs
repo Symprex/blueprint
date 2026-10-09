@@ -133,7 +133,10 @@ public sealed class ResourceEventHrefTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         serviceProvider.Executor = executor;
 
-        var context = new ApiOperationContext(serviceProvider, app, ReportHrefWidgetWithUpstreamHrefCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, ReportHrefWidgetWithUpstreamHrefCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await executor.GetPipeline(typeof(ReportHrefWidgetWithUpstreamHrefCommand)).ExecuteAsync(context);
 

@@ -732,6 +732,40 @@ public static class PipelineHelpers
         return LoadUserContextCoreAsync(context, userIdentity, userContextFactory);
     }
 
+    /// <summary>
+    /// Loads the <see cref="Authorization.IUserAuthorisationContext"/> of an operation with no link from the context's
+    /// <see cref="ApiOperationContext.UserPrincipal"/> when an <see cref="Authorization.IUserAuthorisationContextFactory"/>
+    /// is registered, setting the same activity tags as the HTTP overload does.
+    /// </summary>
+    /// <remarks>
+    /// An operation with no <c>[RootLink]</c>, <c>[SelfLink]</c> or <c>[Link]</c> is executed in process only — as a
+    /// background task, a Rebus message or through <c>ExecuteWithNewScopeAsync</c> — with no HTTP context to take its user
+    /// from, so its user is the principal its executor gave the context. Legacy loaded the user of every operation it
+    /// executed from the context's <c>ClaimsIdentity</c> in the same way (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint/Authorisation/UserContextLoaderMiddlewareBuilder.cs:13-36</c>). As in the HTTP overload, a context that
+    /// already has a user's context, as a nested one does, keeps it.
+    /// </remarks>
+    /// <param name="context">The operation execution context, whose principal is the user's.</param>
+    /// <param name="userContextFactory">The cached user authorization context factory, or <c>null</c> if not registered.</param>
+    /// <returns>A task that completes when the user context has been loaded (or skipped).</returns>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static Task LoadUserContextAsync(
+        ApiOperationContext context,
+        Authorization.IUserAuthorisationContextFactory? userContextFactory)
+    {
+        if (userContextFactory == null || context.UserAuthorisationContext != null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (context.ClaimsIdentity is not { IsAuthenticated: true } userIdentity)
+        {
+            return Task.CompletedTask;
+        }
+
+        return LoadUserContextCoreAsync(context, userIdentity, userContextFactory);
+    }
+
     private static async Task LoadUserContextCoreAsync(
         ApiOperationContext context,
         System.Security.Claims.ClaimsIdentity userIdentity,
@@ -1091,6 +1125,57 @@ public static class PipelineHelpers
         }
 
         return default;
+    }
+
+    /// <summary>
+    /// Authorises an operation with no link as legacy Blueprint's <c>AuthorisationMiddlewareBuilder</c> did: nothing when
+    /// its descriptor allows anonymous access or the context skips authorisation; otherwise a refusal of an anonymous caller,
+    /// or the pre-filtered authorisers run exactly as <see cref="RunPreFilteredAuthorisersAsync"/> runs them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Legacy matched every operation it executed whose descriptor did not allow anonymous access, linked or not
+    /// (Signature365 <c>8b40ecc961</c>, <c>Blueprint/Authorisation/AuthorisationMiddlewareBuilder.cs:52-55</c>), and inside
+    /// <c>if (context.SkipAuthorisation == false)</c> (<c>:99-103</c>) threw <c>UnauthorizedException("Access denied.
+    /// Anonymous access is not allowed.")</c> when there was no user (<c>:75-79</c>) before running each applicable
+    /// authoriser (<c>:81-95</c>). An
+    /// operation with no <c>[RootLink]</c>, <c>[SelfLink]</c> or <c>[Link]</c> is executed in process only, with no HTTP
+    /// identity check ahead of it, so this is that check and those authorisers.
+    /// </para>
+    /// <para>
+    /// The refusal is <see cref="UnauthenticatedResult.Instance"/>, the result the HTTP identity check gives an anonymous
+    /// caller: the host writes it as legacy's <c>UnauthorizedException("Access denied. Anonymous access is not allowed.")</c>.
+    /// There is no user when there is neither an authenticated principal nor a user's context, as the HTTP identity check
+    /// reads an authenticated principal as a user.
+    /// </para>
+    /// <para>
+    /// Whether the descriptor allows anonymous access is read when the operation runs: a background task's and an
+    /// <c>[AllowAnonymous]</c> operation's descriptor is made allowing it, and <c>Blueprint.Rebus</c>'s
+    /// <see cref="IOperationDescriptorConvention"/> marks a subscribed message's as the app is made, as legacy's
+    /// <c>RebusScannerConvention</c> did at start-up, so neither is refused nor authorised.
+    /// </para>
+    /// </remarks>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="apiAuthorisers">Pre-filtered <see cref="Authorization.IApiAuthoriser"/> instances that apply to this operation.</param>
+    /// <param name="operationAuthorisers">Pre-filtered <see cref="Authorization.IOperationAuthoriser"/> instances that apply to this operation.</param>
+    /// <returns><c>null</c> when the operation may execute; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ValueTask<OperationResult?> RunUnlinkedOperationAuthorisersAsync(
+        ApiOperationContext context,
+        Authorization.IApiAuthoriser[] apiAuthorisers,
+        Authorization.IOperationAuthoriser[] operationAuthorisers)
+    {
+        if (context.Descriptor.AnonymousAccessAllowed || context.SkipAuthorisation)
+        {
+            return default;
+        }
+
+        if (context.UserAuthorisationContext == null && context.ClaimsIdentity is not { IsAuthenticated: true })
+        {
+            return new ValueTask<OperationResult?>(UnauthenticatedResult.Instance);
+        }
+
+        return RunPreFilteredAuthorisersAsync(context, apiAuthorisers, operationAuthorisers);
     }
 
     /// <summary>
@@ -1817,7 +1902,9 @@ public static class PipelineHelpers
             // Flush pending persistence so the nested query can read the just-written data.
             await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
 
-            // Create a nested context that inherits auth, tenant, and request state from the parent
+            // Create a nested context that inherits auth, tenant, and request state from the parent. Unlike a nested
+            // operation a handler creates, it skips authorisation, as legacy's self query did: the operation has just
+            // changed the resource (Signature365 8b40ecc961, Blueprint.Http/Middleware/ResourceEventHandler.cs:113-121).
             var nestedContext = context.CreateNested(selfQuery, skipAuthorisation: true);
 
             // Track recursion depth in the shared Data dictionary
@@ -1899,6 +1986,7 @@ public static class PipelineHelpers
             // Flush pending persistence so the nested query can read just-written data
             await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
 
+            // Skips authorisation as a legacy resource event's self query does (ResolveResourceEventSelfQueryCoreAsync).
             var nestedContext = context.CreateNested((IOperation)selfQuery, skipAuthorisation: true);
             nestedContext.Data[SelfQueryDepthKey] = depth + 1;
 

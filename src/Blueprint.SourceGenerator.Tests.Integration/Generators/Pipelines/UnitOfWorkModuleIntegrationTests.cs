@@ -23,7 +23,10 @@ public class UnitOfWorkModuleIntegrationTests
         var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
 
         var pipeline = executor.GetPipeline(typeof(PersistableCommand));
-        var context = new ApiOperationContext(serviceProvider, app, PersistableCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, PersistableCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((PersistableCommand)context.Operation).Name = "valid-name";
 
         var result = await pipeline.ExecuteAsync(context);
@@ -41,7 +44,10 @@ public class UnitOfWorkModuleIntegrationTests
         var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
 
         var pipeline = executor.GetPipeline(typeof(PersistableCommand));
-        var context = new ApiOperationContext(serviceProvider, app, PersistableCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, PersistableCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         // Leave Name null to trigger Required validation failure
         var result = await pipeline.ExecuteAsync(context);
@@ -58,7 +64,10 @@ public class UnitOfWorkModuleIntegrationTests
         var serviceProvider = new PersistenceTestServiceProvider(unitOfWork: null);
 
         var pipeline = executor.GetPipeline(typeof(PersistableCommand));
-        var context = new ApiOperationContext(serviceProvider, app, PersistableCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, PersistableCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((PersistableCommand)context.Operation).Name = "no-uow";
 
         var result = await pipeline.ExecuteAsync(context);
@@ -77,7 +86,10 @@ public class UnitOfWorkModuleIntegrationTests
         var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
 
         var pipeline = executor.GetPipeline(typeof(PersistenceQueryProof));
-        var context = new ApiOperationContext(serviceProvider, app, PersistenceQueryProof.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, PersistenceQueryProof.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -94,7 +106,10 @@ public class UnitOfWorkModuleIntegrationTests
         var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
 
         var pipeline = executor.GetPipeline(typeof(DoNotSaveChangesCommand));
-        var context = new ApiOperationContext(serviceProvider, app, DoNotSaveChangesCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, DoNotSaveChangesCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((DoNotSaveChangesCommand)context.Operation).Name = "should-not-save";
 
         var result = await pipeline.ExecuteAsync(context);

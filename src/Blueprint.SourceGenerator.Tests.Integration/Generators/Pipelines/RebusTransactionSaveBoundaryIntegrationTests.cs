@@ -34,7 +34,10 @@ public class RebusTransactionSaveBoundaryIntegrationTests
         using var scope = provider.CreateScope();
         var app = new IntegrationTestBlueprintApp();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, provider);
-        var context = new ApiOperationContext(scope.ServiceProvider, app, app.FindOperation(typeof(SaveBoundaryCommand)), CancellationToken.None);
+        var context = new ApiOperationContext(scope.ServiceProvider, app, app.FindOperation(typeof(SaveBoundaryCommand)), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         var log = scope.ServiceProvider.GetRequiredService<SaveBoundaryLog>();
 
         var result = await executor.GetPipeline(typeof(SaveBoundaryCommand)).ExecuteAsync(context);

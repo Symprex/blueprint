@@ -115,7 +115,14 @@ public class ResourceEvent : OperationResult
     /// <summary>
     /// Gets or sets the payload of this event — the actual resource that this represents.
     /// </summary>
+    /// <remarks>
+    /// It is <see langword="null"/> when the handler gave none and no self query loaded one, as for a deleted event, whose
+    /// self query is never run. Such an event is written with no <c>data</c> key, as legacy Blueprint wrote it (Signature365
+    /// <c>8b40ecc961</c>, <c>Blueprint.Http/ResourceEvent.cs:122</c>, <c>NullValueHandling.Ignore</c>, and
+    /// <c>JsonConverterFactoryForResourceEventOfT.cs</c>, which wrote it only when it was not null).
+    /// </remarks>
     [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public object? Data { get; set; }
 
     /// <summary>
@@ -282,7 +289,12 @@ public class ResourceEvent<TResource> : ResourceEvent
     /// Shadows <see cref="ResourceEvent.Data"/> so that STJ can bind the <see cref="JsonConstructorAttribute"/>
     /// parameter during deserialization while still serializing as the concrete <typeparamref name="TResource"/>.
     /// </summary>
+    /// <remarks>
+    /// System.Text.Json writes this property, not the one it hides, for an event declared as this type or a subclass, so it
+    /// carries the same condition: a <see langword="null"/> payload is written with no <c>data</c> key, as legacy wrote it.
+    /// </remarks>
     [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public new TResource? Data
     {
         get => (TResource?)base.Data;

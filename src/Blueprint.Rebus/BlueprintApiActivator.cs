@@ -68,13 +68,9 @@ public sealed class BlueprintApiActivator : IContainerAdapter
                 typeof(TMessage),
                 static (key, state) =>
                 {
-                    // Tag the descriptor as a Rebus message and hide from HTTP exposure
-                    if (!state.desc.TryGetFeatureData<RebusMessageFeature>(out _))
-                    {
-                        state.desc.SetFeatureData(new RebusMessageFeature());
-                        state.desc.IsExposed = false;
-                        state.desc.AnonymousAccessAllowed = true;
-                    }
+                    // Tag the descriptor as a Rebus message and hide from HTTP exposure. A subscribed message was marked as the
+                    // app was made (RebusMessageDescriptorConvention); this marks any other operation delivered.
+                    RebusMessageDescriptorConvention.MarkAsMessage(state.desc);
 
                     var singleHandler = (IHandleMessages<TMessage>)Activator
                         .CreateInstance(

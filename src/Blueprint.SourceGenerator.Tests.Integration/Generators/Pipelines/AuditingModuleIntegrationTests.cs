@@ -24,7 +24,10 @@ public class AuditingModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
-        var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -43,7 +46,10 @@ public class AuditingModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(AuditableWriteCommand));
-        var context = new ApiOperationContext(serviceProvider, app, AuditableWriteCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, AuditableWriteCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         // Leave RequiredField null to trigger validation failure
         var result = await pipeline.ExecuteAsync(context);
@@ -60,7 +66,10 @@ public class AuditingModuleIntegrationTests
         var serviceProvider = new AuditTestServiceProvider(auditSink: null);
 
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
-        var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -76,7 +85,10 @@ public class AuditingModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
-        var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -93,7 +105,10 @@ public class AuditingModuleIntegrationTests
         var serviceProvider = new AuditTestServiceProvider(auditSink);
 
         var pipeline = executor.GetPipeline(typeof(NonAuditableQuery));
-        var context = new ApiOperationContext(serviceProvider, app, NonAuditableQuery.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, NonAuditableQuery.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -115,6 +130,7 @@ public class AuditingModuleIntegrationTests
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
         var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None)
         {
+            SkipAuthorisation = true,
             Activity = activity,
         };
 
@@ -150,6 +166,7 @@ public class AuditingModuleIntegrationTests
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
         var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None)
         {
+            SkipAuthorisation = true,
             Activity = activity,
         };
 
@@ -189,7 +206,10 @@ public class AuditingModuleIntegrationTests
         var serviceProvider = new AuditTestServiceProvider(null);
 
         var pipeline = executor.GetPipeline(typeof(NoMetricsQuery));
-        var context = new ApiOperationContext(serviceProvider, app, NoMetricsQuery.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, NoMetricsQuery.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         // Capture the current activity before pipeline execution
         var activityBefore = Activity.Current;

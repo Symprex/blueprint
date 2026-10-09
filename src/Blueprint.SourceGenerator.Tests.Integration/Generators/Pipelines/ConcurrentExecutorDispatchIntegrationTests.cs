@@ -145,7 +145,10 @@ internal static class ConcurrentExecutorDispatchStressHarness
 
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
-        return new ApiOperationContext(EmptyServiceProvider.Instance, app, descriptor, CancellationToken.None);
+        return new ApiOperationContext(EmptyServiceProvider.Instance, app, descriptor, CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
     }
 
     private static string? ExtractOkResultPayload(OperationResult result)

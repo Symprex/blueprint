@@ -223,6 +223,7 @@ public class LinkPopulationModuleIntegrationTests
 
         var context = new ApiOperationContext(CreateLinkServices(static services => services.AddScoped<IResourceLinkGenerator, TestResourceLinkGenerator>()), app, descriptor, CancellationToken.None)
         {
+            SkipAuthorisation = true,
             Operation = new CreateLinkTestResourceCommand { Name = "Test" },
             HttpContext = httpContext,
             BaseUri = RequestBaseUri,
@@ -252,6 +253,7 @@ public class LinkPopulationModuleIntegrationTests
 
         var context = new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
         {
+            SkipAuthorisation = true,
             Operation = new CreateLinkTestResourceCommand { Name = "Test" },
             HttpContext = httpContext,
         };
@@ -267,6 +269,7 @@ public class LinkPopulationModuleIntegrationTests
     {
         return new ApiOperationContext(CreateLinkServices(), app, descriptor, CancellationToken.None)
         {
+            SkipAuthorisation = true,
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext(),
             BaseUri = RequestBaseUri,
         };

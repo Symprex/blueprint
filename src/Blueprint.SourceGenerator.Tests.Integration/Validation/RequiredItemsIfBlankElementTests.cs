@@ -149,7 +149,10 @@ public class RequiredItemsIfBlankElementTests
 
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
-        return new ApiOperationContext(NullServiceProvider.Instance, app, descriptor, CancellationToken.None);
+        return new ApiOperationContext(NullServiceProvider.Instance, app, descriptor, CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
     }
 }
 

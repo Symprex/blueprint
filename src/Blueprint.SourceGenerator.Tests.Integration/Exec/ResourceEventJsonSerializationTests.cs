@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Blueprint.Http;
 using Blueprint.Model;
+using Blueprint.SourceGenerator.Tests.Integration.Http;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Exec;
 
@@ -156,6 +157,45 @@ public class ResourceEventJsonSerializationTests
 
         Assert.False(doc.RootElement.TryGetProperty("href", out _), "an event with no href must not write the key");
         Assert.False(doc.RootElement.TryGetProperty("correlationId", out _), "an event with no correlation id must not write the key");
+    }
+
+    [Fact]
+    public void ResourceEvent_without_data_omits_the_data_key()
+    {
+        // Legacy's converter wrote data only when it was not null (Signature365 8b40ecc961,
+        // Blueprint.Http/JsonConverterFactoryForResourceEventOfT.cs, the Data != null check), as did its Newtonsoft
+        // contract (Blueprint.Http/ResourceEvent.cs:122, NullValueHandling.Ignore), so a deleted event, whose self query was
+        // never run, had no key; here it was written as "data": null.
+        var resourceEvent = new ResourceEvent(ResourceEventChangeType.Deleted, "test.deleted", typeof(TestResource), new GetHrefWidgetQuery { Id = "widget-1" });
+
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(resourceEvent, _options));
+
+        Assert.False(doc.RootElement.TryGetProperty("data", out _), "an event with no data must not write the key");
+    }
+
+    [Fact]
+    public void Generic_ResourceEvent_without_data_omits_the_data_key_whichever_type_it_is_written_as()
+    {
+        // ResourceEvent<T> hides ResourceEvent's Data with its own, and System.Text.Json writes the declared type's.
+        var resourceEvent = new ResourceDeleted<HrefWidgetApiResource>(new GetHrefWidgetQuery { Id = "widget-1" });
+
+        using var asDeleted = JsonDocument.Parse(JsonSerializer.Serialize(resourceEvent, _options));
+        using var asGeneric = JsonDocument.Parse(JsonSerializer.Serialize<ResourceEvent<HrefWidgetApiResource>>(resourceEvent, _options));
+        using var asBase = JsonDocument.Parse(JsonSerializer.Serialize<ResourceEvent>(resourceEvent, _options));
+
+        Assert.False(asDeleted.RootElement.TryGetProperty("data", out _), "written as ResourceDeleted<T>");
+        Assert.False(asGeneric.RootElement.TryGetProperty("data", out _), "written as ResourceEvent<T>");
+        Assert.False(asBase.RootElement.TryGetProperty("data", out _), "written as ResourceEvent");
+    }
+
+    [Fact]
+    public void Generic_ResourceEvent_with_data_writes_it()
+    {
+        var resourceEvent = new ResourceDeleted<HrefWidgetApiResource>(new HrefWidgetApiResource { Id = "widget-2" });
+
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(resourceEvent, _options));
+
+        Assert.Equal("widget-2", doc.RootElement.GetProperty("data").GetProperty("id").GetString());
     }
 
     private sealed class TestResource

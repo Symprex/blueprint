@@ -42,7 +42,10 @@ public class MartenSessionQueuedAfterSaveIntegrationTests
         using var scope = provider.CreateScope();
         var app = new IntegrationTestBlueprintApp();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, provider);
-        var context = new ApiOperationContext(scope.ServiceProvider, app, app.FindOperation(typeof(SendOnlyOutboxCommand)), CancellationToken.None);
+        var context = new ApiOperationContext(scope.ServiceProvider, app, app.FindOperation(typeof(SendOnlyOutboxCommand)), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await executor.GetPipeline(typeof(SendOnlyOutboxCommand)).ExecuteAsync(context);
 

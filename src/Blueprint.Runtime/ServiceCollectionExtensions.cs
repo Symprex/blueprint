@@ -42,7 +42,7 @@ public static class ServiceCollectionExtensions
         // read-only, before the app is ever resolved.
         services.AddSingleton(sp => new BlueprintAppSerializerContextInstaller<TApp>(
             sp,
-            () => new TApp { HateoasLinksDisabled = builder.HateoasLinksDisabled }));
+            () => ApplyOperationDescriptorConventions(new TApp { HateoasLinksDisabled = builder.HateoasLinksDisabled }, sp)));
         services.AddSingleton<IPostConfigureOptions<BlueprintJsonOptions>>(static sp => sp.GetRequiredService<BlueprintAppSerializerContextInstaller<TApp>>());
         services.AddSingleton<TApp>(static sp => sp.GetRequiredService<BlueprintAppSerializerContextInstaller<TApp>>().ResolveApp());
         services.AddSingleton<BlueprintApp>(static sp => sp.GetRequiredService<TApp>());
@@ -97,6 +97,31 @@ public static class ServiceCollectionExtensions
         configure?.Invoke(builder);
 
         return services;
+    }
+
+    /// <summary>
+    /// Applies every registered <see cref="IOperationDescriptorConvention"/> to each of the app's operation descriptors as
+    /// the app is made, so that what they decide holds before any operation executes, as legacy Blueprint applied its
+    /// scanner conventions at start-up.
+    /// </summary>
+    /// <remarks>
+    /// It runs inside the app's one-time creation, from the service provider, so a convention registered after
+    /// <c>AddBlueprintApi</c> applies as well as one registered before it.
+    /// </remarks>
+    private static TApp ApplyOperationDescriptorConventions<TApp>(TApp app, IServiceProvider services)
+        where TApp : BlueprintApp
+    {
+        var conventions = services.GetServices<IOperationDescriptorConvention>();
+
+        foreach (var convention in conventions)
+        {
+            foreach (var descriptor in app.Operations)
+            {
+                convention.Apply(descriptor);
+            }
+        }
+
+        return app;
     }
 }
 

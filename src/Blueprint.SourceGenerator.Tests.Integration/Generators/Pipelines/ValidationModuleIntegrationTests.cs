@@ -1626,7 +1626,10 @@ public class ValidationModuleIntegrationTests
 
     private static ApiOperationContext CreateContext(BlueprintApp app, ApiOperationDescriptor descriptor)
     {
-        return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None);
+        return new ApiOperationContext(new EmptyServiceProvider(), app, descriptor, CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
     }
 
     [Fact]
