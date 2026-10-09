@@ -24,7 +24,7 @@ summary the collapsing exists to leave visible, and `MANIFEST.json` is the one f
 that changes on every sync — mark them and a routine sync pull request shows nothing
 at all.
 
-## symprex-practices 0.13.0
+## symprex-practices 0.13.1
 
 - `agent-conduct`
 - `code-review`
