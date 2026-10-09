@@ -18,7 +18,7 @@ namespace Blueprint.Generated
     internal sealed partial class CreateUserCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["TenantModule", "PropertyPopulationModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
         private static readonly Blueprint.Validation.PasswordAttribute _va_Password =
             new global::Blueprint.Validation.PasswordAttribute("Weak password.");
         private static readonly Blueprint.Validation.UkPostcodeAttribute _va_Postcode =
@@ -47,6 +47,17 @@ namespace Blueprint.Generated
             {
                 await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
+            if (this.UserAuthorisationContextFactory != null)
+            {
+                await LoadUserContextAsync(context, this.UserAuthorisationContextFactory).ConfigureAwait(false);
+            }
+
+            var authoriserDenial = await RunUnlinkedOperationAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false);
+            if (authoriserDenial != null)
+            {
+                return authoriserDenial;
+            }
+
             var validationResults = default(global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>);
             if (operation.AcceptedTerms == false)
             {

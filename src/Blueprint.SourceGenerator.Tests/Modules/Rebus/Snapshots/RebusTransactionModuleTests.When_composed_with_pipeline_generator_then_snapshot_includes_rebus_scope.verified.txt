@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class PlaceOrderCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["MartenScopeModule", "TenantModule", "PropertyPopulationModule", "RebusTransactionModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["MartenScopeModule", "TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "RebusTransactionModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
         readonly bool _hasRebus;
 
         internal PlaceOrderCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
@@ -73,6 +73,17 @@ namespace Blueprint.Generated
             {
                 await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
+            if (this.UserAuthorisationContextFactory != null)
+            {
+                await LoadUserContextAsync(context, this.UserAuthorisationContextFactory).ConfigureAwait(false);
+            }
+
+            var authoriserDenial = await RunUnlinkedOperationAuthorisersAsync(context, this.GetApplicableApiAuthorisers(context.Descriptor), this.GetApplicableOperationAuthorisers(context.Descriptor)).ConfigureAwait(false);
+            if (authoriserDenial != null)
+            {
+                return authoriserDenial;
+            }
+
 
             using var rebusTransactionScope = this._hasRebus ? new global::Rebus.Transport.RebusTransactionScope() : null;
             if (rebusTransactionScope != null && this.HasUnitOfWork)

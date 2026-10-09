@@ -732,6 +732,40 @@ public static class PipelineHelpers
         return LoadUserContextCoreAsync(context, userIdentity, userContextFactory);
     }
 
+    /// <summary>
+    /// Loads the <see cref="Authorization.IUserAuthorisationContext"/> of an operation with no link from the context's
+    /// <see cref="ApiOperationContext.UserPrincipal"/> when an <see cref="Authorization.IUserAuthorisationContextFactory"/>
+    /// is registered, setting the same activity tags as the HTTP overload does.
+    /// </summary>
+    /// <remarks>
+    /// An operation with no <c>[RootLink]</c>, <c>[SelfLink]</c> or <c>[Link]</c> is executed in process only — as a
+    /// background task, a Rebus message or through <c>ExecuteWithNewScopeAsync</c> — with no HTTP context to take its user
+    /// from, so its user is the principal its executor gave the context. Legacy loaded the user of every operation it
+    /// executed from the context's <c>ClaimsIdentity</c> in the same way (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint/Authorisation/UserContextLoaderMiddlewareBuilder.cs:13-36</c>). As in the HTTP overload, a context that
+    /// already has a user's context, as a nested one does, keeps it.
+    /// </remarks>
+    /// <param name="context">The operation execution context, whose principal is the user's.</param>
+    /// <param name="userContextFactory">The cached user authorization context factory, or <c>null</c> if not registered.</param>
+    /// <returns>A task that completes when the user context has been loaded (or skipped).</returns>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static Task LoadUserContextAsync(
+        ApiOperationContext context,
+        Authorization.IUserAuthorisationContextFactory? userContextFactory)
+    {
+        if (userContextFactory == null || context.UserAuthorisationContext != null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (context.ClaimsIdentity is not { IsAuthenticated: true } userIdentity)
+        {
+            return Task.CompletedTask;
+        }
+
+        return LoadUserContextCoreAsync(context, userIdentity, userContextFactory);
+    }
+
     private static async Task LoadUserContextCoreAsync(
         ApiOperationContext context,
         System.Security.Claims.ClaimsIdentity userIdentity,
@@ -1091,6 +1125,58 @@ public static class PipelineHelpers
         }
 
         return default;
+    }
+
+    /// <summary>
+    /// Invokes the pre-filtered authorisers of an operation with no link exactly as
+    /// <see cref="RunPreFilteredAuthorisersAsync"/> does, unless its descriptor allows anonymous access or it is executed
+    /// with no user.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Legacy ran the applicable authorisers of every operation it executed whose descriptor did not allow anonymous access,
+    /// linked or not (Signature365 <c>8b40ecc961</c>, <c>Blueprint/Authorisation/AuthorisationMiddlewareBuilder.cs:52-55</c>,
+    /// <c>:76-103</c>), so an operation with no <c>[RootLink]</c>, <c>[SelfLink]</c> or <c>[Link]</c>, executed in process
+    /// by a user, is authorised as one executed through the HTTP host is.
+    /// </para>
+    /// <para>
+    /// Whether the descriptor allows anonymous access is read when the operation runs, not when it is generated: a
+    /// background task's and an <c>[AllowAnonymous]</c> operation's descriptor is made allowing it, but
+    /// <c>Blueprint.Rebus</c> marks a message's only when it first delivers one, where legacy's <c>RebusScannerConvention</c>
+    /// marked every subscribed message at start-up (<c>Symprex.Signature365.BlueprintRebus/RebusScannerConvention.cs:30-44</c>).
+    /// </para>
+    /// <para>
+    /// An execution with no user — no authenticated principal and no user's context — runs no authoriser. Legacy refused a
+    /// non-anonymous operation with no user ("Access denied. Anonymous access is not allowed.",
+    /// <c>AuthorisationMiddlewareBuilder.cs:78-82</c>), but every operation it executed with no link was a background task or
+    /// a subscribed message, and allowed anonymous access. Here a message executed in process before Rebus has delivered
+    /// one, as a test fixture executes one, is not yet marked, so refusing it, or asking an authoriser that denies a missing
+    /// user, would deny an execution legacy allowed. An execution with no user is a system one, and runs as it did before
+    /// unlinked operations were authorised. An operation with a link is not affected: the HTTP identity check refuses an
+    /// anonymous caller before any authoriser runs.
+    /// </para>
+    /// </remarks>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="apiAuthorisers">Pre-filtered <see cref="Authorization.IApiAuthoriser"/> instances that apply to this operation.</param>
+    /// <param name="operationAuthorisers">Pre-filtered <see cref="Authorization.IOperationAuthoriser"/> instances that apply to this operation.</param>
+    /// <returns><c>null</c> when all authorisers pass or none is run; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ValueTask<OperationResult?> RunUnlinkedOperationAuthorisersAsync(
+        ApiOperationContext context,
+        Authorization.IApiAuthoriser[] apiAuthorisers,
+        Authorization.IOperationAuthoriser[] operationAuthorisers)
+    {
+        if (context.Descriptor.AnonymousAccessAllowed)
+        {
+            return default;
+        }
+
+        if (context.UserAuthorisationContext == null && context.ClaimsIdentity is not { IsAuthenticated: true })
+        {
+            return default;
+        }
+
+        return RunPreFilteredAuthorisersAsync(context, apiAuthorisers, operationAuthorisers);
     }
 
     /// <summary>
