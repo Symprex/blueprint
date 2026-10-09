@@ -1902,7 +1902,9 @@ public static class PipelineHelpers
             // Flush pending persistence so the nested query can read the just-written data.
             await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
 
-            // Create a nested context that inherits auth, tenant, and request state from the parent
+            // Create a nested context that inherits auth, tenant, and request state from the parent. Unlike a nested
+            // operation a handler creates, it skips authorisation, as legacy's self query did: the operation has just
+            // changed the resource (Signature365 8b40ecc961, Blueprint.Http/Middleware/ResourceEventHandler.cs:113-121).
             var nestedContext = context.CreateNested(selfQuery, skipAuthorisation: true);
 
             // Track recursion depth in the shared Data dictionary
@@ -1984,6 +1986,7 @@ public static class PipelineHelpers
             // Flush pending persistence so the nested query can read just-written data
             await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
 
+            // Skips authorisation as a legacy resource event's self query does (ResolveResourceEventSelfQueryCoreAsync).
             var nestedContext = context.CreateNested((IOperation)selfQuery, skipAuthorisation: true);
             nestedContext.Data[SelfQueryDepthKey] = depth + 1;
 

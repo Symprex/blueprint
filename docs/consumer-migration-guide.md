@@ -325,6 +325,18 @@ only when Rebus first delivered it. A test or host that executes an unlinked ope
 give it a user, or skip authorisation (`context.SkipAuthorisation`, or `BlueprintTestContext.SkipAuthorisation()`), as
 legacy required; `BlueprintTestHost`'s `MessageAsync` and `BackgroundTaskAsync` already skip it.
 
+**Behaviour change for a nested operation (v1.0.6).** `ApiOperationContext.CreateNested(operation)` authorises the nested
+operation by default (`skipAuthorisation` defaults to `false`): it is refused with no user and asked of its authorisers
+with the user's context it inherits, which is reused rather than loaded again. The parent's `SkipAuthorisation` is not
+inherited. A resource event's self query is still executed skipping authorisation, as the framework passes
+`skipAuthorisation: true` for it. This is what legacy Blueprint did: its `CreateNested` left `SkipAuthorisation` false and
+its nested pipeline kept the authorisation middleware (Signature365 `8b40ecc961`, `Blueprint/ApiOperationContext.cs:163-180`,
+`Authorisation/AuthorisationMiddlewareBuilder.cs:21`), while its `ResourceEventHandler` set `SkipAuthorisation = true` on
+the self query's nested context (`Blueprint.Http/Middleware/ResourceEventHandler.cs:113-121`). Coming from legacy Blueprint
+nothing changes. Coming from v1.0.5 or earlier, `CreateNested` skipped authorisation unless told otherwise; a caller that
+relied on that must pass `skipAuthorisation: true`. A call compiled against v1.0.5 keeps the old default until it is
+recompiled, as an optional parameter's default is compiled into the call.
+
 **Behaviour change for authorisation denials (v1.0.3).** A denial is answered with the body legacy Blueprint wrote for it:
 `{"type":"unauthorized","title":"<Message>","status":403}` for an `Authorisation` failure,
 `{"type":"security_failure","title":"<Message>","status":401}` for any other, and

@@ -142,8 +142,8 @@ public sealed class ApiOperationContext : IHttpOperationContext
 
     /// <summary>
     /// Gets or sets a value indicating whether authorization checks should be skipped for this
-    /// operation execution. Used for nested/child operations that inherit the parent's authorization
-    /// context and should not be re-evaluated.
+    /// operation execution, which should be used with care: the framework sets it for a resource event's self query,
+    /// whose resource the operation has just changed, as legacy Blueprint did.
     /// </summary>
     public bool SkipAuthorisation { get; set; }
 
@@ -152,14 +152,22 @@ public sealed class ApiOperationContext : IHttpOperationContext
     /// middleware. The nested context inherits the current scope's service provider and user identity
     /// but targets a different operation and descriptor.
     /// </summary>
+    /// <remarks>
+    /// The nested operation is authorised by default, with the user's context it inherits rather than one loaded again,
+    /// as legacy Blueprint's <c>CreateNested</c> left <c>SkipAuthorisation</c> false and its nested pipeline kept the
+    /// authorisation middleware but not the user context loader (Signature365 <c>8b40ecc961</c>,
+    /// <c>Blueprint/ApiOperationContext.cs:163-180</c>, <c>Authorisation/AuthorisationMiddlewareBuilder.cs:21</c>,
+    /// <c>Authorisation/UserContextLoaderMiddlewareBuilder.cs:11</c>). The parent's <see cref="SkipAuthorisation"/> is not
+    /// inherited, as legacy's was not.
+    /// </remarks>
     /// <param name="operation">The child operation to execute.</param>
     /// <param name="skipAuthorisation">
-    /// Whether to skip authorization for the nested operation. Defaults to <c>true</c> because
-    /// the parent operation has already been authorized.
+    /// Whether to skip authorization for the nested operation. Defaults to <c>false</c>, as legacy did: pass <c>true</c>
+    /// only where the parent's authorisation is enough, as the framework does for a resource event's self query.
     /// </param>
     /// <returns>A new context configured for the nested operation.</returns>
     /// <exception cref="InvalidOperationException">If no descriptor is found for the operation type.</exception>
-    public ApiOperationContext CreateNested(IOperation operation, bool skipAuthorisation = true)
+    public ApiOperationContext CreateNested(IOperation operation, bool skipAuthorisation = false)
     {
         ArgumentNullException.ThrowIfNull(operation);
 

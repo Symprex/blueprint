@@ -13,8 +13,10 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 public class NestedExecutionIntegrationTests
 {
     [Fact]
-    public void CreateNested_inherits_user_context_and_skips_authorisation()
+    public void CreateNested_inherits_user_context_and_is_authorised_by_default()
     {
+        // Legacy's CreateNested left SkipAuthorisation false (Signature365 8b40ecc961, Blueprint/ApiOperationContext.cs:163-180),
+        // so a nested operation was authorised with the user it inherited; it used to default to skipping authorisation here.
         // Arrange
         var app = new SampleBlueprintApp();
         var services = new ServiceCollection();
@@ -46,7 +48,7 @@ public class NestedExecutionIntegrationTests
         // Assert
         nested.Should().NotBeNull();
         nested.Parent.Should().BeSameAs(parentContext);
-        nested.SkipAuthorisation.Should().BeTrue();
+        nested.SkipAuthorisation.Should().BeFalse();
         nested.UserPrincipal.Should().BeSameAs(parentContext.UserPrincipal);
         nested.Data.Should().BeSameAs(parentContext.Data);
         nested.Descriptor.OperationType.Should().Be(typeof(Blueprint.SourceGenerator.Sample.Contract.Api.GetTemplateQuery));

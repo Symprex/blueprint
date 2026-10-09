@@ -241,8 +241,9 @@ public partial class PassOnAlwaysExpandEmployeeEventCommand : ICommand<ResourceE
 {
     public static async Task<ResourceEvent<AlwaysExpandTestEmployee>> HandleAsync(PassOnAlwaysExpandEmployeeEventCommand operation, ApiOperationContext context)
     {
+        // A nested operation is authorised by default and these tests have no user; expansion, not authorisation, is tested.
         var executor = (BlueprintAppExecutor)context.ServiceProvider.GetService(typeof(BlueprintAppExecutor))!;
-        var inner = await executor.ExecuteAsync(context.CreateNested(new UpdateAlwaysExpandEmployeeViaSelfQueryCommand()));
+        var inner = await executor.ExecuteAsync(context.CreateNested(new UpdateAlwaysExpandEmployeeViaSelfQueryCommand(), skipAuthorisation: true));
 
         return (ResourceEvent<AlwaysExpandTestEmployee>)inner;
     }
@@ -253,8 +254,9 @@ public partial class HandOnAlwaysExpandEmployeeEventQuery : IQuery<ResourceEvent
 {
     public static async Task<ResourceEvent<AlwaysExpandTestEmployee>> HandleAsync(HandOnAlwaysExpandEmployeeEventQuery operation, ApiOperationContext context)
     {
+        // As PassOnAlwaysExpandEmployeeEventCommand: authorisation is not what is tested.
         var executor = (BlueprintAppExecutor)context.ServiceProvider.GetService(typeof(BlueprintAppExecutor))!;
-        var inner = await executor.ExecuteAsync(context.CreateNested(new UpdateAlwaysExpandEmployeeViaSelfQueryCommand()));
+        var inner = await executor.ExecuteAsync(context.CreateNested(new UpdateAlwaysExpandEmployeeViaSelfQueryCommand(), skipAuthorisation: true));
 
         return (ResourceEvent<AlwaysExpandTestEmployee>)inner;
     }
