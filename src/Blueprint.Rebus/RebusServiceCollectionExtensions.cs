@@ -1,3 +1,4 @@
+using Blueprint;
 using Blueprint.Model;
 using Blueprint.Rebus;
 using Rebus.Bus;
@@ -13,11 +14,19 @@ public static class RebusServiceCollectionExtensions
 {
     /// <summary>
     /// Configures the subscribed Rebus message types, applies Rebus-specific conventions to their
-    /// <see cref="ApiOperationDescriptor"/> entries (anonymous access, not exposed, no return value required),
+    /// <see cref="ApiOperationDescriptor"/> entries (a <see cref="RebusMessageFeature"/>, anonymous access, not exposed),
     /// and auto-registers all <c>IHandleMessages&lt;T&gt;</c> implementations found in the calling assembly
     /// as scoped services in DI.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The conventions are an <see cref="IOperationDescriptorConvention"/>, which <c>AddBlueprintApi</c> applies as the app
+    /// is made, whether this is called before or after it, so a subscribed message allows anonymous access before it first
+    /// executes, as legacy Signature365's <c>RebusScannerConvention</c> made it at start-up (Signature365 <c>8b40ecc961</c>,
+    /// <c>Symprex.Signature365.BlueprintRebus/RebusScannerConvention.cs:30-44</c>). A message is executed with no user, and
+    /// an unlinked operation that does not allow anonymous access refuses one.
+    /// </para>
+    /// <para>
     /// An <c>IHandleMessages&lt;TBase&gt;</c> is also registered as the handler of every subscribed message type assignable
     /// to <c>TBase</c> — derived from a base class, or implementing an interface — so that it runs for such a message as it
     /// did in legacy, where every subscribed message was an operation given every scanned handler of a type it could be
@@ -25,6 +34,7 @@ public static class RebusServiceCollectionExtensions
     /// <c>Symprex.Signature365.BlueprintRebus/RebusHandleMessageOperationExecutorBuilderScanner.cs:50-75</c>). Only
     /// subscribed types are given base-type handlers, as only they were operations there. A handler of a type derived from
     /// the message's type is not registered for it: it cannot be given the message.
+    /// </para>
     /// </remarks>
     /// <param name="services">The services collection.</param>
     /// <param name="configure">A callback to subscribe message types via <see cref="BlueprintRebusConfiguration.Subscribe{T}"/>.</param>
@@ -40,6 +50,7 @@ public static class RebusServiceCollectionExtensions
         configure(config);
 
         services.AddSingleton(config);
+        services.AddSingleton<IOperationDescriptorConvention>(new RebusMessageDescriptorConvention(config));
 
         // Auto-register IHandleMessages<T> implementations from the calling assembly
         // so that plain Rebus handlers (not Blueprint operations) are resolved from DI.

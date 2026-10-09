@@ -137,6 +137,7 @@ public sealed class LegacyResourceEventHandlingTests
         var descriptor = app.FindOperation(operation.GetType())!;
         var context = new ApiOperationContext(serviceProvider, app, descriptor, CancellationToken.None)
         {
+            SkipAuthorisation = true,
             Operation = operation,
             Activity = activity,
             UserAuthorisationContext = user,

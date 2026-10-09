@@ -25,7 +25,10 @@ public class ResourceEventAuditModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(ResourceEventAuditTestCommand));
-        var context = new ApiOperationContext(serviceProvider, app, ResourceEventAuditTestCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, ResourceEventAuditTestCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -44,7 +47,10 @@ public class ResourceEventAuditModuleIntegrationTests
         var serviceProvider = new ResourceEventAuditTestServiceProvider(resourceEventAuditSink: null);
 
         var pipeline = executor.GetPipeline(typeof(ResourceEventAuditTestCommand));
-        var context = new ApiOperationContext(serviceProvider, app, ResourceEventAuditTestCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, ResourceEventAuditTestCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -60,7 +66,10 @@ public class ResourceEventAuditModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(ResourceEventAuditTestCommand));
-        var context = new ApiOperationContext(serviceProvider, app, ResourceEventAuditTestCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, ResourceEventAuditTestCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -81,6 +90,7 @@ public class ResourceEventAuditModuleIntegrationTests
         var pipeline = executor.GetPipeline(typeof(ResourceEventAuditTestCommand));
         var context = new ApiOperationContext(serviceProvider, app, ResourceEventAuditTestCommand.Configure(), CancellationToken.None)
         {
+            SkipAuthorisation = true,
             Activity = activity,
         };
 
@@ -113,7 +123,10 @@ public class ResourceEventAuditModuleIntegrationTests
 
         // AuditableQuery returns a plain string, not a ResourceEventResult
         var pipeline = executor.GetPipeline(typeof(AuditableQuery));
-        var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, AuditableQuery.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         await pipeline.ExecuteAsync(context);
 
@@ -129,7 +142,10 @@ public class ResourceEventAuditModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(KeyOnlyResourceEventAuditTestCommand));
-        var context = new ApiOperationContext(serviceProvider, app, KeyOnlyResourceEventAuditTestCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, KeyOnlyResourceEventAuditTestCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -148,7 +164,10 @@ public class ResourceEventAuditModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(LegacyResourceEventAuditTestCommand));
-        var context = new ApiOperationContext(serviceProvider, app, LegacyResourceEventAuditTestCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, LegacyResourceEventAuditTestCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 

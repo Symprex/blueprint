@@ -24,9 +24,9 @@ namespace Blueprint.SourceGenerator.Modules.Authorization;
 /// legacy Blueprint's <c>UserContextLoaderMiddlewareBuilder</c> and <c>AuthorisationMiddlewareBuilder</c> matched every
 /// operation it executed. An operation with a link takes its user from the request's <c>HttpContext</c>. One without is
 /// executed in process only (a background task, a Rebus message, <c>ExecuteWithNewScopeAsync</c>), with no
-/// <c>HttpContext</c>, so it takes its user from <c>context.UserPrincipal</c>, and runs its authorisers through
-/// <c>RunUnlinkedOperationAuthorisersAsync</c>, which skips them when its descriptor allows anonymous access or there is
-/// no user.
+/// <c>HttpContext</c>, so it takes its user from <c>context.UserPrincipal</c>, and is authorised by
+/// <c>RunUnlinkedOperationAuthorisersAsync</c>: unless its descriptor allows anonymous access or the context skips
+/// authorisation, an anonymous caller is refused, as legacy refused one, and its authorisers are run otherwise.
 /// </para>
 /// <para>
 /// Operations marked <c>[AllowAnonymous]</c> skip the authoriser invocation but still load the user context. The

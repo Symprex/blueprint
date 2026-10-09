@@ -23,7 +23,10 @@ public class MessageOutboxModuleIntegrationTests
         var serviceProvider = new MessagingTestServiceProvider(outbox);
 
         var pipeline = executor.GetPipeline(typeof(MessagingCommand));
-        var context = new ApiOperationContext(serviceProvider, app, MessagingCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, MessagingCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((MessagingCommand)context.Operation).Name = "valid-name";
 
         var result = await pipeline.ExecuteAsync(context);
@@ -41,7 +44,10 @@ public class MessageOutboxModuleIntegrationTests
         var serviceProvider = new MessagingTestServiceProvider(outbox);
 
         var pipeline = executor.GetPipeline(typeof(MessagingCommand));
-        var context = new ApiOperationContext(serviceProvider, app, MessagingCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, MessagingCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         // Leave Name null to trigger Required validation failure
         var result = await pipeline.ExecuteAsync(context);
@@ -58,7 +64,10 @@ public class MessageOutboxModuleIntegrationTests
         var serviceProvider = new MessagingTestServiceProvider(outbox: null);
 
         var pipeline = executor.GetPipeline(typeof(MessagingCommand));
-        var context = new ApiOperationContext(serviceProvider, app, MessagingCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, MessagingCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((MessagingCommand)context.Operation).Name = "no-outbox";
 
         var result = await pipeline.ExecuteAsync(context);
@@ -75,7 +84,10 @@ public class MessageOutboxModuleIntegrationTests
         var serviceProvider = new MessagingTestServiceProvider(outbox);
 
         var pipeline = executor.GetPipeline(typeof(MessagingQueryProof));
-        var context = new ApiOperationContext(serviceProvider, app, MessagingQueryProof.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, MessagingQueryProof.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -92,7 +104,10 @@ public class MessageOutboxModuleIntegrationTests
         var serviceProvider = new MessagingTestServiceProvider(outbox);
 
         var pipeline = executor.GetPipeline(typeof(DoNotPublishMessagesCommand));
-        var context = new ApiOperationContext(serviceProvider, app, DoNotPublishMessagesCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, DoNotPublishMessagesCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((DoNotPublishMessagesCommand)context.Operation).Name = "should-not-commit";
 
         var result = await pipeline.ExecuteAsync(context);
@@ -110,7 +125,10 @@ public class MessageOutboxModuleIntegrationTests
         var serviceProvider = new MessagingTestServiceProvider(outbox);
 
         var pipeline = executor.GetPipeline(typeof(ThrowingMessagingCommand));
-        var context = new ApiOperationContext(serviceProvider, app, ThrowingMessagingCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, ThrowingMessagingCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((ThrowingMessagingCommand)context.Operation).Name = "will-throw";
 
         var result = await pipeline.ExecuteAsync(context);
@@ -161,7 +179,10 @@ public class MessageOutboxModuleIntegrationTests
         var app = new IntegrationTestBlueprintApp();
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
         var outbox = new TestMessageOutbox();
-        var context = new ApiOperationContext(new MessagingTestServiceProvider(outbox), app, app.FindOperation(typeof(TTask)), CancellationToken.None);
+        var context = new ApiOperationContext(new MessagingTestServiceProvider(outbox), app, app.FindOperation(typeof(TTask)), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         return (context, executor.GetPipeline(typeof(TTask)), outbox);
     }

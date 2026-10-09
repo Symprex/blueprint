@@ -301,21 +301,27 @@ For authorisers that need **both** execution and link visibility, implement `IAp
 blueprint.AddApiAuthoriser<FullAuthoriser>();
 ```
 
-**Behaviour change for an operation with no link (v1.0.6).** An operation's authorisers run whether or not it has a
-`[RootLink]`, `[SelfLink]` or `[Link]`, as legacy Blueprint ran them for every operation it executed. One with no link is
+**Behaviour change for an operation with no link (v1.0.6).** An operation is authorised whether or not it has a
+`[RootLink]`, `[SelfLink]` or `[Link]`, as legacy Blueprint authorised every operation it executed. One with no link is
 executed in process only — as a background task, a Rebus message, through `ExecuteWithNewScopeAsync` or by a test host —
-so its user is the context's `UserPrincipal`: the registered `IUserAuthorisationContextFactory` makes its
-`UserAuthorisationContext` from that principal, then each applicable `IApiAuthoriser` and `IOperationAuthoriser` is asked
-once, the first denial answering as it does for an HTTP operation, with a `ForbiddenResult` or `UnauthenticatedResult`. None
-is asked when the operation's descriptor allows anonymous access (an `[AllowAnonymous]` operation, a background task, or a
-Rebus message once Rebus has delivered one), when the context skips authorisation, or when there is no user: no
-authenticated principal and no `UserAuthorisationContext`. Coming from legacy Blueprint nothing changes for a background
-task or a subscribed message, and an unlinked operation executed by a user is authorised as it was. One executed with no
-user that does not allow anonymous access runs, where legacy refused it ("Access denied. Anonymous access is not allowed."):
-every such operation legacy Signature365 executed was a background task or a subscribed message, and here a message's
-descriptor is marked anonymous only when Rebus first delivers it, so refusing would deny a message executed in process
-before then. Coming from v1.0.5 or earlier, an operation with no link ran no authoriser and was given no user's context,
-so its handler's `Identity` was `null` whoever executed it.
+so its user is the context's `UserPrincipal`, from which the registered `IUserAuthorisationContextFactory` makes its
+`UserAuthorisationContext`. Unless its descriptor allows anonymous access or the context skips authorisation:
+- executed with no user (no authenticated principal and no `UserAuthorisationContext`), it is refused with
+  `UnauthenticatedResult.Instance`, legacy's `UnauthorizedException("Access denied. Anonymous access is not allowed.")`,
+  before any authoriser is asked, whether or not any is registered;
+- executed by a user, each applicable `IApiAuthoriser` and `IOperationAuthoriser` is asked once, the first denial
+  answering as it does for an HTTP operation, with a `ForbiddenResult` or `UnauthenticatedResult`.
+
+A descriptor allows anonymous access for an `[AllowAnonymous]` operation, for every background task (a recurring one
+included) as its descriptor is made, and for every message an `AddBlueprintRebusConsumer` subscribes to, from the moment
+the app is made, whether the consumer is registered before or after `AddBlueprintApi` — as legacy's
+`BackgroundTaskAllowAnonymousConvention` and Signature365's `RebusScannerConvention` marked them at start-up. An
+integration can mark descriptors the same way with an `IOperationDescriptorConvention`. Coming from legacy Blueprint
+nothing changes. Coming from v1.0.5 or earlier, an operation with no link was neither refused nor authorised, and was given
+no user's context, so its handler's `Identity` was `null` whoever executed it; a subscribed message was marked anonymous
+only when Rebus first delivered it. A test or host that executes an unlinked operation in process with no user must now
+give it a user, or skip authorisation (`context.SkipAuthorisation`, or `BlueprintTestContext.SkipAuthorisation()`), as
+legacy required; `BlueprintTestHost`'s `MessageAsync` and `BackgroundTaskAsync` already skip it.
 
 **Behaviour change for authorisation denials (v1.0.3).** A denial is answered with the body legacy Blueprint wrote for it:
 `{"type":"unauthorized","title":"<Message>","status":403}` for an `Authorisation` failure,

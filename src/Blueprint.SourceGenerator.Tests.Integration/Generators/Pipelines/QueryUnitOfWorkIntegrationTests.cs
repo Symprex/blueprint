@@ -83,7 +83,10 @@ public class QueryUnitOfWorkIntegrationTests
         var app = provider.GetRequiredService<IntegrationTestBlueprintApp>();
         var executor = provider.GetRequiredService<BlueprintAppExecutor>();
         using var scope = provider.CreateScope();
-        var context = new ApiOperationContext(scope.ServiceProvider, app, app.FindOperation(typeof(TOperation)), CancellationToken.None);
+        var context = new ApiOperationContext(scope.ServiceProvider, app, app.FindOperation(typeof(TOperation)), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await executor.GetPipeline(typeof(TOperation)).ExecuteAsync(context);
 

@@ -26,7 +26,10 @@ public class ResourceEventSelfQueryModuleIntegrationTests
         serviceProvider.Executor = executor;
 
         var pipeline = executor.GetPipeline(typeof(SelfQueryDeleteCommand));
-        var context = new ApiOperationContext(serviceProvider, app, SelfQueryDeleteCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, SelfQueryDeleteCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -50,6 +53,7 @@ public class ResourceEventSelfQueryModuleIntegrationTests
         var pipeline = executor.GetPipeline(typeof(SelfQueryDeleteCommand));
         var context = new ApiOperationContext(serviceProvider, app, SelfQueryDeleteCommand.Configure(), CancellationToken.None)
         {
+            SkipAuthorisation = true,
             Activity = activity,
         };
 
@@ -69,7 +73,10 @@ public class ResourceEventSelfQueryModuleIntegrationTests
         serviceProvider.Executor = executor;
 
         var pipeline = executor.GetPipeline(typeof(SelfQueryCreateWithDataCommand));
-        var context = new ApiOperationContext(serviceProvider, app, SelfQueryCreateWithDataCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, SelfQueryCreateWithDataCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -89,7 +96,10 @@ public class ResourceEventSelfQueryModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(SelfQueryDeleteCommand));
-        var context = new ApiOperationContext(serviceProvider, app, SelfQueryDeleteCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, SelfQueryDeleteCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -107,7 +117,10 @@ public class ResourceEventSelfQueryModuleIntegrationTests
         serviceProvider.Executor = executor;
 
         var pipeline = executor.GetPipeline(typeof(DeferredSelfQueryCommand));
-        var context = new ApiOperationContext(serviceProvider, app, DeferredSelfQueryCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, DeferredSelfQueryCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         var result = await pipeline.ExecuteAsync(context);
 
@@ -134,6 +147,7 @@ public class ResourceEventSelfQueryModuleIntegrationTests
         var pipeline = executor.GetPipeline(typeof(DeferredSelfQueryCommand));
         var context = new ApiOperationContext(serviceProvider, app, DeferredSelfQueryCommand.Configure(), CancellationToken.None)
         {
+            SkipAuthorisation = true,
             Activity = activity,
         };
 
@@ -180,7 +194,12 @@ public class ResourceEventSelfQueryModuleIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
         serviceProvider.Executor = executor;
 
-        return (new ApiOperationContext(serviceProvider, app, app.FindOperation(typeof(TOperation)), CancellationToken.None), executor.GetPipeline(typeof(TOperation)));
+        var context = new ApiOperationContext(serviceProvider, app, app.FindOperation(typeof(TOperation)), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
+
+        return (context, executor.GetPipeline(typeof(TOperation)));
     }
 
     /// <summary>

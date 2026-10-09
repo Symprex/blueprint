@@ -1128,52 +1128,51 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Invokes the pre-filtered authorisers of an operation with no link exactly as
-    /// <see cref="RunPreFilteredAuthorisersAsync"/> does, unless its descriptor allows anonymous access or it is executed
-    /// with no user.
+    /// Authorises an operation with no link as legacy Blueprint's <c>AuthorisationMiddlewareBuilder</c> did: nothing when
+    /// its descriptor allows anonymous access or the context skips authorisation; otherwise a refusal of an anonymous caller,
+    /// or the pre-filtered authorisers run exactly as <see cref="RunPreFilteredAuthorisersAsync"/> runs them.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Legacy ran the applicable authorisers of every operation it executed whose descriptor did not allow anonymous access,
-    /// linked or not (Signature365 <c>8b40ecc961</c>, <c>Blueprint/Authorisation/AuthorisationMiddlewareBuilder.cs:52-55</c>,
-    /// <c>:76-103</c>), so an operation with no <c>[RootLink]</c>, <c>[SelfLink]</c> or <c>[Link]</c>, executed in process
-    /// by a user, is authorised as one executed through the HTTP host is.
+    /// Legacy matched every operation it executed whose descriptor did not allow anonymous access, linked or not
+    /// (Signature365 <c>8b40ecc961</c>, <c>Blueprint/Authorisation/AuthorisationMiddlewareBuilder.cs:52-55</c>), and inside
+    /// <c>if (context.SkipAuthorisation == false)</c> (<c>:99-103</c>) threw <c>UnauthorizedException("Access denied.
+    /// Anonymous access is not allowed.")</c> when there was no user (<c>:75-79</c>) before running each applicable
+    /// authoriser (<c>:81-95</c>). An
+    /// operation with no <c>[RootLink]</c>, <c>[SelfLink]</c> or <c>[Link]</c> is executed in process only, with no HTTP
+    /// identity check ahead of it, so this is that check and those authorisers.
     /// </para>
     /// <para>
-    /// Whether the descriptor allows anonymous access is read when the operation runs, not when it is generated: a
-    /// background task's and an <c>[AllowAnonymous]</c> operation's descriptor is made allowing it, but
-    /// <c>Blueprint.Rebus</c> marks a message's only when it first delivers one, where legacy's <c>RebusScannerConvention</c>
-    /// marked every subscribed message at start-up (<c>Symprex.Signature365.BlueprintRebus/RebusScannerConvention.cs:30-44</c>).
+    /// The refusal is <see cref="UnauthenticatedResult.Instance"/>, the result the HTTP identity check gives an anonymous
+    /// caller: the host writes it as legacy's <c>UnauthorizedException("Access denied. Anonymous access is not allowed.")</c>.
+    /// There is no user when there is neither an authenticated principal nor a user's context, as the HTTP identity check
+    /// reads an authenticated principal as a user.
     /// </para>
     /// <para>
-    /// An execution with no user — no authenticated principal and no user's context — runs no authoriser. Legacy refused a
-    /// non-anonymous operation with no user ("Access denied. Anonymous access is not allowed.",
-    /// <c>AuthorisationMiddlewareBuilder.cs:78-82</c>), but every operation it executed with no link was a background task or
-    /// a subscribed message, and allowed anonymous access. Here a message executed in process before Rebus has delivered
-    /// one, as a test fixture executes one, is not yet marked, so refusing it, or asking an authoriser that denies a missing
-    /// user, would deny an execution legacy allowed. An execution with no user is a system one, and runs as it did before
-    /// unlinked operations were authorised. An operation with a link is not affected: the HTTP identity check refuses an
-    /// anonymous caller before any authoriser runs.
+    /// Whether the descriptor allows anonymous access is read when the operation runs: a background task's and an
+    /// <c>[AllowAnonymous]</c> operation's descriptor is made allowing it, and <c>Blueprint.Rebus</c>'s
+    /// <see cref="IOperationDescriptorConvention"/> marks a subscribed message's as the app is made, as legacy's
+    /// <c>RebusScannerConvention</c> did at start-up, so neither is refused nor authorised.
     /// </para>
     /// </remarks>
     /// <param name="context">The current operation execution context.</param>
     /// <param name="apiAuthorisers">Pre-filtered <see cref="Authorization.IApiAuthoriser"/> instances that apply to this operation.</param>
     /// <param name="operationAuthorisers">Pre-filtered <see cref="Authorization.IOperationAuthoriser"/> instances that apply to this operation.</param>
-    /// <returns><c>null</c> when all authorisers pass or none is run; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
+    /// <returns><c>null</c> when the operation may execute; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ValueTask<OperationResult?> RunUnlinkedOperationAuthorisersAsync(
         ApiOperationContext context,
         Authorization.IApiAuthoriser[] apiAuthorisers,
         Authorization.IOperationAuthoriser[] operationAuthorisers)
     {
-        if (context.Descriptor.AnonymousAccessAllowed)
+        if (context.Descriptor.AnonymousAccessAllowed || context.SkipAuthorisation)
         {
             return default;
         }
 
         if (context.UserAuthorisationContext == null && context.ClaimsIdentity is not { IsAuthenticated: true })
         {
-            return default;
+            return new ValueTask<OperationResult?>(UnauthenticatedResult.Instance);
         }
 
         return RunPreFilteredAuthorisersAsync(context, apiAuthorisers, operationAuthorisers);

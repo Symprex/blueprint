@@ -157,6 +157,7 @@ public class ResourceEventExpansionIntegrationTests
 
         var context = new ApiOperationContext(serviceProvider, app, app.FindOperation(typeof(TOperation)), CancellationToken.None)
         {
+            SkipAuthorisation = true,
             HttpContext = httpContext,
         };
 

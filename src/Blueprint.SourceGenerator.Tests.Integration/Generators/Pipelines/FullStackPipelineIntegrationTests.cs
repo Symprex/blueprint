@@ -29,7 +29,10 @@ public class FullStackPipelineIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
-        var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((FullStackCommand)context.Operation).Name = "full-stack-valid";
 
         using var activity = new Activity("full-stack-test");
@@ -71,7 +74,10 @@ public class FullStackPipelineIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
-        var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
 
         // Leave Name null to trigger validation failure
         var result = await pipeline.ExecuteAsync(context);
@@ -94,7 +100,10 @@ public class FullStackPipelineIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
-        var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((FullStackCommand)context.Operation).Name = "audit-will-throw";
 
         using var activity = new Activity("audit-throws-test");
@@ -128,7 +137,10 @@ public class FullStackPipelineIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(FullStackCommand));
-        var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, FullStackCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((FullStackCommand)context.Operation).Name = "order-test";
 
         var result = await pipeline.ExecuteAsync(context);
@@ -154,7 +166,10 @@ public class FullStackPipelineIntegrationTests
         var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
 
         var pipeline = executor.GetPipeline(typeof(ThrowingFullStackCommand));
-        var context = new ApiOperationContext(serviceProvider, app, ThrowingFullStackCommand.Configure(), CancellationToken.None);
+        var context = new ApiOperationContext(serviceProvider, app, ThrowingFullStackCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
         ((ThrowingFullStackCommand)context.Operation).Name = "will-throw";
 
         var result = await pipeline.ExecuteAsync(context);

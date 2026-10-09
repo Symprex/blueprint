@@ -124,6 +124,11 @@ public class RebusTransactionEnlistmentIntegrationTests
             context.UserPrincipal = principal;
             context.HttpContext = new DefaultHttpContext { User = principal };
         }
+        else
+        {
+            // Not a test of authorisation: an unlinked operation executed with no user is refused as an anonymous caller.
+            context.SkipAuthorisation = true;
+        }
 
         return (context, executor.GetPipeline(typeof(TCommand)), scope.ServiceProvider.GetRequiredService<EnlistmentLog>());
     }

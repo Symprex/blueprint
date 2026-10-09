@@ -70,6 +70,7 @@ Blueprint.Marten does **not** provide built-in multi-tenant document session iso
 | `IContainerAdapter` | `BlueprintApiActivator` | Routes Rebus messages through Blueprint pipeline |
 | Subscription registry | `BlueprintRebusConfiguration` | Declares `Subscribe<T>()` for startup |
 | Feature tag | `RebusMessageFeature` | Marks operations as Rebus-sourced in descriptors |
+| Start-up convention | `IOperationDescriptorConvention` registered by `AddBlueprintRebusConsumer` | Marks every subscribed message anonymous and unexposed as the app is made, as legacy's `RebusScannerConvention` did (since v1.0.6) |
 | Opt-out | `[NoRebusTransaction]` | Skips transaction scope for specific handlers |
 
 ### Registration
