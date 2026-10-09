@@ -716,6 +716,14 @@ public static class PipelineHelpers
             return Task.CompletedTask;
         }
 
+        // A nested operation (a resource event's self query, for one) runs on a context copied from its parent's, which
+        // already carries the request's user: loading it again would build an identical context a second time. Legacy's
+        // ExecuteNestedAsync reused the parent's context in the same way.
+        if (context.UserAuthorisationContext != null)
+        {
+            return Task.CompletedTask;
+        }
+
         if (httpContext.User.Identity is not System.Security.Claims.ClaimsIdentity { IsAuthenticated: true } userIdentity)
         {
             return Task.CompletedTask;

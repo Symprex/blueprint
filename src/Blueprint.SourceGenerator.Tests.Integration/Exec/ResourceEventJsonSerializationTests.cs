@@ -120,6 +120,44 @@ public class ResourceEventJsonSerializationTests
         Assert.Empty(secureData.EnumerateObject());
     }
 
+    [Fact]
+    public void ResourceEvent_without_changed_values_omits_the_changedValues_key()
+    {
+        // Legacy's converter wrote changedValues only when it was not null (Signature365 8b40ecc961,
+        // Blueprint.Http/JsonConverterFactoryForResourceEventOfT.cs, the ChangedValues != null check), so an event with none
+        // had no key at all; here it was written as "changedValues": null.
+        var resourceEvent = new ResourceEvent(ResourceEventChangeType.Created, "test.created", new TestResource { Id = "res-5" });
+
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(resourceEvent, _options));
+
+        Assert.False(doc.RootElement.TryGetProperty("changedValues", out _), "an event with no changed values must not write the key");
+    }
+
+    [Fact]
+    public void ResourceEvent_with_changed_values_writes_them()
+    {
+        var resourceEvent = new ResourceEvent(ResourceEventChangeType.Updated, "test.updated", new TestResource { Id = "res-6" })
+        {
+            ChangedValues = new Dictionary<string, object> { ["name"] = "Old name" },
+        };
+
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(resourceEvent, _options));
+
+        Assert.Equal("Old name", doc.RootElement.GetProperty("changedValues").GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void ResourceEvent_without_href_or_correlation_id_omits_both_keys()
+    {
+        // Legacy's converter wrote href and correlationId only when each was not null, as it did changedValues.
+        var resourceEvent = new ResourceEvent(ResourceEventChangeType.Created, "test.created", new TestResource { Id = "res-7" });
+
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(resourceEvent, _options));
+
+        Assert.False(doc.RootElement.TryGetProperty("href", out _), "an event with no href must not write the key");
+        Assert.False(doc.RootElement.TryGetProperty("correlationId", out _), "an event with no correlation id must not write the key");
+    }
+
     private sealed class TestResource
     {
         public string Id { get; set; } = string.Empty;
