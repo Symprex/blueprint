@@ -123,6 +123,35 @@ public sealed class BlueprintHttpClientResourceEventTests : IClassFixture<Sample
         }
     }
 
+    [Fact]
+    public async Task When_the_host_wrote_a_deleted_event_with_no_data_then_every_reader_reads_no_resource()
+    {
+        // A deleted event's self query is never run, so it has no data, and the host writes no data key for it, as legacy
+        // did (JsonConverterFactoryForResourceEventOfT.cs, the Data != null check). Each reader reads that as it read the
+        // "data": null the host used to write: no resource, not the envelope itself read as one.
+        var written = Stamp(new ResourceDeleted<TemplateApiResource>(new GetTemplateQuery { Id = "t-1" }));
+        var (body, mediaType) = await this.WriteAsTheHostWritesAsync(written);
+        var client = this._fixture.CreateClient(new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(body) { Headers = { ContentType = MediaTypeHeaderValue.Parse(mediaType) } },
+        }));
+
+        using (var document = System.Text.Json.JsonDocument.Parse(body))
+        {
+            document.RootElement.TryGetProperty("data", out _).Should().BeFalse("the host writes no data key for an event with none");
+        }
+
+        var resource = await client.SendResourceEventAsync<TemplateApiResource>(new ArchiveTemplateCommand { Id = "t-1" });
+        var envelope = await client.SendResourceEventEnvelopeAsync<TemplateApiResource>(new ArchiveTemplateCommand { Id = "t-1" });
+        var read = await client.SendAsync<ResourceDeleted<TemplateApiResource>>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        resource.Should().BeNull();
+        envelope.Should().BeNull("an envelope with no data is read as no envelope, as one with null data was");
+        read.Should().NotBeNull();
+        read!.EventId.Should().Be("template.deleted");
+        read.Data.Should().BeNull();
+    }
+
     private static TemplateApiResource Template()
     {
         return new TemplateApiResource("t-1", "Welcome", "<p>Hi</p>", "Hi");

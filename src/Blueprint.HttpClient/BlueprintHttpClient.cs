@@ -260,6 +260,16 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
                 return contentElement.Deserialize<TResource>(this._jsonOptions);
             }
 
+            // An event envelope with neither carries no resource: the host writes no data key for an event with none, such
+            // as a deleted event, whose self query is never run, as legacy Blueprint wrote it. Read the envelope itself as
+            // the resource and that would be a resource made of the envelope's members.
+            if (doc.RootElement.TryGetProperty("$object", out var objectElement)
+                && objectElement.ValueKind == JsonValueKind.String
+                && objectElement.ValueEquals("event"))
+            {
+                return default;
+            }
+
             // Fallback: try deserializing the whole body as TResource
             return doc.RootElement.Deserialize<TResource>(this._jsonOptions);
         }

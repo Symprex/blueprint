@@ -675,7 +675,8 @@ public class HttpOperationResultExecutor
             writer.WriteString(_propHref, href);
         }
 
-        // data: serialize the resolved content (may be null if SelfQuery resolution failed)
+        // data: serialize the resolved content, or, when the self query was not run or loaded nothing, write no key, as
+        // legacy wrote a resource event with no data and as ResourceEvent.Data is written
         if (result.ResolvedContent is not null)
         {
             writer.WritePropertyName(_propData);
@@ -691,10 +692,6 @@ public class HttpOperationResultExecutor
             {
                 JsonSerializer.Serialize(writer, result.ResolvedContent, dataType, CreateFallbackSerializerOptions(serializerOptions));
             }
-        }
-        else
-        {
-            writer.WriteNull(_propData);
         }
 
         if (result.Metadata is not null)

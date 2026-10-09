@@ -511,6 +511,15 @@ a command, as legacy Blueprint ran it. A query that returns a resource event wit
 `Data` stays `null`, and `SelfQuery` is kept. A query's `DeferredResourceEventResult<T>` is not resolved either. Coming
 from legacy Blueprint nothing changes. Coming from v1.0.2, a query's self query ran and filled `Data`.
 
+**Behaviour change for a resource event with no data (v1.0.6).** A resource event with no data — a deleted event, whose
+self query is never run, a query's event, or a `DeferredResourceEventResult<T>` whose self query was not run or loaded
+nothing — is written with no `data` key, as legacy Blueprint wrote it, and as `changedValues`, `href` and `correlationId`
+have been left out when null since v1.0.5. The OpenAPI document is unchanged: it lists `data` as required, as legacy's
+did. `BlueprintHttpClient.SendResourceEventAsync<T>` reads an event envelope with no `data` (and no legacy `content`) as no
+resource, `null`, as it read `"data": null`, rather than reading the envelope itself as the resource. Coming from legacy
+Blueprint nothing changes. Coming from v1.0.5 or earlier, such an event was written with `"data": null`; a client that
+tested for the key rather than for a null value must test for its absence.
+
 #### Response header extensions
 
 `OkResult` supports fluent response header configuration via extension methods:

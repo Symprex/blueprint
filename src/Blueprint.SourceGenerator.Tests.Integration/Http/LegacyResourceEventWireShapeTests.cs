@@ -1,8 +1,12 @@
 using System.Net;
 using System.Text.Json;
+using Blueprint.Model;
+using Blueprint.Runtime.Exec;
 using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 
@@ -57,6 +61,31 @@ public sealed class LegacyResourceEventWireShapeTests
         envelope.RootElement.EnumerateObject().Select(static p => p.Name).Should().NotContain(
             static name => string.Equals(name, "changedValues", StringComparison.OrdinalIgnoreCase));
         host.ServerErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_deferred_resource_event_whose_self_query_loaded_nothing_is_written_without_a_data_key()
+    {
+        // The host's own envelope for a deferred event is written as legacy wrote any resource event with no data
+        // (Signature365 8b40ecc961, JsonConverterFactoryForResourceEventOfT.cs, the Data != null check): without the key,
+        // as the legacy event is, so the two agree. It used to be written as "data": null.
+        await using var services = new ServiceCollection()
+            .AddLogging()
+            .AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>()
+            .BuildServiceProvider();
+        var app = services.GetRequiredService<IntegrationTestBlueprintApp>();
+        var context = new ApiOperationContext(services, app, app.FindOperation(typeof(GetHrefWidgetQuery)), CancellationToken.None);
+        using var body = new MemoryStream();
+        var httpContext = new DefaultHttpContext { RequestServices = services, Response = { Body = body } };
+
+        // Its self query was not run (a query's never is), so it has no resolved content.
+        var deferred = new DeferredResourceEventResult<HrefWidgetApiResource>(ChangeType.Updated, "hrefWidget.updated", "widget-7", new GetHrefWidgetQuery { Id = "widget-7" });
+
+        (await new HttpOperationResultExecutor().TryExecuteAsync(httpContext, context, deferred)).Should().BeTrue();
+
+        using var envelope = JsonDocument.Parse(body.ToArray());
+        envelope.RootElement.GetProperty("eventId").GetString().Should().Be("hrefWidget.updated");
+        envelope.RootElement.TryGetProperty("data", out _).Should().BeFalse("an event with no data must not write the key");
     }
 
     [Fact]

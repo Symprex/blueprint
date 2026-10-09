@@ -18,7 +18,9 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 /// <remarks>
 /// Legacy loaded an event's data through its self query only when the event was not a deletion ("cannot, obviously, get
 /// for a deleted record"), so a deleted event kept no data and its href came from the self query (Signature365
-/// <c>8b40ecc961</c>, <c>Blueprint.Http/Middleware/ResourceEventHandler.cs:86-90</c>, the check at <c>:87</c>); and it logged
+/// <c>8b40ecc961</c>, <c>Blueprint.Http/Middleware/ResourceEventHandler.cs:86-90</c>, the check at <c>:87</c>), and was
+/// written with no <c>data</c> key (<c>Blueprint.Http/JsonConverterFactoryForResourceEventOfT.cs</c>, the
+/// <c>Data != null</c> check; <c>Blueprint.Http/ResourceEvent.cs:122</c>, <c>NullValueHandling.Ignore</c>); and it logged
 /// <c>"No self link exists. Href property of the resource event of type {ResourceType} will not be populated"</c> as a
 /// warning when the event's resource type had no self link, making the href from the self link otherwise
 /// (<c>ResourceEventHandler.cs:54-65</c>). It stamped every event with the request's correlation id and the operation
@@ -37,7 +39,12 @@ public sealed class LegacyResourceEventHandlingTests
 
         response.StatusCode.Should().Be(HttpStatusCode.OK, "the server raised: {0}", string.Join(" | ", host.ServerErrors.Select(static e => e.Message)));
         using var envelope = JsonDocument.Parse(body);
-        Property(envelope.RootElement, "data").ValueKind.Should().Be(JsonValueKind.Null);
+
+        // Written as legacy wrote it, with no data key; it used to be written as "data": null.
+        envelope.RootElement.EnumerateObject().Select(static p => p.Name).Should().NotContain(
+            static name => string.Equals(name, "data", StringComparison.OrdinalIgnoreCase),
+            "a deleted event keeps no data, and legacy wrote no key for it; the body was {0}",
+            body);
         Property(envelope.RootElement, "href").GetString().Should().Be(new Uri(host.Client.BaseAddress!, "api/href-events/widgets/widget-7").AbsoluteUri);
         host.ServerErrors.Should().BeEmpty();
     }
