@@ -1,6 +1,6 @@
 ---
 name: annotation-hygiene
-description: Use when adding, reviewing, or cleaning up JetBrains.Annotations usage in Symprex/blueprint, especially `UsedImplicitly`, `MustDisposeResource`, `MustUseReturnValue`, implicit-use warnings, runtime-model contracts, generator planning seams, validation paths, or focused annotation consistency slices
+description: Use when adding, reviewing, or cleaning up JetBrains.Annotations usage in blueprint-source-gen, especially `UsedImplicitly`, `MustDisposeResource`, `MustUseReturnValue`, implicit-use warnings, runtime-model contracts, generator planning seams, validation paths, or focused annotation consistency slices
 ---
 
 # Annotation Hygiene
