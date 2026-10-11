@@ -1,4 +1,4 @@
-# blueprint-source-gen — agent instructions
+# blueprint — agent instructions
 
 **[`.github/copilot-instructions.md`](.github/copilot-instructions.md) is the canonical instruction file for this repository** — commands, conventions, the test matrix a pipeline slice owes, the docs entry points. Read it. This file exists so tools that look for `AGENTS.md` find their way there, and to record the two things it does not cover.
 

@@ -1,4 +1,4 @@
-# Copilot instructions for `blueprint-source-gen`
+# Copilot instructions for `blueprint`
 
 ## Build and test commands
 

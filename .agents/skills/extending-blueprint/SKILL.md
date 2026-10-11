@@ -1,6 +1,6 @@
 ---
 name: extending-blueprint
-description: Use when changing Blueprint generators, runtime contracts, modules, diagnostics, sample-consumer flow, or migration guidance inside the blueprint-source-gen repository
+description: Use when changing Blueprint generators, runtime contracts, modules, diagnostics, sample-consumer flow, or migration guidance inside the Symprex/blueprint repository
 ---
 
 # Extending Blueprint

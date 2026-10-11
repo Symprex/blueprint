@@ -18,5 +18,5 @@ internal static class MessagingDiagnosticDescriptors
         category: "Blueprint.Messaging",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        helpLinkUri: "https://github.com/AdenDev/blueprint-source-gen/blob/main/docs/compile-time-validation.md#BPM001");
+        helpLinkUri: "https://github.com/Symprex/blueprint/blob/main/docs/compile-time-validation.md#BPM001");
 }
