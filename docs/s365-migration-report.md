@@ -83,7 +83,7 @@ All framework features required for S365 migration are implemented, tested, and 
 | Category | Count | Reason |
 |----------|-------|--------|
 | SMTP subsystem | 59 projects | Independent of Blueprint API layer |
-| Legacy Blueprint (in-tree) | 11 projects | Replaced by blueprint-source-gen |
+| Legacy Blueprint (in-tree) | 11 projects | Replaced by Symprex/blueprint |
 | Tools | 7 projects | CLI/utility, no Blueprint dependency |
 | Brochure site | 1 project | Static, no Blueprint |
 

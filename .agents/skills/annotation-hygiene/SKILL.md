@@ -19,7 +19,7 @@ description: Use when adding, reviewing, or cleaning up JetBrains.Annotations us
 
 Do not use this skill to justify repo-wide annotation churn with no contract improvement.
 
-**REQUIRED BACKGROUND:** Use `using-dotnet` and `dotnet-advisor` for .NET work. In blueprint-source-gen, `dotnet-advisor` should route JetBrains annotation questions here instead of stretching a broader .NET skill. Use `dotnet-csharp` for nullable-flow background, and `extending-blueprint` when the touched code changes Blueprint internals.
+**REQUIRED BACKGROUND:** Use `using-dotnet` and `dotnet-advisor` for .NET work. In Symprex/blueprint, `dotnet-advisor` should route JetBrains annotation questions here instead of stretching a broader .NET skill. Use `dotnet-csharp` for nullable-flow background, and `extending-blueprint` when the touched code changes Blueprint internals.
 
 ## Core categories
 

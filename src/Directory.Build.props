@@ -6,8 +6,8 @@
 
     <PackageId>$(AssemblyName)</PackageId>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/Symprex/blueprint-source-gen</PackageProjectUrl>
-    <PackageReleaseNotes>See https://github.com/Symprex/blueprint-source-gen/releases for more info</PackageReleaseNotes>
+    <PackageProjectUrl>https://github.com/Symprex/blueprint</PackageProjectUrl>
+    <PackageReleaseNotes>See https://github.com/Symprex/blueprint/releases for more info</PackageReleaseNotes>
     <PackageBaseTags>API;CQRS;Blueprint;Rest</PackageBaseTags>
 
     <IsPackable>true</IsPackable>
