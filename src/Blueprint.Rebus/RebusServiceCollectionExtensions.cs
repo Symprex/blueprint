@@ -105,6 +105,20 @@ public static class RebusServiceCollectionExtensions
     /// Adds Rebus, configured with Blueprint integration, to the given services collection. Creates
     /// the <see cref="IBus"/> singleton using <see cref="BlueprintApiActivator"/> as the handler activator.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The <see cref="IBus"/> registered is not the started bus itself (that is still <see cref="IBusStarter.Bus"/>) but one
+    /// that passes every call on to it, except that, inside the handler of an operation delivered as a message,
+    /// <c>Advanced.TransportMessage.Defer</c> and <c>Forward</c> act on the message being handled, in that message's own
+    /// transaction. The pipeline runs the handler in a Rebus transaction scope of its own, which hides that message from
+    /// Rebus, so without this both would throw.
+    /// </para>
+    /// <para>
+    /// For the same reason, the <see cref="IMessageContext"/> registered is, inside such a handler, the context of the message
+    /// being handled. <see cref="MessageContext.Current"/> stays <c>null</c> there, so what the handler publishes and sends is
+    /// still correlated as before.
+    /// </para>
+    /// </remarks>
     /// <param name="services">The services to register with.</param>
     /// <param name="configure">The action used to configure Rebus itself.</param>
     /// <returns>The passed in services collection.</returns>
@@ -140,10 +154,16 @@ public static class RebusServiceCollectionExtensions
             return busStarter;
         });
 
-        services.AddSingleton(static s => s.GetRequiredService<IBusStarter>().Bus);
+        // Inside a pipeline the message being handled is hidden from Rebus by the pipeline's own Rebus transaction scope, so
+        // the bus the application is given defers and forwards it in its own transaction (IncomingMessageAwareBus)
+        services.AddSingleton<IBus>(static s => new IncomingMessageAwareBus(s.GetRequiredService<IBusStarter>().Bus));
         services.AddSingleton(static s => s.GetRequiredService<IBus>().Advanced.SyncBus);
+
+        // For the same reason a handler run by a pipeline is given the context of the message being handled. MessageContext.Current
+        // is deliberately left alone: making the message visible to Rebus there would also make Rebus correlate everything the
+        // handler publishes with it
         services.AddTransient(static _ =>
-            MessageContext.Current ?? throw new InvalidOperationException(
+            MessageContext.Current ?? IncomingMessageContext.Current ?? throw new InvalidOperationException(
                 "Attempted to resolve IMessageContext outside of a Rebus handler. " +
                 "Rebus' message context is only available to code executing inside a Rebus handler."));
 

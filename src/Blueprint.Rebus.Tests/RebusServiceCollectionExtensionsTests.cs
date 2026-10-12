@@ -1,6 +1,9 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Rebus.Bus;
+using Rebus.Config;
+using Rebus.Pipeline;
+using Rebus.Transport.InMem;
 
 namespace Blueprint.Rebus.Tests;
 
@@ -80,6 +83,42 @@ public class RebusServiceCollectionExtensionsTests
         var act = () => services.AddBlueprintRebus((_, configurer) => configurer);
 
         act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void AddBlueprintRebus_registers_a_bus_that_wraps_the_started_one()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(new Model.BlueprintApp());
+        services.AddBlueprintRebusConsumer(static _ => { });
+        services.AddBlueprintRebus(static (_, configurer) => configurer.Transport(static t => t.UseInMemoryTransport(new InMemNetwork(), "wrapped-bus")));
+
+        using var sp = services.BuildServiceProvider();
+
+        var bus = sp.GetRequiredService<IBus>();
+
+        bus.Should().BeOfType<IncomingMessageAwareBus>("deferring a message from a pipeline needs the bus that knows the message being handled");
+        bus.Should().NotBeSameAs(sp.GetRequiredService<IBusStarter>().Bus);
+    }
+
+    [Fact]
+    public void AddBlueprintRebus_registers_a_message_context_that_is_the_one_a_pipeline_is_handling()
+    {
+        var services = new ServiceCollection();
+        services.AddBlueprintRebus(static (_, configurer) => configurer);
+        using var sp = services.BuildServiceProvider();
+
+        var incoming = NSubstitute.Substitute.For<IMessageContext>();
+
+        // Rebus' own MessageContext.Current is null, as it is inside the pipeline's Rebus transaction scope
+        using (IncomingMessageContext.Begin(incoming))
+        {
+            sp.GetRequiredService<IMessageContext>().Should().BeSameAs(incoming);
+        }
+
+        var outside = () => sp.GetRequiredService<IMessageContext>();
+
+        outside.Should().Throw<InvalidOperationException>().WithMessage("Attempted to resolve IMessageContext outside of a Rebus handler*");
     }
 
     [Fact]

@@ -287,6 +287,16 @@ public static async Task<ResourceEventResult<Template>> HandleAsync(
 
 The flush-on-success semantic guarantees tasks are only dispatched when the command succeeds and after the unit-of-work is committed.
 
+## Messaging contract (Rebus)
+
+`AddBlueprintRebus` registers the DI `IBus` as an internal decorator over the real bus (`IBusStarter.Bus` is still the raw `RebusBus`). From v1.0.7, a handler for an operation delivered as a message can work with the message it is handling, as a plain `IHandleMessages<T>` always could:
+
+- **Defer or forward:** `bus.Advanced.TransportMessage.Defer(delay)` / `Forward(queue)` run in the incoming message's transaction. The copy goes out when that message completes, and is discarded if the handler throws. Before v1.0.7 both threw `KeyNotFoundException: 'stepContext'`.
+- **Read the message:** inject Rebus' `IMessageContext` to read its headers, e.g. `Headers.DeferCount` (`rbs2-defer-count`) to cap how often a handler defers. `MessageContext.Current` stays null inside the pipeline, so correlation headers on published messages are unchanged.
+- **Publish and Send are unchanged.** They still go through the pipeline's own transaction and any outbox.
+- **Not covered:** `bus.Reply` from an operation handler, and an operation that a plain handler executes in process.
+- **Tests:** assert on `IBusStarter.Bus`, not the DI `IBus`, when a test needs the raw `RebusBus`.
+
 ## Persistence contract (Unit of Work)
 
 Blueprint's `UnitOfWorkModule` generates a `SaveChangesAsync` call for every operation at Order=900 in PostExecution:
