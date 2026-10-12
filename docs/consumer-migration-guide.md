@@ -929,8 +929,10 @@ and a `[NoRebusTransaction]` operation run in the message's own transaction, so 
 - `Reply` is not covered. It still throws there, because it also needs the message being handled.
 - The message stops being current when its handling ends. Work the handler started and did not wait for cannot defer the
   message or resolve its context afterwards; both throw, as they do outside any handler.
-- A nested operation or background task executed inline while the message is being handled sees the same message. It can
-  now resolve `IMessageContext` and defer that message, where both used to throw.
+- A nested operation or background task executed inline while an operation delivered as a message is being handled sees
+  that message. It can now resolve `IMessageContext` and defer that message, where both used to throw. An operation that a
+  plain `IHandleMessages<T>` executes in process is not covered: nothing is captured for a plain handler's message, so
+  inside that operation's pipeline both still throw.
 - Deferring needs a transport that defers natively, such as Azure Service Bus, or a timeout manager configured with
   `.Timeouts(...)`, as for any Rebus handler.
 
