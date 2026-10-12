@@ -908,6 +908,32 @@ A handler that implements both `IHandleMessages<TBase>` and `IHandleMessages<TDe
 handler once per interface and kept both (`RebusHandleMessageOperationExecutorBuilderScanner.cs:54-74`,
 `ApiOperationDescriptor.cs:179-194`). Handlers registered by hand rather than by the scan are unchanged.
 
+**Behaviour change for deferring an operation delivered as a message (v1.0.7).** In the handler of an operation that
+Rebus delivers, `bus.Advanced.TransportMessage.Defer(delay)` and `Forward(address)` now act on the message being handled,
+and an injected Rebus `IMessageContext` is that message's context, so a handler can read `rbs2-defer-count` to stop
+deferring after a number of attempts. Before v1.0.7 both calls threw `KeyNotFoundException: Could not find an item with
+the key 'stepContext'`, and resolving `IMessageContext` threw "Attempted to resolve IMessageContext outside of a Rebus
+handler": `BlueprintApiActivator` and the generated pipeline run such a handler inside a `RebusTransactionScope` of their
+own, which hides the message being handled from Rebus. Legacy Blueprint failed the same way (Signature365's
+`Symprex.Signature365.BlueprintRebus`, fixed there in the same way by Signature365 PR #7001). A plain `IHandleMessages<T>`
+and a `[NoRebusTransaction]` operation run in the message's own transaction, so they worked before and are unchanged.
+
+- The `IBus` that `AddBlueprintRebus` registers now wraps the started bus, which is still `IBusStarter.Bus`. Code that
+  casts the `IBus` it is given to `RebusBus` must use `IBusStarter.Bus` instead.
+- The deferred or forwarded copy is sent in the transaction of the message being handled: once that message has been
+  handled and its delivery succeeds, never when the handler throws, and not through an outbox enlisted in the pipeline's
+  scope, which may need the database that is the reason for deferring.
+- Every other call passes straight through to the started bus, in the pipeline's transaction as before. `Publish`, `Send`,
+  `Defer(delay, message)` and the outbox are unchanged, and so are the correlation headers of what the handler publishes.
+  `MessageContext.Current` stays `null` in such a handler.
+- `Reply` is not covered. It still throws there, because it also needs the message being handled.
+- The message stops being current when its handling ends. Work the handler started and did not wait for cannot defer the
+  message or resolve its context afterwards; both throw, as they do outside any handler.
+- A nested operation or background task executed inline while the message is being handled sees the same message. It can
+  now resolve `IMessageContext` and defer that message, where both used to throw.
+- Deferring needs a transport that defers natively, such as Azure Service Bus, or a timeout manager configured with
+  `.Timeouts(...)`, as for any Rebus handler.
+
 **A host with no operations.** A host that uses Blueprint only for Rebus — it declares no operations and maps no
 Blueprint routes, as Signature365's GraphProxy does — registers its app directly and does not call `AddBlueprintApi`:
 
