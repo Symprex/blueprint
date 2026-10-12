@@ -7,7 +7,8 @@ namespace Blueprint.Rebus;
 
 /// <summary>
 /// The <see cref="IBus"/> that <c>AddBlueprintRebus</c> registers, which is exactly the bus it wraps except that deferring or
-/// forwarding the message a Blueprint pipeline is handling is done in that message's own transaction.
+/// forwarding the message being handled is done past an outbox: for a Blueprint pipeline, in that message's own transaction; for
+/// a plain handler whose message's transaction has an outbox enlisted in it, in a transaction of the copy's own.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -24,11 +25,17 @@ namespace Blueprint.Rebus;
 /// outbox enlisted in the pipeline's scope, which needs the database that may well be why the message is being deferred.
 /// </para>
 /// <para>
+/// A plain <c>IHandleMessages&lt;T&gt;</c> runs in its message's own transaction, so Rebus finds the message, but
+/// <see cref="BlueprintApiActivator"/> enlists that transaction in an outbox when a unit of work is registered. There the copy is
+/// made in a transaction of its own, which <see cref="IncomingMessageCopyTransaction"/> completes once the message's has committed,
+/// after the unit of work's save, and discards if it does not, so it goes out on the same terms, past the outbox.
+/// </para>
+/// <para>
 /// Everything else, publishing and sending included, goes straight to the wrapped bus in whatever transaction is ambient,
-/// which inside a handler is the pipeline's, so it goes out with the pipeline's unit of work and through its outbox, and is
-/// correlated as it was before. Where no message is being handled through a pipeline — a plain
-/// <c>IHandleMessages&lt;T&gt;</c>, which runs in its message's own transaction, an HTTP request, a background job — the
-/// transport message API is the wrapped bus's too, so Rebus's own error is what a call there meets.
+/// which inside a handler is the pipeline's, or a plain handler's message's own, so it goes out with the unit of work and through
+/// its outbox, and is correlated as it was before. Where neither applies — a plain handler whose message's transaction no outbox
+/// is enlisted in, which defers in that transaction as Rebus does, an HTTP request, a background job — the transport message API
+/// is the wrapped bus's too, so Rebus's own error is what a call there meets.
 /// </para>
 /// </remarks>
 internal sealed class IncomingMessageAwareBus : IBus
@@ -147,8 +154,13 @@ internal sealed class IncomingMessageAwareBus : IBus
 
         private static async Task InIncomingMessageTransactionAsync(Func<Task> operation)
         {
-            // Not handling a message through a pipeline, so whatever is ambient is left alone and Rebus says what is wrong
-            if (IncomingMessageContext.Current is not { } incoming)
+            // An operation delivered as a message, whose pipeline's scope hides it: its own transaction, which nothing enlists.
+            // Otherwise a plain handler's message, whose own transaction has an outbox enlisted in it: one of the copy's own
+            var transaction = IncomingMessageContext.Current?.TransactionContext
+                              ?? IncomingMessageCopyTransaction.Find(AmbientTransactionContext.Current);
+
+            // Neither, so whatever is ambient is left alone and Rebus says what is wrong
+            if (transaction is null)
             {
                 await operation().ConfigureAwait(false);
 
@@ -156,10 +168,10 @@ internal sealed class IncomingMessageAwareBus : IBus
             }
 
             // This is an async method, so the change to the ambient context cannot reach the caller; it is put back anyway,
-            // so nothing that runs on in this flow after the call is left in the message's transaction
+            // so nothing that runs on in this flow after the call is left in that transaction
             var previous = AmbientTransactionContext.Current;
 
-            AmbientTransactionContext.SetCurrent(incoming.TransactionContext);
+            AmbientTransactionContext.SetCurrent(transaction);
 
             try
             {

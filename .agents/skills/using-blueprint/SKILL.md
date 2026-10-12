@@ -293,6 +293,7 @@ The flush-on-success semantic guarantees tasks are only dispatched when the comm
 
 - **Defer or forward:** `bus.Advanced.TransportMessage.Defer(delay)` / `Forward(queue)` run in the incoming message's transaction. The copy goes out when that message completes, and is discarded if the handler throws. Before v1.0.7 both threw `KeyNotFoundException: 'stepContext'`.
 - **Read the message:** inject Rebus' `IMessageContext` to read its headers, e.g. `Headers.DeferCount` (`rbs2-defer-count`) to cap how often a handler defers. `MessageContext.Current` stays null inside the pipeline, so correlation headers on published messages are unchanged.
+- **Plain handlers with an outbox:** a plain `IHandleMessages<T>` whose transaction has an outbox enlisted defers and forwards past it. The copy is sent after the message's save succeeds, so it can defer while the database behind the outbox is down, and is discarded if the handler throws or the save fails.
 - **Publish and Send are unchanged.** They still go through the pipeline's own transaction and any outbox.
 - **Not covered:** `bus.Reply` from an operation handler, and an operation that a plain handler executes in process.
 - **Tests:** assert on `IBusStarter.Bus`, not the DI `IBus`, when a test needs the raw `RebusBus`.

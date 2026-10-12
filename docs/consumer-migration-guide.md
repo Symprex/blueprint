@@ -916,16 +916,29 @@ the key 'stepContext'`, and resolving `IMessageContext` threw "Attempted to reso
 handler": `BlueprintApiActivator` and the generated pipeline run such a handler inside a `RebusTransactionScope` of their
 own, which hides the message being handled from Rebus. Legacy Blueprint failed the same way (Signature365's
 `Symprex.Signature365.BlueprintRebus`, fixed there in the same way by Signature365 PR #7001). A plain `IHandleMessages<T>`
-and a `[NoRebusTransaction]` operation run in the message's own transaction, so they worked before and are unchanged.
+and a `[NoRebusTransaction]` operation run in the message's own transaction, so neither call threw there, and a
+`[NoRebusTransaction]` operation is unchanged.
+
+A plain `IHandleMessages<T>` whose message's transaction has an outbox enlisted in it — which `BlueprintApiActivator` does
+whenever an `IUnitOfWork` is registered — changes too. Before v1.0.7 its deferred or forwarded copy was held by that outbox,
+so completing the message saved it and needed the database: a handler deferring because the database was down, as
+Signature365's Billing `ActiveUserEventHandler` does, failed the delivery instead, and the message went to the error queue
+once its retries ran out. The copy is now sent in a transaction of its own, past the outbox, once the message's transaction
+has committed — after the unit of work's save — and never when a handler throws or the save fails. A handler that wrote or
+sent nothing else therefore completes its message without the database. Legacy Blueprint ran such a handler in a pipeline
+scope of its own, with the outbox enlisted there, so its copy went past the outbox in the same way. A plain handler with no
+unit of work registered still defers in its message's own transaction, as Rebus does.
 
 - The `IBus` that `AddBlueprintRebus` registers now wraps the started bus, which is still `IBusStarter.Bus`. Code that
   casts the `IBus` it is given to `RebusBus` must use `IBusStarter.Bus` instead.
 - The deferred or forwarded copy is sent in the transaction of the message being handled: once that message has been
   handled and its delivery succeeds, never when the handler throws, and not through an outbox enlisted in the pipeline's
-  scope, which may need the database that is the reason for deferring.
-- Every other call passes straight through to the started bus, in the pipeline's transaction as before. `Publish`, `Send`,
-  `Defer(delay, message)` and the outbox are unchanged, and so are the correlation headers of what the handler publishes.
-  `MessageContext.Current` stays `null` in such a handler.
+  scope, which may need the database that is the reason for deferring. For a plain handler whose message's own
+  transaction has the outbox enlisted, it is sent on the same terms in a transaction of its own.
+- Every other call passes straight through to the started bus, in the pipeline's transaction, or a plain handler's
+  message's own, as before. `Publish`, `Send`, `Defer(delay, message)` and the outbox are unchanged, so a handler that
+  sends or writes anything still needs the database to complete its message, and so are the correlation headers of what
+  the handler publishes. `MessageContext.Current` stays `null` in an operation's handler.
 - `Reply` is not covered. It still throws there, because it also needs the message being handled.
 - The message stops being current when its handling ends. Work the handler started and did not wait for cannot defer the
   message or resolve its context afterwards; both throw, as they do outside any handler.
