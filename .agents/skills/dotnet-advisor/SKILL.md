@@ -74,7 +74,7 @@ Identify the primary domain from the request, then invoke the matching skill. If
 
 When the repository has a dedicated local skill for a narrow concern, load it in addition to the core .NET route instead of stretching a broader skill beyond its intended scope.
 
-| In blueprint-source-gen, if the request involves... | Also load |
+| In Symprex/blueprint, if the request involves... | Also load |
 |-----------------------------------------------------|-----------|
 | `JetBrains.Annotations`, `UsedImplicitly`, `MustDisposeResource`, `MustUseReturnValue`, Rider/ReSharper implicit-use warnings, or annotation-cleanup/hygiene work | [skill:annotation-hygiene] after [skill:dotnet-csharp] |
 
@@ -105,7 +105,7 @@ For broad "build me an app" requests, load comprehensively: [skill:dotnet-csharp
 | [skill:dotnet-devops] | GitHub Actions, Azure DevOps, containers, NuGet, observability | CI/CD pipelines, packaging, and operations |
 | [skill:dotnet-tooling] | Project setup, MSBuild, Native AOT, profiling, CLI apps, version detection | Build system, performance, and developer tools |
 | [skill:dotnet-debugging] | WinDbg MCP, crash dumps, hang analysis, memory diagnostics | Live and post-mortem dump analysis |
-| [skill:annotation-hygiene] | blueprint-source-gen JetBrains annotation policy and cleanup guidance | Repo-local overlay for focused annotation hygiene work |
+| [skill:annotation-hygiene] | Symprex/blueprint JetBrains annotation policy and cleanup guidance | Repo-local overlay for focused annotation hygiene work |
 | dotnet-advisor | This skill -- routes to domain skills above | Entry point, loaded after [skill:using-dotnet] |
 
 ---

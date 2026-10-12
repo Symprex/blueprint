@@ -154,7 +154,7 @@ Copy the simplest service (Analytics) alongside its contract, add new Blueprint 
 
 ## Pre-Migration: Framework Gaps to Close
 
-Based on S365 analysis, these gaps need closing in `blueprint-source-gen` before migration:
+Based on S365 analysis, these gaps need closing in `Symprex/blueprint` before migration:
 
 ### Type Compatibility Matrix
 
@@ -298,7 +298,7 @@ machine-readable migration report identifying all BPMIG diagnostics.
 ### Running the Codemod
 
 ```powershell
-# From the blueprint-source-gen repo root
+# From the blueprint repo root
 dotnet run --project src\Blueprint.Codemod\Blueprint.Codemod.csproj -c Release -- \
   --solution D:\Projects\Signature365\Signature365.sln \
   --output .scratch\codemod-report
@@ -1162,7 +1162,7 @@ We need to provide:
    ```
 
 ### Action Items
-- [x] Create `Blueprint.Testing` project in blueprint-source-gen — **Done** (`Blueprint.Testing` with 69 tests)
+- [x] Create `Blueprint.Testing` project in Symprex/blueprint — **Done** (`Blueprint.Testing` with 69 tests)
 - [x] Implement `BlueprintTestHost` using generated pipelines — **Done** (WebApplicationFactory-based fixture)
 - [x] Implement context builder with user/service configuration — **Done** (claim-based identity helpers, tenant context)
 - [x] Implement result assertion extensions — **Done** (result type assertions)
@@ -1952,7 +1952,7 @@ Marten queries, Rebus message headers, and background task context propagation.
 
 ## Improvement Roadmap (Blueprint source-gen)
 
-These items should be tracked and implemented in the `blueprint-source-gen` repo
+These items should be tracked and implemented in the `Symprex/blueprint` repo
 to support a smooth S365 migration.
 
 ### Immediate (blocks migration proof)

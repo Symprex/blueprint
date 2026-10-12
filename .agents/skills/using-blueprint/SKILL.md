@@ -16,7 +16,7 @@ Blueprint is compile-time-first. Consumer code describes operations and app root
 - Diagnosing missing generated descriptors, registrations, routes, or executor behavior
 - Understanding which compile-time contract a consumer repo must satisfy
 
-Do not use this skill to change Blueprint internals in `blueprint-source-gen`; use `extending-blueprint` for that.
+Do not use this skill to change Blueprint internals in `Symprex/blueprint`; use `extending-blueprint` for that.
 
 **REQUIRED BACKGROUND:** Use `using-dotnet` and `dotnet-advisor` when the consumer repo is .NET-based. This skill adds Blueprint-specific contract guidance on top of that baseline.
 
