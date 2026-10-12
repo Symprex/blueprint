@@ -16,7 +16,9 @@ namespace Blueprint.Rebus;
 /// </para>
 /// <para>
 /// A plain <c>IHandleMessages&lt;T&gt;</c> is not run through a pipeline, so nothing hides its message from Rebus and
-/// nothing is captured for it.
+/// nothing is captured for it. Rebus calls it after the activator has returned its handlers, so nothing set in a flow of the
+/// activator's would reach it anyway. What it needs instead, when an outbox is enlisted in its message's own transaction, is
+/// attached to that transaction (<see cref="IncomingMessageCopyTransaction"/>).
 /// </para>
 /// </remarks>
 internal static class IncomingMessageContext

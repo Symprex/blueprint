@@ -28,7 +28,9 @@ namespace Blueprint.Rebus;
 /// received message's transaction, when an <see cref="Persistence.IUnitOfWork"/> is registered. The unit of work is saved,
 /// and the background tasks the handlers enqueued then released, from that transaction's first commit callback, which
 /// runs before any commit callback an enlistment or a handler registers, and with that transaction as
-/// <see cref="AmbientTransactionContext.Current"/>.
+/// <see cref="AmbientTransactionContext.Current"/>. A copy of the received message that a handler defers or forwards, through
+/// the <c>IBus</c> that <c>AddBlueprintRebus</c> registers, is not sent in this transaction but in one of its own, which no
+/// enlistment sees, completed after this one's commit callbacks registered before the handlers ran.
 /// </description></item>
 /// </list>
 /// <para>

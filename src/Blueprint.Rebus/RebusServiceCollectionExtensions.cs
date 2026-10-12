@@ -111,7 +111,9 @@ public static class RebusServiceCollectionExtensions
     /// that passes every call on to it, except that, inside the handler of an operation delivered as a message,
     /// <c>Advanced.TransportMessage.Defer</c> and <c>Forward</c> act on the message being handled, in that message's own
     /// transaction. The pipeline runs the handler in a Rebus transaction scope of its own, which hides that message from
-    /// Rebus, so without this both would throw.
+    /// Rebus, so without this both would throw. Inside a plain <c>IHandleMessages&lt;T&gt;</c> whose message's own transaction
+    /// has an outbox enlisted in it, both send their copy in a transaction of its own, once the message's has committed, rather
+    /// than through the outbox, which would need the database.
     /// </para>
     /// <para>
     /// For the same reason, the <see cref="IMessageContext"/> registered is, inside such a handler, the context of the message

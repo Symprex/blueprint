@@ -35,6 +35,13 @@ namespace Blueprint.Rebus;
 /// background tasks they enqueued through the scope's <see cref="Tasks.IBackgroundTaskScheduler"/> are released straight
 /// after that save, and never for a delivery that failed.
 /// </para>
+/// <para>
+/// When a unit of work is registered the transaction is also enlisted in the consumer's <see cref="IRebusTransactionEnlistment"/>s,
+/// so a copy of the message that a handler defers or forwards through the <see cref="IBus"/> that <c>AddBlueprintRebus</c>
+/// registers is sent in a transaction of its own instead, after the save, and only for a delivery that succeeds
+/// (<see cref="IncomingMessageCopyTransaction"/>): an outbox would need the database to hold it, which may well be why the
+/// message is being deferred.
+/// </para>
 /// </remarks>
 public sealed class BlueprintApiActivator : IContainerAdapter
 {
@@ -126,6 +133,11 @@ public sealed class BlueprintApiActivator : IContainerAdapter
         if (IsUnitOfWorkRegistered(scope.ServiceProvider))
         {
             await RebusTransactionEnlistment.EnlistAsync(transactionContext, scope.ServiceProvider, cancellationToken).ConfigureAwait(false);
+
+            // The outbox is enlisted in the message's own transaction, so a copy of the message that a handler defers or forwards
+            // is sent in one of its own, past the outbox, once this one commits (IncomingMessageAwareBus). Attached after the
+            // enlistments, so that it is sent after the save and their commit callbacks.
+            IncomingMessageCopyTransaction.Attach(transactionContext);
         }
 
         return scope.ServiceProvider.GetServices<IHandleMessages<TMessage>>().ToList();
