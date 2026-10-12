@@ -256,6 +256,11 @@ public sealed class BlueprintApiActivator : IContainerAdapter
             var messageContext = MessageContext.Current;
             var cancellationToken = messageContext.IncomingStepContext.Load<CancellationToken>();
 
+            // The scope opened below, and the one the generated pipeline opens, hide this message from Rebus, so it is kept for
+            // as long as it is being handled, for what acts on it, such as deferring it (IncomingMessageAwareBus). In this async
+            // method, so it never reaches the Rebus step that called it
+            using var incomingMessage = IncomingMessageContext.Begin(messageContext);
+
             using var serviceScope = this._serviceProvider.CreateScope();
             var services = serviceScope.ServiceProvider;
 
