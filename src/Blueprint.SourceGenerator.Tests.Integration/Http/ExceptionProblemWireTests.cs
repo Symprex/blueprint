@@ -127,7 +127,8 @@ public sealed class ExceptionProblemWireTests
             }
 
             builder.Services.Configure<BlueprintHttpOptions>(options => options.ExposeExceptionDetailsInErrorResponses = exposeDetails);
-            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
+                static blueprint => blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>());
 
             var app = builder.Build();
             app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");

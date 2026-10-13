@@ -72,7 +72,8 @@ public sealed class ApiCatalogConcurrencyTests
     private static ServiceProvider CreateProvider()
     {
         var services = new ServiceCollection().AddLogging();
-        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
+            static blueprint => blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>());
 
         return services.BuildServiceProvider();
     }

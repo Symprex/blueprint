@@ -11,10 +11,11 @@ namespace Blueprint.Authorization;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The generated pipeline resolves this service from the scoped <see cref="IServiceProvider"/>
-/// when an operation carries <c>[Resource("noun", "verb")]</c> or <c>[FromResource(...)]</c> metadata.
-/// If the service is not registered, the authorization check is skipped (permissive by default
-/// so consumers can adopt authorization incrementally).
+/// The executor resolves this service once from the root <see cref="IServiceProvider"/>, and the generated pipeline
+/// calls it for each operation that carries <c>[Resource("noun", "verb")]</c> or <c>[FromResource(...)]</c> metadata.
+/// It is required once any operation does. Without it, <c>MapBlueprintApi</c> throws at start-up, and the
+/// generated check refuses each such operation with a 403. A missing registration used to skip the check, letting
+/// every authenticated caller through (Symprex/blueprint#41).
 /// </para>
 /// <para>
 /// Scope pairs use any-of semantics: the caller is authorized if <em>any</em> of the declared

@@ -87,6 +87,7 @@ public class OpenApiServerFromHttpOptionsEndpointTests
             .AddSingleton<TemplateStore>()
             .AddSingleton<SampleBlueprintApp>()
             .AddSingleton<SampleBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IOptions<BlueprintHttpOptions>>(Options.Create(httpOptions));
 
         var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());

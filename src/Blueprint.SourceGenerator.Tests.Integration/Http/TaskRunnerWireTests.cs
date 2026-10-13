@@ -139,7 +139,9 @@ public sealed class TaskRunnerWireTests
             builder.Logging.ClearProviders();
             builder.Services.AddSingleton(log);
             builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
-                static blueprint => blueprint.AddBackgroundTaskScheduleProvider<RecordingScheduleProvider>());
+                static blueprint => blueprint
+                    .AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>()
+                    .AddBackgroundTaskScheduleProvider<RecordingScheduleProvider>());
 
             var app = builder.Build();
 

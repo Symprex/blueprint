@@ -128,6 +128,13 @@ public interface IResourceAuthorizationProvider
 
 Each `ResolvedScopePair` carries the raw template (`/Tenants/{Auth:AccountId}/Templates/{Id}`) alongside the expanded resource key (`/Tenants/abc123/Templates/42`), giving providers full context for both pattern-based and instance-level authorization decisions.
 
+**A provider is required once any operation declares scope pairs.** Without one, the checks fail closed.
+- `MapBlueprintApi` throws `InvalidOperationException` at start-up, naming the operations.
+- `PipelineHelpers.CheckResourceAuthorizationAsync` refuses each one with a plain `403` and logs at Error (`NoResourceAuthorizationProvider`, event 33). This catches a host that never calls `MapBlueprintApi`, such as an in-memory test host.
+- Before Symprex/blueprint#41 the check passed whenever no provider was registered, letting any authenticated caller through.
+- An app with no `[Resource]`/`[FromResource]` operations needs no provider.
+- To let every caller through deliberately, register a provider that returns `true`.
+
 ### `ScopePairClaimAuthorizationProvider`
 
 A production-ready built-in provider that implements both interfaces. It evaluates scope claims from JWT tokens using zero-allocation span-based string comparison.

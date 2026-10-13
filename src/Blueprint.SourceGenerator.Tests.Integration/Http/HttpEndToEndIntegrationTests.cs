@@ -177,9 +177,9 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
-    public async Task When_GET_resource_protected_with_authenticated_user_and_no_provider_then_returns_200()
+    public async Task When_GET_resource_protected_with_authenticated_user_and_provider_permits_then_returns_200()
     {
-        // No IResourceAuthorizationProvider registered → permissive (authorization check skipped)
+        // CreateEndpoints registers PermitAllResourceAuthorizationProvider, as a missing provider no longer permits (#41)
         var endpoints = CreateEndpoints();
         endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
 
@@ -1503,7 +1503,8 @@ public class HttpEndToEndIntegrationTests
         var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
-            .AddSingleton<IntegrationTestBlueprintAppExecutor>();
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
@@ -1538,6 +1539,7 @@ public class HttpEndToEndIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<Blueprint.Runtime.Middleware.IPropertyPopulator>(
                 new TestTenantPropertyPopulator());
 

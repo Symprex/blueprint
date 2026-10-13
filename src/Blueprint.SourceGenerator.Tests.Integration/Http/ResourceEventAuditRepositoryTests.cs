@@ -638,7 +638,11 @@ public sealed class ResourceEventAuditRepositoryTests
 
             // The one expander type every test expanding DepartmentResource uses (see TestDepartmentExpander's remarks).
             builder.Services.AddSingleton<IResourceExpander, TestDepartmentExpander>();
-            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(configure);
+            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(blueprint =>
+            {
+                blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>();
+                configure(blueprint);
+            });
 
             var app = builder.Build();
 

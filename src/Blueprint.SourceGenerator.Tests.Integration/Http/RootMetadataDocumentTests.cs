@@ -252,7 +252,11 @@ public sealed class RootMetadataDocumentTests
 
             // The one expander type every test expanding DepartmentResource uses (see TestDepartmentExpander's remarks).
             builder.Services.AddSingleton<IResourceExpander, TestDepartmentExpander>();
-            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(configure);
+            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(blueprint =>
+            {
+                blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>();
+                configure?.Invoke(blueprint);
+            });
 
             if (publicHost is not null)
             {

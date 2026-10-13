@@ -71,7 +71,8 @@ public sealed class OpenApiDocumentRenderTimingTests
     private static ServiceProvider CreateProvider(bool renderOnFirstRequest)
     {
         var services = new ServiceCollection().AddLogging();
-        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
+            static blueprint => blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>());
         services.Configure<BlueprintHttpOptions>(o => o.RenderOpenApiDocumentOnFirstRequest = renderOnFirstRequest);
 
         return services.BuildServiceProvider();

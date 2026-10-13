@@ -245,7 +245,8 @@ public sealed class ErrorContentTypeNegotiationWireTests
 
             builder.Services.AddSingleton<IApiAuthoriser, ErrorOutcomeAuthoriser>();
             builder.Services.Configure<BlueprintHttpOptions>(options => options.NegotiateErrorContentType = negotiate);
-            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
+                static blueprint => blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>());
 
             var app = builder.Build();
 

@@ -415,8 +415,9 @@ Every operation is authorised unless it opts out. Choose one declaration per ope
 Scope pairs are decided by the `IResourceAuthorizationProvider` you register. Blueprint ships one,
 `ScopePairClaimAuthorizationProvider`, which matches the pairs against the caller's `scope` claims.
 
-> **Register a provider if you use `[Resource]`.** Without one, scope pairs are not checked at all: any authenticated
-> caller passes a `[Resource]` operation. Authentication is still required.
+> **Register a provider if you use `[Resource]`.** Without one there is nothing to judge the scope pairs.
+> `MapBlueprintApi` throws at start-up, naming the operations. If the operations run without it, in an in-memory test
+> host for example, each is refused with a `403`. An app with no `[Resource]` operations needs no provider.
 
 Business rules, such as "only the tenant's own users", go in `IOperationAuthoriser` / `IApiAuthoriser`
 implementations. Link visibility can be filtered per resource, for example to hide an `archive` link on an
@@ -494,9 +495,8 @@ app.MapBlueprintApi<MyApp, MyAppExecutor>(
 ## Cross-cutting services
 
 Infrastructure is pluggable through `AddBlueprintApi`'s builder. Every seam is optional: if a service is not
-registered, its pipeline step is skipped. That includes the scope-pair check, so see
-[Authentication and authorisation](#authentication-and-authorisation) before leaving out a resource authorisation
-provider.
+registered, its pipeline step is skipped. The exception is the resource authorisation provider: an app with
+`[Resource]` operations must register one (see [Authentication and authorisation](#authentication-and-authorisation)).
 
 ```csharp
 builder.Services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>

@@ -87,7 +87,8 @@ public sealed class SelfExecutingResultFaultWireTests
                 options.NegotiateErrorContentType = true;
                 options.ExposeExceptionDetailsInErrorResponses = true;
             });
-            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, SelfExecutingFaultExecutor>();
+            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, SelfExecutingFaultExecutor>(
+                static blueprint => blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>());
 
             var app = builder.Build();
             app.MapBlueprintApi<IntegrationTestBlueprintApp, SelfExecutingFaultExecutor>("api/");

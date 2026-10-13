@@ -827,7 +827,8 @@ public class OpenApiConditionalValidationTests
             .AddLogging()
             .AddSingleton<TemplateStore>()
             .AddSingleton<SampleBlueprintApp>()
-            .AddSingleton<SampleBlueprintAppExecutor>();
+            .AddSingleton<SampleBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
         endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("api/");
