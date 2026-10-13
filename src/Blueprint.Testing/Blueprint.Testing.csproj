@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
+    <Description>Test hosts for Blueprint apps: run operations in memory through their generated pipelines, or over the full HTTP stack, with result assertions and background-task collectors.</Description>
     <OutputType>Library</OutputType>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
