@@ -2,7 +2,9 @@
 
 This folder is the detailed source of truth for repository-specific architecture, principles, and AI-agent workflow.
 
-`README.md` and `.github/copilot-instructions.md` are the entry points. The durable detail lives here.
+The root `README.md` is the entry point for people using Blueprint. It covers what Blueprint is, how it works and
+how to use it. `.github/copilot-instructions.md` is the entry point for people changing it. The durable detail lives
+here. When a change alters the consumer contract the README describes, update the README too.
 
 ## Start here
 

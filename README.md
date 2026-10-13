@@ -270,15 +270,22 @@ operation. It also adds the root document at `basePath`, and the OpenAPI documen
 A request then runs through that operation's generated pipeline:
 
 1. **Bind.** Route values, the query string, headers, cookies and the JSON body are bound onto a new operation
-   instance. The binding code is generated, so it knows each property's source and type ahead of time.
-2. **Authenticate and authorise.** The caller is checked against the operation's declarations: `[AllowAnonymous]`,
+   instance. The binding code is generated, so it knows each property's source and type ahead of time. For example,
+   the JSON body is read with a `Utf8JsonReader` loop that matches each property name directly.
+2. **Resolve context.** If configured, the tenant is resolved from the caller's claims, and the user's authorisation
+   context is loaded.
+3. **Authenticate and authorise.** The caller is checked against the operation's declarations: `[AllowAnonymous]`,
    `[MustBeAuthenticated]` or `[Resource]`. Your registered authorisers are then consulted.
-3. **Validate.** The operation's validation attributes run. Common attributes are compiled into direct inline checks.
+4. **Validate.** The operation's validation attributes run. Common attributes are compiled into direct inline checks.
    Any failure ends the request with a `422`.
-4. **Handle.** Your handler is called. Its dependencies come from the request's DI scope.
-5. **Post-execution, on success only.** The unit of work is saved, audit sinks are called, background tasks queued
-   by the handler are flushed, and links are added to any returned resources.
-6. **Translate the result.** The HTTP result executor writes the response: the status code for the result type,
+5. **Handle.** Your handler is called. Its dependencies come from the request's DI scope.
+6. **Post-execution, on success only.** In this order:
+   1. The unit of work is saved.
+   2. The message outbox is committed.
+   3. The audit sinks are called.
+   4. Background tasks queued by the handler are flushed.
+   5. Links are added to any returned resources.
+7. **Translate the result.** The HTTP result executor writes the response: the status code for the result type,
    the JSON body through your serialiser context, and `Location` and `ETag` headers where they apply.
 
 The whole pipeline runs inside an `Activity`. Exceptions are caught by a generated exception shell and translated:
@@ -494,17 +501,19 @@ builder.Services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
     blueprint.AddTenancy<AsyncLocalTenantAccessor, MyTenantResolver>();
     blueprint.AddResourceExpander<OwnerExpander>();
     blueprint.AddETagSupport();
-    blueprint.ConfigureHttp(http => http.ExposeExceptionDetailsInErrorResponses = env.IsDevelopment());
+    blueprint.ConfigureHttp(http =>
+        http.ExposeExceptionDetailsInErrorResponses = builder.Environment.IsDevelopment());
 });
 ```
 
 Post-execution steps run in a fixed order, and only when the handler succeeds:
 
 1. Save the unit of work.
-2. Call the audit sinks.
-3. Flush the background tasks.
+2. Commit the message outbox.
+3. Call the audit sinks.
+4. Flush the background tasks.
 
-So audits see committed state, and tasks never run for work that was rolled back. Opt an operation out of a step
+So audits see committed state, and messages and tasks never go out for work that was rolled back. Opt an operation out of a step
 with `[DoNotSaveChanges]`, `[DoNotAudit]` or `[DoNotRecordPerformanceMetrics]`. Mark properties `[Sensitive]` so audit
 sinks can redact them.
 
@@ -595,5 +604,6 @@ dotnet test .\Blueprint.sln
 
 ## Licence
 
-Blueprint is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). It began as a
-fork of [barclayadam/blueprint](https://github.com/barclayadam/blueprint).
+Blueprint is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). It succeeds the
+earlier, reflection-based Blueprint ([barclayadam/blueprint](https://github.com/barclayadam/blueprint)), which is
+also Apache 2.0.
