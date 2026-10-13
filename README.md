@@ -68,8 +68,9 @@ GET /api/greetings/Ada
   the routes you declare, and the generator checks every placeholder at build time.
 - **OpenAPI from the same model.** The document is rendered from the generated descriptors. It cannot drift from
   what the endpoints actually do.
-- **Observable by default.** Every operation runs inside an `Activity` on the `Blueprint` activity source. Audit
-  events and exceptions are recorded in OpenTelemetry-compatible form.
+- **Observable by default.** Every operation runs inside an `Activity` on the `Blueprint` activity source. Its
+  status and any exception are recorded in OpenTelemetry-compatible form, along with audit events when an audit
+  sink is registered.
 
 ## Packages
 
@@ -362,7 +363,7 @@ public partial class GetTemplateQuery : IQuery<Results<OkResult<TemplateApiResou
 | `AcceptedResult<T>` | 202 | JSON |
 | `NotFoundResult<T>` | 404 | JSON |
 | `ConflictResult<T>` | 409 | JSON |
-| `ResourceEventResult<T>` | 201 / 200 / 204 for created / updated / deleted | `{ eventId, resourceId, content }` envelope |
+| `ResourceEventResult<T>` | 201 / 200 / 204 for created / updated / deleted | An event: `$object: "event"`, `eventId`, `changeType`, `created`, `resourceObject`, `href` and the resource as `data`. None on 204. A 201 also gets a `Location` header. |
 | `KeyOnlyResourceEventResult` | 201 / 200 / 204 | None |
 | `NoResultOperationResult` | 200 | None |
 | `HttpNoContentResult` | 204 | None |
@@ -407,19 +408,24 @@ Every operation is authorised unless it opts out. Choose one declaration per ope
 | --- | --- |
 | `[AllowAnonymous]` | Anyone may call it. |
 | `[MustBeAuthenticated]` | Any authenticated caller may call it. |
-| `[Resource("template", "write")]` | The caller needs this noun/verb scope pair. Several `[Resource]` attributes mean "any of" these. Implies authentication. |
+| `[Resource("template", "write")]` | The caller needs this noun/verb scope pair, as judged by your `IResourceAuthorizationProvider` (see below). Several `[Resource]` attributes mean "any of" these. Implies authentication. |
 | `[FromResource(typeof(OtherOperation))]` | Use another operation's `[Resource]` pairs. |
 | *(none)* | An anonymous caller is refused with `401`. An authenticated caller is checked by your registered authorisers. |
 
-Scope pairs are decided by your `IResourceAuthorizationProvider`. Business rules, such as "only the tenant's own
-users", go in `IOperationAuthoriser` / `IApiAuthoriser` implementations. Link visibility can be filtered per
-resource, for example to hide an `archive` link on an already-archived item. Conflicting declarations are build
-errors (`BPAU001`–`BPAU006`).
+Scope pairs are decided by the `IResourceAuthorizationProvider` you register. Blueprint ships one,
+`ScopePairClaimAuthorizationProvider`, which matches the pairs against the caller's `scope` claims.
+
+> **Register a provider if you use `[Resource]`.** Without one, scope pairs are not checked at all: any authenticated
+> caller passes a `[Resource]` operation. Authentication is still required.
+
+Business rules, such as "only the tenant's own users", go in `IOperationAuthoriser` / `IApiAuthoriser`
+implementations. Link visibility can be filtered per resource, for example to hide an `archive` link on an
+already-archived item. Conflicting declarations are build errors (`BPAU001`–`BPAU006`).
 
 ```csharp
 builder.Services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 {
-    blueprint.AddResourceAuthorizationProvider<ScopeClaimAuthorizationProvider>();
+    blueprint.AddResourceAuthorizationProvider<MyScopeAuthorizationProvider>();
     blueprint.AddOperationAuthoriser<TenantIsolationAuthoriser>();
     blueprint.AddUserAuthorisationContextFactory<MyUserContextFactory>();
 });
@@ -488,7 +494,9 @@ app.MapBlueprintApi<MyApp, MyAppExecutor>(
 ## Cross-cutting services
 
 Infrastructure is pluggable through `AddBlueprintApi`'s builder. Every seam is optional: if a service is not
-registered, its pipeline step is skipped.
+registered, its pipeline step is skipped. That includes the scope-pair check, so see
+[Authentication and authorisation](#authentication-and-authorisation) before leaving out a resource authorisation
+provider.
 
 ```csharp
 builder.Services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
@@ -534,12 +542,14 @@ builder.Services.AddOpenTelemetry().WithTracing(tracing => tracing
     .AddAspNetCoreInstrumentation());
 ```
 
-Spans are named after the operation type. They carry `blueprint.operation.type` tags, the
-`blueprint.audit.started`/`succeeded`/`failed` events, and exception events that follow OpenTelemetry's `exception.*`
-conventions. Generated logging uses `LoggerMessage`-style delegates rather than string formatting.
+Each span is named after the operation type plus `Pipeline`, for example `GetGreetingQueryPipeline`. Its status is
+set through `otel.status_code`. A failure adds an exception event that follows OpenTelemetry's `exception.*`
+conventions. When an `IAuditSink` is registered, the span also gets `blueprint.audit.started`/`succeeded`/`failed`
+events tagged with `blueprint.operation.type`. `[DoNotRecordPerformanceMetrics]` turns the span off for an operation.
+Pipeline logging uses `LoggerMessage.Define` delegates rather than string formatting.
 
-In development, an app can also serve a generated manifest of its operations as JSON, HTML or Markdown under
-`<basePath>/.blueprint/manifests/`. See [`docs/observability-and-dev-experience.md`](docs/observability-and-dev-experience.md).
+In development, an app that sets `BlueprintHttpOptions.OperationsManifestResourceName` can also serve a generated
+manifest of its operations as JSON, HTML or Markdown under `<basePath>/.blueprint/manifests/`. See [`docs/observability-and-dev-experience.md`](docs/observability-and-dev-experience.md).
 
 ## Compile-time diagnostics
 
