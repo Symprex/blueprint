@@ -59,6 +59,8 @@ public static class EndpointRouteBuilderExtensions
         // Fall back to direct construction for testing scenarios that build a manual service collection.
         var runtimeModel = endpoints.ServiceProvider.GetService<T>() ?? new T();
 
+        EnsureScopePairsCanBeAuthorised(runtimeModel, endpoints.ServiceProvider);
+
         var httpOptions = endpoints.ServiceProvider.GetService<IOptions<BlueprintHttpOptions>>()?.Value ?? new BlueprintHttpOptions();
 
         var router = new BlueprintApiRouter<TExec>(
@@ -304,6 +306,45 @@ public static class EndpointRouteBuilderExtensions
         }
 
         return new BlueprintEndpointRouteBuilder(builders);
+    }
+
+    /// <summary>
+    /// Stops an app whose operations declare <c>[Resource]</c> scope pairs from being mapped when no
+    /// <see cref="Blueprint.Authorization.IResourceAuthorizationProvider"/> is registered to judge them.
+    /// </summary>
+    /// <remarks>
+    /// Without a provider the generated scope check refuses every such operation (Symprex/blueprint#41). This finds the
+    /// omission at start-up instead of as a 403 on each request. The provider is looked up from the root provider, as
+    /// <see cref="PipelineServices"/> looks it up for the pipelines, so this agrees with what they will use. An app with no
+    /// scope-pair operations needs no provider.
+    /// </remarks>
+    /// <param name="app">The app being mapped.</param>
+    /// <param name="serviceProvider">The root service provider.</param>
+    /// <exception cref="InvalidOperationException">Scope-pair operations exist and no provider is registered.</exception>
+    private static void EnsureScopePairsCanBeAuthorised(BlueprintApp app, IServiceProvider serviceProvider)
+    {
+        var scopedOperations = app.Operations
+            .Where(static descriptor => descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var authorization)
+                                        && !authorization.ScopePairs.IsDefaultOrEmpty)
+            .Select(static descriptor => descriptor.OperationType.Name)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        if (scopedOperations.Count == 0
+            || serviceProvider.GetService<Blueprint.Authorization.IResourceAuthorizationProvider>() is not null)
+        {
+            return;
+        }
+
+        const int namedLimit = 10;
+        var named = string.Join(", ", scopedOperations.Take(namedLimit));
+        var more = scopedOperations.Count > namedLimit ? $" and {scopedOperations.Count - namedLimit} more" : string.Empty;
+
+        throw new InvalidOperationException(
+            $"{app.GetType().Name} has operations that declare [Resource] scope pairs ({named}{more}), but no " +
+            $"{nameof(Blueprint.Authorization.IResourceAuthorizationProvider)} is registered to judge them, so every one " +
+            "would be refused. Register one in AddBlueprintApi with blueprint.AddResourceAuthorizationProvider<T>(), for " +
+            "example the built-in ScopePairClaimAuthorizationProvider, which matches them against the caller's scope claims.");
     }
 
     /// <summary>

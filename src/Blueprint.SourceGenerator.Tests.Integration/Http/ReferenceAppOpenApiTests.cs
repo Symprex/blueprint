@@ -1625,7 +1625,8 @@ public class ReferenceAppOpenApiTests
             .AddLogging()
             .AddSingleton<TemplateStore>()
             .AddSingleton<SampleBlueprintApp>()
-            .AddSingleton<SampleBlueprintAppExecutor>();
+            .AddSingleton<SampleBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }

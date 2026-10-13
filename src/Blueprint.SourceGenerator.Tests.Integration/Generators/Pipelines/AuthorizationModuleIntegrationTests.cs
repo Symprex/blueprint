@@ -49,6 +49,31 @@ public class AuthorizationModuleIntegrationTests
     }
 
     [Fact]
+    public async Task When_resource_declared_and_no_resource_authorization_provider_is_registered_then_forbidden()
+    {
+        // With no IResourceAuthorizationProvider registered, the scope pairs used to go unchecked, so any authenticated
+        // caller ran a [Resource] operation (Symprex/blueprint#41). The caller here even holds the matching claim: nothing
+        // is registered to judge it, so the operation must still be refused.
+        var app = new IntegrationTestBlueprintApp();
+        var serviceProvider = new ServiceCollection().BuildServiceProvider();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, serviceProvider);
+        var pipeline = executor.GetPipeline(typeof(UpdateTenantAuthorizationCommand));
+        var context = CreateHttpContext(
+            app,
+            UpdateTenantAuthorizationCommand.Configure(),
+            new UpdateTenantAuthorizationCommand { TenantId = "tenant-42" },
+            CreateAuthenticatedPrincipal(new System.Security.Claims.Claim("resource-access", "tenant:update:/tenants/tenant-42")),
+            serviceProvider);
+
+        UpdateTenantAuthorizationCommand.Reset();
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ForbiddenResult>();
+        UpdateTenantAuthorizationCommand.HandlerCallCount.Should().Be(0);
+    }
+
+    [Fact]
     public async Task When_operation_allows_anonymous_then_authorization_checks_are_skipped()
     {
         var countingAuthoriser = new CountingDenyingApiAuthoriser();

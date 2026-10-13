@@ -315,7 +315,11 @@ public sealed class ResourceLinkWireTests
 
             // The one expander type every test expanding DepartmentResource uses (see TestDepartmentExpander's remarks).
             builder.Services.AddSingleton<IResourceExpander, TestDepartmentExpander>();
-            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(configure);
+            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(blueprint =>
+            {
+                blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>();
+                configure?.Invoke(blueprint);
+            });
 
             var app = builder.Build();
             app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");

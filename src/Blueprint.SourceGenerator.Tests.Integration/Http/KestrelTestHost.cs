@@ -43,6 +43,7 @@ internal sealed class KestrelTestHost : IAsyncDisposable
         builder.Services
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
 
             // As AddBlueprintApi registers it, so that a pipeline can execute a nested operation such as a self query.
             .AddSingleton<Blueprint.BlueprintAppExecutor>(static sp => sp.GetRequiredService<IntegrationTestBlueprintAppExecutor>());

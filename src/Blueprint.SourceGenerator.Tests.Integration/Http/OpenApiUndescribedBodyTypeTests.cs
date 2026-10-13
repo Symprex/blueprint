@@ -229,7 +229,8 @@ public sealed class OpenApiUndescribedBodyTypeTests
         builder.Logging.AddProvider(new WarningRecordingLoggerProvider(logged));
         builder.Services
             .AddSingleton<IntegrationTestBlueprintApp>()
-            .AddSingleton<IntegrationTestBlueprintAppExecutor>();
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
         var app = builder.Build();
 
         app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");

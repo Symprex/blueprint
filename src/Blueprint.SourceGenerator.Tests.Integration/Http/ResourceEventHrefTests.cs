@@ -100,7 +100,7 @@ public sealed class ResourceEventHrefTests
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
         builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(static blueprint =>
-            blueprint.ConfigureHttp(static options => options.PublicHost = "api.example.test"));
+            blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>().ConfigureHttp(static options => options.PublicHost = "api.example.test"));
 
         await using var app = builder.Build();
         app.UsePathBase("/partners");

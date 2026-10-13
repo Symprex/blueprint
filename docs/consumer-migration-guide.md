@@ -211,6 +211,11 @@ Register your `IResourceAuthorizationProvider` to implement scope checking:
 blueprint.AddResourceAuthorizationProvider<YourResourceAuthorizationProvider>();
 ```
 
+This is required, not optional, once any operation uses Blueprint's `[Resource]` or `[FromResource]`. Without a provider,
+`MapBlueprintApi` throws at start-up, and each such operation is refused with a `403` wherever it runs
+(Symprex/blueprint#41). An app that authorises only through its own attributes and `IApiAuthoriser`s, and uses neither
+attribute, needs no provider.
+
 #### User context factory
 
 In legacy Blueprint, the user context was built during the authentication middleware. In source-generated Blueprint, register an `IUserAuthorisationContextFactory` that converts ASP.NET Core's `ClaimsIdentity` into your application-specific `IUserAuthorisationContext`:

@@ -26,7 +26,8 @@ public sealed class RouterBaseUriConcurrencyTests
     public async Task Concurrent_requests_for_different_hosts_each_have_links_made_under_their_own_host()
     {
         var services = new ServiceCollection().AddLogging();
-        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
+            static blueprint => blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>());
         await using var provider = services.BuildServiceProvider();
 
         var endpoints = new TestEndpointRouteBuilder(provider);
@@ -71,7 +72,8 @@ public sealed class RouterBaseUriConcurrencyTests
         // a request under "/GATEWAY" had "/GATEWAY" links though the one before it was under "/gateway". PathString's own
         // equality ignores case.
         var services = new ServiceCollection().AddLogging();
-        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
+            static blueprint => blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>());
         await using var provider = services.BuildServiceProvider();
         var endpoint = FindWidgetEndpoint(provider);
 

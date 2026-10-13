@@ -129,7 +129,8 @@ public class NodaTimeJsonIntegrationTests
 
                 return app;
             })
-            .AddSingleton<IntegrationTestBlueprintAppExecutor>();
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         // Wire NodaTime converters into Blueprint's JSON options — exactly as S365 services do
         services.Configure<BlueprintJsonOptions>(json =>
@@ -145,7 +146,8 @@ public class NodaTimeJsonIntegrationTests
         var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
-            .AddSingleton<IntegrationTestBlueprintAppExecutor>();
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }

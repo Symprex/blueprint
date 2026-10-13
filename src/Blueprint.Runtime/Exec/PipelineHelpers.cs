@@ -1243,9 +1243,16 @@ public static class PipelineHelpers
 
     /// <summary>
     /// Checks resource authorization using the <see cref="Authorization.IResourceAuthorizationProvider"/>.
-    /// Returns <see cref="ForbiddenResult.Instance"/> when the provider denies access, or <c>null</c>
-    /// when the caller is authorized or the provider is not registered (permissive default).
+    /// Returns <c>null</c> when the provider authorises the caller, and <see cref="ForbiddenResult.Instance"/> when it
+    /// denies access or when no provider is registered.
     /// </summary>
+    /// <remarks>
+    /// With no provider there is nothing to judge the operation's scope pairs, so the operation is refused rather than
+    /// let through: this used to return <c>null</c>, passing every authenticated caller (Symprex/blueprint#41).
+    /// <c>MapBlueprintApi</c> stops an HTTP app with scope-pair operations from starting without a provider, so this
+    /// denial is the backstop, logged at Error for whoever runs the app. The response is the plain 403, which says
+    /// nothing of the misconfiguration to the caller.
+    /// </remarks>
     /// <param name="context">The current operation execution context.</param>
     /// <param name="principal">The authenticated caller's claims principal.</param>
     /// <param name="provider">The resource authorization provider, or <c>null</c> if none is registered.</param>
@@ -1262,7 +1269,7 @@ public static class PipelineHelpers
     {
         if (provider == null)
         {
-            return default;
+            return DenyWithoutResourceAuthorizationProvider(context);
         }
 
         var task = provider.IsAuthorizedAsync(context, principal, resolvedScopes, cancellationToken);
@@ -1281,6 +1288,25 @@ public static class PipelineHelpers
         var isAuthorized = await pendingTask.ConfigureAwait(false);
 
         return isAuthorized ? null : ForbiddenResult.Instance;
+    }
+
+    /// <summary>
+    /// Refuses an operation whose scope pairs have no <see cref="Authorization.IResourceAuthorizationProvider"/> to judge
+    /// them, logging why at Error. Kept out of the inlined checks: a configured app never reaches it.
+    /// </summary>
+    /// <param name="context">The operation's context.</param>
+    /// <returns><see cref="ForbiddenResult.Instance"/>.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static ValueTask<OperationResult?> DenyWithoutResourceAuthorizationProvider(ApiOperationContext context)
+    {
+        var logger = (context.ServiceProvider.GetService(typeof(ILoggerFactory)) as ILoggerFactory)?.CreateLogger(_permissionCheckLoggerCategory);
+
+        if (logger is not null)
+        {
+            _logNoResourceAuthorizationProvider(logger, context.Descriptor.OperationType.Name, null);
+        }
+
+        return new ValueTask<OperationResult?>(ForbiddenResult.Instance);
     }
 
     /// <summary>
@@ -1304,7 +1330,7 @@ public static class PipelineHelpers
     {
         if (provider == null)
         {
-            return default;
+            return DenyWithoutResourceAuthorizationProvider(context);
         }
 
         var scopeList = new SingleItemList<ResolvedScopePair>(singleScope);
@@ -1709,6 +1735,12 @@ public static class PipelineHelpers
     //  ResourceEvent SelfQuery resolution — executes a nested query to
     //  populate Data when handlers return ResourceEvent with SelfQuery.
     // ────────────────────────────────────────────────────────────────────
+
+    private static readonly Action<ILogger, string, Exception?> _logNoResourceAuthorizationProvider =
+        LoggerMessage.Define<string>(
+            LogLevel.Error,
+            new EventId(33, "NoResourceAuthorizationProvider"),
+            "{OperationType} declares [Resource] scope pairs but no IResourceAuthorizationProvider is registered, so it was refused. Register one with AddResourceAuthorizationProvider");
 
     private static readonly Action<ILogger, string, string, Exception?> _logSelfQueryResolved =
         LoggerMessage.Define<string, string>(

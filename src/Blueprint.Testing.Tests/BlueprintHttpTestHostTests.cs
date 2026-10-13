@@ -24,6 +24,7 @@ public class BlueprintHttpTestHostTests : IAsyncLifetime
             {
                 services.AddSingleton<TemplateStore>();
                 services.AddScoped<InMemoryUnitOfWork>();
+                services.AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
             })
             .WithBasePath("/api")
             .BuildAsync();
@@ -124,6 +125,7 @@ public class BlueprintHttpTestHostAuthenticatedTests : IAsyncLifetime
             {
                 services.AddSingleton<TemplateStore>();
                 services.AddScoped<InMemoryUnitOfWork>();
+                services.AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
             })
             .WithTestAuthentication(claims =>
             {

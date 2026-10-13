@@ -68,7 +68,8 @@ public class ApiAuthoriserIntegrationTests
         var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
-            .AddSingleton<IntegrationTestBlueprintAppExecutor>();
+            .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
         endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
@@ -91,6 +92,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IUserAuthorisationContextFactory>(factory)
             .AddSingleton<IApiAuthoriser>(authoriser);
 
@@ -117,6 +119,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IApiAuthoriser>(authoriser);
 
         var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
@@ -145,6 +148,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IApiAuthoriser>(authoriser);
 
         var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
@@ -165,6 +169,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IUserAuthorisationContextFactory>(new TestUserContextFactory("user-99", "acct-42"));
 
         var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
@@ -193,6 +198,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IApiAuthoriser>(new TestApiAuthoriser(result));
 
         var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
@@ -392,6 +398,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IOperationAuthoriser>(new TestOperationAuthoriser(ExecutionAllowed.Yes));
 
         var endpoints = new TestEndpointRouteBuilder(services.BuildServiceProvider());
@@ -412,6 +419,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IOperationAuthoriser>(new TestOperationAuthoriser(
                 ExecutionAllowed.No("denied", "reason", ExecutionAllowedFailureType.Authorisation)));
 
@@ -451,6 +459,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IApiAuthoriser>(new TestApiAuthoriser(ExecutionAllowed.Yes))
             .AddSingleton<IOperationAuthoriser>(new TestOperationAuthoriser(ExecutionAllowed.Yes));
 
@@ -473,6 +482,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IApiAuthoriser>(new TestApiAuthoriser(ExecutionAllowed.Yes))
             .AddSingleton<IOperationAuthoriser>(new TestOperationAuthoriser(
                 ExecutionAllowed.No("business rule denied", "biz-denied", ExecutionAllowedFailureType.Authorisation)));
@@ -498,6 +508,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IApiAuthoriser>(new TestApiAuthoriser(
                 ExecutionAllowed.No("api-level denied", "api-denied", ExecutionAllowedFailureType.Authorisation)))
             .AddSingleton<IOperationAuthoriser>(operationAuthoriser);
@@ -526,6 +537,7 @@ public class ApiAuthoriserIntegrationTests
             .AddLogging()
             .AddSingleton<IntegrationTestBlueprintApp>()
             .AddSingleton<IntegrationTestBlueprintAppExecutor>()
+            .AddSingleton<IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>()
             .AddSingleton<IUserAuthorisationContextFactory>(factory)
             .AddSingleton<IApiAuthoriser>(contextCapturingApiAuthoriser)
             .AddSingleton<IOperationAuthoriser>(contextCapturingOpAuthoriser);

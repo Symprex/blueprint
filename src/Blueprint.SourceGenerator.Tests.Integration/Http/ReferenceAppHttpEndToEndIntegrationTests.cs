@@ -2659,7 +2659,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddScoped<Blueprint.Tasks.IBackgroundTaskScheduler, InProcessBackgroundTaskScheduler>()
             .AddScoped<SampleMartenUnitOfWork>()
             .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
-            .AddScoped<Blueprint.Http.ETagger>();
+            .AddScoped<Blueprint.Http.ETagger>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
@@ -2681,7 +2682,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddScoped<Blueprint.Http.ETagger>()
             .AddScoped<Blueprint.Http.IResourceLinkGenerator, Blueprint.Http.EntityOperationResourceLinkGenerator>()
-            .AddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, AllowAllApiAuthoriserAggregator>();
+            .AddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, AllowAllApiAuthoriserAggregator>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
@@ -2697,7 +2699,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddScoped<SampleMartenUnitOfWork>()
             .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, SampleUserAuthorisationContextFactory>()
-            .AddSingleton<Blueprint.Authorization.IOperationAuthoriser, TenantIsolationApiAuthoriser>();
+            .AddSingleton<Blueprint.Authorization.IOperationAuthoriser, TenantIsolationApiAuthoriser>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
@@ -2729,7 +2732,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddSingleton<Blueprint.Authorization.IUserAuthorisationContextFactory, SampleUserAuthorisationContextFactory>()
             .AddSingleton<Blueprint.Authorization.IOperationAuthoriser, TenantIsolationApiAuthoriser>()
-            .AddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, AllowAllApiAuthoriserAggregator>();
+            .AddSingleton<Blueprint.Authorization.IApiAuthoriserAggregator, AllowAllApiAuthoriserAggregator>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
@@ -2745,7 +2749,8 @@ public class ReferenceAppHttpEndToEndIntegrationTests
             .AddScoped<SampleMartenUnitOfWork>()
             .AddScoped<Blueprint.Persistence.IUnitOfWork>(sp => sp.GetRequiredService<SampleMartenUnitOfWork>())
             .AddSingleton<Blueprint.Tenancy.ITenantAccessor, Blueprint.Tenancy.AsyncLocalTenantAccessor>()
-            .AddSingleton<Blueprint.Tenancy.ITenantResolver, SampleTenantResolver>();
+            .AddSingleton<Blueprint.Tenancy.ITenantResolver, SampleTenantResolver>()
+            .AddSingleton<Blueprint.Authorization.IResourceAuthorizationProvider, PermitAllResourceAuthorizationProvider>();
 
         return new TestEndpointRouteBuilder(services.BuildServiceProvider());
     }
