@@ -9,6 +9,16 @@
     <PackageProjectUrl>https://github.com/Symprex/blueprint</PackageProjectUrl>
     <PackageReleaseNotes>See https://github.com/Symprex/blueprint/releases for more info</PackageReleaseNotes>
     <PackageBaseTags>API;CQRS;Blueprint;Rest</PackageBaseTags>
+    <PackageTags>$(PackageBaseTags);SourceGenerator;OpenAPI;HATEOAS;AspNetCore</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Restated rather than inherited, for the same reason as WarningsNotAsErrors below: the
+         repository-root Directory.Build.props never applies under src/. Without these, NuGet fills
+         <authors> with the package ID. Each packable project sets its own <Description>. -->
+    <Authors>Symprex</Authors>
+    <Company>Symprex Limited</Company>
+    <Product>Blueprint</Product>
+    <Copyright>Copyright © Symprex Limited</Copyright>
 
     <IsPackable>true</IsPackable>
     <IncludeSymbols>true</IncludeSymbols>
@@ -61,6 +71,16 @@
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)Rules.ruleset">
       <Link>Rules.ruleset</Link>
     </AdditionalFiles>
+  </ItemGroup>
+
+  <!-- Every package carries the same short readme (nuget.org renders it on the package page, and
+       its links are absolute because relative ones break there). It also carries the LICENSE and
+       NOTICE: Apache 2.0 section 4 requires a redistributed copy to include both, and the
+       PackageLicenseExpression above names the licence without shipping its text. -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)PACKAGE-README.md" Pack="true" PackagePath="README.md" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)..\LICENSE" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)..\NOTICE" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
   <!-- Only required during CI builds — a deterministic build path baked into the PDB is only

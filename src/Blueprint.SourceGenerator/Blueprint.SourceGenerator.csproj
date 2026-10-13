@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <Description>Roslyn source generator and code fixes for Blueprint. Generates operation descriptors, app registration, execution pipelines and executors at build time, and reports API-shape mistakes as compile-time diagnostics.</Description>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>

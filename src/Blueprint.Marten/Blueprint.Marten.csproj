@@ -2,6 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
+        <Description>Marten integration for Blueprint: a unit of work for generated pipelines and domain-event dispatch from Marten sessions.</Description>
         <Nullable>enable</Nullable>
         <LangVersion>preview</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>

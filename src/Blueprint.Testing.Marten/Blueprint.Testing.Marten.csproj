@@ -2,6 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
+        <Description>Marten fixtures for Blueprint.Testing.</Description>
         <Nullable>enable</Nullable>
         <LangVersion>preview</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
