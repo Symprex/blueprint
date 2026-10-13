@@ -156,3 +156,66 @@ jobs:
               --skip-duplicate
             if ($LASTEXITCODE -ne 0) { throw "Push failed for $($package.Name)." }
           }
+
+      # Handed to publish-nuget below, so nuget.org receives exactly the bytes GitHub Packages
+      # did. Repacking there would build again and could produce different packages under the
+      # same version.
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: ${{ runner.temp }}/packages
+          if-no-files-found: error
+
+  # nuget.org is a separate job, not more steps in publish, for two reasons.
+  #
+  # First, it runs in the `nuget` environment, which needs barclayadam's or michaeldtaylor's
+  # approval and accepts only v* tags. A workflow_dispatch run from a branch would be refused by
+  # that environment, so keeping it in its own job leaves the dispatch-to-GitHub-Packages escape
+  # hatch above working. Dispatch versions are alpha builds that must never reach nuget.org anyway:
+  # a version pushed there can be unlisted but never deleted.
+  #
+  # Second, it authenticates by Trusted Publishing rather than an API key. NuGet/login exchanges
+  # this job's GitHub OIDC token for a one-hour API key. That only works because a nuget.org policy
+  # on the Blueprint organisation trusts this repository, this workflow file (ci.yml) and this
+  # environment (nuget). Renaming any of the three breaks publishing until the policy is updated.
+  # `user` is the nuget.org member who created that policy.
+  publish-nuget:
+    name: Publish to nuget.org
+    needs: publish
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    environment: nuget
+    permissions:
+      id-token: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: ${{ runner.temp }}/packages
+
+      - name: NuGet login
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: barclayadam
+
+      # The same explicit .nupkg filter as the GitHub Packages push. Here, though, each package's
+      # .snupkg is still published: when the source is nuget.org, `dotnet nuget push` finds the
+      # symbol package beside the .nupkg and pushes it to the symbol server too.
+      # --skip-duplicate makes a re-run after a partial failure finish the remaining packages
+      # instead of failing on the first one already pushed.
+      - name: Push to nuget.org
+        run: |
+          $packages = Get-ChildItem "${{ runner.temp }}/packages" -File |
+            Where-Object { $_.Extension -eq '.nupkg' }
+          if (-not $packages) { throw "No .nupkg files were handed over from the publish job." }
+          Write-Host "Pushing $($packages.Count) package(s)."
+          foreach ($package in $packages) {
+            dotnet nuget push $package.FullName `
+              --source https://api.nuget.org/v3/index.json `
+              --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} `
+              --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { throw "Push failed for $($package.Name)." }
+          }
