@@ -60,8 +60,8 @@ GET /api/greetings/Ada
 - **Compile-time, not start-up time.** Operation descriptors, the app's operation registry, and one execution
   pipeline per operation are all generated source. At runtime they are simply called.
 - **Mistakes fail the build.** About a hundred diagnostics cover route templates, handler signatures, result
-  contracts, authorisation declarations, validation attributes and serialiser coverage. Many come with an IDE code
-  fix.
+  contracts, authorisation declarations, validation attributes and serialiser coverage. The missing-`partial`
+  diagnostics (`BP001`, `BP002`, `BP005`, `BP104`) also come with an IDE code fix that adds it.
 - **AOT- and trimming-friendly.** `Blueprint.Runtime` is marked `IsAotCompatible` and `IsTrimmable`. Serialisation
   goes through a `System.Text.Json` source-generated context that your app owns.
 - **Hypermedia built in.** Responses are resources with `$object`, `$links` and `$partial`. Links are generated from
@@ -77,7 +77,7 @@ GET /api/greetings/Ada
 | --- | --- |
 | `Blueprint.Runtime.Model` | The contracts: `IOperation`, `ICommand`, `IQuery`, `BlueprintApp`, `ApiResource`, `Results<T1, T2>`, and the attributes you put on operations. |
 | `Blueprint.Runtime` | The runtime: the semantic result types (`OkResult<T>` and the rest), the executor that runs the generated pipelines, `AddBlueprintApi` / `MapBlueprintApi`, HTTP result translation and OpenAPI rendering. Depends on `Blueprint.Runtime.Model`. |
-| `Blueprint.SourceGenerator` | The Roslyn source generator and its code fixes. It is an analyzer-only package, so reference it with `PrivateAssets="all"`. |
+| `Blueprint.SourceGenerator` | The Roslyn source generator, plus the IDE code fix for a missing `partial`. It is an analyzer-only package, so reference it with `PrivateAssets="all"`. |
 | `Blueprint.HttpClient` | `BlueprintHttpClient<TApp>`, a typed client that calls another Blueprint API using its operation types. |
 | `Blueprint.Testing` | In-memory and full-HTTP test hosts, task collectors and result assertions. |
 | `Blueprint.Marten` | A Marten `IUnitOfWork`, plus domain-event dispatch from Marten sessions. |
