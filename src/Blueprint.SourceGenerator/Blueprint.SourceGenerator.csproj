@@ -17,6 +17,10 @@
          lib/netstandard2.0/, which is the exact "consumers reference it and get nothing" failure
          this pairs with the None/PackagePath item below to avoid. -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- No symbol package. src/Directory.Build.props turns IncludeSymbols on for every package, but
+         with IncludeBuildOutput=false this one's .snupkg holds no .pdb, and nuget.org rejects such a
+         package with "does not contain any symbol (.pdb) files" (400). v1.0.8-rc.1's push stopped there. -->
+    <IncludeSymbols>false</IncludeSymbols>
     <!-- NuGet's NU5128 ("no lib/ref assets for a dependency group") is built around the shape of
          a normal class library and is a false positive for an analyzer-only package — the payload
          lives under analyzers/dotnet/cs (populated below via None/PackagePath, per the linked
