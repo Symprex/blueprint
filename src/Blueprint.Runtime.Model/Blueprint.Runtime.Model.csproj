@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Description>Contracts for Blueprint APIs: operations (ICommand, IQuery), BlueprintApp, ApiResource, Results&lt;T1, T2&gt; and the attributes that describe routes, links, binding and authorisation.</Description>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

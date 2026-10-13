@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Description>Hangfire task scheduling and execution for Blueprint background tasks.</Description>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Description>Rebus integration for Blueprint: delivers messages through generated operation pipelines, with a transaction scope and an optional outbox.</Description>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
