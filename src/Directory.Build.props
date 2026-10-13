@@ -74,10 +74,12 @@
   </ItemGroup>
 
   <!-- Every package carries the same short readme (nuget.org renders it on the package page, and
-       its links are absolute because relative ones break there) and the NOTICE that Apache 2.0
-       requires a derivative work to ship. -->
+       its links are absolute because relative ones break there). It also carries the LICENSE and
+       NOTICE: Apache 2.0 section 4 requires a redistributed copy to include both, and the
+       PackageLicenseExpression above names the licence without shipping its text. -->
   <ItemGroup Condition="'$(IsPackable)' == 'true'">
     <None Include="$(MSBuildThisFileDirectory)PACKAGE-README.md" Pack="true" PackagePath="README.md" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)..\LICENSE" Pack="true" PackagePath="\" Visible="false" />
     <None Include="$(MSBuildThisFileDirectory)..\NOTICE" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
