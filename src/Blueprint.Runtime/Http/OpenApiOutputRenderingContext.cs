@@ -2348,6 +2348,12 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("format", property.ItemsFormat);
             }
 
+            // A nullable value type element (double?[]) is nullable beside its type, as a nullable property is.
+            if (property.ItemsAreNullable)
+            {
+                writer.WriteBoolean("nullable", true);
+            }
+
             writer.WriteEndObject();
         }
 

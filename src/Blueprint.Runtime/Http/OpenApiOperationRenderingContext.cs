@@ -628,9 +628,10 @@ public sealed record OpenApiOperationRenderingContext(
                         AdditionalPropertiesSchemaRef = bodyAdditionalSchemaRef,
                         AllowsAdditionalProperties = bodyValuesAreAnyValue,
                         AdditionalPropertiesAreNullable = bodyValuesAreNullable,
-                        ItemsAreNullable = naming == OpenApiSchemaNaming.Legacy
-                            && bodyItemsSchemaRef is not null
-                            && OpenApiNullability.AreItemsNullable(clrProperty, nullabilityContext),
+                        ItemsAreNullable = bodyItemsSchemaRef is not null
+                            ? naming == OpenApiSchemaNaming.Legacy
+                                && OpenApiNullability.AreItemsNullable(clrProperty, nullabilityContext)
+                            : OpenApiNullability.AreValueItemsNullable(clrProperty),
                         EnumDescription = enumSchemaRef is null || clrProperty is null
                             ? null
                             : OpenApiSchemaProjectionContext.GetTypeDescription(Nullable.GetUnderlyingType(clrProperty.PropertyType) ?? clrProperty.PropertyType),

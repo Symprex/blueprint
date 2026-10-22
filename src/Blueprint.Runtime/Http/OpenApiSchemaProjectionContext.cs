@@ -831,9 +831,11 @@ public sealed record OpenApiSchemaProjectionContext(
             AdditionalPropertiesAreNullable = valuesAreNullable,
 
             // R163: legacy wrote the items of a collection of nullable elements as a nullable reference.
-            ItemsAreNullable = naming == OpenApiSchemaNaming.Legacy
-                && itemsSchemaName is not null
-                && OpenApiNullability.AreItemsNullable(property.AttributeProvider as PropertyInfo, nullabilityContext),
+            // Items of a nullable value type (double?[]) are nullable under either naming.
+            ItemsAreNullable = itemsSchemaName is not null
+                ? naming == OpenApiSchemaNaming.Legacy
+                    && OpenApiNullability.AreItemsNullable(property.AttributeProvider as PropertyInfo, nullabilityContext)
+                : OpenApiNullability.AreValueItemsNullable(property.AttributeProvider as PropertyInfo),
             EnumDescription = enumDescription,
         };
     }

@@ -62,4 +62,27 @@ internal static class OpenApiNullability
 
         return element is { Type.IsValueType: false, ReadState: NullabilityState.Nullable };
     }
+
+    /// <summary>
+    /// Returns whether the elements of the collection <paramref name="property"/> are <see cref="Nullable{T}"/>, as
+    /// <c>double?[]</c> and <c>List&lt;int?&gt;</c> declare them. Unlike <see cref="AreItemsNullable"/>, which reads the
+    /// annotation on a reference element, a nullable value type is part of the element's own type.
+    /// </summary>
+    /// <param name="property">The CLR property, or <see langword="null"/> when it is not known.</param>
+    /// <returns><see langword="true"/> when the property's element type is a nullable value type.</returns>
+    public static bool AreValueItemsNullable(PropertyInfo? property)
+    {
+        var type = property?.PropertyType;
+
+        if (type is null)
+        {
+            return false;
+        }
+
+        var element = type.IsArray
+            ? type.GetElementType()
+            : type.IsGenericType && type.GetGenericArguments() is [var argument] ? argument : null;
+
+        return element is not null && Nullable.GetUnderlyingType(element) is not null;
+    }
 }

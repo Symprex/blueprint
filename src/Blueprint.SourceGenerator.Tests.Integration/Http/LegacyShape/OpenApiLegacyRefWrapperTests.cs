@@ -140,6 +140,12 @@ public partial class RefWrapperApiResource : ApiResource
     public List<LegacyShapeContact?> Contacts { get; init; } = [];
 
     public List<LegacyShapeContact> RequiredContacts { get; init; } = [];
+
+    public double?[]? ScoreTrend { get; init; }
+
+    public List<int?> Counts { get; init; } = [];
+
+    public int[] Totals { get; init; } = [];
 }
 
 /// <summary>Returns the resource.</summary>
@@ -164,6 +170,12 @@ public partial class CreateRefWrapperCommand : ICommand<string>
     public List<LegacyShapeAddress?>? Addresses { get; set; }
 
     public List<LegacyShapeAddress> RequiredAddresses { get; set; } = [];
+
+    public double?[]? ScoreTrend { get; set; }
+
+    public List<int?> Counts { get; set; } = [];
+
+    public int[] Totals { get; set; } = [];
 
     public static string Handle(CreateRefWrapperCommand command)
     {
