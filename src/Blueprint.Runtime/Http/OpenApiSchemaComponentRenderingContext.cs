@@ -324,8 +324,10 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     public bool AdditionalPropertiesAreNullable { get; init; }
 
     /// <summary>
-    /// Gets a value indicating whether the property is a collection of references to a component whose elements may be
-    /// null, written with <c>"nullable": true</c> beside a <c>oneOf</c> wrapping the items' <c>$ref</c>.
+    /// Gets a value indicating whether the property is a collection whose elements may be null: a collection of
+    /// references to a component, written with <c>"nullable": true</c> beside a <c>oneOf</c> wrapping the items'
+    /// <c>$ref</c>, or a collection of a nullable value type, written with <c>"nullable": true</c> beside the items'
+    /// <c>type</c>.
     /// </summary>
     public bool ItemsAreNullable { get; init; }
 

@@ -214,7 +214,7 @@ public sealed record OpenApiRequestBodyPropertyModel(
     /// <summary>Gets whether this property is a dictionary of any values, rendered as <c>additionalProperties: {}</c>.</summary>
     public bool AllowsAdditionalProperties { get; init; }
 
-    /// <summary>Gets whether this property is a collection of references whose elements may be null, rendered with <c>"nullable": true</c> beside a <c>oneOf</c> wrapping the items' <c>$ref</c>.</summary>
+    /// <summary>Gets whether this property is a collection whose elements may be null: a collection of references, rendered with <c>"nullable": true</c> beside a <c>oneOf</c> wrapping the items' <c>$ref</c>, or a collection of a nullable value type, rendered with <c>"nullable": true</c> beside the items' <c>type</c>.</summary>
     public bool ItemsAreNullable { get; init; }
 
     /// <summary>Gets whether this property is a dictionary whose values may be null, rendered with <c>"nullable": true</c> in its <c>additionalProperties</c>.</summary>
