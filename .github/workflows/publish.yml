@@ -195,7 +195,11 @@ jobs:
       # .snupkg is still published: when the source is nuget.org, `dotnet nuget push` finds the
       # symbol package beside the .nupkg and pushes it to the symbol server too.
       # --skip-duplicate makes a re-run after a partial failure finish the remaining packages
-      # instead of failing on the first one already pushed.
+      # instead of failing on the first one already pushed. But a re-run skips the symbol package
+      # of a .nupkg already pushed, so a symbols upload that fails is lost for that version.
+      # --timeout 600 doubles dotnet's 300-second default. v1.0.8's first run hit that limit:
+      # nuget.org took 90-150 seconds per upload, and then returned a 500 on Blueprint.Marten's
+      # .snupkg. That is why Blueprint.Marten 1.0.8 has no symbols.
       - name: Push to nuget.org
         run: |
           $packages = Get-ChildItem "${{ runner.temp }}/packages" -File |
@@ -206,7 +210,8 @@ jobs:
             dotnet nuget push $package.FullName `
               --source https://api.nuget.org/v3/index.json `
               --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} `
-              --skip-duplicate
+              --skip-duplicate `
+              --timeout 600
             if ($LASTEXITCODE -ne 0) { throw "Push failed for $($package.Name)." }
           }
 
