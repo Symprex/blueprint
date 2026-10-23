@@ -46,6 +46,12 @@ Two sets, and the distinction matters when deciding which to trust:
 
 Repository conventions — scopes, commands, the gate — are in `.symprex/config.json`.
 
+## Pull requests and releases
+
+- PR titles are Conventional Commits, `type(scope): description`, with `!` for a breaking change. The **PR title** check enforces it and labels the PR for the release notes.
+- Only the **Publish** workflow (`publish.yml`, started by hand on `main`) releases a version. Never push a `v*` tag by hand.
+- Types, the major/minor/patch rules and the publish steps: `docs/releasing.md`. The `releasing-blueprint` skill is the short form.
+
 ## Docs source of truth
 
 - `/docs/README.md` is the entry point for detailed repository guidance. Treat `/docs` as the detailed source of truth for architecture, principles, observability, and AI workflow.

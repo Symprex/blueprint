@@ -1,0 +1,21 @@
+# Sections for the notes `gh release create --generate-notes` writes in publish.yml. A PR lands in
+# the first section whose labels it carries; the PR title check (.github/workflows/pr-title.yml)
+# applies these labels from the title's Conventional Commits type.
+changelog:
+  exclude:
+    authors:
+      - github-actions[bot]
+      - dependabot[bot]
+  categories:
+    - title: Breaking changes
+      labels: [breaking]
+    - title: Features
+      labels: [enhancement]
+    - title: Fixes
+      labels: [bug]
+    - title: Documentation
+      labels: [documentation]
+    - title: Maintenance
+      labels: [maintenance, dependencies]
+    - title: Other changes
+      labels: ["*"]
