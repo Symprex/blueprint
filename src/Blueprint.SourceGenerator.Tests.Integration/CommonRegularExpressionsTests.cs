@@ -57,6 +57,7 @@ public class CommonRegularExpressionsTests
         [InlineData("https://example.com/path")]
         [InlineData("example.com")]
         [InlineData("  https://example.com  ")]
+        [InlineData("portal.apps.svc.cluster.local.")]
         public void Matches_valid_url(string input)
         {
             Assert.Matches(CommonRegularExpressions.UrlOnly, input);
@@ -77,6 +78,9 @@ public class CommonRegularExpressionsTests
         [InlineData("http://example.com")]
         [InlineData("https://example.com/path?q=1")]
         [InlineData("ftp://files.example.com")]
+        [InlineData("http://portal.apps.svc.cluster.local.")]
+        [InlineData("http://portal.apps.svc.cluster.local.:8080")]
+        [InlineData("http://portal.apps.svc.cluster.local./api")]
         public void Matches_url_with_protocol(string input)
         {
             Assert.Matches(CommonRegularExpressions.UrlWithProtocol, input);
