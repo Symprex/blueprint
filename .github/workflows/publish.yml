@@ -1,0 +1,242 @@
+name: Publish
+
+# The only way a Blueprint version is released. Run it from the Actions tab (or
+# `gh workflow run publish.yml -f bump=patch`) on main; docs/releasing.md is the full guide.
+#
+# It does not test. The "Require CI" ruleset makes "Build and test" a required, strict check on
+# main, so every commit there was tested as-is before it merged; the verify job below refuses a
+# commit whose CI run did not succeed, rather than repeating it.
+#
+# Order matters: the tag and the GitHub release come last, after nuget.org has accepted the
+# packages, so a failed or rejected run leaves no tag pointing at a version that was never shipped.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Which part of the version to bump (see docs/releasing.md for which to choose)"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      prerelease:
+        description: "Optional SemVer prerelease label, e.g. rc.1. Leave empty for a stable release."
+        type: string
+        default: ""
+
+# One release at a time: two concurrent runs would compute the same next version.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  verify:
+    name: Verify and version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Publish runs only from main; this run is on ${{ github.ref }}."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The check is matched by name, so renaming the "Build and test" job in ci.yml breaks this
+      # and the "Require CI" ruleset together.
+      - name: Require a green CI run for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs?check_name=Build%20and%20test" \
+            --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.completed_at) | last | .conclusion // "missing"')
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::CI 'Build and test' for ${{ github.sha }} is '$conclusion', not 'success'. Wait for it to pass, or fix main first."
+            exit 1
+          fi
+
+      - name: Compute the version
+        id: version
+        run: |
+          version=$(git tag --list 'v*' | node .github/scripts/release-version.mjs "${{ inputs.bump }}" "${{ inputs.prerelease }}")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing **v$version** from \`${{ github.sha }}\` (${{ inputs.bump }} bump)." >> "$GITHUB_STEP_SUMMARY"
+
+  pack:
+    name: Pack and push to GitHub Packages
+    needs: verify
+    # windows-latest for the same reason as ci.yml: the build is Windows-native.
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # Must precede checkout: the Verify baselines' long filenames exceed MAX_PATH otherwise.
+      - name: Enable git long paths
+        run: git config --system core.longpaths true
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # MinVer reads the version from the tag at HEAD, so tagging locally is all it takes for
+      # every package to carry exactly the computed version. The tag is not pushed here; the
+      # release job creates it on GitHub once nuget.org has the packages.
+      - name: Tag locally for MinVer
+        run: git tag "v${{ needs.verify.outputs.version }}"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Blueprint.sln
+
+      - name: Build
+        run: dotnet build Blueprint.sln -c Release --no-restore
+
+      # --no-build reuses the assemblies the Build step just produced. Packing a project fresh in
+      # the same invocation is what let a Roslyn analyzer's `None Include="$(OutputPath)\*.dll"`
+      # glob (Blueprint.SourceGenerator) evaluate against an empty output directory before Build
+      # had populated it — a real, reproduced failure, not a hypothetical one.
+      - name: Pack
+        run: >
+          dotnet pack Blueprint.sln -c Release --no-build
+          -o ${{ runner.temp }}/packages
+
+      # Guards against MinVer missing the local tag (a shallow clone, a changed tag prefix) and
+      # silently packing an alpha version.
+      - name: Check the packed version
+        run: |
+          $expected = "${{ needs.verify.outputs.version }}"
+          $wrong = Get-ChildItem "${{ runner.temp }}/packages" -Filter *.nupkg |
+            Where-Object { $_.Name -notlike "*.$expected.nupkg" }
+          if ($wrong) { throw "Packed with the wrong version (expected $expected): $($wrong.Name -join ', ')" }
+
+      # Explicit --source rather than anything added to NuGet.config: the repository's
+      # NuGet.config lists only nuget.org, and three of these package IDs (Blueprint.Testing,
+      # Blueprint.Http, Blueprint.Tasks.Hangfire) already exist there at 0.8.4 from the
+      # barclayadam/blueprint upstream fork. An unqualified push could go to the wrong feed;
+      # naming the GitHub Packages source here is what guarantees it does not.
+      # The glob is expanded here rather than handed to dotnet: `dotnet nuget push` does not
+      # expand wildcards on Windows, and quoting stops the shell doing it, so passing the
+      # pattern through fails with "File does not exist" even though Pack just produced them.
+      #
+      # Extension is compared explicitly rather than filtering on "*.nupkg", because Windows
+      # wildcard matching also matches .snupkg against that pattern. Symbol packages must not
+      # be pushed: GitHub Packages' NuGet endpoint rejects them outright.
+      - name: Push to GitHub Packages
+        run: |
+          $packages = Get-ChildItem "${{ runner.temp }}/packages" -File |
+            Where-Object { $_.Extension -eq '.nupkg' }
+          if (-not $packages) { throw "Pack produced no .nupkg files to push." }
+          Write-Host "Pushing $($packages.Count) package(s)."
+          foreach ($package in $packages) {
+            dotnet nuget push $package.FullName `
+              --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json `
+              --api-key ${{ secrets.GITHUB_TOKEN }} `
+              --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { throw "Push failed for $($package.Name)." }
+          }
+
+      # Handed to publish-nuget below, so nuget.org receives exactly the bytes GitHub Packages
+      # did. Repacking there would build again and could produce different packages under the
+      # same version.
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: ${{ runner.temp }}/packages
+          if-no-files-found: error
+
+  # nuget.org is a separate job so the `nuget` environment's approval gates only this step.
+  # The environment needs barclayadam's or michaeldtaylor's approval and deploys only from main.
+  # A version pushed to nuget.org can be unlisted but never deleted.
+  #
+  # It authenticates by Trusted Publishing rather than an API key. NuGet/login exchanges this
+  # job's GitHub OIDC token for a one-hour API key. That only works because a nuget.org policy on
+  # the Blueprint organisation trusts this repository, this workflow file (publish.yml) and this
+  # environment (nuget). Renaming any of the three breaks publishing until the policy is updated.
+  # `user` is the nuget.org member who created that policy.
+  publish-nuget:
+    name: Publish to nuget.org
+    needs: pack
+    runs-on: windows-latest
+    environment: nuget
+    permissions:
+      id-token: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: ${{ runner.temp }}/packages
+
+      - name: NuGet login
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: barclayadam
+
+      # The same explicit .nupkg filter as the GitHub Packages push. Here, though, each package's
+      # .snupkg is still published: when the source is nuget.org, `dotnet nuget push` finds the
+      # symbol package beside the .nupkg and pushes it to the symbol server too.
+      # --skip-duplicate makes a re-run after a partial failure finish the remaining packages
+      # instead of failing on the first one already pushed.
+      - name: Push to nuget.org
+        run: |
+          $packages = Get-ChildItem "${{ runner.temp }}/packages" -File |
+            Where-Object { $_.Extension -eq '.nupkg' }
+          if (-not $packages) { throw "No .nupkg files were handed over from the pack job." }
+          Write-Host "Pushing $($packages.Count) package(s)."
+          foreach ($package in $packages) {
+            dotnet nuget push $package.FullName `
+              --source https://api.nuget.org/v3/index.json `
+              --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} `
+              --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { throw "Push failed for $($package.Name)." }
+          }
+
+  # `gh release create --target` creates the tag on GitHub at the released commit, and
+  # --generate-notes builds the notes from the PRs merged since the previous release, grouped by
+  # the labels the PR title check applies (.github/release.yml). A tag created with GITHUB_TOKEN
+  # starts no workflow, so this cannot set off a second run.
+  release:
+    name: Tag and create GitHub release
+    needs: [verify, publish-nuget]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: ${{ runner.temp }}/packages
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          flags=()
+          if [ -n "${{ inputs.prerelease }}" ]; then flags+=(--prerelease); fi
+          gh release create "v$VERSION" "${{ runner.temp }}"/packages/*.nupkg \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "v$VERSION" \
+            --generate-notes \
+            "${flags[@]}"
