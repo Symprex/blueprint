@@ -90,6 +90,7 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Http.OperationIdMixedLinkApiResource))]
 [JsonSerializable(typeof(Http.NestedLinkHolderApiResource))]
 [JsonSerializable(typeof(Http.LegacyShape.RefWrapperApiResource))]
+[JsonSerializable(typeof(Http.LegacyShape.NullableItemsApiResource))]
 [JsonSerializable(typeof(Http.DeclaredOnlyBodyItem))]
 [JsonSerializable(typeof(Http.DeclaredCollectionBodyItem))]
 [JsonSerializable(typeof(List<Http.DeclaredCollectionBodyItem>))]

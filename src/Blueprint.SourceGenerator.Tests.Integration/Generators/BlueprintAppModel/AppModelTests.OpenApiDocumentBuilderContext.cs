@@ -75,6 +75,7 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.OperationIdMixedLinkApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.NestedLinkHolderApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.RefWrapperApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.NullableItemsApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredOnlyBodyItem",
             "Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredCollectionBodyItem",
             "System.Collections.Generic.List<Blueprint.SourceGenerator.Tests.Integration.Http.DeclaredCollectionBodyItem>",

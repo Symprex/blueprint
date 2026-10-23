@@ -31,12 +31,16 @@ internal static class OpenApiNullability
     }
 
     /// <summary>
-    /// Returns whether the elements of the collection <paramref name="property"/> are annotated as nullable, as
-    /// <c>IEnumerable&lt;Block?&gt;</c> annotates them, which legacy Blueprint's NJsonSchema documented as nullable items.
+    /// Returns whether the elements of the collection <paramref name="property"/> may be null, as
+    /// <c>IEnumerable&lt;Block?&gt;</c> annotates them or <c>double?[]</c> declares them, which legacy Blueprint's
+    /// NJsonSchema documented as nullable items.
     /// </summary>
     /// <param name="property">The CLR property, or <see langword="null"/> when it is not known.</param>
     /// <param name="nullabilityContext">The context that reads the property's nullable annotations.</param>
-    /// <returns><see langword="true"/> when the property's element type is a reference type annotated as nullable.</returns>
+    /// <returns>
+    /// <see langword="true"/> when the property's element type is a reference type annotated as nullable, or a
+    /// <see cref="Nullable{T}"/>.
+    /// </returns>
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The generic type definition of a covered closed generic body type is preserved alongside it.")]
     public static bool AreItemsNullable(PropertyInfo? property, NullabilityInfoContext nullabilityContext)
     {
@@ -60,6 +64,13 @@ internal static class OpenApiNullability
         var element = nullability.ElementType
             ?? (nullability.GenericTypeArguments.Length == 1 ? nullability.GenericTypeArguments[0] : null);
 
-        return element is { Type.IsValueType: false, ReadState: NullabilityState.Nullable };
+        if (element is null)
+        {
+            return false;
+        }
+
+        return element.Type.IsValueType
+            ? Nullable.GetUnderlyingType(element.Type) is not null
+            : element.ReadState == NullabilityState.Nullable;
     }
 }

@@ -830,9 +830,9 @@ public sealed record OpenApiSchemaProjectionContext(
             AllowsAdditionalProperties = valuesAreAnyValue,
             AdditionalPropertiesAreNullable = valuesAreNullable,
 
-            // R163: legacy wrote the items of a collection of nullable elements as a nullable reference.
+            // R163: legacy wrote the items of a collection of nullable elements as a nullable reference, or as a
+            // nullable primitive (double?[]).
             ItemsAreNullable = naming == OpenApiSchemaNaming.Legacy
-                && itemsSchemaName is not null
                 && OpenApiNullability.AreItemsNullable(property.AttributeProvider as PropertyInfo, nullabilityContext),
             EnumDescription = enumDescription,
         };
@@ -1762,8 +1762,9 @@ public sealed record OpenApiSchemaPropertyModel(
     public bool AllowsAdditionalProperties { get; init; }
 
     /// <summary>
-    /// Gets a value indicating whether the property is a collection of references to a component whose elements may be
-    /// null, written with <c>"nullable": true</c> beside a <c>oneOf</c> wrapping the items' <c>$ref</c>.
+    /// Gets a value indicating whether the property is a collection whose elements may be null, written with
+    /// <c>"nullable": true</c> beside a <c>oneOf</c> wrapping the items' <c>$ref</c>, or after a primitive item's type
+    /// and format.
     /// </summary>
     public bool ItemsAreNullable { get; init; }
 

@@ -2348,6 +2348,12 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("format", property.ItemsFormat);
             }
 
+            // A nullable primitive element (double?[]) carries "nullable" after its type and format, as legacy wrote it.
+            if (property.ItemsAreNullable)
+            {
+                writer.WriteBoolean("nullable", true);
+            }
+
             writer.WriteEndObject();
         }
 

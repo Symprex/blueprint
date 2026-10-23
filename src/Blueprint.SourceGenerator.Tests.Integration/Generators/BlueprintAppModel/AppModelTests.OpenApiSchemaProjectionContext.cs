@@ -78,6 +78,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "NestedLinkInnerApiResource",
             "NestedLinkListedItemApiResource",
             "NodaTimeEchoResponse",
+            "NullableItemsApiResource",
             "OperationIdMixedLinkApiResource",
             "PagedApiResourceOfLegacyShapeTenant",
             "ParameterTitlesApiResource",
