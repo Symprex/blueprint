@@ -42,6 +42,7 @@ jobs:
     permissions:
       contents: read
       checks: read
+      packages: read
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -68,12 +69,42 @@ jobs:
             exit 1
           fi
 
+      # Inputs reach the shell only as environment variables, never interpolated into the script:
+      # an input such as `rc.$(cmd)` would otherwise run as a command before anything validates it.
       - name: Compute the version
         id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          version=$(git tag --list 'v*' | node .github/scripts/release-version.mjs "${{ inputs.bump }}" "${{ inputs.prerelease }}")
+          version=$(git tag --list 'v*' | node .github/scripts/release-version.mjs "$BUMP" "$PRERELEASE")
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Releasing **v$version** from \`${{ github.sha }}\` (${{ inputs.bump }} bump)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Releasing **v$version** from \`$GITHUB_SHA\` ($BUMP bump)." >> "$GITHUB_STEP_SUMMARY"
+
+      # No tag reserves a version until the release job, so a run whose nuget.org approval was
+      # rejected, or that failed part-way, can leave a version on a feed with no tag. A fresh
+      # dispatch would then compute the same version for a different commit, and --skip-duplicate
+      # would keep the old bytes on one feed while the other got the new ones. Refusing here keeps
+      # a version bound to one build: recover a failed run with "Re-run failed jobs" on that run,
+      # which reuses its packages. Blueprint.Runtime stands for the set, as every package shares a
+      # version.
+      - name: Refuse a version already on a feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Captured first rather than piped into grep -q: grep exiting early would fail the upstream
+          # command under pipefail and read as "not found".
+          nuget=$(curl -fsS https://api.nuget.org/v3-flatcontainer/blueprint.runtime/index.json | jq -r '.versions[]')
+          if grep -qxF "$VERSION" <<< "$nuget"; then
+            echo "::error::$VERSION is already on nuget.org. Re-run the failed jobs of the run that published it, or choose another version."
+            exit 1
+          fi
+          github=$(gh api "orgs/${{ github.repository_owner }}/packages/nuget/Blueprint.Runtime/versions" --paginate --jq '.[].name')
+          if grep -qxF "$VERSION" <<< "$github"; then
+            echo "::error::$VERSION is already on GitHub Packages. Re-run the failed jobs of the run that pushed it, or delete that package version (it never reached nuget.org) and dispatch again."
+            exit 1
+          fi
 
   pack:
     name: Pack and push to GitHub Packages
@@ -237,8 +268,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
+          # From the validated version, never the raw input, which would otherwise reach a shell
+          # holding a contents: write token.
           flags=()
-          if [ -n "${{ inputs.prerelease }}" ]; then flags+=(--prerelease); fi
+          if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease); fi
           gh release create "v$VERSION" "${{ runner.temp }}"/packages/*.nupkg \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \

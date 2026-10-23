@@ -43,3 +43,13 @@ test('refuses an unknown bump', () => {
 test('refuses a malformed prerelease label', () => {
     assert.throws(() => nextVersion(tags, 'patch', 'rc 1'), /prerelease/);
 });
+
+test('refuses a numeric prerelease identifier with a leading zero', () => {
+    assert.throws(() => nextVersion(tags, 'patch', '01'), /prerelease/);
+    assert.throws(() => nextVersion(tags, 'patch', 'rc.01'), /prerelease/);
+});
+
+test('accepts zero and alphanumeric identifiers that start with zero', () => {
+    assert.equal(nextVersion(tags, 'patch', 'rc.0'), '1.0.9-rc.0');
+    assert.equal(nextVersion(tags, 'patch', '01a'), '1.0.9-01a');
+});

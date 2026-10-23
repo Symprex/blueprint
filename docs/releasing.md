@@ -73,7 +73,7 @@ What it does, in order:
 
 1. **Verify and version**: refuses to run off `main`, refuses a commit whose CI **Build and test**
    run did not succeed, then computes the version (`.github/scripts/release-version.mjs`). It
-   refuses a version whose tag already exists.
+   refuses a version whose tag already exists, or that nuget.org or GitHub Packages already has.
 2. **Pack**: tags the commit locally so MinVer stamps that version, builds Release, packs, checks every
    package carries the version, and pushes to GitHub Packages. It does not re-run tests: the
    **Require CI** ruleset makes **Build and test** a required, strict check on `main`.
@@ -83,8 +83,15 @@ What it does, in order:
 4. **Tag and create GitHub release**: creates the `vX.Y.Z` tag at the released commit and a GitHub
    release with generated notes, grouped by `.github/release.yml`, with the `.nupkg` files attached.
 
-The tag is created last, so a run that fails or is rejected leaves no tag and no release behind. Fix the
-cause and run it again.
+The tag is created last, so a run that fails or is rejected leaves no tag and no release behind. Its
+packages may already be on a feed, though, and **Verify and version** refuses a version either feed
+already has, so that one version is never two different builds. To recover:
+
+- **The run failed or was rejected part-way:** open that run and use **Re-run failed jobs**. It reuses
+  the run's own packages, so the feeds and the release get the same bytes.
+- **You want different code under that version instead:** if it never reached nuget.org, delete the
+  version from GitHub Packages and dispatch again. Once it is on nuget.org, the version is spent:
+  dispatch the next one.
 
 ### Settings the workflow depends on
 

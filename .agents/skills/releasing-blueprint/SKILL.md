@@ -28,6 +28,8 @@ that must hold:
 - **Starting a publish is a release decision. Get the human's explicit go-ahead first.** The nuget.org
   step needs barclayadam's or michaeldtaylor's approval anyway, and a nuget.org version cannot be
   deleted.
+- **A run that failed or was rejected is recovered with "Re-run failed jobs" on that run**, not with a
+  fresh dispatch. The fresh one is refused when the version is already on a feed, by design.
 - Do not rename `publish.yml`, the `nuget` environment, or the `Build and test` job in `ci.yml`.
   Trusted Publishing, the environment and the CI ruleset are tied to those names.
 

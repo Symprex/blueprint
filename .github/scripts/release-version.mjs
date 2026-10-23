@@ -6,7 +6,8 @@
 
 const BUMPS = ['patch', 'minor', 'major'];
 const STABLE_TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
-const PRERELEASE_LABEL = /^[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$/;
+// SemVer prerelease: dot-separated identifiers; a purely numeric one may not have a leading zero.
+const PRERELEASE_IDENTIFIER = /^(0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)$/;
 
 /**
  * @param {string[]} tags Every tag in the repository.
@@ -19,7 +20,7 @@ export function nextVersion(tags, bump, prerelease = '') {
         throw new Error(`bump must be one of ${BUMPS.join(', ')}; got '${bump}'.`);
     }
 
-    if (prerelease !== '' && !PRERELEASE_LABEL.test(prerelease)) {
+    if (prerelease !== '' && !prerelease.split('.').every((identifier) => PRERELEASE_IDENTIFIER.test(identifier))) {
         throw new Error(`prerelease must be a SemVer label such as rc.1; got '${prerelease}'.`);
     }
 
