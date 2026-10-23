@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using JetBrains.Annotations;
 
 namespace Blueprint.Model;
@@ -32,11 +31,13 @@ public class PagedApiResource<T> : ListApiResource<T>
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="PagedApiResource{T}"/> class
-    /// for JSON deserialization.
+    /// Initializes a new instance of the <see cref="PagedApiResource{T}"/> class with no values, for derived types that
+    /// populate the page themselves.
     /// </summary>
-    [JsonConstructor]
-    public PagedApiResource()
+    /// <remarks>
+    /// Not the constructor JSON deserialization binds; see <see cref="ListApiResource{T}"/>.
+    /// </remarks>
+    protected PagedApiResource()
     {
     }
 

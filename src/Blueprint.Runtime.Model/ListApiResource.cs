@@ -26,11 +26,15 @@ public class ListApiResource<T> : ApiResource, IApiResourceCollection
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ListApiResource{T}"/> class
-    /// for JSON deserialization.
+    /// Initializes a new instance of the <see cref="ListApiResource{T}"/> class with no values, for derived types that
+    /// populate the list themselves.
     /// </summary>
-    [JsonConstructor]
-    public ListApiResource()
+    /// <remarks>
+    /// This is not the constructor JSON deserialization binds: it is not public and carries no
+    /// <see cref="JsonConstructorAttribute"/>, so System.Text.Json uses the one taking the values, as it did in legacy
+    /// Blueprint. The data properties are get-only, so a parameterless constructor could not populate them.
+    /// </remarks>
+    protected ListApiResource()
     {
         this.Values = [];
     }
