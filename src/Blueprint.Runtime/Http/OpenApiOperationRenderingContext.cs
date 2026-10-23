@@ -631,7 +631,7 @@ public sealed record OpenApiOperationRenderingContext(
 
                         // A nullable value type element is nullable under either naming, whether or not it has a component;
                         // only a nullable reference annotation is legacy's.
-                        ItemsAreNullable = OpenApiNullability.AreValueItemsNullable(clrProperty)
+                        ItemsAreNullable = OpenApiNullability.AreValueItemsNullable(clrProperty?.PropertyType)
                             || (naming == OpenApiSchemaNaming.Legacy
                                 && bodyItemsSchemaRef is not null
                                 && OpenApiNullability.AreItemsNullable(clrProperty, nullabilityContext)),

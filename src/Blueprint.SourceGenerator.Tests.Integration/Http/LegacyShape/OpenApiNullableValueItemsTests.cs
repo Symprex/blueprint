@@ -86,6 +86,49 @@ public sealed class OpenApiNullableValueItemsTests
         Json(Body(document).GetProperty("coordinates").GetProperty("items")).Should().Be(Expected);
     }
 
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    public void The_items_of_the_array_values_of_a_dictionary_are_nullable_when_their_element_is(OpenApiSchemaNaming naming)
+    {
+        using var document = Render(naming);
+
+        Json(Resource(document, "ScoresByName").GetProperty("additionalProperties"))
+            .Should().Be("""{"type":"array","items":{"type":"number","format":"double","nullable":true}}""");
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    public void The_items_of_the_array_values_of_a_dictionary_stay_without_nullable_when_their_element_is_not(OpenApiSchemaNaming naming)
+    {
+        using var document = Render(naming);
+
+        Json(Resource(document, "TotalsByName").GetProperty("additionalProperties"))
+            .Should().Be("""{"type":"array","items":{"type":"integer","format":"int32"}}""");
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    public void The_items_of_the_array_values_of_a_dictionary_of_a_nullable_struct_with_a_component_wrap_their_reference_beside_nullable(OpenApiSchemaNaming naming)
+    {
+        using var document = Render(naming);
+
+        Json(Resource(document, "CoordinatesByName").GetProperty("additionalProperties"))
+            .Should().Be("""{"type":"array","items":{"nullable":true,"oneOf":[{"$ref":"#/components/schemas/LegacyShapeCoordinate"}]}}""");
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    public void The_items_of_a_serialised_field_that_is_an_array_of_a_nullable_value_type_are_nullable(OpenApiSchemaNaming naming)
+    {
+        using var document = Render(naming);
+
+        Json(Resource(document, "ScoreField").GetProperty("items")).Should().Be("""{"type":"number","format":"double","nullable":true}""");
+    }
+
     private static JsonElement Body(JsonDocument document)
     {
         return document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("CreateRefWrapper").GetProperty("properties");

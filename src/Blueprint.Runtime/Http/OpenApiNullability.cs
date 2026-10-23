@@ -64,16 +64,16 @@ internal static class OpenApiNullability
     }
 
     /// <summary>
-    /// Returns whether the elements of the collection <paramref name="property"/> are <see cref="Nullable{T}"/>, as
+    /// Returns whether the elements of a collection of type <paramref name="collectionType"/> are <see cref="Nullable{T}"/>, as
     /// <c>double?[]</c> and <c>List&lt;int?&gt;</c> declare them. Unlike <see cref="AreItemsNullable"/>, which reads the
     /// annotation on a reference element, a nullable value type is part of the element's own type.
     /// </summary>
-    /// <param name="property">The CLR property, or <see langword="null"/> when it is not known.</param>
-    /// <returns><see langword="true"/> when the property's element type is a nullable value type.</returns>
-    public static bool AreValueItemsNullable(PropertyInfo? property)
+    /// <param name="collectionType">The type of the collection, which a property or a serialised field has, or <see langword="null"/> when it is not known.</param>
+    /// <returns><see langword="true"/> when the collection's element type is a nullable value type.</returns>
+    public static bool AreValueItemsNullable(Type? collectionType)
     {
         // The element the projections render items for: the T of the type's IEnumerable<T>, however the type is declared.
-        var element = OpenApiOperationRenderingContext.GetCollectionElementType(property?.PropertyType, dictionaryValues: false);
+        var element = OpenApiOperationRenderingContext.GetCollectionElementType(collectionType, dictionaryValues: false);
 
         return element is not null && Nullable.GetUnderlyingType(element) is not null;
     }

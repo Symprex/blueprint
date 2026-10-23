@@ -829,11 +829,13 @@ public sealed record OpenApiSchemaProjectionContext(
         {
             AllowsAdditionalProperties = valuesAreAnyValue,
             AdditionalPropertiesAreNullable = valuesAreNullable,
+            AdditionalPropertiesItemsAreNullable = additionalPropertiesKind == OpenApiSchemaKind.Array
+                && OpenApiNullability.AreValueItemsNullable(dictValueType),
 
             // R163: legacy wrote the items of a collection of nullable elements as a nullable reference.
             // Items of a nullable value type (double?[]) are nullable under either naming, whether or not they have a
             // component; only a nullable reference annotation is legacy's.
-            ItemsAreNullable = OpenApiNullability.AreValueItemsNullable(property.AttributeProvider as PropertyInfo)
+            ItemsAreNullable = OpenApiNullability.AreValueItemsNullable(property.PropertyType)
                 || (naming == OpenApiSchemaNaming.Legacy
                     && itemsSchemaName is not null
                     && OpenApiNullability.AreItemsNullable(property.AttributeProvider as PropertyInfo, nullabilityContext)),
@@ -1770,6 +1772,12 @@ public sealed record OpenApiSchemaPropertyModel(
     /// null, written with <c>"nullable": true</c> beside a <c>oneOf</c> wrapping the items' <c>$ref</c>.
     /// </summary>
     public bool ItemsAreNullable { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the property is a dictionary whose values are collections of a nullable value
+    /// type, written with <c>"nullable": true</c> on the <c>items</c> within its <c>additionalProperties</c>.
+    /// </summary>
+    public bool AdditionalPropertiesItemsAreNullable { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether the property is a dictionary whose values may be null, written with

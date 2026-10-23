@@ -152,6 +152,18 @@ public partial class RefWrapperApiResource : ApiResource
     public LegacyShapeIntValues<double?> IntValues { get; init; } = [];
 
     public List<LegacyShapeCoordinate?> Coordinates { get; init; } = [];
+
+    public Dictionary<string, double?[]> ScoresByName { get; init; } = [];
+
+    public Dictionary<string, int[]> TotalsByName { get; init; } = [];
+
+    public Dictionary<string, LegacyShapeCoordinate?[]> CoordinatesByName { get; init; } = [];
+
+    // A serialised field has no PropertyInfo.
+#pragma warning disable SA1401 // The test needs a public field.
+    [System.Text.Json.Serialization.JsonInclude]
+    public double?[] ScoreField = [];
+#pragma warning restore SA1401
 }
 
 /// <summary>A non-generic collection that inherits its nullable value type elements.</summary>
