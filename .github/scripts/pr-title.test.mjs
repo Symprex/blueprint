@@ -51,3 +51,9 @@ test('every label it applies is one it manages, so a retitle can remove stale on
         }
     }
 });
+
+test('an inherited object property is not a type', () => {
+    for (const type of ['constructor', 'toString', 'hasOwnProperty']) {
+        assert.equal(parsePrTitle(`${type}: describe a change`).valid, false, type);
+    }
+});

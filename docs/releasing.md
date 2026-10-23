@@ -73,18 +73,21 @@ What it does, in order:
 
 1. **Verify and version**: refuses to run off `main`, refuses a commit whose CI **Build and test**
    run did not succeed, then computes the version (`.github/scripts/release-version.mjs`). It
-   refuses a version whose tag already exists, or that nuget.org or GitHub Packages already has.
-2. **Pack**: tags the commit locally so MinVer stamps that version, builds Release, packs, checks every
-   package carries the version, and pushes to GitHub Packages. It does not re-run tests: the
-   **Require CI** ruleset makes **Build and test** a required, strict check on `main`.
-3. **Publish to nuget.org**: waits in the `nuget` environment for **barclayadam** or
-   **michaeldtaylor** to approve, then pushes by Trusted Publishing. A nuget.org version can be
-   unlisted but never deleted, so the approval is the last point to stop.
-4. **Tag and create GitHub release**: creates the `vX.Y.Z` tag at the released commit and a GitHub
+   refuses a version whose tag already exists.
+2. **Pack**: tags the commit locally so MinVer stamps that version, builds Release, packs, and checks
+   every package carries the version. It then refuses the version if **any** package in the set is
+   already on nuget.org or GitHub Packages, and saves the packages as the run's artefact, which every
+   later job pushes. It does not re-run tests: the **Require CI** ruleset makes **Build and test** a
+   required, strict check on `main`.
+3. **Push to GitHub Packages**: pushes the packed artefact.
+4. **Publish to nuget.org**: waits in the `nuget` environment for **barclayadam** or
+   **michaeldtaylor** to approve, then pushes the same artefact by Trusted Publishing. A nuget.org
+   version can be unlisted but never deleted, so the approval is the last point to stop.
+5. **Tag and create GitHub release**: creates the `vX.Y.Z` tag at the released commit and a GitHub
    release with generated notes, grouped by `.github/release.yml`, with the `.nupkg` files attached.
 
 The tag is created last, so a run that fails or is rejected leaves no tag and no release behind. Its
-packages may already be on a feed, though, and **Verify and version** refuses a version either feed
+packages may already be on a feed, though, and **Pack** refuses a version either feed
 already has, so that one version is never two different builds. To recover:
 
 - **The run failed or was rejected part-way:** open that run and use **Re-run failed jobs**. It reuses

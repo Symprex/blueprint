@@ -27,7 +27,7 @@ export const MANAGED_LABELS = ['breaking', ...new Set(Object.values(LABEL_BY_TYP
 export function parsePrTitle(title) {
     const match = TITLE.exec(title.trim());
 
-    if (match === null || !(match.groups.type in LABEL_BY_TYPE)) {
+    if (match === null || !Object.hasOwn(LABEL_BY_TYPE, match.groups.type)) {
         return {
             valid: false,
             labels: [],

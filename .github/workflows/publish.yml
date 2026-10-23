@@ -42,7 +42,6 @@ jobs:
     permissions:
       contents: read
       checks: read
-      packages: read
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -81,39 +80,16 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Releasing **v$version** from \`$GITHUB_SHA\` ($BUMP bump)." >> "$GITHUB_STEP_SUMMARY"
 
-      # No tag reserves a version until the release job, so a run whose nuget.org approval was
-      # rejected, or that failed part-way, can leave a version on a feed with no tag. A fresh
-      # dispatch would then compute the same version for a different commit, and --skip-duplicate
-      # would keep the old bytes on one feed while the other got the new ones. Refusing here keeps
-      # a version bound to one build: recover a failed run with "Re-run failed jobs" on that run,
-      # which reuses its packages. Blueprint.Runtime stands for the set, as every package shares a
-      # version.
-      - name: Refuse a version already on a feed
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          # Captured first rather than piped into grep -q: grep exiting early would fail the upstream
-          # command under pipefail and read as "not found".
-          nuget=$(curl -fsS https://api.nuget.org/v3-flatcontainer/blueprint.runtime/index.json | jq -r '.versions[]')
-          if grep -qxF "$VERSION" <<< "$nuget"; then
-            echo "::error::$VERSION is already on nuget.org. Re-run the failed jobs of the run that published it, or choose another version."
-            exit 1
-          fi
-          github=$(gh api "orgs/${{ github.repository_owner }}/packages/nuget/Blueprint.Runtime/versions" --paginate --jq '.[].name')
-          if grep -qxF "$VERSION" <<< "$github"; then
-            echo "::error::$VERSION is already on GitHub Packages. Re-run the failed jobs of the run that pushed it, or delete that package version (it never reached nuget.org) and dispatch again."
-            exit 1
-          fi
-
+  # Builds and packs once. Everything after this job takes these packages as an artefact, so a
+  # "Re-run failed jobs" of a later job pushes the same bytes rather than a rebuild.
   pack:
-    name: Pack and push to GitHub Packages
+    name: Pack
     needs: verify
     # windows-latest for the same reason as ci.yml: the build is Windows-native.
     runs-on: windows-latest
     permissions:
       contents: read
-      packages: write
+      packages: read
     steps:
       # Must precede checkout: the Verify baselines' long filenames exceed MAX_PATH otherwise.
       - name: Enable git long paths
@@ -157,6 +133,62 @@ jobs:
             Where-Object { $_.Name -notlike "*.$expected.nupkg" }
           if ($wrong) { throw "Packed with the wrong version (expected $expected): $($wrong.Name -join ', ')" }
 
+      # No tag reserves a version until the release job, so a run that was rejected or failed
+      # part-way can leave a version on a feed with no tag, and a fresh dispatch would compute it
+      # again for a different commit. --skip-duplicate would then keep the old bytes on one feed
+      # while the other got the new ones. So every package in the set is checked on both feeds
+      # (uploads are per package, never atomic), before anything is pushed. This runs only in a
+      # fresh run: "Re-run failed jobs" does not repeat a job that succeeded, which is what lets a
+      # retry finish the pushes this check would otherwise refuse.
+      - name: Refuse a version already on a feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ needs.verify.outputs.version }}"
+          $taken = foreach ($package in Get-ChildItem "${{ runner.temp }}/packages" -Filter *.nupkg |
+              Where-Object { $_.Extension -eq '.nupkg' }) {
+            $id = $package.Name.Substring(0, $package.Name.Length - ".$version.nupkg".Length)
+
+            $nuget = Invoke-WebRequest "https://api.nuget.org/v3-flatcontainer/$($id.ToLowerInvariant())/index.json" -SkipHttpErrorCheck
+            if ($nuget.StatusCode -eq 200) {
+              if (($nuget.Content | ConvertFrom-Json).versions -contains $version) { "$id $version on nuget.org" }
+            } elseif ($nuget.StatusCode -ne 404) {
+              throw "nuget.org returned $($nuget.StatusCode) for $id; cannot tell whether $version is taken."
+            }
+
+            $github = gh api "orgs/${{ github.repository_owner }}/packages/nuget/$id/versions" --paginate --jq '.[].name' 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              if ($github -contains $version) { "$id $version on GitHub Packages" }
+            } elseif ("$github" -notmatch 'HTTP 404') {
+              throw "GitHub Packages lookup failed for ${id}: $github"
+            }
+          }
+          if ($taken) {
+            throw ("Already published: $($taken -join '; '). Re-run the failed jobs of the run that " +
+              "published it; or, if it never reached nuget.org, delete it from GitHub Packages and dispatch again. " +
+              "See docs/releasing.md.")
+          }
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: ${{ runner.temp }}/packages
+          if-no-files-found: error
+
+  push-github:
+    name: Push to GitHub Packages
+    needs: pack
+    runs-on: windows-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: ${{ runner.temp }}/packages
+
       # Explicit --source rather than anything added to NuGet.config: the repository's
       # NuGet.config lists only nuget.org, and three of these package IDs (Blueprint.Testing,
       # Blueprint.Http, Blueprint.Tasks.Hangfire) already exist there at 0.8.4 from the
@@ -169,11 +201,12 @@ jobs:
       # Extension is compared explicitly rather than filtering on "*.nupkg", because Windows
       # wildcard matching also matches .snupkg against that pattern. Symbol packages must not
       # be pushed: GitHub Packages' NuGet endpoint rejects them outright.
+      # --skip-duplicate lets a re-run finish a part-way push with the same packages.
       - name: Push to GitHub Packages
         run: |
           $packages = Get-ChildItem "${{ runner.temp }}/packages" -File |
             Where-Object { $_.Extension -eq '.nupkg' }
-          if (-not $packages) { throw "Pack produced no .nupkg files to push." }
+          if (-not $packages) { throw "No .nupkg files were handed over from the pack job." }
           Write-Host "Pushing $($packages.Count) package(s)."
           foreach ($package in $packages) {
             dotnet nuget push $package.FullName `
@@ -182,17 +215,6 @@ jobs:
               --skip-duplicate
             if ($LASTEXITCODE -ne 0) { throw "Push failed for $($package.Name)." }
           }
-
-      # Handed to publish-nuget below, so nuget.org receives exactly the bytes GitHub Packages
-      # did. Repacking there would build again and could produce different packages under the
-      # same version.
-      - name: Upload packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: packages
-          path: ${{ runner.temp }}/packages
-          if-no-files-found: error
-
   # nuget.org is a separate job so the `nuget` environment's approval gates only this step.
   # The environment needs barclayadam's or michaeldtaylor's approval and deploys only from main.
   # A version pushed to nuget.org can be unlisted but never deleted.
@@ -204,7 +226,7 @@ jobs:
   # `user` is the nuget.org member who created that policy.
   publish-nuget:
     name: Publish to nuget.org
-    needs: pack
+    needs: push-github
     runs-on: windows-latest
     environment: nuget
     permissions:
