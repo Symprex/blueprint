@@ -49,10 +49,35 @@ public class ContinuationPagedApiResource<T> : ApiResource, IApiResourceCollecti
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ContinuationPagedApiResource{T}"/> class
-    /// for JSON deserialization.
+    /// with every continuation property, which is the constructor JSON deserialization binds.
     /// </summary>
+    /// <param name="values">The items on the current page.</param>
+    /// <param name="hasMore">Whether more items exist beyond this page.</param>
+    /// <param name="continuationToken">
+    /// An opaque token for the next set of values, or <c>null</c> when none was supplied.
+    /// </param>
+    /// <param name="pageSize">The maximum number of items per page, or <c>0</c> when none was supplied.</param>
+    /// <param name="currentPage">The 1-based current page number, or <c>0</c> when none was supplied.</param>
     [JsonConstructor]
-    public ContinuationPagedApiResource()
+    public ContinuationPagedApiResource(IEnumerable<T> values, bool hasMore, string? continuationToken, int pageSize, int currentPage)
+    {
+        var asList = values as IReadOnlyList<T> ?? values.ToList();
+
+        this.Values = asList;
+        this.HasMore = hasMore;
+        this.ContinuationToken = continuationToken;
+        this.PageSize = pageSize;
+        this.CurrentPage = currentPage;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ContinuationPagedApiResource{T}"/> class with no values, for derived
+    /// types that populate the page themselves.
+    /// </summary>
+    /// <remarks>
+    /// Not the constructor JSON deserialization binds; see <see cref="ListApiResource{T}"/>.
+    /// </remarks>
+    protected ContinuationPagedApiResource()
     {
         this.Values = [];
     }
