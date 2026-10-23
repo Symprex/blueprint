@@ -17,6 +17,7 @@ here. When a change alters the consumer contract the README describes, update th
 - Working as an AI agent: read `ai-agent-playbook.md`.
 - Planning or running a large refactor or a legacy-app migration: read `refactoring-workflow.md`.
 - Implementing new features: keep `implementation-checklists.md` open while you work.
+- Titling a PR, choosing a version or publishing a release: read `releasing.md`.
 
 ## Maintenance contract
 
@@ -44,6 +45,7 @@ here. When a change alters the consumer contract the README describes, update th
 | `ai-agent-playbook.md` | Repo-specific AI workflow guidance adapted from harness-engineering ideas. |
 | `refactoring-workflow.md` | The layered toolchain plus the concrete workflow for larger refactors and legacy-app migrations. |
 | `implementation-checklists.md` | Practical checklists for common change types. |
+| `releasing.md` | PR title format, SemVer bump rules, and how the Publish workflow releases to nuget.org. |
 
 ## What these docs are not
 

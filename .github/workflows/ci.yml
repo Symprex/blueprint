@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch: {}
@@ -31,7 +30,7 @@ jobs:
     steps:
       # MinVer derives the package version from git tags and commit height, and the default
       # fetch-depth: 1 shallow clone gives it neither — without full history a local pack and a
-      # CI pack would silently disagree. This is not just for the publish job: PR/branch builds
+      # CI pack would silently disagree. publish.yml packs the same way, and PR/branch builds
       # go through the same MinVer-versioned props, so they need the same history to compute a
       # sane (if unpublished) version.
       # Must precede checkout. Windows MAX_PATH is 260 characters and the Verify snapshot
@@ -64,6 +63,11 @@ jobs:
           --logger "trx;LogFileName=results.trx"
           --results-directory ${{ runner.temp }}/test-results
 
+      # The version and PR-title logic the publish and pr-title workflows run. Plain node:test, no
+      # dependencies to install; Node is on every hosted runner.
+      - name: Test release scripts
+        run: node --test ".github/scripts/*.test.mjs"
+
       - name: Publish test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -71,151 +75,3 @@ jobs:
           name: test-results
           path: ${{ runner.temp }}/test-results
           if-no-files-found: ignore
-
-  # Deliberately separate from build-and-test and gated to tag pushes (plus a manual
-  # workflow_dispatch escape hatch) — a release is a deliberate act, not something every merged
-  # PR should trigger. The tag itself is the version: pushing v0.1.0 makes MinVer produce exactly
-  # 0.1.0 here, with no separate "bump the version" step to forget.
-  #
-  # The two triggers version differently, deliberately: a tag push resolves to that tag's exact
-  # version (v0.1.0 -> 0.1.0). A workflow_dispatch run has no tag to resolve, so MinVer falls back
-  # to its untagged scheme (see src/Directory.Build.props): 0.1.0-alpha.0.<height>+<sha>. That is
-  # the only way to exercise this job at all today — there are no tags in this repository yet —
-  # and it cannot collide with a real release: MinVer only ever produces a plain "0.1.0" from an
-  # actual "v0.1.0" tag, never from commit height, so the alpha build and the eventual tagged
-  # release are always distinguishable. --skip-duplicate below means re-running dispatch against
-  # the same commit is a harmless no-op rather than a push failure.
-  publish:
-    name: Pack and publish
-    needs: build-and-test
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
-    # windows-latest, not ubuntu-latest, and this is load-bearing rather than incidental. The
-    # first CI run on Linux failed 68 tests: 67 Verify snapshot mismatches, because the committed
-    # .verified.txt baselines carry CRLF and a BOM while the generator emits LF on Linux, and one
-    # Blueprint.Codemod test that starts `powershell`, which does not exist there. This repository
-    # is Windows-native throughout — .symprex/config.json, copilot-instructions.md and the Husky
-    # hooks are all PowerShell — so CI matching the developer environment is the fix. Moving back
-    # to ubuntu means making 67 baselines line-ending agnostic and the process invocation `pwsh`
-    # first; it is not a one-line change.
-    runs-on: windows-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      # Must precede checkout. Windows MAX_PATH is 260 characters and the Verify snapshot
-      # baselines have long, descriptive filenames; under the runner workspace path the
-      # checkout itself fails with "Filename too long" before a single step runs.
-      - name: Enable git long paths
-        run: git config --system core.longpaths true
-
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
-
-      - name: Restore
-        run: dotnet restore Blueprint.sln
-
-      - name: Build
-        run: dotnet build Blueprint.sln -c Release --no-restore
-
-      # --no-build reuses the assemblies the Build step just produced. Packing a project fresh in
-      # the same invocation is what let a Roslyn analyzer's `None Include="$(OutputPath)\*.dll"`
-      # glob (Blueprint.SourceGenerator) evaluate against an empty output directory before Build
-      # had populated it — a real, reproduced failure, not a hypothetical one.
-      - name: Pack
-        run: >
-          dotnet pack Blueprint.sln -c Release --no-build
-          -o ${{ runner.temp }}/packages
-
-      # Explicit --source rather than anything added to NuGet.config: the repository's
-      # NuGet.config lists only nuget.org, and three of these package IDs (Blueprint.Testing,
-      # Blueprint.Http, Blueprint.Tasks.Hangfire) already exist there at 0.8.4 from the
-      # barclayadam/blueprint upstream fork. An unqualified push could go to the wrong feed;
-      # naming the GitHub Packages source here is what guarantees it does not.
-      # The glob is expanded here rather than handed to dotnet: `dotnet nuget push` does not
-      # expand wildcards on Windows, and quoting stops the shell doing it, so passing the
-      # pattern through fails with "File does not exist" even though Pack just produced them.
-      #
-      # Extension is compared explicitly rather than filtering on "*.nupkg", because Windows
-      # wildcard matching also matches .snupkg against that pattern. Symbol packages must not
-      # be pushed: GitHub Packages' NuGet endpoint rejects them outright.
-      - name: Push to GitHub Packages
-        run: |
-          $packages = Get-ChildItem "${{ runner.temp }}/packages" -File |
-            Where-Object { $_.Extension -eq '.nupkg' }
-          if (-not $packages) { throw "Pack produced no .nupkg files to push." }
-          Write-Host "Pushing $($packages.Count) package(s)."
-          foreach ($package in $packages) {
-            dotnet nuget push $package.FullName `
-              --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json `
-              --api-key ${{ secrets.GITHUB_TOKEN }} `
-              --skip-duplicate
-            if ($LASTEXITCODE -ne 0) { throw "Push failed for $($package.Name)." }
-          }
-
-      # Handed to publish-nuget below, so nuget.org receives exactly the bytes GitHub Packages
-      # did. Repacking there would build again and could produce different packages under the
-      # same version.
-      - name: Upload packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: packages
-          path: ${{ runner.temp }}/packages
-          if-no-files-found: error
-
-  # nuget.org is a separate job, not more steps in publish, for two reasons.
-  #
-  # First, it runs in the `nuget` environment, which needs barclayadam's or michaeldtaylor's
-  # approval and accepts only v* tags. A workflow_dispatch run from a branch would be refused by
-  # that environment, so keeping it in its own job leaves the dispatch-to-GitHub-Packages escape
-  # hatch above working. Dispatch versions are alpha builds that must never reach nuget.org anyway:
-  # a version pushed there can be unlisted but never deleted.
-  #
-  # Second, it authenticates by Trusted Publishing rather than an API key. NuGet/login exchanges
-  # this job's GitHub OIDC token for a one-hour API key. That only works because a nuget.org policy
-  # on the Blueprint organisation trusts this repository, this workflow file (ci.yml) and this
-  # environment (nuget). Renaming any of the three breaks publishing until the policy is updated.
-  # `user` is the nuget.org member who created that policy.
-  publish-nuget:
-    name: Publish to nuget.org
-    needs: publish
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: windows-latest
-    environment: nuget
-    permissions:
-      id-token: write
-    steps:
-      - name: Download packages
-        uses: actions/download-artifact@v4
-        with:
-          name: packages
-          path: ${{ runner.temp }}/packages
-
-      - name: NuGet login
-        id: nuget-login
-        uses: NuGet/login@v1
-        with:
-          user: barclayadam
-
-      # The same explicit .nupkg filter as the GitHub Packages push. Here, though, each package's
-      # .snupkg is still published: when the source is nuget.org, `dotnet nuget push` finds the
-      # symbol package beside the .nupkg and pushes it to the symbol server too.
-      # --skip-duplicate makes a re-run after a partial failure finish the remaining packages
-      # instead of failing on the first one already pushed.
-      - name: Push to nuget.org
-        run: |
-          $packages = Get-ChildItem "${{ runner.temp }}/packages" -File |
-            Where-Object { $_.Extension -eq '.nupkg' }
-          if (-not $packages) { throw "No .nupkg files were handed over from the publish job." }
-          Write-Host "Pushing $($packages.Count) package(s)."
-          foreach ($package in $packages) {
-            dotnet nuget push $package.FullName `
-              --source https://api.nuget.org/v3/index.json `
-              --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} `
-              --skip-duplicate
-            if ($LASTEXITCODE -ne 0) { throw "Push failed for $($package.Name)." }
-          }

@@ -84,7 +84,7 @@ public static partial class CommonRegularExpressions
 
     private const string UrlProtocolPattern = @"((([Hh][Tt]|[Ff])[Tt][Pp]([Ss]?))\://)";
     private const string UrlWithProtocolPattern = UrlProtocolPattern + UrlDomainPattern;
-    private const string UrlDomainPattern = @"([a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,63}|localhost)(\:[0-9]{1,5})*([/?]($|[a-zA-Z0-9\.\,\;\'\\\+&amp;()%@\$#\=~_\-]+))*";
+    private const string UrlDomainPattern = @"([a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,63}\.?|localhost)(\:[0-9]{1,5})*([/?]($|[a-zA-Z0-9\.\,\;\'\\\+&amp;()%@\$#\=~_\-]+))*";
 
     // Factory methods wrapping compiled Regex instances. These cannot use GeneratedRegex
     // because the patterns are built from const string concatenation with interpolation,
