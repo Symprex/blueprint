@@ -831,11 +831,12 @@ public sealed record OpenApiSchemaProjectionContext(
             AdditionalPropertiesAreNullable = valuesAreNullable,
 
             // R163: legacy wrote the items of a collection of nullable elements as a nullable reference.
-            // Items of a nullable value type (double?[]) are nullable under either naming.
-            ItemsAreNullable = itemsSchemaName is not null
-                ? naming == OpenApiSchemaNaming.Legacy
-                    && OpenApiNullability.AreItemsNullable(property.AttributeProvider as PropertyInfo, nullabilityContext)
-                : OpenApiNullability.AreValueItemsNullable(property.AttributeProvider as PropertyInfo),
+            // Items of a nullable value type (double?[]) are nullable under either naming, whether or not they have a
+            // component; only a nullable reference annotation is legacy's.
+            ItemsAreNullable = OpenApiNullability.AreValueItemsNullable(property.AttributeProvider as PropertyInfo)
+                || (naming == OpenApiSchemaNaming.Legacy
+                    && itemsSchemaName is not null
+                    && OpenApiNullability.AreItemsNullable(property.AttributeProvider as PropertyInfo, nullabilityContext)),
             EnumDescription = enumDescription,
         };
     }
@@ -907,7 +908,8 @@ public sealed record OpenApiSchemaProjectionContext(
             return null;
         }
 
-        return schemaNamesByType.GetValueOrDefault(elementType);
+        // A nullable struct takes its underlying type's component.
+        return schemaNamesByType.GetValueOrDefault(Nullable.GetUnderlyingType(elementType) ?? elementType);
     }
 
     /// <summary>

@@ -72,16 +72,8 @@ internal static class OpenApiNullability
     /// <returns><see langword="true"/> when the property's element type is a nullable value type.</returns>
     public static bool AreValueItemsNullable(PropertyInfo? property)
     {
-        var type = property?.PropertyType;
-
-        if (type is null)
-        {
-            return false;
-        }
-
-        var element = type.IsArray
-            ? type.GetElementType()
-            : type.IsGenericType && type.GetGenericArguments() is [var argument] ? argument : null;
+        // The element the projections render items for: the T of the type's IEnumerable<T>, however the type is declared.
+        var element = OpenApiOperationRenderingContext.GetCollectionElementType(property?.PropertyType, dictionaryValues: false);
 
         return element is not null && Nullable.GetUnderlyingType(element) is not null;
     }

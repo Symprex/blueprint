@@ -58,6 +58,39 @@ public sealed class OpenApiNullableValueItemsTests
         Json(body.GetProperty("totals").GetProperty("items")).Should().Be("""{"type":"integer","format":"int32"}""");
     }
 
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    public void The_items_of_an_inherited_collection_follow_its_IEnumerable_element_type(OpenApiSchemaNaming naming)
+    {
+        using var document = Render(naming);
+        var body = Body(document);
+
+        // LegacyShapeScores : List<double?> has nullable elements; LegacyShapeIntValues<double?> : List<int> does not,
+        // whatever its type argument.
+        Json(Resource(document, "Scores").GetProperty("items")).Should().Be("""{"type":"number","format":"double","nullable":true}""");
+        Json(Resource(document, "IntValues").GetProperty("items")).Should().Be("""{"type":"integer","format":"int32"}""");
+        Json(body.GetProperty("scores").GetProperty("items")).Should().Be("""{"type":"number","format":"double","nullable":true}""");
+        Json(body.GetProperty("intValues").GetProperty("items")).Should().Be("""{"type":"integer","format":"int32"}""");
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    public void The_items_of_a_collection_of_a_nullable_struct_with_a_component_wrap_their_reference_beside_nullable(OpenApiSchemaNaming naming)
+    {
+        using var document = Render(naming);
+
+        const string Expected = """{"nullable":true,"oneOf":[{"$ref":"#/components/schemas/LegacyShapeCoordinate"}]}""";
+        Json(Resource(document, "Coordinates").GetProperty("items")).Should().Be(Expected);
+        Json(Body(document).GetProperty("coordinates").GetProperty("items")).Should().Be(Expected);
+    }
+
+    private static JsonElement Body(JsonDocument document)
+    {
+        return document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("CreateRefWrapper").GetProperty("properties");
+    }
+
     private static string Json(JsonElement element)
     {
         return JsonNode.Parse(element.GetRawText())!.ToJsonString();

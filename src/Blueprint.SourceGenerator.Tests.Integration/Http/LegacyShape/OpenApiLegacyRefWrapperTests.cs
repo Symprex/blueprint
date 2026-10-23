@@ -146,6 +146,27 @@ public partial class RefWrapperApiResource : ApiResource
     public List<int?> Counts { get; init; } = [];
 
     public int[] Totals { get; init; } = [];
+
+    public LegacyShapeScores Scores { get; init; } = [];
+
+    public LegacyShapeIntValues<double?> IntValues { get; init; } = [];
+
+    public List<LegacyShapeCoordinate?> Coordinates { get; init; } = [];
+}
+
+/// <summary>A non-generic collection that inherits its nullable value type elements.</summary>
+public sealed class LegacyShapeScores : List<double?>;
+
+/// <summary>A generic collection whose own type argument is not its element type, which is always <see cref="int"/>.</summary>
+/// <typeparam name="T">A type argument that is not the element type.</typeparam>
+public sealed class LegacyShapeIntValues<T> : List<int>;
+
+/// <summary>A struct that has a schema component of its own.</summary>
+public readonly struct LegacyShapeCoordinate
+{
+    public double X { get; init; }
+
+    public double Y { get; init; }
 }
 
 /// <summary>Returns the resource.</summary>
@@ -176,6 +197,12 @@ public partial class CreateRefWrapperCommand : ICommand<string>
     public List<int?> Counts { get; set; } = [];
 
     public int[] Totals { get; set; } = [];
+
+    public LegacyShapeScores Scores { get; set; } = [];
+
+    public LegacyShapeIntValues<double?> IntValues { get; set; } = [];
+
+    public List<LegacyShapeCoordinate?> Coordinates { get; set; } = [];
 
     public static string Handle(CreateRefWrapperCommand command)
     {
