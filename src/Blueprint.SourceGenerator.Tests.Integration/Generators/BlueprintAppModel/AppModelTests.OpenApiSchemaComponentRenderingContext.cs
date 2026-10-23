@@ -61,6 +61,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "LegacyShapeBillingAccount",
             "LegacyShapeClosedInfo",
             "LegacyShapeContact",
+            "LegacyShapeCoordinate",
             "LegacyShapeCountryApiResource",
             "LegacyShapeListApiResourceOfLegacyShapeCountry",
             "LegacyShapeRun",

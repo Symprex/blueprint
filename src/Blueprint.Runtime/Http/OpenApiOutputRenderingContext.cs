@@ -2348,6 +2348,12 @@ public sealed record OpenApiOutputRenderingContext(
                 writer.WriteString("format", property.ItemsFormat);
             }
 
+            // A nullable value type element (double?[]) is nullable beside its type, as a nullable property is.
+            if (property.ItemsAreNullable)
+            {
+                writer.WriteBoolean("nullable", true);
+            }
+
             writer.WriteEndObject();
         }
 
@@ -2397,7 +2403,23 @@ public sealed record OpenApiOutputRenderingContext(
                 {
                     writer.WritePropertyName("items");
                     writer.WriteStartObject();
-                    writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesItemsSchemaRef, schemaNameFormatter)}");
+
+                    // A nullable element wraps its reference in oneOf beside "nullable", as a collection's items do.
+                    if (property.AdditionalPropertiesItemsAreNullable)
+                    {
+                        writer.WriteBoolean("nullable", true);
+                        writer.WritePropertyName("oneOf");
+                        writer.WriteStartArray();
+                        writer.WriteStartObject();
+                        writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesItemsSchemaRef, schemaNameFormatter)}");
+                        writer.WriteEndObject();
+                        writer.WriteEndArray();
+                    }
+                    else
+                    {
+                        writer.WriteString("$ref", $"#/components/schemas/{SanitiseSchemaKey(property.AdditionalPropertiesItemsSchemaRef, schemaNameFormatter)}");
+                    }
+
                     writer.WriteEndObject();
                 }
                 else if (property.AdditionalPropertiesItemsType is not null)
@@ -2409,6 +2431,11 @@ public sealed record OpenApiOutputRenderingContext(
                     if (property.AdditionalPropertiesItemsFormat is not null)
                     {
                         writer.WriteString("format", property.AdditionalPropertiesItemsFormat);
+                    }
+
+                    if (property.AdditionalPropertiesItemsAreNullable)
+                    {
+                        writer.WriteBoolean("nullable", true);
                     }
 
                     writer.WriteEndObject();

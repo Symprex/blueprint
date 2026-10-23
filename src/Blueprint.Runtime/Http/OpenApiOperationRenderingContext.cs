@@ -628,9 +628,13 @@ public sealed record OpenApiOperationRenderingContext(
                         AdditionalPropertiesSchemaRef = bodyAdditionalSchemaRef,
                         AllowsAdditionalProperties = bodyValuesAreAnyValue,
                         AdditionalPropertiesAreNullable = bodyValuesAreNullable,
-                        ItemsAreNullable = naming == OpenApiSchemaNaming.Legacy
-                            && bodyItemsSchemaRef is not null
-                            && OpenApiNullability.AreItemsNullable(clrProperty, nullabilityContext),
+
+                        // A nullable value type element is nullable under either naming, whether or not it has a component;
+                        // only a nullable reference annotation is legacy's.
+                        ItemsAreNullable = OpenApiNullability.AreValueItemsNullable(clrProperty?.PropertyType)
+                            || (naming == OpenApiSchemaNaming.Legacy
+                                && bodyItemsSchemaRef is not null
+                                && OpenApiNullability.AreItemsNullable(clrProperty, nullabilityContext)),
                         EnumDescription = enumSchemaRef is null || clrProperty is null
                             ? null
                             : OpenApiSchemaProjectionContext.GetTypeDescription(Nullable.GetUnderlyingType(clrProperty.PropertyType) ?? clrProperty.PropertyType),
@@ -1038,8 +1042,11 @@ public sealed record OpenApiOperationRenderingContext(
     /// <summary>
     /// Returns the type of a collection's items, or of a dictionary's values when <paramref name="dictionaryValues"/> is set.
     /// </summary>
+    /// <param name="type">The collection's type, or <see langword="null"/> when it is not known.</param>
+    /// <param name="dictionaryValues">Whether to return a dictionary's value type rather than a collection's item type.</param>
+    /// <returns>The type of the items or values, or <see langword="null"/> when <paramref name="type"/> has none.</returns>
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Type interfaces are preserved for operation types registered with the serializer context.")]
-    private static Type? GetCollectionElementType(Type? type, bool dictionaryValues)
+    internal static Type? GetCollectionElementType(Type? type, bool dictionaryValues)
     {
         if (type is null)
         {

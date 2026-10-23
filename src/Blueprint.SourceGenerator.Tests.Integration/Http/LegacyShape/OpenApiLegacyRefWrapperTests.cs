@@ -140,6 +140,45 @@ public partial class RefWrapperApiResource : ApiResource
     public List<LegacyShapeContact?> Contacts { get; init; } = [];
 
     public List<LegacyShapeContact> RequiredContacts { get; init; } = [];
+
+    public double?[]? ScoreTrend { get; init; }
+
+    public List<int?> Counts { get; init; } = [];
+
+    public int[] Totals { get; init; } = [];
+
+    public LegacyShapeScores Scores { get; init; } = [];
+
+    public LegacyShapeIntValues<double?> IntValues { get; init; } = [];
+
+    public List<LegacyShapeCoordinate?> Coordinates { get; init; } = [];
+
+    public Dictionary<string, double?[]> ScoresByName { get; init; } = [];
+
+    public Dictionary<string, int[]> TotalsByName { get; init; } = [];
+
+    public Dictionary<string, LegacyShapeCoordinate?[]> CoordinatesByName { get; init; } = [];
+
+    // A serialised field has no PropertyInfo.
+#pragma warning disable SA1401 // The test needs a public field.
+    [System.Text.Json.Serialization.JsonInclude]
+    public double?[] ScoreField = [];
+#pragma warning restore SA1401
+}
+
+/// <summary>A non-generic collection that inherits its nullable value type elements.</summary>
+public sealed class LegacyShapeScores : List<double?>;
+
+/// <summary>A generic collection whose own type argument is not its element type, which is always <see cref="int"/>.</summary>
+/// <typeparam name="T">A type argument that is not the element type.</typeparam>
+public sealed class LegacyShapeIntValues<T> : List<int>;
+
+/// <summary>A struct that has a schema component of its own.</summary>
+public readonly struct LegacyShapeCoordinate
+{
+    public double X { get; init; }
+
+    public double Y { get; init; }
 }
 
 /// <summary>Returns the resource.</summary>
@@ -164,6 +203,18 @@ public partial class CreateRefWrapperCommand : ICommand<string>
     public List<LegacyShapeAddress?>? Addresses { get; set; }
 
     public List<LegacyShapeAddress> RequiredAddresses { get; set; } = [];
+
+    public double?[]? ScoreTrend { get; set; }
+
+    public List<int?> Counts { get; set; } = [];
+
+    public int[] Totals { get; set; } = [];
+
+    public LegacyShapeScores Scores { get; set; } = [];
+
+    public LegacyShapeIntValues<double?> IntValues { get; set; } = [];
+
+    public List<LegacyShapeCoordinate?> Coordinates { get; set; } = [];
 
     public static string Handle(CreateRefWrapperCommand command)
     {

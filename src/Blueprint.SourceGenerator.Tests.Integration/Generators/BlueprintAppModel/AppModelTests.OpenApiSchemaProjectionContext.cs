@@ -61,6 +61,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "LegacyShapeBillingAccount",
             "LegacyShapeClosedInfo",
             "LegacyShapeContact",
+            "LegacyShapeCoordinate",
             "LegacyShapeCountryApiResource",
             "LegacyShapeListApiResourceOfLegacyShapeCountry",
             "LegacyShapeRun",

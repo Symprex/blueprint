@@ -33,6 +33,7 @@ public class OpenApiLegacyShapedSampleTests
             "LegacyShapeAddress",
             "LegacyShapeClosedInfo",
             "LegacyShapeContact",
+            "LegacyShapeCoordinate",
             "LegacyShapeStatus",
             "LegacyShapeTier",
             "LegacyShapeListOfLegacyShapeCountry",
