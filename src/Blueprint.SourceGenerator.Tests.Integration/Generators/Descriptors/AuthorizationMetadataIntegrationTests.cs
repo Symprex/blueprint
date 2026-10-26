@@ -94,6 +94,196 @@ public class AuthorizationMetadataIntegrationTests
         hasAuth.Should().BeTrue("[FromResource] operations implicitly require authentication");
         auth!.Requirement.Should().Be(AuthenticationRequirement.Authenticated);
     }
+
+    [Theory]
+    [InlineData(typeof(SingleResourceQuery), OperationAccessMode.Permissioned)]
+    [InlineData(typeof(InheritedResourceQuery), OperationAccessMode.Permissioned)]
+    [InlineData(typeof(NoResourceQuery), OperationAccessMode.Anonymous)]
+    [InlineData(typeof(ExplicitlyAuthenticatedQuery), OperationAccessMode.Authenticated)]
+    [InlineData(typeof(AuthenticatedAndPermissionedQuery), OperationAccessMode.Permissioned)]
+    public void Descriptor_exposes_the_declared_access_mode(Type operationType, OperationAccessMode expected)
+    {
+        var descriptor = new IntegrationTestBlueprintApp().Operations.Single(d => d.OperationType == operationType);
+
+        descriptor.TryGetFeatureData<OperationAccessFeatureData>(out var access).Should().BeTrue();
+        access!.Mode.Should().Be(expected);
+    }
+
+    [Fact]
+    public void Descriptor_with_no_access_declaration_has_no_access_feature_data()
+    {
+        // An undeclared HTTP operation still requires authentication by default, so its authentication feature data
+        // cannot tell it from [MustBeAuthenticated]; the access feature data's absence does.
+        var descriptor = new IntegrationTestBlueprintApp().Operations.Single(static d => d.OperationType == typeof(UndeclaredAccessQuery));
+
+        descriptor.TryGetFeatureData<OperationAccessFeatureData>(out _).Should().BeFalse();
+        descriptor.TryGetFeatureData<OperationAuthenticationFeatureData>(out var auth).Should().BeTrue();
+        auth!.Requirement.Should().Be(AuthenticationRequirement.Authenticated);
+    }
+
+    [Fact]
+    public void Descriptor_records_where_FromResource_inherited_its_scope_pairs_from()
+    {
+        var descriptor = new IntegrationTestBlueprintApp().Operations.Single(static d => d.OperationType == typeof(InheritedResourceQuery));
+
+        descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var meta).Should().BeTrue();
+        meta!.InheritedFrom.Should().Be(typeof(SingleResourceQuery));
+        meta.InheritedTemplateOverride.Should().BeNull();
+    }
+
+    [Fact]
+    public void Descriptor_records_a_FromResource_template_override_and_applies_it_to_every_inherited_pair()
+    {
+        var descriptor = new IntegrationTestBlueprintApp().Operations.Single(static d => d.OperationType == typeof(OverriddenInheritedResourceQuery));
+
+        descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var meta).Should().BeTrue();
+        meta!.InheritedFrom.Should().Be(typeof(MultiResourceCommand));
+        meta.InheritedTemplateOverride.Should().Be("/accounts/{Id}");
+        meta.ScopePairs.Should().BeEquivalentTo(new[]
+        {
+            new ScopePair("account", "write", "/accounts/{Id}"),
+            new ScopePair("tenant", "manage", "/accounts/{Id}"),
+        });
+    }
+
+    [Fact]
+    public void Descriptor_of_a_direct_Resource_records_no_inheritance()
+    {
+        var descriptor = new IntegrationTestBlueprintApp().Operations.Single(static d => d.OperationType == typeof(MultiResourceCommand));
+
+        descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var meta).Should().BeTrue();
+        meta!.InheritedFrom.Should().BeNull();
+        meta.InheritedTemplateOverride.Should().BeNull();
+    }
+
+    [Fact]
+    public void Generated_authorization_metadata_matches_reflection_over_the_attributes_for_every_operation()
+    {
+        // The proof that an app can read the generated data instead of reflecting over the attributes itself
+        // (Symprex/blueprint#83): for every operation in the app, the two agree.
+        var operations = new IntegrationTestBlueprintApp().Operations;
+
+        operations.Should().NotBeEmpty();
+
+        foreach (var descriptor in operations)
+        {
+            var type = descriptor.OperationType;
+            var because = $"{type.Name}'s generated metadata should match its attributes";
+
+            var expectedMode = ExpectedAccessMode(type);
+            var hasAccess = descriptor.TryGetFeatureData<OperationAccessFeatureData>(out var access);
+            hasAccess.Should().Be(expectedMode is not null, because);
+            access?.Mode.Should().Be(expectedMode, because);
+
+            var fromResource = type.GetCustomAttributes(typeof(FromResourceAttribute), false).OfType<FromResourceAttribute>().SingleOrDefault();
+            var direct = type.GetCustomAttributes(typeof(ResourceAttribute), false).OfType<ResourceAttribute>().ToArray();
+            var hasMeta = descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var meta);
+
+            if (fromResource is null && direct.Length == 0)
+            {
+                hasMeta.Should().BeFalse(because);
+                continue;
+            }
+
+            hasMeta.Should().BeTrue(because);
+
+            var expectedPairs = fromResource is null
+                ? direct.Select(static a => new ScopePair(a.Noun, a.Verb, a.ResourceKeyTemplate))
+                : fromResource.SourceOperation.GetCustomAttributes(typeof(ResourceAttribute), false).OfType<ResourceAttribute>()
+                    .Select(a => new ScopePair(a.Noun, a.Verb, fromResource.ResourceKeyTemplate ?? a.ResourceKeyTemplate));
+
+            meta!.ScopePairs.Should().BeEquivalentTo(expectedPairs, because);
+            meta.InheritedFrom.Should().Be(fromResource?.SourceOperation, because);
+            meta.InheritedTemplateOverride.Should().Be(fromResource?.ResourceKeyTemplate, because);
+        }
+    }
+
+    private static OperationAccessMode? ExpectedAccessMode(Type type)
+    {
+        if (type.IsDefined(typeof(ResourceAttribute), false) || type.IsDefined(typeof(FromResourceAttribute), false))
+        {
+            return OperationAccessMode.Permissioned;
+        }
+
+        if (type.IsDefined(typeof(AllowAnonymousAttribute), false))
+        {
+            return OperationAccessMode.Anonymous;
+        }
+
+        if (type.IsDefined(typeof(MustBeAuthenticatedAttribute), false))
+        {
+            return OperationAccessMode.Authenticated;
+        }
+
+        return null;
+    }
+}
+
+/// <summary>
+/// Operation that inherits <see cref="MultiResourceCommand"/>'s two scope pairs with a template of its own.
+/// </summary>
+[RootLink("/authz-test/accounts/{Id}/overridden")]
+[FromResource(typeof(MultiResourceCommand), "/accounts/{Id}")]
+public partial class OverriddenInheritedResourceQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the account ID.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Handles the query.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A test result.</returns>
+    public static Task<string> HandleAsync(OverriddenInheritedResourceQuery query)
+    {
+        return Task.FromResult("overridden-inherited-resource");
+    }
+}
+
+/// <summary>
+/// Operation that declares <c>[MustBeAuthenticated]</c> and no scope pairs.
+/// </summary>
+[MustBeAuthenticated]
+[RootLink("/authz-test/explicitly-authenticated")]
+public partial class ExplicitlyAuthenticatedQuery : IQuery<string>
+{
+    /// <summary>Handles the query.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A test result.</returns>
+    public static Task<string> HandleAsync(ExplicitlyAuthenticatedQuery query)
+    {
+        return Task.FromResult("explicitly-authenticated");
+    }
+}
+
+/// <summary>
+/// Operation that declares <c>[MustBeAuthenticated]</c> beside a scope pair, which makes it permissioned.
+/// </summary>
+[MustBeAuthenticated]
+[Resource("account", "read")]
+[RootLink("/authz-test/authenticated-and-permissioned")]
+public partial class AuthenticatedAndPermissionedQuery : IQuery<string>
+{
+    /// <summary>Handles the query.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A test result.</returns>
+    public static Task<string> HandleAsync(AuthenticatedAndPermissionedQuery query)
+    {
+        return Task.FromResult("authenticated-and-permissioned");
+    }
+}
+
+/// <summary>
+/// Operation that declares no access attribute at all.
+/// </summary>
+[RootLink("/authz-test/undeclared")]
+public partial class UndeclaredAccessQuery : IQuery<string>
+{
+    /// <summary>Handles the query.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A test result.</returns>
+    public static Task<string> HandleAsync(UndeclaredAccessQuery query)
+    {
+        return Task.FromResult("undeclared");
+    }
 }
 
 /// <summary>

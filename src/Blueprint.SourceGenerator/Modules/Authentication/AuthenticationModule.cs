@@ -14,6 +14,8 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
 {
     private const string MustBeAuthenticatedAttributeName = "MustBeAuthenticatedAttribute";
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
+    private const string ResourceAttributeName = "ResourceAttribute";
+    private const string FromResourceAttributeName = "FromResourceAttribute";
 
     /// <inheritdoc />
     public string ModuleId => nameof(AuthenticationModule);
@@ -62,6 +64,7 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
         {
             context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: false));
             context.AddRenderStep(RenderAnonymousFeatureData);
+            context.AddRenderStep(static writer => RenderDeclaredAccess(writer, "AnonymousAccess"));
             return;
         }
 
@@ -91,6 +94,16 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
         {
             context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: true));
             context.AddRenderStep(RenderAuthenticatedFeatureData);
+
+            // An operation with scope pairs is permissioned, which AuthorizationModule records; [MustBeAuthenticated]
+            // beside them adds nothing. Deciding it here, not by which module's render step runs last, keeps the
+            // declared access mode independent of module order.
+            if (hasMustBeAuthenticated
+                && !HasAttribute(operationType, ResourceAttributeName)
+                && !HasAttribute(operationType, FromResourceAttributeName))
+            {
+                context.AddRenderStep(static writer => RenderDeclaredAccess(writer, "AuthenticatedAccess"));
+            }
         }
         else if (hasMustBeAuthenticated)
         {
@@ -146,6 +159,14 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
         writer.AppendLine(
             "this.SetFeatureData(new global::Blueprint.Model.OperationAuthenticationFeatureData(global::Blueprint.Model.AuthenticationRequirement.Anonymous));");
         writer.AppendLine("this.AnonymousAccessAllowed = true;");
+    }
+
+    /// <summary>
+    /// Records the access attribute the operation declares, from one of the shared <c>WellKnownFeatureData</c> instances.
+    /// </summary>
+    private static void RenderDeclaredAccess(CodeWriter.ICodeWriter writer, string wellKnownAccess)
+    {
+        writer.AppendLine($"this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.{wellKnownAccess});");
     }
 
     private static void RenderAuthenticatedFeatureData(CodeWriter.ICodeWriter writer)

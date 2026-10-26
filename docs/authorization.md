@@ -62,6 +62,26 @@ Inherits scope pairs from another operation. Useful when a mutation's scope requ
 - Cannot combine with `[Resource]` on the same operation (compile-time error BPAU005).
 - When `resourceKeyTemplate` is provided, it overrides all inherited templates.
 
+### Reading the declarations at runtime
+
+The generator records what these attributes declare on each operation's descriptor, so an app that needs it, to map roles to operations or list an operation's permissions, reads it there instead of reflecting over the attributes:
+
+| Feature data | Present when | Carries |
+|---|---|---|
+| `OperationAccessFeatureData` | An access attribute is declared | `Mode`: `Anonymous` (`[AllowAnonymous]`), `Authenticated` (`[MustBeAuthenticated]` with no scope pairs) or `Permissioned` (`[Resource]`/`[FromResource]`, which wins over `[MustBeAuthenticated]`) |
+| `OperationAuthorizationFeatureData` | The operation is permissioned | `ScopePairs`, each with its effective template; `InheritedFrom`, the `[FromResource]` source operation; `InheritedTemplateOverride`, the template `[FromResource]` gave |
+| `OperationAuthenticationFeatureData` | The pipeline checks identity | `Requirement`: what is enforced, which for an HTTP operation that declares nothing is `Authenticated` by default |
+
+```csharp
+if (descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var authorization))
+{
+    var pairs = authorization.ScopePairs;          // any-of
+    var source = authorization.InheritedFrom;       // null for a direct [Resource]
+}
+```
+
+`OperationAccessFeatureData` is absent for an operation that declares no access attribute; use it, not `OperationAuthenticationFeatureData`, to tell `[MustBeAuthenticated]` from no declaration.
+
 ---
 
 ## Resource Key Templates

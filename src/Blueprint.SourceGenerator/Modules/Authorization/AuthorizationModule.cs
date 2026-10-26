@@ -199,6 +199,14 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 ? $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\")"
                 : $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
 
+        // A [FromResource] operation records where its pairs came from, and any template it overrode them with, so an
+        // app can read what the attributes declared without reflecting over them.
+        var inheritanceInitializer = fromResourceResult is { } inherited
+            ? inherited.TemplateOverride is { } overriddenTemplate
+                ? $" {{ InheritedFrom = typeof({inherited.Target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), InheritedTemplateOverride = \"{overriddenTemplate}\" }}"
+                : $" {{ InheritedFrom = typeof({inherited.Target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}) }}"
+            : string.Empty;
+
         context.AddRenderStep(writer =>
         {
             if (!alreadyHasAuthRegistration)
@@ -208,7 +216,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             }
 
             writer.AppendLine(
-                $"this.SetFeatureData(new global::Blueprint.Model.OperationAuthorizationFeatureData(global::System.Collections.Immutable.ImmutableArray.Create<global::Blueprint.Model.ScopePair>([{scopePairEntries}])));");
+                $"this.SetFeatureData(new global::Blueprint.Model.OperationAuthorizationFeatureData(global::System.Collections.Immutable.ImmutableArray.Create<global::Blueprint.Model.ScopePair>([{scopePairEntries}])){inheritanceInitializer});");
+            writer.AppendLine("this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.PermissionedAccess);");
         });
     }
 
