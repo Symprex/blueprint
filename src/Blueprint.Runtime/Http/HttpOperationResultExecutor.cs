@@ -122,7 +122,7 @@ public class HttpOperationResultExecutor
             case ForbiddenResult { Failure: { } authorisationFailure }:
                 return WriteDenialAndReturnTrue(httpContext, operationContext, httpOptions, StatusCodes.Status403Forbidden, AuthorisationFailureProblemType, authorisationFailure.Message, preserialized: null);
 
-            // A denial with no authoriser's detail, a resource authorization provider's, which legacy did not have.
+            // A denial with no detail: the backstop for scope pairs with no resource authorization provider to judge them.
             case ForbiddenResult:
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
                 httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
