@@ -1032,7 +1032,7 @@ public static class PipelineHelpers
     /// logged it: the only place the denial's reason goes.
     /// </summary>
     /// <param name="context">The operation's context.</param>
-    /// <param name="authoriser">The authoriser that denied it.</param>
+    /// <param name="authoriser">The authoriser, or resource authorization provider, that denied it.</param>
     /// <param name="result">The authoriser's denial.</param>
     /// <returns>The denial's result.</returns>
     private static OperationResult CreateAuthoriserDenial(ApiOperationContext context, object authoriser, Authorization.ExecutionAllowed result)
@@ -1242,52 +1242,97 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Checks resource authorization using the <see cref="Authorization.IResourceAuthorizationProvider"/>.
-    /// Returns <c>null</c> when the provider authorises the caller, and <see cref="ForbiddenResult.Instance"/> when it
-    /// denies access or when no provider is registered.
+    /// Asks every registered <see cref="Authorization.IResourceAuthorizationProvider"/> to authorise the operation's
+    /// execution. Returns <c>null</c> when all of them allow; otherwise the first denial's result, made exactly as an
+    /// authoriser's denial is made (see <see cref="CreateAuthoriserDenial"/>), or <see cref="ForbiddenResult.Instance"/>
+    /// when no provider is registered.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Providers compose all-of, as authorisers do: they are asked in registration order, and the first denial is the
+    /// answer, so the rest are not asked. Like <see cref="RunPreFilteredAuthorisersAsync"/>, the loop allocates no state
+    /// machine while every provider completes synchronously.
+    /// </para>
+    /// <para>
     /// With no provider there is nothing to judge the operation's scope pairs, so the operation is refused rather than
     /// let through: this used to return <c>null</c>, passing every authenticated caller (Symprex/blueprint#41).
     /// <c>MapBlueprintApi</c> stops an HTTP app with scope-pair operations from starting without a provider, so this
     /// denial is the backstop, logged at Error for whoever runs the app. The response is the plain 403, which says
     /// nothing of the misconfiguration to the caller.
+    /// </para>
     /// </remarks>
     /// <param name="context">The current operation execution context.</param>
     /// <param name="principal">The authenticated caller's claims principal.</param>
-    /// <param name="provider">The resource authorization provider, or <c>null</c> if none is registered.</param>
+    /// <param name="providers">The registered resource authorization providers, in registration order; empty if none.</param>
     /// <param name="resolvedScopes">The compile-time expanded scope pairs for this operation.</param>
     /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
-    /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
+    /// <returns><c>null</c> when authorized; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ValueTask<OperationResult?> CheckResourceAuthorizationAsync(
         ApiOperationContext context,
         ClaimsPrincipal principal,
-        Authorization.IResourceAuthorizationProvider? provider,
+        Authorization.IResourceAuthorizationProvider[] providers,
         IReadOnlyList<ResolvedScopePair> resolvedScopes,
         CancellationToken cancellationToken)
     {
-        if (provider == null)
+        if (providers.Length == 0)
         {
             return DenyWithoutResourceAuthorizationProvider(context);
         }
 
-        var task = provider.IsAuthorizedAsync(context, principal, resolvedScopes, cancellationToken);
+        var request = Authorization.ResourceAuthorizationRequest.Execute(resolvedScopes);
 
-        if (task.IsCompletedSuccessfully)
+        for (var i = 0; i < providers.Length; i++)
         {
-            return new ValueTask<OperationResult?>(task.GetAwaiter().GetResult() ? null : ForbiddenResult.Instance);
+            var pending = providers[i].AuthorizeAsync(context, principal, request, cancellationToken);
+
+            if (!pending.IsCompletedSuccessfully)
+            {
+                return new ValueTask<OperationResult?>(
+                    CheckResourceAuthorizationSlowAsync(context, principal, providers, request, pending, i, cancellationToken));
+            }
+
+            var result = pending.Result;
+
+            if (!result.IsAllowed)
+            {
+                return new ValueTask<OperationResult?>(CreateAuthoriserDenial(context, providers[i], result));
+            }
         }
 
-        return new ValueTask<OperationResult?>(CheckResourceAuthorizationCoreAsync(task));
+        return default;
     }
 
-    private static async Task<OperationResult?> CheckResourceAuthorizationCoreAsync(
-        Task<bool> pendingTask)
+    /// <summary>
+    /// Async fallback when a provider did not complete synchronously. Continues from the provider that suspended.
+    /// </summary>
+    private static async Task<OperationResult?> CheckResourceAuthorizationSlowAsync(
+        ApiOperationContext context,
+        ClaimsPrincipal principal,
+        Authorization.IResourceAuthorizationProvider[] providers,
+        Authorization.ResourceAuthorizationRequest request,
+        ValueTask<Authorization.ExecutionAllowed> pending,
+        int pendingIndex,
+        CancellationToken cancellationToken)
     {
-        var isAuthorized = await pendingTask.ConfigureAwait(false);
+        var pendingResult = await pending.ConfigureAwait(false);
 
-        return isAuthorized ? null : ForbiddenResult.Instance;
+        if (!pendingResult.IsAllowed)
+        {
+            return CreateAuthoriserDenial(context, providers[pendingIndex], pendingResult);
+        }
+
+        for (var i = pendingIndex + 1; i < providers.Length; i++)
+        {
+            var result = await providers[i].AuthorizeAsync(context, principal, request, cancellationToken).ConfigureAwait(false);
+
+            if (!result.IsAllowed)
+            {
+                return CreateAuthoriserDenial(context, providers[i], result);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1310,38 +1355,25 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Single-element overload for <see cref="CheckResourceAuthorizationAsync(ApiOperationContext, ClaimsPrincipal, Authorization.IResourceAuthorizationProvider, IReadOnlyList{ResolvedScopePair}, CancellationToken)"/>.
+    /// Single-element overload for <see cref="CheckResourceAuthorizationAsync(ApiOperationContext, ClaimsPrincipal, Authorization.IResourceAuthorizationProvider[], IReadOnlyList{ResolvedScopePair}, CancellationToken)"/>.
     /// Avoids per-request array allocation for the common case of operations with exactly one
-    /// <c>[Resource]</c> attribute. The scope pair is passed by value and wrapped in a stack-allocated
+    /// <c>[Resource]</c> attribute. The scope pair is passed by value and wrapped in a
     /// <see cref="SingleItemList{T}"/> that implements <see cref="IReadOnlyList{T}"/>.
     /// </summary>
     /// <param name="context">The current operation execution context.</param>
     /// <param name="principal">The authenticated caller's claims principal.</param>
-    /// <param name="provider">The resource authorization provider, or <c>null</c> if none is registered.</param>
+    /// <param name="providers">The registered resource authorization providers, in registration order; empty if none.</param>
     /// <param name="singleScope">The single compile-time expanded scope pair for this operation.</param>
     /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
-    /// <returns><c>null</c> when authorized; <see cref="ForbiddenResult.Instance"/> when denied.</returns>
+    /// <returns><c>null</c> when authorized; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
     public static ValueTask<OperationResult?> CheckResourceAuthorizationAsync(
         ApiOperationContext context,
         ClaimsPrincipal principal,
-        Authorization.IResourceAuthorizationProvider? provider,
+        Authorization.IResourceAuthorizationProvider[] providers,
         ResolvedScopePair singleScope,
         CancellationToken cancellationToken)
     {
-        if (provider == null)
-        {
-            return DenyWithoutResourceAuthorizationProvider(context);
-        }
-
-        var scopeList = new SingleItemList<ResolvedScopePair>(singleScope);
-        var task = provider.IsAuthorizedAsync(context, principal, scopeList, cancellationToken);
-
-        if (task.IsCompletedSuccessfully)
-        {
-            return new ValueTask<OperationResult?>(task.GetAwaiter().GetResult() ? null : ForbiddenResult.Instance);
-        }
-
-        return new ValueTask<OperationResult?>(CheckResourceAuthorizationCoreAsync(task));
+        return CheckResourceAuthorizationAsync(context, principal, providers, new SingleItemList<ResolvedScopePair>(singleScope), cancellationToken);
     }
 
     /// <summary>

@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using Blueprint.Authorization;
-using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
 namespace Blueprint.Testing.Tests;
@@ -13,12 +12,12 @@ namespace Blueprint.Testing.Tests;
 internal sealed class PermitAllResourceAuthorizationProvider : IResourceAuthorizationProvider
 {
     /// <inheritdoc />
-    public Task<bool> IsAuthorizedAsync(
+    public ValueTask<ExecutionAllowed> AuthorizeAsync(
         ApiOperationContext operationContext,
         ClaimsPrincipal principal,
-        IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
+        ResourceAuthorizationRequest request,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(true);
+        return new ValueTask<ExecutionAllowed>(ExecutionAllowed.Yes);
     }
 }

@@ -176,18 +176,25 @@ public class ResolvedResourceAuthorizationIntegrationTests
 
     // ─── Test doubles ─────────────────────────────────────────────────
 
+    private static ExecutionAllowed Decide(bool authorized)
+    {
+        return authorized
+            ? ExecutionAllowed.Yes
+            : ExecutionAllowed.No("denied by test provider", "denied", ExecutionAllowedFailureType.Authorisation);
+    }
+
     private sealed class CapturingResolvedProvider(bool authorized) : IResourceAuthorizationProvider
     {
         public IReadOnlyList<Blueprint.Model.ResolvedScopePair>? CapturedScopePairs { get; private set; }
 
-        public Task<bool> IsAuthorizedAsync(
+        public ValueTask<ExecutionAllowed> AuthorizeAsync(
             ApiOperationContext operationContext,
             System.Security.Claims.ClaimsPrincipal principal,
-            IReadOnlyList<Blueprint.Model.ResolvedScopePair> resolvedScopePairs,
+            ResourceAuthorizationRequest request,
             CancellationToken cancellationToken)
         {
-            this.CapturedScopePairs = resolvedScopePairs;
-            return Task.FromResult(authorized);
+            this.CapturedScopePairs = request.ScopePairs;
+            return new ValueTask<ExecutionAllowed>(Decide(authorized));
         }
     }
 
@@ -195,14 +202,14 @@ public class ResolvedResourceAuthorizationIntegrationTests
     {
         public IReadOnlyList<Blueprint.Model.ResolvedScopePair>? CapturedScopePairs { get; private set; }
 
-        public Task<bool> IsAuthorizedAsync(
+        public ValueTask<ExecutionAllowed> AuthorizeAsync(
             ApiOperationContext operationContext,
             System.Security.Claims.ClaimsPrincipal principal,
-            IReadOnlyList<Blueprint.Model.ResolvedScopePair> scopePairs,
+            ResourceAuthorizationRequest request,
             CancellationToken cancellationToken)
         {
-            this.CapturedScopePairs = scopePairs;
-            return Task.FromResult(authorized);
+            this.CapturedScopePairs = request.ScopePairs;
+            return new ValueTask<ExecutionAllowed>(Decide(authorized));
         }
     }
 }

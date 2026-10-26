@@ -92,7 +92,7 @@ namespace Blueprint.Generated
                 await LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);
             }
 
-            var authorizationDenial = await CheckResourceAuthorizationAsync(context, httpContext.User, this.ResourceAuthorizationProvider, new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth.AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}"), httpContext.RequestAborted).ConfigureAwait(false);
+            var authorizationDenial = await CheckResourceAuthorizationAsync(context, httpContext.User, this.ResourceAuthorizationProviders, new Blueprint.Model.ResolvedScopePair("account", "read", "/tenants/{Auth.AccountId}/accounts/{Id}", $"/tenants/{context.UserAuthorisationContext?.AccountId ?? httpContext.User.FindFirst("AccountId")?.Value ?? ""}/accounts/{operation.Id?.ToString() ?? ""}"), httpContext.RequestAborted).ConfigureAwait(false);
             if (authorizationDenial != null)
             {
                 return authorizationDenial;

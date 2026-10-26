@@ -87,33 +87,33 @@ public class AuthorizationBenchmarks
     /// <summary>
     /// Exact scope match — the fastest happy-path: user holds exactly the required scope.
     /// </summary>
-    /// <returns>The authorization result (always true for this scenario).</returns>
+    /// <returns>The authorization result (always allowed for this scenario).</returns>
     [Benchmark(Baseline = true)]
-    public Task<bool> ExactMatch_SingleScope()
+    public ValueTask<ExecutionAllowed> ExactMatch_SingleScope()
     {
-        return _provider.IsAuthorizedAsync(_dummyContext, _exactMatch, _singleRequired, default);
+        return _provider.AuthorizeAsync(_dummyContext, _exactMatch, ResourceAuthorizationRequest.Execute(_singleRequired), default);
     }
 
     /// <summary>
     /// Hierarchy match — user holds Manage, operation requires Read.
     /// Exercises the verb expansion path.
     /// </summary>
-    /// <returns>The authorization result (true via hierarchy match).</returns>
+    /// <returns>The authorization result (allowed via hierarchy match).</returns>
     [Benchmark]
-    public Task<bool> HierarchyMatch_ManageIncludesRead()
+    public ValueTask<ExecutionAllowed> HierarchyMatch_ManageIncludesRead()
     {
-        return _provider.IsAuthorizedAsync(_dummyContext, _hierarchyMatch, _singleRequired, default);
+        return _provider.AuthorizeAsync(_dummyContext, _hierarchyMatch, ResourceAuthorizationRequest.Execute(_singleRequired), default);
     }
 
     /// <summary>
     /// No restrictive scopes — triggers the allowWhenNoScopeClaims fast-path.
     /// This is the most common S365 path (internal users with broad access).
     /// </summary>
-    /// <returns>The authorization result (true via no-scopes fast-path).</returns>
+    /// <returns>The authorization result (allowed via no-scopes fast-path).</returns>
     [Benchmark]
-    public Task<bool> NoScopes_AllowFullAccess()
+    public ValueTask<ExecutionAllowed> NoScopes_AllowFullAccess()
     {
-        return _provider.IsAuthorizedAsync(_dummyContext, _noScopes, _singleRequired, default);
+        return _provider.AuthorizeAsync(_dummyContext, _noScopes, ResourceAuthorizationRequest.Execute(_singleRequired), default);
     }
 
     /// <summary>
@@ -122,9 +122,9 @@ public class AuthorizationBenchmarks
     /// </summary>
     /// <returns>The authorization result after scanning all user scopes.</returns>
     [Benchmark]
-    public Task<bool> ManyScopes_ExactMatch()
+    public ValueTask<ExecutionAllowed> ManyScopes_ExactMatch()
     {
-        return _provider.IsAuthorizedAsync(_dummyContext, _manyScopes, _singleRequired, default);
+        return _provider.AuthorizeAsync(_dummyContext, _manyScopes, ResourceAuthorizationRequest.Execute(_singleRequired), default);
     }
 
     /// <summary>
@@ -133,20 +133,20 @@ public class AuthorizationBenchmarks
     /// </summary>
     /// <returns>The authorization result after cross-checking user and required scopes.</returns>
     [Benchmark]
-    public Task<bool> ManyScopes_MultiRequired()
+    public ValueTask<ExecutionAllowed> ManyScopes_MultiRequired()
     {
-        return _provider.IsAuthorizedAsync(_dummyContext, _manyScopes, _multiRequired, default);
+        return _provider.AuthorizeAsync(_dummyContext, _manyScopes, ResourceAuthorizationRequest.Execute(_multiRequired), default);
     }
 
     /// <summary>
     /// Authorization failure — no matching scopes. Measures worst-case scan cost
     /// when all scope pairs are checked and none match.
     /// </summary>
-    /// <returns>The authorization result (always false for this scenario).</returns>
+    /// <returns>The authorization result (always denied for this scenario).</returns>
     [Benchmark]
-    public Task<bool> AuthorizationFailure()
+    public ValueTask<ExecutionAllowed> AuthorizationFailure()
     {
-        return _provider.IsAuthorizedAsync(_dummyContext, _noMatch, _singleRequired, default);
+        return _provider.AuthorizeAsync(_dummyContext, _noMatch, ResourceAuthorizationRequest.Execute(_singleRequired), default);
     }
 
     private static ClaimsPrincipal BuildPrincipal(params string[] scopes)

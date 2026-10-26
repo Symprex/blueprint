@@ -52,8 +52,22 @@ public delegate string[]? LegacyScopeMapperFunc(string scopeClaimValue);
 /// <inheritdoc cref="ScopePairClaimAuthorizationProvider"/>
 public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvider
 {
-    private static readonly Task<bool> _trueResult = Task.FromResult(true);
-    private static readonly Task<bool> _falseResult = Task.FromResult(false);
+    /// <summary>
+    /// The message a denial carries, which titles the 403 the caller sees. The reason, which names the scopes, is logged only.
+    /// </summary>
+    public const string DeniedMessage = "You do not have enough permissions to perform this operation";
+
+    private static readonly ValueTask<ExecutionAllowed> _allowed = new(ExecutionAllowed.Yes);
+
+    private static readonly ValueTask<ExecutionAllowed> _unauthenticated = new(ExecutionAllowed.No(
+        "The caller is not authenticated, so it holds no scope claims",
+        DeniedMessage,
+        ExecutionAllowedFailureType.Authorisation));
+
+    private static readonly ValueTask<ExecutionAllowed> _noScopeClaims = new(ExecutionAllowed.No(
+        "The caller holds no API scope claims",
+        DeniedMessage,
+        ExecutionAllowedFailureType.Authorisation));
 
     private readonly string _scopeClaimType;
     private readonly string _separator;
@@ -198,22 +212,28 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     }
 
     /// <inheritdoc />
-    public Task<bool> IsAuthorizedAsync(
+    /// <remarks>
+    /// Every denial is an <see cref="ExecutionAllowedFailureType.Authorisation"/> failure (a 403) carrying
+    /// <see cref="DeniedMessage"/>; its reason names the scope pairs required and the scope claims held, for the log.
+    /// </remarks>
+    public ValueTask<ExecutionAllowed> AuthorizeAsync(
         ApiOperationContext operationContext,
         ClaimsPrincipal principal,
-        IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
+        ResourceAuthorizationRequest request,
         CancellationToken cancellationToken)
     {
+        var resolvedScopePairs = request.ScopePairs;
+
         if (resolvedScopePairs.Count == 0)
         {
-            return _trueResult;
+            return _allowed;
         }
 
         var identity = principal.Identity as ClaimsIdentity;
 
         if (identity is not { IsAuthenticated: true })
         {
-            return _falseResult;
+            return _unauthenticated;
         }
 
         var hasAnyScopeClaims = false;
@@ -234,7 +254,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
             if (this.MatchesAnyScopePair(claim.Value, resolvedScopePairs))
             {
-                return _trueResult;
+                return _allowed;
             }
 
             // Legacy scope remapping: if the claim didn't directly match, try mapped values
@@ -248,7 +268,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
                     {
                         if (this.MatchesAnyScopePair(mapped, resolvedScopePairs))
                         {
-                            return _trueResult;
+                            return _allowed;
                         }
                     }
                 }
@@ -257,10 +277,40 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
         if (!hasAnyScopeClaims)
         {
-            return this.AllowWhenNoScopeClaims(operationContext, principal) ? _trueResult : _falseResult;
+            return this.AllowWhenNoScopeClaims(operationContext, principal) ? _allowed : _noScopeClaims;
         }
 
-        return _falseResult;
+        return new ValueTask<ExecutionAllowed>(ExecutionAllowed.No(
+            this.CreateMissingScopeReason(identity, resolvedScopePairs),
+            DeniedMessage,
+            ExecutionAllowedFailureType.Authorisation));
+    }
+
+    /// <summary>
+    /// Names the scope pairs any one of which would have satisfied the request, and the API scope claims the caller
+    /// held. Built only on denial, so the allowed path never allocates it.
+    /// </summary>
+    private string CreateMissingScopeReason(ClaimsIdentity identity, IReadOnlyList<ResolvedScopePair> scopePairs)
+    {
+        var required = new List<string>(scopePairs.Count);
+
+        foreach (var pair in scopePairs)
+        {
+            required.Add(pair.Noun + this._separator + pair.Verb);
+        }
+
+        var held = new List<string>();
+
+        foreach (var claim in identity.Claims)
+        {
+            if (string.Equals(claim.Type, this._scopeClaimType, StringComparison.OrdinalIgnoreCase)
+                && !this._ignoredScopes.Contains(claim.Value))
+            {
+                held.Add(claim.Value);
+            }
+        }
+
+        return $"The caller holds none of the required scopes: {string.Join(", ", required)}. Held: {string.Join(", ", held)}";
     }
 
     /// <summary>
