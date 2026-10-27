@@ -208,6 +208,38 @@ public partial class GetLinkAuthUserQuery : IQuery<LinkAuthUserApiResource>
     }
 }
 
+/// <summary>An account, with a value-type property for a key segment.</summary>
+public partial class LinkAuthAccountApiResource : ApiResource
+{
+    public string Id { get; init; } = null!;
+
+    public string TenantId { get; init; } = null!;
+
+    public int Sequence { get; init; }
+}
+
+/// <summary>
+/// Renames an account. Its key takes the caller's account from the user's context, a claim, a claim falling back to the
+/// resource's <c>TenantId</c>, and a value-type property.
+/// </summary>
+[Resource("linkAuthAccount", "rename", "/LinkAuth/Accounts/{Auth.AccountId}/Departments/{Auth.department}/Regions/{Auth.region:TenantId}/Seq/{Sequence}")]
+[Link(typeof(LinkAuthAccountApiResource), "/link-auth/accounts/{Id}/rename", "rename")]
+[HttpPost]
+[Blueprint.Auditing.DoNotAudit]
+public partial class RenameLinkAuthAccountCommand : ICommand<string>
+{
+    public string Id { get; set; } = null!;
+
+    public string TenantId { get; set; } = null!;
+
+    public int Sequence { get; set; }
+
+    public static string Handle(RenameLinkAuthAccountCommand command)
+    {
+        return "renamed";
+    }
+}
+
 /// <summary>
 /// Archives a tenant or a user. Its key's primary, <c>UserTenantId</c>, is its own property; the fallback,
 /// <c>TenantId</c>, is not, but a tenant uses it because a tenant lacks the primary, so BPAU010 does not fire.

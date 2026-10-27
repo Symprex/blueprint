@@ -97,11 +97,40 @@ public sealed class ResourceProviderLinkVisibilityTests
         provider.LastPrincipal!.Identity?.IsAuthenticated.Should().NotBe(true);
     }
 
+    [Theory]
+    [InlineData(null, "/LinkAuth/Accounts/acc_ctx/Departments/dept_1/Regions/ten_9/Seq/7")]
+    [InlineData("eu", "/LinkAuth/Accounts/acc_ctx/Departments/dept_1/Regions/eu/Seq/7")]
+    public async Task Caller_tokens_resolve_as_execution_resolves_them_and_value_types_are_written(string? region, string expectedKey)
+    {
+        // AccountId comes from the user's context before the claim of that name; department and region from claims;
+        // region falls back to the resource's TenantId when the caller has none; Sequence is an int.
+        var claims = new List<Claim> { new("AccountId", "acc_claim"), new("department", "dept_1") };
+
+        if (region is not null)
+        {
+            claims.Add(new Claim("region", region));
+        }
+
+        var provider = new KeyProvider(expectedKey);
+        var app = new IntegrationTestBlueprintApp();
+
+        var result = await CanShowAsync(
+            new LinkAuthAccountApiResource { Id = "x", TenantId = "ten_9", Sequence = 7 },
+            [provider],
+            app.FindOperation(typeof(RenameLinkAuthAccountCommand))!,
+            new ClaimsPrincipal(new ClaimsIdentity(claims, "Test")),
+            new FixedUserAuthorisationContext("acc_ctx"));
+
+        provider.LastKey.Should().Be(expectedKey);
+        result.IsAllowed.Should().BeTrue();
+    }
+
     private static async Task<ExecutionAllowed> CanShowAsync(
         object? resource,
         IResourceAuthorizationProvider[] providers,
         ApiOperationDescriptor? descriptor = null,
-        ClaimsPrincipal? principal = null)
+        ClaimsPrincipal? principal = null,
+        IUserAuthorisationContext? user = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -123,9 +152,32 @@ public sealed class ResourceProviderLinkVisibilityTests
         var context = new ApiOperationContext(scope.ServiceProvider, app, app.FindOperation(typeof(ListLinkAuthTenantsQuery))!, CancellationToken.None)
         {
             UserPrincipal = principal,
+            UserAuthorisationContext = user,
         };
 
         return await aggregator.CanShowLinkAsync(context, descriptor, resource);
+    }
+
+    /// <summary>A user's context whose account is fixed, as an app's user context factory gives it.</summary>
+    private sealed class FixedUserAuthorisationContext(string accountId) : IUserAuthorisationContext
+    {
+        public bool IsActive => true;
+
+        public bool IsAnonymous => false;
+
+        public string Id => "user-1";
+
+        public string? IdentityId => null;
+
+        public string AccountId => accountId;
+
+        public string? Email => null;
+
+        public string? Name => null;
+
+        public void PopulateMetadata(Action<string, object> add)
+        {
+        }
     }
 
     /// <summary>Allows a link whose resolved key is one of the given keys.</summary>
@@ -135,6 +187,8 @@ public sealed class ResourceProviderLinkVisibilityTests
 
         public ClaimsPrincipal? LastPrincipal { get; private set; }
 
+        public string? LastKey { get; private set; }
+
         public ValueTask<ExecutionAllowed> AuthorizeAsync(
             ApiOperationContext operationContext,
             ClaimsPrincipal principal,
@@ -143,6 +197,7 @@ public sealed class ResourceProviderLinkVisibilityTests
         {
             this.Calls++;
             this.LastPrincipal = principal;
+            this.LastKey = request.ScopePairs.FirstOrDefault().ExpandedResourceKey;
 
             return new ValueTask<ExecutionAllowed>(
                 request.ScopePairs.Any(p => grantedKeys.Contains(p.ExpandedResourceKey))
