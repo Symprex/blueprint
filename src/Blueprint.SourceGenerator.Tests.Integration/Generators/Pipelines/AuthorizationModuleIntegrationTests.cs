@@ -246,14 +246,16 @@ public class AuthorizationModuleIntegrationTests
 
     private sealed class MatchingClaimResolvedResourceAuthorizationProvider : IResourceAuthorizationProvider
     {
-        public Task<bool> IsAuthorizedAsync(
+        public ValueTask<ExecutionAllowed> AuthorizeAsync(
             ApiOperationContext operationContext,
             System.Security.Claims.ClaimsPrincipal principal,
-            IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
+            ResourceAuthorizationRequest request,
             CancellationToken cancellationToken)
         {
-            var isAuthorized = resolvedScopePairs.Any(scopePair => principal.HasClaim("resource-access", $"{scopePair.Noun}:{scopePair.Verb}:{scopePair.ExpandedResourceKey}"));
-            return Task.FromResult(isAuthorized);
+            var isAuthorized = request.ScopePairs.Any(scopePair => principal.HasClaim("resource-access", $"{scopePair.Noun}:{scopePair.Verb}:{scopePair.ExpandedResourceKey}"));
+            return new ValueTask<ExecutionAllowed>(isAuthorized
+                ? ExecutionAllowed.Yes
+                : ExecutionAllowed.No("no matching resource-access claim", "denied", ExecutionAllowedFailureType.Authorisation));
         }
     }
 

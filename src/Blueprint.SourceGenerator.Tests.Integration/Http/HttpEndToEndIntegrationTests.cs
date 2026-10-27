@@ -212,7 +212,9 @@ public class HttpEndToEndIntegrationTests
 
         response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
         response.ContentType.Should().StartWith("application/problem+json");
-        response.Body.Should().Contain("Forbidden");
+        response.Body.Should().Be(
+            """{"type":"unauthorized","title":"denied","status":403}""",
+            "a provider's denial is written as an authoriser's is, titled with its message (Symprex/blueprint#77)");
     }
 
     [Fact]
@@ -1674,13 +1676,15 @@ public partial class E2EValidatedCommand : ICommand<string>
 /// </summary>
 internal sealed class TestResourceAuthorizationProvider(bool authorized) : Blueprint.Authorization.IResourceAuthorizationProvider
 {
-    public Task<bool> IsAuthorizedAsync(
+    public ValueTask<Blueprint.Authorization.ExecutionAllowed> AuthorizeAsync(
         Blueprint.Runtime.Exec.ApiOperationContext operationContext,
         System.Security.Claims.ClaimsPrincipal principal,
-        IReadOnlyList<Blueprint.Model.ResolvedScopePair> requiredScopePairs,
+        Blueprint.Authorization.ResourceAuthorizationRequest request,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(authorized);
+        return new ValueTask<Blueprint.Authorization.ExecutionAllowed>(authorized
+            ? Blueprint.Authorization.ExecutionAllowed.Yes
+            : OwnershipAwareAuthorizationProvider.Denied);
     }
 }
 
@@ -1692,16 +1696,21 @@ internal sealed class TestResourceAuthorizationProvider(bool authorized) : Bluep
 /// </summary>
 internal sealed class OwnershipAwareAuthorizationProvider : Blueprint.Authorization.IResourceAuthorizationProvider
 {
-    public Task<bool> IsAuthorizedAsync(
+    internal static readonly Blueprint.Authorization.ExecutionAllowed Denied = Blueprint.Authorization.ExecutionAllowed.No(
+        "denied by test provider",
+        "denied",
+        Blueprint.Authorization.ExecutionAllowedFailureType.Authorisation);
+
+    public ValueTask<Blueprint.Authorization.ExecutionAllowed> AuthorizeAsync(
         Blueprint.Runtime.Exec.ApiOperationContext operationContext,
         System.Security.Claims.ClaimsPrincipal principal,
-        IReadOnlyList<Blueprint.Model.ResolvedScopePair> requiredScopePairs,
+        Blueprint.Authorization.ResourceAuthorizationRequest request,
         CancellationToken cancellationToken)
     {
         // Check scope pairs (any-of)
         var hasScopePair = false;
 
-        foreach (var scopePair in requiredScopePairs)
+        foreach (var scopePair in request.ScopePairs)
         {
             if (principal.HasClaim("scope", $"{scopePair.Noun}:{scopePair.Verb}"))
             {
@@ -1712,7 +1721,7 @@ internal sealed class OwnershipAwareAuthorizationProvider : Blueprint.Authorizat
 
         if (!hasScopePair)
         {
-            return Task.FromResult(false);
+            return new ValueTask<Blueprint.Authorization.ExecutionAllowed>(Denied);
         }
 
         // Ownership check: verify caller's tenant_id matches operation's TenantId property
@@ -1726,11 +1735,11 @@ internal sealed class OwnershipAwareAuthorizationProvider : Blueprint.Authorizat
             if (operationTenantId != null && callerTenantId != null &&
                 !string.Equals(operationTenantId, callerTenantId, StringComparison.Ordinal))
             {
-                return Task.FromResult(false);
+                return new ValueTask<Blueprint.Authorization.ExecutionAllowed>(Denied);
             }
         }
 
-        return Task.FromResult(true);
+        return new ValueTask<Blueprint.Authorization.ExecutionAllowed>(Blueprint.Authorization.ExecutionAllowed.Yes);
     }
 }
 

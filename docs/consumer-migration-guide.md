@@ -1858,9 +1858,9 @@ The source generator emits per-operation authorization checks that avoid reflect
 // For [Resource("user", "update", "/Tenants/{Auth:TenantId}/Users/{UserId}")]
 // the generator produces inline property access:
 var expandedKey = $"/Tenants/{principal.FindFirst("TenantId")?.Value}/Users/{operation.UserId}";
-var isAuthorized = await resolvedAuthProvider.IsAuthorizedAsync(
+var decision = await resourceAuthorizationProvider.AuthorizeAsync(
     context, principal,
-    new ResolvedScopePair[] { new("user", "update", template, expandedKey) },
+    ResourceAuthorizationRequest.Execute(new ResolvedScopePair[] { new("user", "update", template, expandedKey) }),
     cancellationToken);
 ```
 

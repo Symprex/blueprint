@@ -448,18 +448,18 @@ public sealed class TenantIdBindingWireTests
     /// <summary>Records every resource key the operation's authorisation expanded, and allows it.</summary>
     private sealed class RecordingResourceAuthorizationProvider(ConcurrentQueue<string> expandedKeys) : IResourceAuthorizationProvider
     {
-        public Task<bool> IsAuthorizedAsync(
+        public ValueTask<ExecutionAllowed> AuthorizeAsync(
             ApiOperationContext operationContext,
             ClaimsPrincipal principal,
-            IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
+            ResourceAuthorizationRequest request,
             CancellationToken cancellationToken)
         {
-            foreach (var pair in resolvedScopePairs)
+            foreach (var pair in request.ScopePairs)
             {
                 expandedKeys.Enqueue(pair.ExpandedResourceKey ?? "(null)");
             }
 
-            return Task.FromResult(true);
+            return new ValueTask<ExecutionAllowed>(ExecutionAllowed.Yes);
         }
     }
 
