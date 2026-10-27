@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.Pipelines;
 using Blueprint.SourceGenerator.Modules;
 using Blueprint.SourceGenerator.Planning;

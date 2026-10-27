@@ -1,4 +1,5 @@
 using Blueprint.SourceGenerator.Artifacts;
+using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
 using Blueprint.SourceGenerator.Planning;
