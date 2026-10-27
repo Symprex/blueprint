@@ -1377,6 +1377,60 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Authorises a permissioned operation executed in process, with no <c>HttpContext</c> (an unlinked operation, a Rebus
+    /// message, a background task or a nested execution), by asking the resource providers as
+    /// <see cref="CheckResourceAuthorizationAsync(ApiOperationContext, ClaimsPrincipal, Authorization.IResourceAuthorizationProvider[], IReadOnlyList{ResolvedScopePair}, CancellationToken)"/>
+    /// does over HTTP. Nothing is asked when the context skips authorisation or the operation's descriptor allows anonymous
+    /// access, exactly as <see cref="RunUnlinkedOperationAuthorisersAsync"/> does not run the authorisers.
+    /// </summary>
+    /// <remarks>
+    /// The caller is <see cref="ApiOperationContext.UserPrincipal"/>. A provider's judgement is of a principal's claims, so
+    /// with no authenticated principal there is nothing to judge: the caller is refused as anonymous with
+    /// <see cref="UnauthenticatedResult.Instance"/> before any provider is asked, which is the refusal
+    /// <see cref="RunUnlinkedOperationAuthorisersAsync"/> gives. A user's context set without a principal does not
+    /// stand in for one, as a provider cannot be asked about it. With scope pairs and no provider registered the operation
+    /// is refused, as it is over HTTP.
+    /// </remarks>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="providers">The registered resource authorization providers, in registration order; empty if none.</param>
+    /// <param name="resolvedScopes">The compile-time expanded scope pairs for this operation.</param>
+    /// <returns><c>null</c> when the operation may execute; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ValueTask<OperationResult?> CheckUnlinkedResourceAuthorizationAsync(
+        ApiOperationContext context,
+        Authorization.IResourceAuthorizationProvider[] providers,
+        IReadOnlyList<ResolvedScopePair> resolvedScopes)
+    {
+        if (context.Descriptor.AnonymousAccessAllowed || context.SkipAuthorisation)
+        {
+            return default;
+        }
+
+        if (context.UserPrincipal is not { Identity.IsAuthenticated: true } principal)
+        {
+            return new ValueTask<OperationResult?>(UnauthenticatedResult.Instance);
+        }
+
+        return CheckResourceAuthorizationAsync(context, principal, providers, resolvedScopes, context.OperationCancelled);
+    }
+
+    /// <summary>
+    /// Single-element overload for <see cref="CheckUnlinkedResourceAuthorizationAsync(ApiOperationContext, Authorization.IResourceAuthorizationProvider[], IReadOnlyList{ResolvedScopePair})"/>,
+    /// which avoids the per-execution array allocation for an operation with exactly one <c>[Resource]</c> attribute.
+    /// </summary>
+    /// <param name="context">The current operation execution context.</param>
+    /// <param name="providers">The registered resource authorization providers, in registration order; empty if none.</param>
+    /// <param name="singleScope">The single compile-time expanded scope pair for this operation.</param>
+    /// <returns><c>null</c> when the operation may execute; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
+    public static ValueTask<OperationResult?> CheckUnlinkedResourceAuthorizationAsync(
+        ApiOperationContext context,
+        Authorization.IResourceAuthorizationProvider[] providers,
+        ResolvedScopePair singleScope)
+    {
+        return CheckUnlinkedResourceAuthorizationAsync(context, providers, new SingleItemList<ResolvedScopePair>(singleScope));
+    }
+
+    /// <summary>
     /// Executes the resource-event audit sink with best-effort semantics when the handler result
     /// is a <see cref="ResourceEventResult"/> or <see cref="KeyOnlyResourceEventResult"/>.
     /// Extracts the event/resource identity from the result, records started/succeeded/failed

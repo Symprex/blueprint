@@ -253,7 +253,7 @@ Current authentication IDs in active use:
 - `BPAU005`: Both `[FromResource]` and `[Resource]` applied to the same operation (error — use one mechanism to declare scope pairs, not both).
 - `BPAU006`: `[FromResource(typeof(X))]` referencing a type that has no `[Resource]` attributes (error — the target must declare at least one scope pair to inherit).
 - `BPAU007`: Resource key template token `{PropertyName}` references a property that does not exist on the operation type AND there is no valid fallback path (error — authorization enforcement is suppressed, which is a security issue).
-- `BPAU008`: `[Resource]` or `[FromResource]` on an operation that is not exposed via an HTTP host (warning — the authorization pipeline check cannot be generated without HTTP context to extract the principal; descriptor metadata is still projected).
+- `BPAU008`: `[Resource]` or `[FromResource]` on a background task that is not exposed via an HTTP host (warning — a background task allows anonymous access, so the in-process provider check is skipped and the declaration is never enforced; any other in-process operation's declaration is enforced, taking its principal from `context.UserPrincipal`).
 - `BPAU009`: Duplicate noun+verb scope pair on the same operation via multiple `[Resource]` attributes (warning — redundant metadata, usually a copy-paste error).
 - `BPAU010`: Fallback property path in `{Primary:Fallback}` syntax does not exist on the operation type, but the primary property does (warning — authorization code is still generated using the primary; the fallback is dead code that should be removed).
 

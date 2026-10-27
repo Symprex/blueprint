@@ -56,7 +56,7 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BPAU005 | Error | Both `[FromResource]` and `[Resource]` applied |
 | BPAU006 | Error | `[FromResource]` target has no `[Resource]` attributes |
 | BPAU007 | Error | Resource key template `{Token}` does not match a property |
-| BPAU008 | Warning | `[Resource]` on non-HTTP operation |
+| BPAU008 | Warning | `[Resource]` on a background task that is not exposed over HTTP (never enforced). Narrowed from "any non-HTTP operation": other in-process operations are now checked by the providers (#78) |
 | BPAU009 | Warning | Duplicate `[Resource]` scope pair |
 
 ## Link generation (BPLG)
