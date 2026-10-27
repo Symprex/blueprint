@@ -11,14 +11,20 @@ namespace Blueprint.Authorization;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The executor resolves this service once from the root <see cref="IServiceProvider"/>, and the generated pipeline
-/// calls it for each operation that carries <c>[Resource("noun", "verb")]</c> or <c>[FromResource(...)]</c> metadata.
-/// It is required once any operation does. Without it, <c>MapBlueprintApi</c> throws at start-up, and the
-/// generated check refuses each such operation with a 403. A missing registration used to skip the check, letting
-/// every authenticated caller through (Symprex/blueprint#41).
+/// The executor resolves every registered provider once from the root <see cref="IServiceProvider"/>, and the generated
+/// pipeline asks them for each operation that carries <c>[Resource("noun", "verb")]</c> or <c>[FromResource(...)]</c>
+/// metadata. At least one is required once any operation does. Without one, <c>MapBlueprintApi</c> throws at start-up,
+/// and the generated check refuses each such operation with a 403. A missing registration used to skip the check,
+/// letting every authenticated caller through (Symprex/blueprint#41).
 /// </para>
 /// <para>
-/// Scope pairs use any-of semantics: the caller is authorized if <em>any</em> of the declared
+/// <b>Every registered provider must allow</b>, as every applicable <see cref="IApiAuthoriser"/> must: they are asked in
+/// registration order and the first denial is the answer, so the rest are not asked. Register one provider per concern,
+/// for example one that checks a token's OAuth scopes and one that checks the caller's grants on the resource, rather than
+/// one that composes both.
+/// </para>
+/// <para>
+/// Within one provider, scope pairs use any-of semantics: the caller is authorized if <em>any</em> of the declared
 /// scope pairs is satisfied. This matches the legacy Blueprint convention where multiple
 /// <c>[Resource]</c> attributes on a single operation represent alternative permission paths.
 /// </para>
@@ -37,8 +43,7 @@ namespace Blueprint.Authorization;
 public interface IResourceAuthorizationProvider
 {
     /// <summary>
-    /// Evaluates whether the <paramref name="principal"/> satisfies at least one of the
-    /// supplied <paramref name="resolvedScopePairs"/> for the current operation.
+    /// Decides whether the <paramref name="principal"/> satisfies at least one of the request's scope pairs.
     /// </summary>
     /// <param name="operationContext">
     /// The current operation execution context, providing access to the operation instance,
@@ -46,19 +51,21 @@ public interface IResourceAuthorizationProvider
     /// properties for ownership-based authorization (e.g. checking that the caller's tenant
     /// claim matches the operation's <c>TenantId</c> property).
     /// </param>
-    /// <param name="principal">The authenticated caller's claims principal.</param>
-    /// <param name="resolvedScopePairs">
-    /// The resource scope pairs declared on the operation, with compile-time–expanded resource
-    /// keys. Any-of semantics: return <see langword="true"/> if at least one pair is satisfied.
+    /// <param name="principal">The caller's claims principal.</param>
+    /// <param name="request">
+    /// The scope pairs declared on the operation, with their resource keys resolved, and why the provider is being asked.
     /// </param>
     /// <param name="cancellationToken">Cancellation token for the authorization evaluation.</param>
     /// <returns>
-    /// <see langword="true"/> if the caller is authorized; <see langword="false"/> if the
-    /// request should be rejected with a 403 Forbidden response.
+    /// <see cref="ExecutionAllowed.Yes"/> to allow, or a denial made with <see cref="ExecutionAllowed.No"/>. A denial's
+    /// <see cref="ExecutionAllowed.FailureType"/> selects the response, exactly as an authoriser's does: a 403 for
+    /// <see cref="ExecutionAllowedFailureType.Authorisation"/> and a 401 otherwise. Its
+    /// <see cref="ExecutionAllowed.Message"/> titles the response, and its <see cref="ExecutionAllowed.Reason"/> is
+    /// logged and never written.
     /// </returns>
-    Task<bool> IsAuthorizedAsync(
+    ValueTask<ExecutionAllowed> AuthorizeAsync(
         ApiOperationContext operationContext,
         ClaimsPrincipal principal,
-        IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
+        ResourceAuthorizationRequest request,
         CancellationToken cancellationToken);
 }

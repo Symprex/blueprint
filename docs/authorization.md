@@ -96,7 +96,7 @@ Generated pipeline code (compile-time):
 var authorizationDenial = await PipelineHelpers.CheckResourceAuthorizationAsync(
     context,
     httpContext.User,
-    this.ResourceAuthorizationProvider,
+    this.ResourceAuthorizationProviders,
     new ResolvedScopePair(
         "Template",
         "Read",
@@ -118,22 +118,33 @@ The single authorization interface. Receives pre-expanded `ResolvedScopePair` va
 ```csharp
 public interface IResourceAuthorizationProvider
 {
-    Task<bool> IsAuthorizedAsync(
+    ValueTask<ExecutionAllowed> AuthorizeAsync(
         ApiOperationContext operationContext,
         ClaimsPrincipal principal,
-        IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
+        ResourceAuthorizationRequest request,
         CancellationToken cancellationToken);
 }
 ```
 
+`ResourceAuthorizationRequest` carries the operation's `ScopePairs` and the `Mode` the provider is asked in. Only `Execute` is asked today; `Link` (with the linked `Resource`) and `Listing` are reserved for link visibility and authorisation manifests (Symprex/blueprint#79, #81).
+
 Each `ResolvedScopePair` carries the raw template (`/Tenants/{Auth:AccountId}/Templates/{Id}`) alongside the expanded resource key (`/Tenants/abc123/Templates/42`), giving providers full context for both pattern-based and instance-level authorization decisions.
+
+**A decision, not a yes or no.** A provider returns `ExecutionAllowed.Yes` or a denial made with `ExecutionAllowed.No(reason, message, failureType)`, and the denial is answered exactly as an `IApiAuthoriser`'s is:
+- `ExecutionAllowedFailureType.Authorisation` is a `403`, any other a `401`;
+- the `message` titles the problem response;
+- the `reason` is logged at Information (`Permission check failed. reason=… authoriser=<provider type>`) and never written, so it may name claims and keys the caller must not see.
+
+**Every registered provider must allow.** Providers compose all-of, like authorisers: they are asked in registration order and the first denial is the answer, so the rest are not asked. Register one provider per concern, for example one for a token's OAuth scopes and one for the caller's grants on the resource, rather than one provider that composes both.
+
+> **Breaking change (Symprex/blueprint#77):** this replaced `Task<bool> IsAuthorizedAsync(…, IReadOnlyList<ResolvedScopePair>, …)`. A provider's `false` was always a plain `403` titled `Forbidden`; a denial is now titled with its message. Registering more than one provider used to keep only the last; now every one is asked.
 
 **A provider is required once any operation declares scope pairs.** Without one, the checks fail closed.
 - `MapBlueprintApi` throws `InvalidOperationException` at start-up, naming the operations.
 - `PipelineHelpers.CheckResourceAuthorizationAsync` refuses each one with a plain `403` and logs at Error (`NoResourceAuthorizationProvider`, event 33). This catches a host that never calls `MapBlueprintApi`, such as an in-memory test host.
 - Before Symprex/blueprint#41 the check passed whenever no provider was registered, letting any authenticated caller through.
 - An app with no `[Resource]`/`[FromResource]` operations needs no provider.
-- To let every caller through deliberately, register a provider that returns `true`.
+- To let every caller through deliberately, register a provider that returns `ExecutionAllowed.Yes`.
 
 ### `ScopePairClaimAuthorizationProvider`
 
@@ -162,6 +173,8 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 ```
 
 **Verb hierarchy**: When `Manage → [Create, Read, Update, Delete]` is configured, a user with scope `"Template.Manage"` automatically satisfies requirements for `"Template.Create"`, `"Template.Read"`, etc.
+
+**Denials**: every denial is a `403` titled `ScopePairClaimAuthorizationProvider.DeniedMessage` ("You do not have enough permissions to perform this operation"). Its logged reason names the scope pairs required and the API scope claims the caller held.
 
 **No-API-scope behavior**: When the user's only scopes are ignored scopes (e.g. `openid`, `Signature365.ReadWrite.All`), the `AllowWhenNoScopeClaims` virtual method is called. Override to `true` for full-access semantics (S365 pattern).
 
@@ -207,7 +220,7 @@ S365ClaimInspector                         →    Generated pipeline code + Scop
 AuthResourceKeyTemplateExpander            →    ResourceKeyTemplateParser (compile-time)
 {Auth:AccountId} expansion                 →    Generated inline string interpolation
 
-IS365ResourceKeyExpander                   →    IResourceAuthorizationProvider.IsAuthorizedAsync
+IS365ResourceKeyExpander                   →    IResourceAuthorizationProvider.AuthorizeAsync
 (hierarchical key expansion)                    (consumer implements hierarchical matching)
 ```
 

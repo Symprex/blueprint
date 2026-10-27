@@ -224,6 +224,7 @@ public sealed class BlueprintServiceBuilder
 
     /// <summary>
     /// Registers a resource authorization provider that evaluates scope-pair permissions at pipeline execution time.
+    /// Each call adds a provider: every registered provider is asked, in registration order, and every one must allow.
     /// </summary>
     /// <typeparam name="T">The <see cref="Blueprint.Authorization.IResourceAuthorizationProvider"/> implementation type.</typeparam>
     /// <returns>This builder for chaining.</returns>

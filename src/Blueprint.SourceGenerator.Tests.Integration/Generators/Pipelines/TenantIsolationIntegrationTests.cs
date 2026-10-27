@@ -288,17 +288,19 @@ public class TenantIsolationIntegrationTests
     /// </summary>
     private sealed class S365StyleResourceAuthorizationProvider : IResourceAuthorizationProvider
     {
-        public Task<bool> IsAuthorizedAsync(
+        public ValueTask<ExecutionAllowed> AuthorizeAsync(
             ApiOperationContext operationContext,
             System.Security.Claims.ClaimsPrincipal principal,
-            IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
+            ResourceAuthorizationRequest request,
             CancellationToken cancellationToken)
         {
-            var isAuthorized = resolvedScopePairs.Any(
+            var isAuthorized = request.ScopePairs.Any(
                 scopePair => principal.HasClaim(
                     "resource-access",
                     $"{scopePair.Noun}:{scopePair.Verb}:{scopePair.ExpandedResourceKey}"));
-            return Task.FromResult(isAuthorized);
+            return new ValueTask<ExecutionAllowed>(isAuthorized
+                ? ExecutionAllowed.Yes
+                : ExecutionAllowed.No("no matching resource-access claim", "denied", ExecutionAllowedFailureType.Authorisation));
         }
     }
 

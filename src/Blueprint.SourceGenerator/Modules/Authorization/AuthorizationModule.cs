@@ -462,7 +462,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         context.DeclareVariable(
             "authorizationDenial",
-            $"await CheckResourceAuthorizationAsync(context, {principalExpr}, this.ResourceAuthorizationProvider, {resolvedScopeArg}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
+            $"await CheckResourceAuthorizationAsync(context, {principalExpr}, this.ResourceAuthorizationProviders, {resolvedScopeArg}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
 
         context.If(
             "authorizationDenial != null",

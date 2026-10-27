@@ -614,4 +614,52 @@ public class ScopePairClaimAuthorizationProviderTests
         result.Should().BeFalse(
             "unauthenticated principal is always denied regardless of allowWhenNoScopeClaims");
     }
+
+    // ─── Decision shape ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task A_denial_is_an_authorisation_failure_whose_reason_names_the_required_and_held_scopes()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy();
+        var principal = CreatePrincipal("openid", "SentEmail::Read", "Outlook::Read");
+
+        var result = await provider.AuthorizeAsync(
+            null!, principal, ResourceAuthorizationRequest.Execute(Resolve(new ScopePair("Template", "Read"), new ScopePair("Template", "Update"))), CancellationToken.None);
+
+        result.IsAllowed.Should().BeFalse();
+        result.FailureType.Should().Be(ExecutionAllowedFailureType.Authorisation);
+        result.Message.Should().Be(ScopePairClaimAuthorizationProvider.DeniedMessage);
+        result.Reason.Should().Be("The caller holds none of the required scopes: Template::Read, Template::Update. Held: SentEmail::Read, Outlook::Read");
+    }
+
+    [Fact]
+    public async Task An_unauthenticated_caller_is_refused_with_a_403_as_before()
+    {
+        var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy();
+
+        var result = await provider.AuthorizeAsync(
+            null!, new ClaimsPrincipal(new ClaimsIdentity()), ResourceAuthorizationRequest.Execute(Resolve(new ScopePair("Template", "Read"))), CancellationToken.None);
+
+        result.IsAllowed.Should().BeFalse();
+        result.FailureType.Should().Be(ExecutionAllowedFailureType.Authorisation, "the bool contract's false was always a 403");
+        result.Message.Should().Be(ScopePairClaimAuthorizationProvider.DeniedMessage);
+    }
+}
+
+/// <summary>
+/// Reads a provider's decision as the yes or no most of these tests are about.
+/// </summary>
+internal static class ResourceAuthorizationProviderTestExtensions
+{
+    public static async Task<bool> IsAuthorizedAsync(
+        this IResourceAuthorizationProvider provider,
+        ApiOperationContext operationContext,
+        ClaimsPrincipal principal,
+        IReadOnlyList<ResolvedScopePair> scopePairs,
+        CancellationToken cancellationToken)
+    {
+        var result = await provider.AuthorizeAsync(operationContext, principal, ResourceAuthorizationRequest.Execute(scopePairs), cancellationToken);
+
+        return result.IsAllowed;
+    }
 }

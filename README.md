@@ -412,8 +412,10 @@ Every operation is authorised unless it opts out. Choose one declaration per ope
 | `[FromResource(typeof(OtherOperation))]` | Use another operation's `[Resource]` pairs. |
 | *(none)* | An anonymous caller is refused with `401`. An authenticated caller is checked by your registered authorisers. |
 
-Scope pairs are decided by the `IResourceAuthorizationProvider` you register. Blueprint ships one,
-`ScopePairClaimAuthorizationProvider`, which matches the pairs against the caller's `scope` claims.
+Scope pairs are decided by the `IResourceAuthorizationProvider`s you register. Blueprint ships one,
+`ScopePairClaimAuthorizationProvider`, which matches the pairs against the caller's `scope` claims. A provider returns
+an `ExecutionAllowed` decision, answered as an authoriser's is: its failure type selects `401` or `403`, its message
+titles the response and its reason is only logged. Every registered provider must allow.
 
 > **Register a provider if you use `[Resource]`.** Without one there is nothing to judge the scope pairs.
 > `MapBlueprintApi` throws at start-up, naming the operations. If the operations run without it, in an in-memory test

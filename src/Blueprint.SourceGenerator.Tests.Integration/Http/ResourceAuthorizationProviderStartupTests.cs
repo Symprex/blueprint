@@ -1,5 +1,4 @@
 using Blueprint.Authorization;
-using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
@@ -60,13 +59,13 @@ public sealed class ResourceAuthorizationProviderStartupTests
 
     private sealed class DenyingResourceAuthorizationProvider : IResourceAuthorizationProvider
     {
-        public Task<bool> IsAuthorizedAsync(
+        public ValueTask<ExecutionAllowed> AuthorizeAsync(
             ApiOperationContext operationContext,
             System.Security.Claims.ClaimsPrincipal principal,
-            IReadOnlyList<ResolvedScopePair> resolvedScopePairs,
+            ResourceAuthorizationRequest request,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(false);
+            return new ValueTask<ExecutionAllowed>(ExecutionAllowed.No("denied", "denied", ExecutionAllowedFailureType.Authorisation));
         }
     }
 }
