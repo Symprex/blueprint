@@ -159,7 +159,23 @@ public class DiagnosticSuppressionBuildTests
         process.BeginErrorReadLine();
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-        await process.WaitForExitAsync(timeout.Token);
+
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelling the wait leaves dotnet and its MSBuild nodes running, and they would still be writing the
+            // referenced projects' outputs while the next test in the collection builds them
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+            }
+
+            throw;
+        }
 
         lock (output)
         {
