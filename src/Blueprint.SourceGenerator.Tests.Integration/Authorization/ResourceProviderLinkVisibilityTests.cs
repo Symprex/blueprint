@@ -1,0 +1,153 @@
+using System.Security.Claims;
+using Blueprint.Authorization;
+using Blueprint.Model;
+using Blueprint.Runtime.Exec;
+using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
+using Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
+using Blueprint.SourceGenerator.Tests.Integration.Http;
+using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Blueprint.SourceGenerator.Tests.Integration.Authorization;
+
+/// <summary>
+/// Proves how <see cref="IApiAuthoriserAggregator.CanShowLinkAsync"/> asks the resource authorization providers: all-of,
+/// only for an operation that declares scope pairs and only with a resource, and refusing when nothing can judge the link.
+/// </summary>
+public sealed class ResourceProviderLinkVisibilityTests
+{
+    private static readonly LinkAuthTenantApiResource GrantedTenant = new() { Id = "a", TenantId = "ten_1" };
+
+    [Fact]
+    public async Task Every_provider_must_allow_the_link()
+    {
+        var first = new KeyProvider("/LinkAuth/Tenants/ten_1");
+        var second = new KeyProvider();
+
+        var result = await CanShowAsync(GrantedTenant, [first, second]);
+
+        result.IsAllowed.Should().BeFalse();
+        first.Calls.Should().Be(1);
+        second.Calls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task The_first_denial_is_the_answer_and_later_providers_are_not_asked()
+    {
+        var first = new KeyProvider();
+        var second = new KeyProvider("/LinkAuth/Tenants/ten_1");
+
+        var result = await CanShowAsync(GrantedTenant, [first, second]);
+
+        result.IsAllowed.Should().BeFalse();
+        result.Reason.Should().Be("not granted");
+        second.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task A_permissioned_link_is_hidden_when_no_provider_is_registered()
+    {
+        var result = await CanShowAsync(GrantedTenant, []);
+
+        result.IsAllowed.Should().BeFalse("with nothing to judge the operation's scope pairs, the link is refused, as its execution is");
+    }
+
+    [Fact]
+    public async Task A_link_on_a_resource_type_the_operation_does_not_link_from_is_hidden()
+    {
+        var provider = new KeyProvider("/LinkAuth/Tenants/ten_1");
+
+        var result = await CanShowAsync(new LinkTestApiResource { Id = "x", Name = "x" }, [provider]);
+
+        result.IsAllowed.Should().BeFalse("no key can be resolved against a resource the operation does not link from");
+        provider.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Providers_are_not_asked_without_a_resource()
+    {
+        // A link with no resource is listing mode's to decide (#81), which this aggregator does not ask yet.
+        var provider = new KeyProvider();
+
+        var result = await CanShowAsync(null, [provider]);
+
+        result.IsAllowed.Should().BeTrue();
+        provider.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Providers_are_not_asked_for_an_operation_without_scope_pairs()
+    {
+        var provider = new KeyProvider();
+
+        var result = await CanShowAsync(new LinkTestApiResource { Id = "x", Name = "x" }, [provider], GetLinkTestResourceQuery.Configure());
+
+        result.IsAllowed.Should().BeTrue();
+        provider.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Without_a_principal_on_the_context_the_provider_is_given_an_unauthenticated_one()
+    {
+        var provider = new KeyProvider("/LinkAuth/Tenants/ten_1");
+
+        await CanShowAsync(GrantedTenant, [provider], principal: null);
+
+        provider.LastPrincipal.Should().NotBeNull();
+        provider.LastPrincipal!.Identity?.IsAuthenticated.Should().NotBe(true);
+    }
+
+    private static async Task<ExecutionAllowed> CanShowAsync(
+        object? resource,
+        IResourceAuthorizationProvider[] providers,
+        ApiOperationDescriptor? descriptor = null,
+        ClaimsPrincipal? principal = null)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped<IApiAuthoriserAggregator, ApiAuthoriserAggregator>();
+
+        foreach (var provider in providers)
+        {
+            services.AddSingleton<IResourceAuthorizationProvider>(provider);
+        }
+
+        await using var serviceProvider = services.BuildServiceProvider();
+        await using var scope = serviceProvider.CreateAsyncScope();
+
+        var aggregator = scope.ServiceProvider.GetRequiredService<IApiAuthoriserAggregator>();
+        var app = new IntegrationTestBlueprintApp();
+        descriptor ??= app.FindOperation(typeof(ArchiveLinkAuthResourceCommand))!;
+
+        // The context is the outer operation's, as link population's is; the linked operation is the descriptor given.
+        var context = new ApiOperationContext(scope.ServiceProvider, app, app.FindOperation(typeof(ListLinkAuthTenantsQuery))!, CancellationToken.None)
+        {
+            UserPrincipal = principal,
+        };
+
+        return await aggregator.CanShowLinkAsync(context, descriptor, resource);
+    }
+
+    /// <summary>Allows a link whose resolved key is one of the given keys.</summary>
+    private sealed class KeyProvider(params string[] grantedKeys) : IResourceAuthorizationProvider
+    {
+        public int Calls { get; private set; }
+
+        public ClaimsPrincipal? LastPrincipal { get; private set; }
+
+        public ValueTask<ExecutionAllowed> AuthorizeAsync(
+            ApiOperationContext operationContext,
+            ClaimsPrincipal principal,
+            ResourceAuthorizationRequest request,
+            CancellationToken cancellationToken)
+        {
+            this.Calls++;
+            this.LastPrincipal = principal;
+
+            return new ValueTask<ExecutionAllowed>(
+                request.ScopePairs.Any(p => grantedKeys.Contains(p.ExpandedResourceKey))
+                    ? ExecutionAllowed.Yes
+                    : ExecutionAllowed.No("not granted", "You may not do this", ExecutionAllowedFailureType.Authorisation));
+        }
+    }
+}

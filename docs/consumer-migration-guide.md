@@ -1860,7 +1860,7 @@ The source generator emits per-operation authorization checks that avoid reflect
 var expandedKey = $"/Tenants/{principal.FindFirst("TenantId")?.Value}/Users/{operation.UserId}";
 var decision = await resourceAuthorizationProvider.AuthorizeAsync(
     context, principal,
-    ResourceAuthorizationRequest.Execute(new ResolvedScopePair[] { new("user", "update", template, expandedKey) }),
+    ResourceAuthorizationRequest.Execute(context.Descriptor, new ResolvedScopePair[] { new("user", "update", template, expandedKey) }),
     cancellationToken);
 ```
 

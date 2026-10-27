@@ -149,6 +149,11 @@ internal static class ResourceKeyTemplateParser
     /// path does not. For these tokens, only the primary expression is emitted (the invalid
     /// fallback is ignored to avoid generating invalid property access).
     /// </param>
+    /// <param name="callerValueExpression">
+    /// Optional expression of a <c>Func&lt;string, string?&gt;</c> that gives the caller's value for an <c>Auth</c> path's
+    /// name. When given, <c>Auth</c> paths call it instead of reading <paramref name="contextExpression"/> and
+    /// <paramref name="principalExpression"/>, for code that cannot reference the runtime's types.
+    /// </param>
     /// <returns>A C# expression string that evaluates to the expanded resource key.</returns>
     public static string GenerateExpansionExpression(
         string template,
@@ -158,7 +163,8 @@ internal static class ResourceKeyTemplateParser
         string? contextExpression = null,
         HashSet<string>? valueTypePropertyNames = null,
         HashSet<string>? fallbackOnlyTokenNames = null,
-        HashSet<string>? invalidFallbackTokenNames = null)
+        HashSet<string>? invalidFallbackTokenNames = null,
+        string? callerValueExpression = null)
     {
         if (tokens.Count == 0)
         {
@@ -181,7 +187,7 @@ internal static class ResourceKeyTemplateParser
             if (isFallbackOnly && token.FallbackPropertyPath != null)
             {
                 var fallbackExpr = GeneratePathExpression(
-                    token.FallbackPropertyPath, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+                    token.FallbackPropertyPath, operationExpression, principalExpression, contextExpression, valueTypePropertyNames, callerValueExpression);
 
                 replacement = $"{{{fallbackExpr} ?? \"\"}}";
             }
@@ -195,7 +201,7 @@ internal static class ResourceKeyTemplateParser
                 if (hasInvalidFallback)
                 {
                     var primaryExpr = GeneratePathExpression(
-                        token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+                        token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames, callerValueExpression);
 
                     var isSimpleValueType = !token.Name.Contains('.') &&
                         !token.IsAuthPath &&
@@ -208,9 +214,9 @@ internal static class ResourceKeyTemplateParser
                 else
                 {
                     var primaryExpr = GeneratePathExpression(
-                        token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+                        token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames, callerValueExpression);
                     var fallbackExpr = GeneratePathExpression(
-                        token.FallbackPropertyPath, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+                        token.FallbackPropertyPath, operationExpression, principalExpression, contextExpression, valueTypePropertyNames, callerValueExpression);
 
                     replacement = $"{{{primaryExpr} ?? {fallbackExpr} ?? \"\"}}";
                 }
@@ -218,7 +224,7 @@ internal static class ResourceKeyTemplateParser
             else
             {
                 var primaryExpr = GeneratePathExpression(
-                    token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames);
+                    token.Name, operationExpression, principalExpression, contextExpression, valueTypePropertyNames, callerValueExpression);
 
                 // Simple, dotted, or auth path — no fallback
                 var isSimpleValueType = !token.Name.Contains('.') &&
@@ -247,12 +253,16 @@ internal static class ResourceKeyTemplateParser
         string operationExpression,
         string principalExpression,
         string? contextExpression,
-        HashSet<string>? valueTypePropertyNames)
+        HashSet<string>? valueTypePropertyNames,
+        string? callerValueExpression)
     {
         if (ResourceKeyToken.IsAuthPropertyPath(path))
         {
             var authPropName = ResourceKeyToken.GetAuthPropertyName(path);
-            return GenerateAuthExpression(authPropName, principalExpression, contextExpression);
+
+            return callerValueExpression is not null
+                ? $"{callerValueExpression}(\"{authPropName}\")"
+                : GenerateAuthExpression(authPropName, principalExpression, contextExpression);
         }
 
         return GenerateOperationPropertyPathExpression(path, operationExpression, valueTypePropertyNames);

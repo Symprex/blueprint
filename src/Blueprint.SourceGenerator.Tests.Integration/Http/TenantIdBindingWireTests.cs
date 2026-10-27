@@ -736,10 +736,11 @@ public partial class BindTenantIdRouteQuery : IQuery<string>
 
 /// <summary>
 /// Shaped as Signature365 Admin Portal's <c>GetDefaultProductForTenantQuery</c>: a link whose <c>{TenantId:Id}</c>
-/// placeholder names the resource's <c>Id</c>, and a resource key naming the tenant. (Signature365's key is
-/// <c>/Tenants/{TenantId:Id}</c>, whose fallback names no operation property: BPAU010 warns, and the primary is used.)
+/// placeholder names the resource's <c>Id</c>, and Signature365's resource key, <c>/Tenants/{TenantId:Id}</c>. Its fallback
+/// names no operation property, so execution uses the primary; a link from the resource, which lacks <c>TenantId</c>,
+/// uses the fallback, so BPAU010 does not fire (Symprex/blueprint#79).
 /// </summary>
-[Resource("billing-product", "read", "/Tenants/{TenantId}")]
+[Resource("billing-product", "read", "/Tenants/{TenantId:Id}")]
 [Link(typeof(BoundTenantLinkApiResource), "/tenant-binding/billing/tenants/{TenantId:Id}/products/default", Rel = "defaultProduct")]
 public partial class GetBoundTenantDefaultProductQuery : IQuery<string>
 {

@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Planning;
@@ -29,6 +30,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private const string ResourceAttributeName = "ResourceAttribute";
     private const string FromResourceAttributeName = "FromResourceAttribute";
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
+    private const string LinkAttributeName = "LinkAttribute";
+    private const string SelfLinkAttributeName = "SelfLinkAttribute";
 
     /// <inheritdoc />
     public string ModuleId => nameof(AuthorizationModule);
@@ -199,6 +202,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 ? $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\")"
                 : $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
 
+        var linkResolverBranches = BuildLinkScopeResolverBranches(operationType, operationLocation, effectiveScopePairs, context);
+
         context.AddRenderStep(writer =>
         {
             if (!alreadyHasAuthRegistration)
@@ -209,7 +214,259 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
             writer.AppendLine(
                 $"this.SetFeatureData(new global::Blueprint.Model.OperationAuthorizationFeatureData(global::System.Collections.Immutable.ImmutableArray.Create<global::Blueprint.Model.ScopePair>([{scopePairEntries}])));");
+
+            if (linkResolverBranches.Count > 0)
+            {
+                RenderLinkScopeResolver(writer, linkResolverBranches);
+            }
         });
+    }
+
+    /// <summary>
+    /// Builds, for each resource type the operation links from, the statement that resolves the operation's scope pairs
+    /// against a resource of that type, most-derived type first so that a resource is resolved against its own type.
+    /// </summary>
+    /// <remarks>
+    /// A <c>{A:B}</c> token uses <c>A</c> when the resource type has a public property <c>A</c>, and <c>B</c> only when it
+    /// has not, as Signature 365's link authorisation chose it. Reports BPAU011 for a token that matches neither, and builds
+    /// no statement for that type.
+    /// </remarks>
+    private static List<string> BuildLinkScopeResolverBranches(
+        INamedTypeSymbol operationType,
+        Location? operationLocation,
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
+        DescriptorContributorContext context)
+    {
+        var branches = new List<string>();
+        var linkedResourceTypes = GetLinkedResourceTypes(operationType);
+
+        for (var index = 0; index < linkedResourceTypes.Count; index++)
+        {
+            var resourceType = linkedResourceTypes[index];
+            var resourceExpression = $"resource{index}";
+            var valueTypePropertyNames = new HashSet<string>();
+            var fallbackOnlyTokenNames = new HashSet<string>();
+            var primaryOnlyTokenNames = new HashSet<string>();
+            var unresolvedTokens = new HashSet<string>();
+
+            foreach (var (_, _, template) in scopePairs)
+            {
+                if (template is null)
+                {
+                    continue;
+                }
+
+                foreach (var token in ResourceKeyTemplateParser.ParseTokens(template))
+                {
+                    ClassifyTokenForLinkedResource(token, resourceType, valueTypePropertyNames, fallbackOnlyTokenNames, primaryOnlyTokenNames, unresolvedTokens);
+                }
+            }
+
+            foreach (var unresolved in unresolvedTokens)
+            {
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        AuthorizationDiagnosticDescriptors.ResourceKeyTemplateTokenNotFoundOnLinkedResource,
+                        operationLocation,
+                        [operationType.Name, unresolved, resourceType.Name]));
+            }
+
+            if (unresolvedTokens.Count > 0)
+            {
+                continue;
+            }
+
+            var resolvedPairs = scopePairs.Select(sp =>
+            {
+                if (sp.ResourceKeyTemplate is null)
+                {
+                    return $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
+                }
+
+                var expansion = ResourceKeyTemplateParser.GenerateExpansionExpression(
+                    sp.ResourceKeyTemplate,
+                    ResourceKeyTemplateParser.ParseTokens(sp.ResourceKeyTemplate),
+                    resourceExpression,
+                    principalExpression: "principal",
+                    contextExpression: null,
+                    valueTypePropertyNames,
+                    fallbackOnlyTokenNames,
+                    primaryOnlyTokenNames,
+                    callerValueExpression: "callerValue");
+
+                return $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expansion})";
+            });
+
+            var resourceTypeName = resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            branches.Add($"if (linkResource is {resourceTypeName} {resourceExpression}) {{ return [{string.Join(", ", resolvedPairs)}]; }}");
+        }
+
+        return branches;
+    }
+
+    /// <summary>
+    /// Decides how one token resolves against a linked resource type: the primary alone when the type has it, the fallback
+    /// alone when it lacks the primary, and unresolved when it has neither. A caller (<c>Auth</c>) path always resolves.
+    /// </summary>
+    private static void ClassifyTokenForLinkedResource(
+        ResourceKeyToken token,
+        INamedTypeSymbol resourceType,
+        HashSet<string> valueTypePropertyNames,
+        HashSet<string> fallbackOnlyTokenNames,
+        HashSet<string> primaryOnlyTokenNames,
+        HashSet<string> unresolvedTokens)
+    {
+        var fallback = token.FallbackPropertyPath;
+        var fallbackIsCaller = fallback is not null && ResourceKeyToken.IsAuthPropertyPath(fallback);
+        var fallbackProperty = fallback is not null && !fallbackIsCaller ? FindPublicProperty(resourceType, fallback) : null;
+
+        if (token.IsAuthPath)
+        {
+            // The caller's value is always available; a property fallback is used only when the type has it
+            if (fallback is not null && !fallbackIsCaller)
+            {
+                if (fallbackProperty is null)
+                {
+                    primaryOnlyTokenNames.Add(token.Name);
+                }
+                else if (fallbackProperty.Type.IsValueType)
+                {
+                    valueTypePropertyNames.Add(fallbackProperty.Name);
+                }
+            }
+
+            return;
+        }
+
+        var primaryProperty = FindPublicProperty(resourceType, token.Name);
+
+        if (primaryProperty is not null)
+        {
+            if (primaryProperty.Type.IsValueType)
+            {
+                valueTypePropertyNames.Add(primaryProperty.Name);
+            }
+
+            if (fallback is not null)
+            {
+                primaryOnlyTokenNames.Add(token.Name);
+            }
+
+            return;
+        }
+
+        if (fallbackIsCaller)
+        {
+            fallbackOnlyTokenNames.Add(token.Name);
+
+            return;
+        }
+
+        if (fallbackProperty is not null)
+        {
+            if (fallbackProperty.Type.IsValueType)
+            {
+                valueTypePropertyNames.Add(fallbackProperty.Name);
+            }
+
+            fallbackOnlyTokenNames.Add(token.Name);
+
+            return;
+        }
+
+        unresolvedTokens.Add(token.RawToken.Trim('{', '}'));
+    }
+
+    /// <summary>
+    /// Writes the operation's <c>OperationLinkAuthorizationFeatureData</c>: a resolver that tries each linked resource type
+    /// in turn and gives <see langword="null"/> for a resource of none of them.
+    /// </summary>
+    private static void RenderLinkScopeResolver(ICodeWriter writer, List<string> branches)
+    {
+        writer.AppendLine("this.SetFeatureData(new global::Blueprint.Model.OperationLinkAuthorizationFeatureData(static (linkResource, callerValue) =>");
+        writer.AppendLine("{");
+
+        foreach (var branch in branches)
+        {
+            writer.AppendLine("    " + branch);
+        }
+
+        writer.AppendLine("    return null;");
+        writer.AppendLine("}));");
+    }
+
+    /// <summary>
+    /// Gives the resource types the operation links from through <c>[Link]</c> and <c>[SelfLink]</c>, each once, ordered
+    /// so that a type comes before any of its base types.
+    /// </summary>
+    private static List<INamedTypeSymbol> GetLinkedResourceTypes(INamedTypeSymbol operationType)
+    {
+        var types = new List<INamedTypeSymbol>();
+
+        foreach (var attribute in operationType.GetAttributes())
+        {
+            var attrClass = attribute.AttributeClass;
+
+            if (attrClass is null
+                || (attrClass.Name != LinkAttributeName && attrClass.Name != SelfLinkAttributeName)
+                || !attrClass.IsInNamespace("Blueprint", "Model", "Attributes")
+                || attribute.ConstructorArguments.Length < 1)
+            {
+                continue;
+            }
+
+            var resourceTypeArgument = attribute.ConstructorArguments[0];
+
+            if (resourceTypeArgument.Kind != TypedConstantKind.Type
+                || resourceTypeArgument.Value is not INamedTypeSymbol resourceType
+                || resourceType.TypeKind == TypeKind.Error
+                || !resourceType.AllInterfaces.Any(static i => i.Name == "ILinkableResource")
+                || types.Contains(resourceType, SymbolEqualityComparer.Default))
+            {
+                continue;
+            }
+
+            types.Add(resourceType);
+        }
+
+        return types.OrderByDescending(static t => InheritanceDepth(t)).ToList();
+    }
+
+    private static int InheritanceDepth(INamedTypeSymbol type)
+    {
+        var depth = 0;
+
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            depth++;
+        }
+
+        return depth;
+    }
+
+    /// <summary>
+    /// Finds the public instance property named by a property path's first segment, matching the name exactly, as the
+    /// generated access needs it and as Signature 365's link authorisation looked it up.
+    /// </summary>
+    private static IPropertySymbol? FindPublicProperty(INamedTypeSymbol type, string propertyPath)
+    {
+        var firstSegment = propertyPath.Split('.')[0];
+
+        return type.GetAllMembers()
+            .OfType<IPropertySymbol>()
+            .FirstOrDefault(p => p.Name == firstSegment && !p.IsStatic && p.DeclaredAccessibility == Accessibility.Public);
+    }
+
+    /// <summary>
+    /// Whether some resource type the operation links from lacks <paramref name="token"/>'s primary and has its fallback,
+    /// so that a link from it uses the fallback.
+    /// </summary>
+    private static bool IsFallbackUsedByALinkedResourceType(INamedTypeSymbol operationType, ResourceKeyToken token)
+    {
+        return GetLinkedResourceTypes(operationType).Any(resourceType =>
+            FindPublicProperty(resourceType, token.Name) is null
+            && FindPublicProperty(resourceType, token.FallbackPropertyPath!) is not null);
     }
 
     /// <inheritdoc />
@@ -366,11 +623,16 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
                         if (fallbackProperty is null)
                         {
-                            context.AddDiagnostic(
-                                new DiagnosticInfo(
-                                    AuthorizationDiagnosticDescriptors.ResourceKeyTemplateFallbackPropertyNotFound,
-                                    operationLocation,
-                                    [operationType.Name, fallbackSegment]));
+                            // Dead only if no linked resource type uses it either: a link from a type that lacks the
+                            // primary resolves to the fallback
+                            if (!IsFallbackUsedByALinkedResourceType(operationType, token))
+                            {
+                                context.AddDiagnostic(
+                                    new DiagnosticInfo(
+                                        AuthorizationDiagnosticDescriptors.ResourceKeyTemplateFallbackPropertyNotFound,
+                                        operationLocation,
+                                        [operationType.Name, fallbackSegment]));
+                            }
 
                             // Track as invalid so code gen skips the fallback expression
                             invalidFallbackTokenNames.Add(token.Name);
