@@ -31,6 +31,7 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         { "[JsonInclude] public object? Value;", string.Empty, "TestNamespace.Payload.Value" },
         { "public object? Value { get; }", string.Empty, "TestNamespace.Payload.Value" },
         { "public ProblemDetails? Value { get; set; }", string.Empty, "Microsoft.AspNetCore.Mvc.ProblemDetails.Extensions" },
+        { "[JsonIgnore(Condition = JsonIgnoreCondition.WhenReading)] public object? Value { get; set; }", string.Empty, "TestNamespace.Payload.Value" },
     };
 
     public static TheoryData<string, string> ClosedShapes => new()
@@ -43,6 +44,7 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         { "[JsonIgnore] public object? Value { get; set; }", string.Empty },
         { "[JsonConverter(typeof(ObjectAsStringConverter))] public object? Value { get; set; }", ObjectAsStringConverter },
         { "public ConvertedShape? Value { get; set; }", "[JsonConverter(typeof(ConvertedShapeConverter))] public abstract class ConvertedShape { } " + ConvertedShapeConverter },
+        { "[JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting)] public object? Value { get; set; }", string.Empty },
         { "public Tree? Value { get; set; }", "public sealed class Tree : List<Tree> { }" },
         { "public TreeMap? Value { get; set; }", "public sealed class TreeMap : Dictionary<string, TreeMap> { }" },
         { "public object? Value;", string.Empty },
@@ -128,6 +130,70 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
             .Should().Contain("'TestNamespace.Known.Loose'");
     }
 
+    [Theory]
+    [InlineData("object[]")]
+    [InlineData("List<object>")]
+    public void When_a_declared_runtime_collection_holds_open_elements_then_generator_reports_BP012_on_the_member(string runtimeType)
+    {
+        var result = Compile(
+            $"[BlueprintRuntimeTypes(typeof({runtimeType}))] public object? Value {{ get; set; }}",
+            string.Empty,
+            extraRegistrations: [runtimeType]);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
+            .Should().ContainSingle()
+            .Which.GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .Should().Contain("'TestNamespace.Payload.Value'");
+    }
+
+    [Fact]
+    public void When_a_private_member_shadows_an_open_public_base_member_then_generator_still_reports_the_base_member()
+    {
+        // System.Text.Json writes the public base property; a non-public one hiding it does not take its place.
+        var result = Compile("private new string? Value { get; set; }", "public class PayloadBase { public object? Value { get; set; } }", payloadBase: "PayloadBase");
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
+            .Should().ContainSingle()
+            .Which.GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .Should().Contain("'TestNamespace.PayloadBase.Value'");
+    }
+
+    [Theory]
+    [InlineData("public List<object> Value { get; } = new();")]
+    [InlineData("public Dictionary<string, object> Value { get; } = new();")]
+    public void When_the_context_ignores_read_only_properties_a_getter_only_collection_is_still_reported(string member)
+    {
+        // System.Text.Json still writes a getter-only collection under IgnoreReadOnlyProperties.
+        var result = Compile(member, string.Empty, contextAttributes: "[JsonSourceGenerationOptions(IgnoreReadOnlyProperties = true)]");
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id).Should().Equal("BP012");
+    }
+
+    [Fact]
+    public void When_the_context_ignores_read_only_properties_an_annotated_getter_only_collection_is_still_checked()
+    {
+        var result = Compile(
+            "[BlueprintRuntimeTypes(typeof(Unknown))] public Dictionary<string, object> Value { get; } = new();",
+            "public sealed class Unknown { }",
+            contextAttributes: "[JsonSourceGenerationOptions(IgnoreReadOnlyProperties = true)]");
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id).Should().Equal("BP013");
+    }
+
+    [Fact]
+    public void When_a_response_type_nests_the_framework_problem_details_then_generator_reports_its_extensions()
+    {
+        // The referenced ASP.NET Core ProblemDetails, not an in-source substitute, so the walk must reach a framework
+        // assembly; only ValidationProblemDetails, from an assembly the harness does not reference, is stubbed.
+
+        var result = Compile("public ProblemDetails? Value { get; set; }", string.Empty, stubProblemDetails: false);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
+            .Should().ContainSingle()
+            .Which.GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .Should().Contain("'Microsoft.AspNetCore.Mvc.ProblemDetails.Extensions'");
+    }
+
     [Fact]
     public void When_the_context_ignores_read_only_properties_then_a_getter_only_open_member_is_not_reported()
     {
@@ -199,6 +265,31 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         }
         """;
 
+    private const string ProblemDetailsStub = """
+        namespace Microsoft.AspNetCore.Mvc
+        {
+            public class ProblemDetails
+            {
+                [JsonExtensionData]
+                public IDictionary<string, object?> Extensions { get; set; } = new Dictionary<string, object?>();
+            }
+
+            public sealed class ValidationProblemDetails : ProblemDetails
+            {
+                public IDictionary<string, string[]> Errors { get; set; } = new Dictionary<string, string[]>();
+            }
+        }
+        """;
+
+    private const string ValidationProblemDetailsStub = """
+        namespace Microsoft.AspNetCore.Mvc
+        {
+            public sealed class ValidationProblemDetails : ProblemDetails
+            {
+            }
+        }
+        """;
+
     private const string ConvertedShapeConverter = """
         public sealed class ConvertedShapeConverter : JsonConverter<ConvertedShape>
         {
@@ -215,8 +306,10 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         string[]? extraRegistrations = null,
         string? payloadBase = null,
         string contextAttributes = "",
-        bool nestedContext = false)
+        bool nestedContext = false,
+        bool stubProblemDetails = true)
     {
+        var problemDetailsStub = stubProblemDetails ? ProblemDetailsStub : ValidationProblemDetailsStub;
         var contextOpen = nestedContext ? "public static partial class Outer {" : string.Empty;
         var contextClose = nestedContext ? "}" : string.Empty;
         var contextReference = nestedContext ? "Outer.TestBlueprintJsonContext" : "TestBlueprintJsonContext";
@@ -236,19 +329,7 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
             using Blueprint.Runtime.Exec;
             using Microsoft.AspNetCore.Mvc;
 
-            namespace Microsoft.AspNetCore.Mvc
-            {
-                public class ProblemDetails
-                {
-                    [JsonExtensionData]
-                    public IDictionary<string, object?> Extensions { get; set; } = new Dictionary<string, object?>();
-                }
-
-                public sealed class ValidationProblemDetails : ProblemDetails
-                {
-                    public IDictionary<string, string[]> Errors { get; set; } = new Dictionary<string, string[]>();
-                }
-            }
+            {{problemDetailsStub}}
 
             namespace Blueprint.Model.Attributes
             {

@@ -179,8 +179,8 @@ internal static class SerializerContextTypeInfoCache
     /// warned about. An object's warning waits for its first instance written (<see cref="JsonTypeInfo.OnSerializing" />),
     /// and a value-shaped type's - a <see cref="JsonElement" />, a type with its own converter - for its converter's first
     /// write (or first key written), since only objects have that callback. Numbers and enums are written as they would
-    /// be by the context and are not warned about. A concrete collection is warned about when it is resolved, which in
-    /// practice is when it is written.
+    /// be by the context and are not warned about, nullable ones included. A collection is not warned about itself, only
+    /// what it holds.
     /// </remarks>
     private sealed class LoggingFallbackResolver(string contextName, ILogger logger) : IJsonTypeInfoResolver
     {
@@ -229,13 +229,16 @@ internal static class SerializerContextTypeInfoCache
                     return (JsonTypeInfo)_createValueInfo.MakeGenericMethod(type).Invoke(null, [typeInfo, options, this])!;
 
                 default:
-                    this.LogOnce(type);
+                    // A collection is not warned about itself - it has no callback, and resolving it is not writing it
+                    // (a null list left out still has metadata). What it holds is warned about when written.
                     return typeInfo;
             }
         }
 
         private static bool IsNumberLike(Type type)
         {
+            type = Nullable.GetUnderlyingType(type) ?? type;
+
             return type.IsPrimitive
                 || type.IsEnum
                 || type == typeof(decimal)

@@ -147,6 +147,7 @@ public sealed partial class AppDataModelSourceGenerator
         // JsonIgnoreCondition's values, which the attribute's named argument carries as an int.
         private const int IgnoreNever = 0;
         private const int IgnoreAlways = 1;
+        private const int IgnoreWhenWriting = 4;
 
         // Blueprint's own members that are open by design: a problem's extensions and a resource event's payload and
         // bags. The runtime writes a problem or event root through reflection behind the context
@@ -283,8 +284,9 @@ public sealed partial class AppDataModelSourceGenerator
                         [GetMemberName(member), runtimeTypeName, contextName]));
                 }
 
-                // A declared runtime type is written as itself, so what it reaches is reached from the root too.
-                this.VisitType(runtimeType, null, rootName, atRoot: false);
+                // A declared runtime type is written as itself, so what it reaches is reached from the root too, and an open
+                // element of a declared collection (object[]) is still the member's to report.
+                this.VisitType(runtimeType, member, rootName, atRoot: false);
             }
         }
 
@@ -373,7 +375,8 @@ public sealed partial class AppDataModelSourceGenerator
 
             return SymbolEqualityComparer.Default.Equals(assembly, compilation.Assembly)
                 || scannedAssemblies.Contains(assembly)
-                || assembly.Name.StartsWith("Blueprint.", StringComparison.Ordinal);
+                || assembly.Name.StartsWith("Blueprint.", StringComparison.Ordinal)
+                || IsProblemDetails(type);
         }
 
         private LocationInfo? GetLocation(AttributeData? attribute, ISymbol member)
@@ -396,38 +399,76 @@ public sealed partial class AppDataModelSourceGenerator
         {
             var seen = new HashSet<string>(StringComparer.Ordinal);
 
-            // Most-derived first, so a member that hides or overrides one on a base class is the one walked.
+            // Most-derived first, so a member that hides or overrides one on a base class is the one walked. Only a member
+            // the contract considers - written, or ignored - takes its name from a base member: a non-public one hiding a
+            // public base property does not, and System.Text.Json writes the base property.
             foreach (var member in type.GetAllMembers())
             {
                 if (member is not (IPropertySymbol { IsIndexer: false } or IFieldSymbol { IsConst: false, IsImplicitlyDeclared: false })
                     || member.IsStatic
-                    || !seen.Add(member.Name))
+                    || seen.Contains(member.Name))
                 {
                     continue;
                 }
 
                 var included = HasJsonAttribute(member, "JsonIncludeAttribute");
-                var ignoreCondition = GetIgnoreCondition(member);
-                if (ignoreCondition == IgnoreAlways)
+                var visible = member switch
+                {
+                    IPropertySymbol property => property.GetMethod is not null
+                        && (included || (property.DeclaredAccessibility == Accessibility.Public && property.GetMethod.DeclaredAccessibility == Accessibility.Public)),
+                    IFieldSymbol field => included || (memberOptions.IncludeFields && field.DeclaredAccessibility == Accessibility.Public),
+                    _ => false,
+                };
+
+                if (!visible)
                 {
                     continue;
                 }
 
-                var written = member switch
-                {
-                    IPropertySymbol property => property.GetMethod is not null
-                        && (included || (property.DeclaredAccessibility == Accessibility.Public && property.GetMethod.DeclaredAccessibility == Accessibility.Public))
-                        && (ignoreCondition == IgnoreNever || !memberOptions.IgnoreReadOnlyProperties || !IsReadOnly(property, included)),
-                    IFieldSymbol field => (included || (memberOptions.IncludeFields && field.DeclaredAccessibility == Accessibility.Public))
-                        && (ignoreCondition == IgnoreNever || !memberOptions.IgnoreReadOnlyFields || !field.IsReadOnly),
-                    _ => false,
-                };
+                seen.Add(member.Name);
 
-                if (written)
+                var ignoreCondition = GetIgnoreCondition(member);
+                if (ignoreCondition is IgnoreAlways or IgnoreWhenWriting)
+                {
+                    continue;
+                }
+
+                // The read-only options leave a collection in: System.Text.Json still writes a getter-only collection.
+                var ignoredAsReadOnly = ignoreCondition != IgnoreNever
+                    && !this.IsCollectionOrArray(GetMemberType(member))
+                    && member switch
+                    {
+                        IPropertySymbol property => memberOptions.IgnoreReadOnlyProperties && IsReadOnly(property, included),
+                        IFieldSymbol field => memberOptions.IgnoreReadOnlyFields && field.IsReadOnly,
+                        _ => false,
+                    };
+
+                if (!ignoredAsReadOnly)
                 {
                     yield return member;
                 }
             }
+        }
+
+        private bool IsCollectionOrArray(ITypeSymbol type)
+        {
+            return type is IArrayTypeSymbol || (type.SpecialType != SpecialType.System_String && this.IsCollection(type));
+        }
+
+        // ASP.NET Core's problem types are walked although they are the framework's: their open Extensions are written by
+        // the context alone when a problem is nested in another response type.
+        private static bool IsProblemDetails(INamedTypeSymbol type)
+        {
+            for (var current = type; current is not null; current = current.BaseType)
+            {
+                // Name and namespace, not ToDisplayString, which writes a nullable-annotated ProblemDetails? with its '?'.
+                if (current.Name == "ProblemDetails" && current.ContainingNamespace?.ToDisplayString() == "Microsoft.AspNetCore.Mvc")
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool IsReadOnly(IPropertySymbol property, bool included)

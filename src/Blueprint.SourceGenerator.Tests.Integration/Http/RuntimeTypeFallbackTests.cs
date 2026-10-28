@@ -121,6 +121,33 @@ public sealed class RuntimeTypeFallbackTests
     }
 
     [Fact]
+    public async Task With_the_opt_in_an_unregistered_objects_nullable_number_keeps_the_options_number_handling()
+    {
+        using var services = CreateServices(new ConcurrentQueue<string>());
+        var context = new RuntimeTypeFallbackJsonContext(new JsonSerializerOptions { NumberHandling = JsonNumberHandling.WriteAsString });
+        var app = new FallbackTestApp(allowRuntimeTypeFallback: true, context);
+
+        var httpContext = CreateHttpContext(services);
+        await HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, app, new OpenHolder { Value = new NullableNumberPayload { Count = 42 } });
+
+        ReadBody(httpContext).Should().Be("""{"Value":{"Count":"42"}}""");
+    }
+
+    [Fact]
+    public async Task With_the_opt_in_a_collection_left_unwritten_is_not_warned_about()
+    {
+        var logged = new ConcurrentQueue<string>();
+        using var services = CreateServices(logged);
+        var app = new FallbackTestApp(allowRuntimeTypeFallback: true);
+
+        var httpContext = CreateHttpContext(services);
+        await HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, app, new OpenHolder { Value = new PayloadWithOptionalItems { Name = "no items" } });
+
+        ReadBody(httpContext).Should().Be("""{"Value":{"Name":"no items"}}""");
+        logged.Should().ContainSingle().Which.Should().Contain(typeof(PayloadWithOptionalItems).FullName!);
+    }
+
+    [Fact]
     public async Task With_the_opt_in_an_unregistered_dictionary_keyed_by_a_converted_type_writes_its_keys_and_logs_the_key_type()
     {
         var logged = new ConcurrentQueue<string>();
@@ -216,6 +243,34 @@ public sealed class OpenHolder
 /// </summary>
 /// <param name="Name">The payload's name.</param>
 public sealed record UnregisteredPayload(string Name);
+
+/// <summary>
+/// A type the context does not register, holding a nullable number.
+/// </summary>
+public sealed class NullableNumberPayload
+{
+    /// <summary>
+    /// Gets or sets the count.
+    /// </summary>
+    public int? Count { get; set; }
+}
+
+/// <summary>
+/// A type the context does not register, whose collection is left out when it is null.
+/// </summary>
+public sealed class PayloadWithOptionalItems
+{
+    /// <summary>
+    /// Gets or sets the name.
+    /// </summary>
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// Gets or sets the items, written only when there are any.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<UnregisteredPayload>? Items { get; set; }
+}
 
 /// <summary>
 /// A dictionary key written by its own converter, as a property name.
