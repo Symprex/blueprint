@@ -77,7 +77,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         if (fromResourceResult is not null)
         {
-            var (fromTarget, templateOverride) = fromResourceResult.Value;
+            var (fromTarget, templateOverride, _) = fromResourceResult.Value;
 
             // [FromResource(typeof(X))] — inherit from the referenced type's direct [Resource] attrs
             var targetResourceAttributes = GetResourceAttributes(fromTarget);
@@ -199,6 +199,14 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 ? $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\")"
                 : $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
 
+        // A [FromResource] operation records where its pairs came from, and any template it overrode them with, so an
+        // app can read what the attributes declared without reflecting over them.
+        var inheritanceInitializer = fromResourceResult is { } inherited
+            ? inherited.DeclaredOverride is { } declaredOverride
+                ? $" {{ InheritedFrom = typeof({inherited.Target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), InheritedTemplateOverride = {Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(declaredOverride, quote: true)} }}"
+                : $" {{ InheritedFrom = typeof({inherited.Target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}) }}"
+            : string.Empty;
+
         context.AddRenderStep(writer =>
         {
             if (!alreadyHasAuthRegistration)
@@ -208,7 +216,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             }
 
             writer.AppendLine(
-                $"this.SetFeatureData(new global::Blueprint.Model.OperationAuthorizationFeatureData(global::System.Collections.Immutable.ImmutableArray.Create<global::Blueprint.Model.ScopePair>([{scopePairEntries}])));");
+                $"this.SetFeatureData(new global::Blueprint.Model.OperationAuthorizationFeatureData(global::System.Collections.Immutable.ImmutableArray.Create<global::Blueprint.Model.ScopePair>([{scopePairEntries}])){inheritanceInitializer});");
+            writer.AppendLine("this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.PermissionedAccess);");
         });
     }
 
@@ -247,7 +256,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         // (which may differ from the template source operation)
         if (fromResourceResult is not null)
         {
-            var (fromTarget, templateOverride) = fromResourceResult.Value;
+            var (fromTarget, templateOverride, _) = fromResourceResult.Value;
             var targetResourceAttributes = GetResourceAttributes(fromTarget);
 
             if (targetResourceAttributes.Count == 0)
@@ -530,7 +539,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     /// attribute on the operation, returning the referenced <see cref="INamedTypeSymbol"/> and an
     /// optional resource key template override, or <c>null</c> if the attribute is not present.
     /// </summary>
-    private static (INamedTypeSymbol Target, string? TemplateOverride)? GetFromResourceTarget(INamedTypeSymbol operationType)
+    private static (INamedTypeSymbol Target, string? TemplateOverride, string? DeclaredOverride)? GetFromResourceTarget(INamedTypeSymbol operationType)
     {
         foreach (var attribute in operationType.GetAttributes())
         {
@@ -566,17 +575,14 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 continue;
             }
 
-            // Check for optional second constructor argument (resource key template override)
-            string? templateOverride = null;
+            // Check for optional second constructor argument (resource key template override). The override as written is
+            // the declaration; a blank one is not a template, so it does not replace the source's.
+            var declaredOverride = attribute.ConstructorArguments.Length >= 2
+                ? attribute.ConstructorArguments[1].Value as string
+                : null;
+            var templateOverride = string.IsNullOrWhiteSpace(declaredOverride) ? null : declaredOverride;
 
-            if (attribute.ConstructorArguments.Length >= 2 &&
-                attribute.ConstructorArguments[1].Value is string template &&
-                !string.IsNullOrWhiteSpace(template))
-            {
-                templateOverride = template;
-            }
-
-            return (targetType, templateOverride);
+            return (targetType, templateOverride, declaredOverride);
         }
 
         return null;
