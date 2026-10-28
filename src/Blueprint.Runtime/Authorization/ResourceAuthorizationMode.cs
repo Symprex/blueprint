@@ -5,9 +5,9 @@ namespace Blueprint.Authorization;
 /// it must match.
 /// </summary>
 /// <remarks>
-/// Only <see cref="Execute"/> is asked today. <see cref="Link"/> and <see cref="Listing"/> are part of the contract so that
-/// a provider written now already has to say what it does with them; Blueprint starts asking in those modes once link
-/// visibility (Symprex/blueprint#79) and authorisation manifests (Symprex/blueprint#81) consult providers.
+/// An execution's generated check asks in <see cref="Execute"/> mode. <see cref="IApiAuthoriserAggregator"/> asks in
+/// <see cref="Link"/> mode for a link written on a resource (Symprex/blueprint#79), and in <see cref="Listing"/> mode for a
+/// link with no resource, as an authorisation manifest asks (Symprex/blueprint#81).
 /// </remarks>
 public enum ResourceAuthorizationMode
 {
