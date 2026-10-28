@@ -1377,11 +1377,13 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Authorises a permissioned operation executed in process, with no <c>HttpContext</c> (an unlinked operation, a Rebus
-    /// message, a background task or a nested execution), by asking the resource providers as
+    /// Authorises a permissioned operation's execution, over HTTP or in process (an unlinked operation, a Rebus message, a
+    /// background task or a nested execution) alike, by asking the resource providers through
     /// <see cref="CheckResourceAuthorizationAsync(ApiOperationContext, ClaimsPrincipal, Authorization.IResourceAuthorizationProvider[], IReadOnlyList{ResolvedScopePair}, CancellationToken)"/>
-    /// does over HTTP. Nothing is asked when the context skips authorisation or the operation's descriptor allows anonymous
-    /// access, exactly as <see cref="RunUnlinkedOperationAuthorisersAsync"/> does not run the authorisers.
+    /// with the context's own caller and cancellation: over HTTP they are the request's <c>User</c> and <c>RequestAborted</c>.
+    /// Nothing is asked when the context skips authorisation or the operation's descriptor allows anonymous access, as the
+    /// authentication step and <see cref="RunUnlinkedOperationAuthorisersAsync"/> skip theirs. A subscribed Rebus message
+    /// allows anonymous access but is not exposed over HTTP, so that never skips a request's check.
     /// </summary>
     /// <remarks>
     /// The caller is <see cref="ApiOperationContext.UserPrincipal"/>. A provider's judgement is of a principal's claims, so
@@ -1389,14 +1391,14 @@ public static class PipelineHelpers
     /// <see cref="UnauthenticatedResult.Instance"/> before any provider is asked, which is the refusal
     /// <see cref="RunUnlinkedOperationAuthorisersAsync"/> gives. A user's context set without a principal does not
     /// stand in for one, as a provider cannot be asked about it. With scope pairs and no provider registered the operation
-    /// is refused, as it is over HTTP.
+    /// is refused.
     /// </remarks>
     /// <param name="context">The current operation execution context.</param>
     /// <param name="providers">The registered resource authorization providers, in registration order; empty if none.</param>
     /// <param name="resolvedScopes">The compile-time expanded scope pairs for this operation.</param>
     /// <returns><c>null</c> when the operation may execute; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ValueTask<OperationResult?> CheckUnlinkedResourceAuthorizationAsync(
+    public static ValueTask<OperationResult?> CheckOperationResourceAuthorizationAsync(
         ApiOperationContext context,
         Authorization.IResourceAuthorizationProvider[] providers,
         IReadOnlyList<ResolvedScopePair> resolvedScopes)
@@ -1415,19 +1417,19 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Single-element overload for <see cref="CheckUnlinkedResourceAuthorizationAsync(ApiOperationContext, Authorization.IResourceAuthorizationProvider[], IReadOnlyList{ResolvedScopePair})"/>,
+    /// Single-element overload for <see cref="CheckOperationResourceAuthorizationAsync(ApiOperationContext, Authorization.IResourceAuthorizationProvider[], IReadOnlyList{ResolvedScopePair})"/>,
     /// which avoids the per-execution array allocation for an operation with exactly one <c>[Resource]</c> attribute.
     /// </summary>
     /// <param name="context">The current operation execution context.</param>
     /// <param name="providers">The registered resource authorization providers, in registration order; empty if none.</param>
     /// <param name="singleScope">The single compile-time expanded scope pair for this operation.</param>
     /// <returns><c>null</c> when the operation may execute; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
-    public static ValueTask<OperationResult?> CheckUnlinkedResourceAuthorizationAsync(
+    public static ValueTask<OperationResult?> CheckOperationResourceAuthorizationAsync(
         ApiOperationContext context,
         Authorization.IResourceAuthorizationProvider[] providers,
         ResolvedScopePair singleScope)
     {
-        return CheckUnlinkedResourceAuthorizationAsync(context, providers, new SingleItemList<ResolvedScopePair>(singleScope));
+        return CheckOperationResourceAuthorizationAsync(context, providers, new SingleItemList<ResolvedScopePair>(singleScope));
     }
 
     /// <summary>

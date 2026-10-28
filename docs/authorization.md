@@ -148,10 +148,10 @@ Each `ResolvedScopePair` carries the raw template (`/Tenants/{Auth:AccountId}/Te
 
 ### In-process executions
 
-Providers are asked wherever an `IApiAuthoriser` is (Symprex/blueprint#78), not only for HTTP requests. An operation with a `[Resource]` or `[FromResource]` and no link is executed in process only, with no `HttpContext`: an unlinked operation, a Rebus message, a background task or a nested execution (`CreateNested`, `ExecuteWithNewScopeAsync`). Its generated pipeline calls `PipelineHelpers.CheckUnlinkedResourceAuthorizationAsync`, which gives the same answers as the HTTP check (all-of providers, fail closed with none registered) with these differences:
-- the principal is `context.UserPrincipal`, which a nested context inherits from its parent;
-- with no authenticated principal the caller is refused as anonymous (`UnauthenticatedResult`) and no provider is asked, because a provider judges a principal's claims;
-- nothing is asked when `context.SkipAuthorisation` is set or the operation's descriptor allows anonymous access, as the authoriser step does not run for either.
+Providers are asked wherever an `IApiAuthoriser` is (Symprex/blueprint#78), not only for HTTP requests. An operation with a `[Resource]` or `[FromResource]` and no link is executed in process only, with no `HttpContext`: an unlinked operation, a Rebus message, a background task or a nested execution (`CreateNested`, `ExecuteWithNewScopeAsync`). Every permissioned pipeline, HTTP or not, calls the same `PipelineHelpers.CheckOperationResourceAuthorizationAsync` (all-of providers, fail closed with none registered):
+- the principal is `context.UserPrincipal`, which over HTTP is the request's user and in a nested context is the parent's; the cancellation is `context.OperationCancelled`, which over HTTP is the request's;
+- with no authenticated principal the caller is refused as anonymous (`UnauthenticatedResult`) and no provider is asked, because a provider judges a principal's claims (over HTTP the authentication step has already refused such a caller);
+- nothing is asked when `context.SkipAuthorisation` is set or the operation's descriptor allows anonymous access, as the authentication and authoriser steps do not run for either.
 
 A descriptor allows anonymous access when it is `[AllowAnonymous]`, a background task, or a message a Rebus consumer subscribes to (marked when the app is made). So a subscribed message's `[Resource]` is not checked on delivery, as its authorisers are not run; the same operation executed with no such marking is.
 
