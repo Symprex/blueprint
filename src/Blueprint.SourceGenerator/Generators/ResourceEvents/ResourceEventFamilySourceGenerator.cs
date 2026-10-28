@@ -80,6 +80,8 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
             .Where(static m => m is not null)
             .WithTrackingName(Stages.InitialExtraction);
 
+        context.RegisterDiagnosticOutput(familyDeclarations.Select(static (result, _) => result!.Diagnostics));
+
         context.RegisterSourceOutput(
             familyDeclarations,
             static (spc, result) => EmitFamilySource(spc, result!));
@@ -389,11 +391,6 @@ public sealed class ResourceEventFamilySourceGenerator : IIncrementalGenerator, 
 
     private static void EmitFamilySource(SourceProductionContext spc, FamilyResult result)
     {
-        foreach (var diag in result.Diagnostics)
-        {
-            spc.ReportDiagnostic(diag.ToDiagnostic());
-        }
-
         if (result.Family is not { } family)
         {
             return;
