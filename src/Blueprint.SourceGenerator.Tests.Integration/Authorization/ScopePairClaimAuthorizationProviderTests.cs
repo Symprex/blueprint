@@ -616,6 +616,114 @@ public class ScopePairClaimAuthorizationProviderTests
             "unauthenticated principal is always denied regardless of allowWhenNoScopeClaims");
     }
 
+    // ─── Parity settings (Symprex/blueprint#82) ───────────────────────
+
+    [Fact]
+    public async Task An_exact_ignored_scope_set_adds_none_of_the_default_ignored_scopes()
+    {
+        // Signature 365 ignores openid and profile but not offline_access: a token whose only scope is offline_access
+        // carries an API scope, matches nothing and is refused, rather than being read as unrestricted.
+        var provider = new ScopePairClaimAuthorizationProvider("scope", "::", ignoredScopes: ["openid", "profile"], allowWhenNoScopeClaims: true);
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, CreatePrincipal("openid", "offline_access"), Resolve(new ScopePair("Template", "Read")), CancellationToken.None);
+
+        result.Should().BeFalse("offline_access is not in the exact ignored set, so it is an API scope that matches nothing");
+    }
+
+    [Fact]
+    public async Task An_exact_ignored_scope_set_still_ignores_what_it_names()
+    {
+        var provider = new ScopePairClaimAuthorizationProvider("scope", "::", ignoredScopes: ["openid", "profile"], allowWhenNoScopeClaims: true);
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, CreatePrincipal("openid", "profile"), Resolve(new ScopePair("Template", "Read")), CancellationToken.None);
+
+        result.Should().BeTrue("only ignored scopes are held, so the no-scope-claims rule applies");
+    }
+
+    [Fact]
+    public async Task An_unauthenticated_caller_is_allowed_when_the_provider_is_told_to_allow_one()
+    {
+        // Signature 365's scope check abstains for an unauthenticated caller and leaves refusing it to the permission
+        // check, so registered beside that one it must not refuse first with its own 403.
+        var provider = new ScopePairClaimAuthorizationProvider("scope", "::", allowUnauthenticated: true);
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, new ClaimsPrincipal(new ClaimsIdentity()), Resolve(new ScopePair("Template", "Read")), CancellationToken.None);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task An_unauthenticated_caller_is_refused_by_default()
+    {
+        var provider = new ScopePairClaimAuthorizationProvider("scope", "::");
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, new ClaimsPrincipal(new ClaimsIdentity()), Resolve(new ScopePair("Template", "Read")), CancellationToken.None);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("Template::Admin", "Read")]
+    [InlineData("Template::Admin", "Manage")]
+    [InlineData("Template::Manage", "Read")]
+    public async Task A_verb_includes_every_verb_its_included_verbs_include(string held, string requiredVerb)
+    {
+        // Admin → Manage → Read: Admin must satisfy Read without the map listing Read under Admin.
+        var provider = new ScopePairClaimAuthorizationProvider(
+            "scope",
+            "::",
+            verbInclusions: new Dictionary<string, string[]>
+            {
+                ["Admin"] = ["Manage"],
+                ["Manage"] = ["Create", "Read", "Update", "Delete"],
+            });
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, CreatePrincipal(held), Resolve(new ScopePair("Template", requiredVerb)), CancellationToken.None);
+
+        result.Should().BeTrue($"{held} includes {requiredVerb}, directly or through another verb");
+    }
+
+    [Fact]
+    public async Task A_verb_never_includes_the_verbs_that_include_it()
+    {
+        var provider = new ScopePairClaimAuthorizationProvider(
+            "scope",
+            "::",
+            verbInclusions: new Dictionary<string, string[]>
+            {
+                ["Admin"] = ["Manage"],
+                ["Manage"] = ["Read"],
+            });
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, CreatePrincipal("Template::Read"), Resolve(new ScopePair("Template", "Admin")), CancellationToken.None);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_cycle_in_the_verb_inclusions_does_not_hang()
+    {
+        var provider = new ScopePairClaimAuthorizationProvider(
+            "scope",
+            "::",
+            verbInclusions: new Dictionary<string, string[]>
+            {
+                ["A"] = ["B"],
+                ["B"] = ["A", "C"],
+            });
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, CreatePrincipal("Template::A"), Resolve(new ScopePair("Template", "C")), CancellationToken.None);
+
+        result.Should().BeTrue("A includes B, which includes C");
+    }
+
     // ─── Decision shape ───────────────────────────────────────────────
 
     [Fact]

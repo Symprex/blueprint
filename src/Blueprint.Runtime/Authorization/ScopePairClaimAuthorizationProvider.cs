@@ -41,15 +41,6 @@ namespace Blueprint.Authorization;
 /// after scope renames (e.g. <c>"CompiledSignature::Read"</c> → <c>"MyCompiledSignature::Read"</c>).
 /// </para>
 /// </remarks>
-/// <summary>
-/// A function that maps a legacy scope claim value to zero or more replacement scope values.
-/// Returning <see langword="null"/> or an empty array means no legacy mapping exists for the value.
-/// </summary>
-/// <param name="scopeClaimValue">The raw scope claim value that did not match any required scope pair directly.</param>
-/// <returns>Replacement scope values, or <see langword="null"/> if no mapping exists.</returns>
-public delegate string[]? LegacyScopeMapperFunc(string scopeClaimValue);
-
-/// <inheritdoc cref="ScopePairClaimAuthorizationProvider"/>
 public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvider
 {
     /// <summary>
@@ -74,6 +65,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     private readonly FrozenSet<string> _ignoredScopes;
     private readonly LegacyScopeMapperFunc? _legacyScopeMapper;
     private readonly bool _allowWhenNoScopeClaims;
+    private readonly bool _allowUnauthenticated;
 
     // Inverse mapping: required verb → list of parent verbs that also satisfy it.
     // e.g. "Create" → ["Manage"] means a "Manage" claim also satisfies a "Create" requirement.
@@ -99,7 +91,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// <summary>
     /// Initialises a new instance of the <see cref="ScopePairClaimAuthorizationProvider"/> class
     /// with default settings: <c>"scope"</c> claim type, <c>"::"</c> separator, and the standard
-    /// OAuth2 non-API scopes (<c>openid</c>, <c>profile</c>, <c>email</c>) ignored.
+    /// OAuth2 non-API scopes (<c>openid</c>, <c>profile</c>, <c>email</c>, <c>offline_access</c>) ignored.
     /// </summary>
     public ScopePairClaimAuthorizationProvider()
         : this("scope", "::", ["openid", "profile", "email", "offline_access"])
@@ -174,13 +166,16 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// </param>
     /// <param name="ignoredScopes">
     /// Scope values to ignore during authorization (e.g. <c>"openid"</c>, <c>"profile"</c>).
-    /// When non-null and non-empty, claims matching these values are skipped entirely.
+    /// When non-null and non-empty, claims matching these values are skipped entirely. The set is used exactly as given:
+    /// unlike the parameterless constructor and <see cref="WithCrudVerbHierarchy(string[])"/>, this constructor adds none
+    /// of the OAuth2 defaults, so a scope such as <c>offline_access</c> left out of it counts as an API scope.
     /// </param>
     /// <param name="verbInclusions">
     /// Optional verb hierarchy: maps parent verbs to the child verbs they include.
     /// For example, <c>{ "Manage": ["Create", "Read", "Update", "Delete"] }</c> means a
     /// claim of <c>"User::Manage"</c> also satisfies requirements for <c>"User::Create"</c>,
-    /// <c>"User::Read"</c>, etc. This matches the S365 verb expansion model.
+    /// <c>"User::Read"</c>, etc. This matches the S365 verb expansion model. Inclusion is transitive: with
+    /// <c>Admin → [Manage]</c> and <c>Manage → [Read]</c>, <c>Admin</c> satisfies <c>Read</c> too.
     /// </param>
     /// <param name="legacyScopeMapper">
     /// Optional function that maps legacy scope claim values to replacement values.
@@ -193,14 +188,22 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// convention where admin/service tokens without explicit scopes have full access.
     /// Defaults to <see langword="false"/> (deny when no scopes).
     /// </param>
+    /// <param name="allowUnauthenticated">
+    /// When <see langword="true"/>, an unauthenticated caller is allowed by this provider, which then judges only the
+    /// scopes of authenticated callers. Use it when another provider registered beside this one refuses unauthenticated
+    /// callers itself, as Signature 365's grant check does with a 401, so this one does not refuse first with a 403.
+    /// Defaults to <see langword="false"/> (deny).
+    /// </param>
     public ScopePairClaimAuthorizationProvider(
         string scopeClaimType,
         string separator,
         IEnumerable<string>? ignoredScopes = null,
         IDictionary<string, string[]>? verbInclusions = null,
         LegacyScopeMapperFunc? legacyScopeMapper = null,
-        bool allowWhenNoScopeClaims = false)
+        bool allowWhenNoScopeClaims = false,
+        bool allowUnauthenticated = false)
     {
+        this._allowUnauthenticated = allowUnauthenticated;
         this._scopeClaimType = scopeClaimType ?? throw new ArgumentNullException(nameof(scopeClaimType));
         this._separator = separator ?? throw new ArgumentNullException(nameof(separator));
         this._ignoredScopes = ignoredScopes is not null
@@ -233,7 +236,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
         if (identity is not { IsAuthenticated: true })
         {
-            return _unauthenticated;
+            return this._allowUnauthenticated ? _allowed : _unauthenticated;
         }
 
         var hasAnyScopeClaims = false;
@@ -400,19 +403,48 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
             return FrozenDictionary<string, string[]>.Empty;
         }
 
-        var inverse = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        // Inclusion is transitive (Admin → Manage → Read means Admin includes Read), so each parent is mapped from every verb
+        // it reaches, not only those it lists. Computed once here, so authorization stays a single lookup per verb; the
+        // visited set ends a walk that meets a cycle.
+        var children = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var (parentVerb, childVerbs) in verbInclusions)
         {
-            foreach (var childVerb in childVerbs)
+            // Keys differing only in case were accepted before inclusion became transitive, so merge them, not throw.
+            children[parentVerb] = children.TryGetValue(parentVerb, out var existing) ? [.. existing, .. childVerbs] : childVerbs;
+        }
+
+        var inverse = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var parentVerb in children.Keys)
+        {
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { parentVerb };
+            var pending = new Stack<string>(children[parentVerb]);
+
+            while (pending.Count > 0)
             {
-                if (!inverse.TryGetValue(childVerb, out var parents))
+                var includedVerb = pending.Pop();
+
+                if (!visited.Add(includedVerb))
                 {
-                    parents = [];
-                    inverse[childVerb] = parents;
+                    continue;
+                }
+
+                if (!inverse.TryGetValue(includedVerb, out var parents))
+                {
+                    parents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    inverse[includedVerb] = parents;
                 }
 
                 parents.Add(parentVerb);
+
+                if (children.TryGetValue(includedVerb, out var grandchildren))
+                {
+                    foreach (var grandchild in grandchildren)
+                    {
+                        pending.Push(grandchild);
+                    }
+                }
             }
         }
 

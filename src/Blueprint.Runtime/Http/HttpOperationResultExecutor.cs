@@ -2,10 +2,8 @@ using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -450,7 +448,7 @@ public class HttpOperationResultExecutor
         var serializerContext = app.AppOwnedSerializerContext;
         var contentType = content.GetType();
 
-        var jsonTypeInfo = SerializerContextTypeInfoCache.Get(serializerContext, contentType);
+        var jsonTypeInfo = SerializerContextTypeInfoCache.Get(app, contentType, httpContext.RequestServices);
 
         if (jsonTypeInfo is not null)
         {
@@ -485,7 +483,9 @@ public class HttpOperationResultExecutor
         else
         {
             var serializerOptions = serializerContext?.Options ?? _emptyFallbackOptions;
-            return JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, CreateFallbackSerializerOptions(serializerOptions), httpContext.RequestAborted);
+            var options = SerializerContextTypeInfoCache.GetUncoveredRootOptions(app, httpContext.RequestServices)
+                ?? CreateFallbackSerializerOptions(serializerOptions);
+            return JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, options, httpContext.RequestAborted);
         }
     }
 
@@ -571,7 +571,7 @@ public class HttpOperationResultExecutor
         writer.WritePropertyName(_propData);
 
         var dataType = result.Content.GetType();
-        var dataTypeInfo = SerializerContextTypeInfoCache.Get(serializerContext, dataType);
+        var dataTypeInfo = SerializerContextTypeInfoCache.Get(operationContext.App, dataType, httpContext.RequestServices);
 
         if (dataTypeInfo is not null)
         {
@@ -682,7 +682,7 @@ public class HttpOperationResultExecutor
             writer.WritePropertyName(_propData);
 
             var dataType = result.ResolvedContent.GetType();
-            var dataTypeInfo = SerializerContextTypeInfoCache.Get(serializerContext, dataType);
+            var dataTypeInfo = SerializerContextTypeInfoCache.Get(operationContext.App, dataType, httpContext.RequestServices);
 
             if (dataTypeInfo is not null)
             {
@@ -744,38 +744,9 @@ public class HttpOperationResultExecutor
         return writeTask;
     }
 
-    // Keyed weakly, as SerializerContextTypeInfoCache is: the key is an app's context options, and this static must not
-    // keep a dropped app's options alive.
-    private static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptionsCache = new();
-
-    // Shared singleton avoids allocating a new resolver each time the fallback cache is populated.
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2026",
-        Justification = "The fallback serialization path already suppresses IL2026 for this code path. Sharing a single DefaultJsonTypeInfoResolver instance avoids unnecessary allocations.")]
-    [UnconditionalSuppressMessage(
-        "AOT",
-        "IL3050",
-        Justification = "DefaultJsonTypeInfoResolver requires dynamic code. This is only used as a fallback when the app-owned serializer context does not cover a type.")]
-    private static readonly DefaultJsonTypeInfoResolver _sharedDefaultTypeInfoResolver = new();
-
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2026",
-        Justification = "The HTTP executor already relies on runtime serialization for uncovered response roots while the serializer-coverage migration remains in progress. This fallback keeps app-owned source-generated metadata first and only adds reflection metadata for wrapper roots the app context does not declare.")]
-    [UnconditionalSuppressMessage(
-        "AOT",
-        "IL3050",
-        Justification = "Fallback options use DefaultJsonTypeInfoResolver which requires dynamic code. AOT consumers must ensure their JsonSerializerContext covers all serialized types.")]
     private static JsonSerializerOptions CreateFallbackSerializerOptions(JsonSerializerOptions serializerOptions)
     {
-        return _fallbackOptionsCache.GetValue(serializerOptions, static opts =>
-            new JsonSerializerOptions(opts)
-            {
-                TypeInfoResolver = opts.TypeInfoResolver is null
-                    ? _sharedDefaultTypeInfoResolver
-                    : JsonTypeInfoResolver.Combine(opts.TypeInfoResolver, _sharedDefaultTypeInfoResolver),
-            });
+        return SerializerContextTypeInfoCache.GetFallbackOptions(serializerOptions);
     }
 
     private static readonly ConcurrentDictionary<Type, FrozenSet<string>> _resultTypeNamesCache = new();

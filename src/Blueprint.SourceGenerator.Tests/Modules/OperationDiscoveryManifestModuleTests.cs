@@ -130,7 +130,7 @@ public class OperationDiscoveryManifestModuleTests
 
         result.Value.Should().BeNull();
         result.Diagnostics.Should().ContainSingle();
-        result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BPMOD005");
+        result.Diagnostics[0].ToDiagnostic(null).Id.Should().Be("BPMOD005");
     }
 
     [Fact]
@@ -147,9 +147,9 @@ public class OperationDiscoveryManifestModuleTests
 
         result.Value.Should().BeNull();
         result.Diagnostics.Should().ContainSingle();
-        result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BPOD001");
-        result.Diagnostics[0].ToDiagnostic().GetMessage().Should().Contain("http");
-        result.Diagnostics[0].ToDiagnostic().GetMessage().Should().Contain("ListUsersQuery");
+        result.Diagnostics[0].ToDiagnostic(null).Id.Should().Be("BPOD001");
+        result.Diagnostics[0].ToDiagnostic(null).GetMessage().Should().Contain("http");
+        result.Diagnostics[0].ToDiagnostic(null).GetMessage().Should().Contain("ListUsersQuery");
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class OperationDiscoveryManifestModuleTests
         result.Value.Should().BeNull();
         result.Diagnostics.Should().ContainSingle();
 
-        var diagnostic = result.Diagnostics[0].ToDiagnostic();
+        var diagnostic = result.Diagnostics[0].ToDiagnostic(null);
         diagnostic.Id.Should().Be("BPOD002");
         diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
         diagnostic.GetMessage().Should().Contain("SendWelcomeEmailTask");

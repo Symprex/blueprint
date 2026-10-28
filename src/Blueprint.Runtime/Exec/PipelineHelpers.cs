@@ -2395,7 +2395,7 @@ public static class PipelineHelpers
         var serializerContext = operationContext.App.AppOwnedSerializerContext;
         var contentType = content.GetType();
 
-        var jsonTypeInfo = Http.SerializerContextTypeInfoCache.Get(serializerContext, contentType);
+        var jsonTypeInfo = Http.SerializerContextTypeInfoCache.Get(operationContext.App, contentType, httpContext.RequestServices);
 
         if (jsonTypeInfo is not null)
         {
@@ -2434,8 +2434,10 @@ public static class PipelineHelpers
         }
         else
         {
+            var options = Http.SerializerContextTypeInfoCache.GetUncoveredRootOptions(operationContext.App, httpContext.RequestServices)
+                ?? serializerContext?.Options;
             return System.Text.Json.JsonSerializer.SerializeAsync(
-                httpContext.Response.Body, content, contentType, serializerContext?.Options, httpContext.RequestAborted);
+                httpContext.Response.Body, content, contentType, options, httpContext.RequestAborted);
         }
     }
 

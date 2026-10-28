@@ -213,4 +213,63 @@ public class AppDataModelSourceGeneratorTestsSerializerContextDeclaration
         registrationSource.Should().NotBeNull();
         registrationSource!.Should().Contain("this.AppOwnedSerializerContextBodyTypes = global::System.Collections.Immutable.ImmutableArray.Create<global::System.Type>(typeof(string), typeof(global::TestNamespace.FirstPayload));");
     }
+
+    [Theory]
+    [InlineData("AllowRuntimeTypeFallback = true", true)]
+    [InlineData("AllowRuntimeTypeFallback = false", false)]
+    [InlineData(null, false)]
+    public void When_app_declares_runtime_type_fallback_then_generated_registration_assigns_it_only_when_true(string? argument, bool assigned)
+    {
+        var arguments = argument is null ? string.Empty : ", " + argument;
+        var result = AppDataModelSourceGeneratorTests.Compile($$"""
+            #nullable enable
+
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+
+            public partial class TestBlueprintJsonContext : JsonSerializerContext
+            {
+                public TestBlueprintJsonContext()
+                    : base(new JsonSerializerOptions())
+                {
+                }
+
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => new JsonSerializerOptions();
+
+                public override JsonTypeInfo? GetTypeInfo(Type type)
+                {
+                    return null;
+                }
+            }
+
+            public partial class IncludedOperation : IOperation
+            {
+                public static ApiOperationDescriptor Configure() => throw new System.NotImplementedException();
+            }
+
+            [BlueprintAppScan]
+            [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(TestBlueprintJsonContext){{arguments}})]
+            public partial class TestBlueprintApp : BlueprintApp
+            {
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var registrationSource = result.Output
+            .Where(static tree => tree.FilePath.EndsWith("TestBlueprintApp_DataModelRegistration.g.cs", StringComparison.Ordinal))
+            .Select(static tree => tree.ToString())
+            .Single();
+
+        if (assigned)
+        {
+            registrationSource.Should().Contain("this.AllowRuntimeTypeFallback = true;");
+        }
+        else
+        {
+            registrationSource.Should().NotContain("AllowRuntimeTypeFallback");
+        }
+    }
 }
