@@ -1160,6 +1160,125 @@ public class AuthorizationModuleTests
             "authorization check must still be generated when primary property exists");
     }
 
+    // ── Linked resource types as subjects (#79) ────────────────────
+
+    [Fact]
+    public void When_fallback_is_missing_on_operation_but_used_by_a_linked_resource_type_then_no_BPAU010()
+    {
+        // The operation has the primary, so its own check never uses the fallback; TenantResource lacks the primary and
+        // has the fallback, so a link from it does.
+        var compilation = CreateCompilation(LinkedResourceSource(
+            "/Tenants/{UserTenantId:TenantId}",
+            "public string TenantId { get; set; }"));
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.DeleteTenantUserCommand", compilation);
+
+        result.Diagnostics.Should().NotContain(static d => d.Descriptor.Id == "BPAU010");
+    }
+
+    [Fact]
+    public void When_fallback_is_used_by_no_subject_then_BPAU010_still_fires()
+    {
+        // TenantResource has the primary too, so a link from it uses the primary and the fallback is dead everywhere.
+        var compilation = CreateCompilation(LinkedResourceSource(
+            "/Tenants/{UserTenantId:TenantId}",
+            "public string UserTenantId { get; set; }\n    public string TenantId { get; set; }"));
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.DeleteTenantUserCommand", compilation);
+
+        result.Diagnostics.Should().Contain(static d => d.Descriptor.Id == "BPAU010");
+    }
+
+    [Fact]
+    public void When_template_token_matches_no_property_on_a_linked_resource_type_then_reports_BPAU011()
+    {
+        var result = CompileDescriptor(LinkedResourceDeclarations("/Tenants/{UserTenantId}", "public string Name { get; set; }"));
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPAU011")
+            .Which.GetMessage().Should().Contain("UserTenantId").And.Contain("TenantResource");
+    }
+
+    [Fact]
+    public void When_operation_links_from_a_resource_then_descriptor_resolves_keys_against_that_resource_by_existence()
+    {
+        var result = CompileDescriptor(LinkedResourceDeclarations(
+            "/Tenants/{UserTenantId:TenantId}/Users/{Id}",
+            "public string TenantId { get; set; }\n    public string Id { get; set; }"));
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .Single(static s => s.Contains("DeleteTenantUserCommandDescriptor"));
+
+        // TenantResource lacks UserTenantId, so the fallback is used, and only the fallback: existence, not a null value,
+        // decides it.
+        descriptorSource.Should().Contain("OperationLinkAuthorizationFeatureData");
+        descriptorSource.Should().Contain("is global::TestNamespace.TenantResource");
+        descriptorSource.Should().Contain(".TenantId?.ToString()");
+        descriptorSource.Should().NotContain(".UserTenantId?.ToString() ??");
+    }
+
+    [Fact]
+    public void When_linked_resource_has_the_primary_then_descriptor_never_falls_back_to_the_fallback()
+    {
+        var result = CompileDescriptor(LinkedResourceDeclarations(
+            "/Tenants/{UserTenantId:TenantId}",
+            "public string UserTenantId { get; set; }\n    public string TenantId { get; set; }"));
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .Single(static s => s.Contains("DeleteTenantUserCommandDescriptor"));
+
+        descriptorSource.Should().Contain(".UserTenantId?.ToString() ?? \"\"");
+        descriptorSource.Should().NotContain(".TenantId?.ToString()");
+    }
+
+    [Theory]
+    [InlineData("public string UserTenantId { private get; set; }")]
+    [InlineData("public string UserTenantId { set { } }")]
+    public void When_linked_resource_has_the_primary_but_cannot_read_it_then_reports_BPAU011_and_does_not_fall_back(string primary)
+    {
+        // The primary exists, so silently using the fallback instead would change the key
+        var result = CompileDescriptor(LinkedResourceDeclarations(
+            "/Tenants/{UserTenantId:TenantId}",
+            primary + "\n    public string TenantId { get; set; }"));
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPAU011")
+            .Which.GetMessage().Should().Contain("UserTenantId:TenantId");
+
+        // An error stops the descriptor being written at all; nothing generated may read the fallback either way
+        result.Output
+            .Select(static t => t.ToString())
+            .Should().NotContain(static s => s.Contains(".TenantId?.ToString()"));
+    }
+
+    [Fact]
+    public void When_operation_has_no_links_then_descriptor_has_no_link_resolver()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read", "/Accounts/{Id}")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Output
+            .Select(static t => t.ToString())
+            .Single(static s => s.Contains("GetAccountQueryDescriptor"))
+            .Should().NotContain("OperationLinkAuthorizationFeatureData");
+    }
+
     // ── Duplicate scope pair detection ─────────────────────────────
 
     [Fact]
@@ -1271,6 +1390,38 @@ public class AuthorizationModuleTests
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
+
+    // An HTTP command whose [Resource] template is resolved both against itself and, through [Link], against
+    // TenantResource, whose members are given.
+    private static string LinkedResourceDeclarations(string template, string resourceMembers)
+    {
+        return $$"""
+                 public partial class TenantResource : ApiResource
+                 {
+                     {{resourceMembers}}
+                 }
+
+                 [RootLink("/tenantUsers/{UserTenantId}/{Id}")]
+                 [Link(typeof(TenantResource), "/tenantUsers", Rel = "deleteUser")]
+                 [Resource("tenantUser", "delete", "{{template}}")]
+                 public partial class DeleteTenantUserCommand : ICommand<string>
+                 {
+                     public string UserTenantId { get; set; }
+                     public string Id { get; set; }
+
+                     public static Task<string> HandleAsync(DeleteTenantUserCommand operation)
+                     {
+                         return Task.FromResult("ok");
+                     }
+                 }
+                 """;
+    }
+
+    private static string LinkedResourceSource(string template, string resourceMembers)
+    {
+        return "using Blueprint.Model;\nusing Blueprint.Model.Attributes;\nusing System.Threading.Tasks;\n\nnamespace TestNamespace;\n\n"
+               + LinkedResourceDeclarations(template, resourceMembers);
+    }
 
     private static GenerationResult CompileDescriptor(string source)
     {

@@ -3,20 +3,31 @@ using Blueprint.Model;
 namespace Blueprint.Authorization;
 
 /// <summary>
-/// What an <see cref="IResourceAuthorizationProvider"/> is asked to decide: the operation's resolved scope pairs, why it
-/// is being asked, and, for a link, the resource the link would be written on.
+/// What an <see cref="IResourceAuthorizationProvider"/> is asked to decide: the operation being authorised, its resolved
+/// scope pairs, why it is being asked, and, for a link, the resource the link would be written on.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A struct with factory methods so the happy path allocates nothing and a request can only be made in a valid shape: a
 /// <see cref="ResourceAuthorizationMode.Link"/> request always carries its resource, and no other mode does.
+/// </para>
+/// <para>
+/// <see cref="Descriptor"/> is the operation being authorised, which for a link is the linked operation. Read it rather
+/// than the context's descriptor: when links are written the context is the operation that returned the resource.
+/// </para>
 /// </remarks>
 public readonly struct ResourceAuthorizationRequest
 {
     private readonly IReadOnlyList<ResolvedScopePair>? _scopePairs;
 
-    private ResourceAuthorizationRequest(ResourceAuthorizationMode mode, IReadOnlyList<ResolvedScopePair> scopePairs, object? resource)
+    private ResourceAuthorizationRequest(
+        ResourceAuthorizationMode mode,
+        ApiOperationDescriptor descriptor,
+        IReadOnlyList<ResolvedScopePair> scopePairs,
+        object? resource)
     {
         this.Mode = mode;
+        this.Descriptor = descriptor;
         this._scopePairs = scopePairs;
         this.Resource = resource;
     }
@@ -25,6 +36,12 @@ public readonly struct ResourceAuthorizationRequest
     /// Gets why the provider is being asked.
     /// </summary>
     public ResourceAuthorizationMode Mode { get; }
+
+    /// <summary>
+    /// Gets the operation being authorised: the one executing, or for a link the linked one. Never
+    /// <see langword="null"/> for a request made by a factory method.
+    /// </summary>
+    public ApiOperationDescriptor Descriptor { get; }
 
     /// <summary>
     /// Gets the scope pairs declared on the operation, with their resource keys resolved for <see cref="Mode"/>. Any-of
@@ -41,38 +58,44 @@ public readonly struct ResourceAuthorizationRequest
     /// <summary>
     /// Creates a request to authorise the operation's execution.
     /// </summary>
+    /// <param name="descriptor">The operation executing.</param>
     /// <param name="scopePairs">The operation's scope pairs, resolved against the operation.</param>
     /// <returns>The request.</returns>
-    public static ResourceAuthorizationRequest Execute(IReadOnlyList<ResolvedScopePair> scopePairs)
+    public static ResourceAuthorizationRequest Execute(ApiOperationDescriptor descriptor, IReadOnlyList<ResolvedScopePair> scopePairs)
     {
+        ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(scopePairs);
 
-        return new ResourceAuthorizationRequest(ResourceAuthorizationMode.Execute, scopePairs, resource: null);
+        return new ResourceAuthorizationRequest(ResourceAuthorizationMode.Execute, descriptor, scopePairs, resource: null);
     }
 
     /// <summary>
     /// Creates a request to decide whether a link to the operation may be written on <paramref name="resource"/>.
     /// </summary>
+    /// <param name="descriptor">The linked operation.</param>
     /// <param name="scopePairs">The operation's scope pairs, resolved against <paramref name="resource"/>.</param>
     /// <param name="resource">The resource the link would be written on.</param>
     /// <returns>The request.</returns>
-    public static ResourceAuthorizationRequest Link(IReadOnlyList<ResolvedScopePair> scopePairs, object resource)
+    public static ResourceAuthorizationRequest Link(ApiOperationDescriptor descriptor, IReadOnlyList<ResolvedScopePair> scopePairs, object resource)
     {
+        ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(scopePairs);
         ArgumentNullException.ThrowIfNull(resource);
 
-        return new ResourceAuthorizationRequest(ResourceAuthorizationMode.Link, scopePairs, resource);
+        return new ResourceAuthorizationRequest(ResourceAuthorizationMode.Link, descriptor, scopePairs, resource);
     }
 
     /// <summary>
     /// Creates a request to decide whether the operation may be listed for the caller before any resource exists.
     /// </summary>
+    /// <param name="descriptor">The operation being listed.</param>
     /// <param name="scopePairs">The operation's scope pairs, with only the caller's own tokens resolved.</param>
     /// <returns>The request.</returns>
-    public static ResourceAuthorizationRequest Listing(IReadOnlyList<ResolvedScopePair> scopePairs)
+    public static ResourceAuthorizationRequest Listing(ApiOperationDescriptor descriptor, IReadOnlyList<ResolvedScopePair> scopePairs)
     {
+        ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(scopePairs);
 
-        return new ResourceAuthorizationRequest(ResourceAuthorizationMode.Listing, scopePairs, resource: null);
+        return new ResourceAuthorizationRequest(ResourceAuthorizationMode.Listing, descriptor, scopePairs, resource: null);
     }
 }

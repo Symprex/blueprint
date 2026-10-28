@@ -1280,7 +1280,7 @@ public static class PipelineHelpers
             return DenyWithoutResourceAuthorizationProvider(context);
         }
 
-        var request = Authorization.ResourceAuthorizationRequest.Execute(resolvedScopes);
+        var request = Authorization.ResourceAuthorizationRequest.Execute(context.Descriptor, resolvedScopes);
 
         for (var i = 0; i < providers.Length; i++)
         {

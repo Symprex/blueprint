@@ -97,15 +97,29 @@ internal static class AuthorizationDiagnosticDescriptors
 
     /// <summary>
     /// BPAU010: A fallback property path in a resource key template (the part after <c>:</c> in
-    /// <c>{Primary:Fallback}</c>) does not exist on the operation type. Since the primary property
-    /// exists and is used for authorization, this is non-blocking — the fallback is dead code.
-    /// Remove the fallback to silence this warning.
+    /// <c>{Primary:Fallback}</c>) is never used: the operation has the primary but not the fallback, and no resource type
+    /// the operation links from both lacks the primary and has the fallback. The fallback is dead code. Remove it to
+    /// silence this warning.
     /// </summary>
     public static readonly DiagnosticDescriptor ResourceKeyTemplateFallbackPropertyNotFound = new(
         id: "BPAU010",
         title: "Resource key template fallback property does not exist",
-        messageFormat: "Resource key template for operation '{0}' has fallback '{{{1}}}' but no public property '{1}' exists on the operation type. The primary property is used; remove the fallback to silence this warning.",
+        messageFormat: "Resource key template for operation '{0}' has fallback '{{{1}}}' but no public property '{1}' exists on the operation type, or on a resource type it links from that lacks the primary. The primary property is used; remove the fallback to silence this warning.",
         category: "Blueprint.Authorization",
         defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPAU011: A token in a resource key template matches no readable public property of a resource type the operation
+    /// links from (<c>[Link]</c> or <c>[SelfLink]</c>): neither the primary nor, for <c>{Primary:Fallback}</c>, the
+    /// fallback, or the primary exists but has no public getter. The key cannot be resolved against that resource, so a
+    /// link from it could never be authorised.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ResourceKeyTemplateTokenNotFoundOnLinkedResource = new(
+        id: "BPAU011",
+        title: "Resource key template token does not match a property of a linked resource type",
+        messageFormat: "Resource key template for operation '{0}' contains token '{{{1}}}', which matches no readable public property of '{2}', a resource type the operation links from. A link from '{2}' cannot be authorised. Fix the template, or add the property or its public getter to '{2}'.",
+        category: "Blueprint.Authorization",
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 }
