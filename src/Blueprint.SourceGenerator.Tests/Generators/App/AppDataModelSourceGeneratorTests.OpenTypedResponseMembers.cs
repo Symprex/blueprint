@@ -286,6 +286,19 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
     }
 
     [Fact]
+    public void When_the_naming_policy_makes_a_renamed_derived_member_collide_with_the_base_member_then_generator_reports_nothing()
+    {
+        // Under camelCase the base Value is "value" too, so System.Text.Json writes only the derived property.
+        var result = Compile(
+            "[JsonPropertyName(\"value\")] public new string? Value { get; set; }",
+            "public class PayloadBase { public object? Value { get; set; } }",
+            payloadBase: "PayloadBase",
+            contextAttributes: "[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]");
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
+    [Fact]
     public void When_a_problem_carries_open_extensions_then_generator_does_not_report_BP012()
     {
         // ProblemDetails is a declared root of every HTTP app; its Extensions are written through reflection at runtime.

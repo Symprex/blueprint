@@ -121,24 +121,35 @@ internal static class SerializerContextTypeInfoCache
 
     private static JsonTypeInfo? Resolve(JsonSerializerContext context, Type type, JsonSerializerOptions? runtimeFallbackOptions)
     {
+        // A problem's extensions and a resource event's payload and bags are open by design, so they are written
+        // through reflection without the runtime type fallback's warning: no context could register what they hold.
+        // That holds for a subclass the context does not register as well, so both writers write it the same way.
+        if (typeof(MvcProblemDetails).IsAssignableFrom(type) || typeof(ResourceEvent).IsAssignableFrom(type))
+        {
+            return GetFallbackOptions(context.Options).GetTypeInfo(type);
+        }
+
         var typeInfo = context.GetTypeInfo(type);
 
         if (typeInfo is null)
         {
             // An uncovered root - a registered root returned as a subclass the context does not register - goes through the
             // runtime type fallback when the app allows it, so it is warned about and both writers agree; otherwise the
-            // caller's own runtime serialization applies.
-            return runtimeFallbackOptions?.GetTypeInfo(type);
-        }
-
-        // A problem's extensions and a resource event's payload and bags are open by design, so they are written
-        // through reflection without the runtime type fallback's warning: no context could register what they hold.
-        if (typeof(MvcProblemDetails).IsAssignableFrom(type) || typeof(ResourceEvent).IsAssignableFrom(type))
-        {
-            return GetFallbackOptions(context.Options).GetTypeInfo(type);
+            // caller's own runtime serialization applies. An async stream is left to that too: its metadata would send it
+            // to a synchronous write, which cannot enumerate it.
+            return runtimeFallbackOptions is null || IsAsyncEnumerable(type) ? null : runtimeFallbackOptions.GetTypeInfo(type);
         }
 
         return runtimeFallbackOptions?.GetTypeInfo(type) ?? typeInfo;
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = "Asked only on the runtime type fallback's path, which is reflection by definition; an app that opts in has given up trimming.")]
+    private static bool IsAsyncEnumerable(Type type)
+    {
+        return type.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAsyncEnumerable<>));
     }
 
     /// <summary>
@@ -250,9 +261,17 @@ internal static class SerializerContextTypeInfoCache
                 || type == typeof(UInt128);
         }
 
-        private static JsonTypeInfo<T> CreateLoggingValueInfo<T>(JsonTypeInfo inner, JsonSerializerOptions options, LoggingFallbackResolver owner)
+        private static JsonTypeInfo CreateLoggingValueInfo<T>(JsonTypeInfo inner, JsonSerializerOptions options, LoggingFallbackResolver owner)
         {
-            return JsonMetadataServices.CreateValueInfo<T>(options, new LoggingValueConverter<T>((JsonConverter<T>)inner.Converter, owner));
+            if (inner.Converter is JsonConverter<T> converter)
+            {
+                return JsonMetadataServices.CreateValueInfo<T>(options, new LoggingValueConverter<T>(converter, owner));
+            }
+
+            // A base type's converter accepting this type through CanConvert, which System.Text.Json adapts internally and
+            // which cannot be wrapped as this type's: keep its metadata, and warn as it is resolved instead.
+            owner.LogOnce(typeof(T));
+            return inner;
         }
 
         private void LogOnce(Type type)

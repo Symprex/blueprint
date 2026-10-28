@@ -70,6 +70,38 @@ public sealed class RuntimeTypeFallbackTests
     }
 
     [Fact]
+    public async Task With_the_opt_in_an_async_iterator_root_is_still_written_asynchronously()
+    {
+        using var services = CreateServices(new ConcurrentQueue<string>());
+        var app = new FallbackTestApp(allowRuntimeTypeFallback: true);
+
+        static async IAsyncEnumerable<string> ItemsAsync()
+        {
+            await Task.Yield();
+            yield return "a";
+            yield return "b";
+        }
+
+        var httpContext = CreateHttpContext(services);
+        await HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, app, ItemsAsync());
+
+        ReadBody(httpContext).Should().Be("""["a","b"]""");
+    }
+
+    [Fact]
+    public async Task With_the_opt_in_a_value_written_by_a_base_types_converter_is_written_by_it()
+    {
+        using var services = CreateServices(new ConcurrentQueue<string>());
+        var context = new RuntimeTypeFallbackJsonContext(new JsonSerializerOptions { Converters = { new ShapeConverter() } });
+        var app = new FallbackTestApp(allowRuntimeTypeFallback: true, context);
+
+        var httpContext = CreateHttpContext(services);
+        await HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, app, new OpenHolder { Value = new Square() });
+
+        ReadBody(httpContext).Should().Be("""{"Value":"Square"}""");
+    }
+
+    [Fact]
     public async Task With_the_opt_in_a_registered_runtime_type_is_written_without_a_warning()
     {
         var logged = new ConcurrentQueue<string>();
@@ -257,6 +289,40 @@ public sealed class OpenHolder
 /// </summary>
 /// <param name="Name">The payload's name.</param>
 public sealed record UnregisteredPayload(string Name);
+
+/// <summary>
+/// A base type whose converter also writes its subclasses.
+/// </summary>
+public abstract class Shape;
+
+/// <summary>
+/// A subclass of <see cref="Shape" /> the context does not register, written by <see cref="ShapeConverter" />.
+/// </summary>
+public sealed class Square : Shape;
+
+/// <summary>
+/// Writes any <see cref="Shape" /> as its type name, accepting subclasses through <see cref="CanConvert" />.
+/// </summary>
+public sealed class ShapeConverter : JsonConverter<Shape>
+{
+    /// <inheritdoc />
+    public override bool CanConvert(Type typeToConvert)
+    {
+        return typeof(Shape).IsAssignableFrom(typeToConvert);
+    }
+
+    /// <inheritdoc />
+    public override Shape Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        throw new NotSupportedException();
+    }
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, Shape value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.GetType().Name);
+    }
+}
 
 /// <summary>
 /// A response root the context registers, which may be returned as a subclass it does not.

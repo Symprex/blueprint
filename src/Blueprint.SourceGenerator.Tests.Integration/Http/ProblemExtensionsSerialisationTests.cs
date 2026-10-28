@@ -54,6 +54,25 @@ public sealed class ProblemExtensionsSerialisationTests
     }
 
     [Fact]
+    public async Task An_unregistered_problem_subclass_written_by_the_pipelines_inline_writer_writes_its_extensions()
+    {
+        using var services = CreateServices();
+        var app = services.GetRequiredService<IntegrationTestBlueprintApp>();
+        var context = new ApiOperationContext(services, app, app.FindOperation(typeof(GetLinkWireWidgetQuery)), CancellationToken.None);
+        var httpContext = CreateHttpContext(services);
+
+        var problem = new TemplateProblem
+        {
+            Status = 400,
+            Extensions = { ["errors"] = new List<CompilationError> { new(3, "Unexpected token") } },
+        };
+
+        await PipelineHelpers.WriteOkJsonResponseAsync(httpContext, context, problem);
+
+        ReadBody(httpContext).Should().Contain(ExpectedErrors);
+    }
+
+    [Fact]
     public async Task An_ApiExceptions_extensions_of_unregistered_types_are_written_with_its_status()
     {
         using var services = CreateServices();
@@ -140,4 +159,9 @@ public sealed class ProblemExtensionsSerialisationTests
     }
 
     private sealed record CompilationError(int Line, string Message);
+
+    private sealed class TemplateProblem : ProblemDetails
+    {
+        public string? Template { get; set; }
+    }
 }

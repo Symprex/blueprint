@@ -121,7 +121,7 @@ public sealed partial class AppDataModelSourceGenerator
     /// <summary>
     /// The context's <c>[JsonSourceGenerationOptions]</c> that decide which members its contract writes at all.
     /// </summary>
-    private sealed record ContextMemberOptions(bool IncludeFields, bool IgnoreReadOnlyProperties, bool IgnoreReadOnlyFields)
+    private sealed record ContextMemberOptions(bool IncludeFields, bool IgnoreReadOnlyProperties, bool IgnoreReadOnlyFields, int NamingPolicy)
     {
         public static ContextMemberOptions From(INamedTypeSymbol contextType)
         {
@@ -132,7 +132,9 @@ public sealed partial class AppDataModelSourceGenerator
 
             bool Get(string name) => arguments.Any(argument => argument.Key == name && argument.Value.Value is true);
 
-            return new ContextMemberOptions(Get(nameof(IncludeFields)), Get(nameof(IgnoreReadOnlyProperties)), Get(nameof(IgnoreReadOnlyFields)));
+            var namingPolicy = arguments.FirstOrDefault(static argument => argument.Key == "PropertyNamingPolicy").Value.Value as int? ?? 0;
+
+            return new ContextMemberOptions(Get(nameof(IncludeFields)), Get(nameof(IgnoreReadOnlyProperties)), Get(nameof(IgnoreReadOnlyFields)), namingPolicy);
         }
     }
 
@@ -428,7 +430,7 @@ public sealed partial class AppDataModelSourceGenerator
             {
                 if (member is not (IPropertySymbol { IsIndexer: false } or IFieldSymbol { IsConst: false, IsImplicitlyDeclared: false })
                     || member.IsStatic
-                    || seen.Contains(GetJsonName(member)))
+                    || seen.Contains(this.GetJsonName(member)))
                 {
                     continue;
                 }
@@ -447,7 +449,7 @@ public sealed partial class AppDataModelSourceGenerator
                     continue;
                 }
 
-                seen.Add(GetJsonName(member));
+                seen.Add(this.GetJsonName(member));
 
                 var ignoreCondition = GetIgnoreCondition(member);
                 if (ignoreCondition is IgnoreAlways or IgnoreWhenWriting)
@@ -493,12 +495,81 @@ public sealed partial class AppDataModelSourceGenerator
             return false;
         }
 
-        private static string GetJsonName(ISymbol member)
+        // The member's JSON name: its [JsonPropertyName], or its name under the context's known naming policy, so two
+        // members collide exactly when System.Text.Json would write one name for both.
+        private string GetJsonName(ISymbol member)
         {
             return member.GetAttributes()
                 .Where(static attribute => IsJsonAttribute(attribute.AttributeClass, "JsonPropertyNameAttribute"))
                 .Select(static attribute => attribute.ConstructorArguments.FirstOrDefault().Value as string)
-                .FirstOrDefault() ?? member.Name;
+                .FirstOrDefault() ?? ApplyNamingPolicy(member.Name, memberOptions.NamingPolicy);
+        }
+
+        // JsonKnownNamingPolicy: 1 camelCase, 2/3 snake_case lower/upper, 4/5 kebab-case lower/upper.
+        private static string ApplyNamingPolicy(string name, int policy)
+        {
+            return policy switch
+            {
+                1 => ToCamelCase(name),
+                2 => ToSeparated(name, '_', upper: false),
+                3 => ToSeparated(name, '_', upper: true),
+                4 => ToSeparated(name, '-', upper: false),
+                5 => ToSeparated(name, '-', upper: true),
+                _ => name,
+            };
+        }
+
+        // As JsonNamingPolicy.CamelCase: the leading run of capitals is lowered, except a capital that starts the next word.
+        private static string ToCamelCase(string name)
+        {
+            if (name.Length == 0 || !char.IsUpper(name[0]))
+            {
+                return name;
+            }
+
+            var chars = name.ToCharArray();
+            for (var i = 0; i < chars.Length; i++)
+            {
+                if (i == 1 && !char.IsUpper(chars[i]))
+                {
+                    break;
+                }
+
+                var hasNext = i + 1 < chars.Length;
+                if (i > 0 && hasNext && !char.IsUpper(chars[i + 1]))
+                {
+                    if (char.IsSeparator(chars[i + 1]))
+                    {
+                        chars[i] = char.ToLowerInvariant(chars[i]);
+                    }
+
+                    break;
+                }
+
+                chars[i] = char.ToLowerInvariant(chars[i]);
+            }
+
+            return new string(chars);
+        }
+
+        // An approximation of JsonNamingPolicy's snake and kebab policies: a separator before each capital that follows a
+        // lower-case letter or digit, or that starts a word after a run of capitals.
+        private static string ToSeparated(string name, char separator, bool upper)
+        {
+            var builder = new System.Text.StringBuilder(name.Length + 4);
+            for (var i = 0; i < name.Length; i++)
+            {
+                var c = name[i];
+                if (i > 0 && char.IsUpper(c)
+                    && (char.IsLower(name[i - 1]) || char.IsDigit(name[i - 1]) || (i + 1 < name.Length && char.IsLower(name[i + 1]) && char.IsUpper(name[i - 1]))))
+                {
+                    builder.Append(separator);
+                }
+
+                builder.Append(upper ? char.ToUpperInvariant(c) : char.ToLowerInvariant(c));
+            }
+
+            return builder.ToString();
         }
 
         private static bool IsReadOnly(IPropertySymbol property, bool included)
