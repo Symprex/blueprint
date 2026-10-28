@@ -14,7 +14,9 @@ namespace Blueprint.Model;
 /// </para>
 /// <para>
 /// List the types the member actually holds - for a <c>Dictionary&lt;string, object&gt;</c> the value types, for an
-/// <c>object</c> property the types assigned to it. The other ways to clear BP012 are a <c>[JsonConverter]</c> on the
+/// <c>object</c> property the types assigned to it. It clears BP012 only where the member holds <see cref="object" />: a
+/// member typed as an interface or abstract class is written as that type whatever it holds, so naming the runtime
+/// types does not make their members written; such a member needs <c>[JsonDerivedType]</c> or a converter. The other ways to clear BP012 are a <c>[JsonConverter]</c> on the
 /// member, which then owns the member's shape, and the app-wide
 /// <see cref="BlueprintAppSerializerContextAttribute.AllowRuntimeTypeFallback" />.
 /// </para>

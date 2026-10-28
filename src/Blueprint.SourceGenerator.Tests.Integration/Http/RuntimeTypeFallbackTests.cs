@@ -56,6 +56,20 @@ public sealed class RuntimeTypeFallbackTests
     }
 
     [Fact]
+    public async Task With_the_opt_in_an_unregistered_subclass_of_a_registered_root_is_written_through_the_fallback_and_logged()
+    {
+        var logged = new ConcurrentQueue<string>();
+        using var services = CreateServices(logged);
+        var app = new FallbackTestApp(allowRuntimeTypeFallback: true);
+
+        var httpContext = CreateHttpContext(services);
+        await HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, app, new UnregisteredSubclass { Name = "base", Extra = new UnregisteredPayload("extra") });
+
+        ReadBody(httpContext).Should().Be("""{"Extra":{"Name":"extra"},"Name":"base"}""");
+        logged.Should().Contain(static message => message.Contains(typeof(UnregisteredSubclass).FullName!, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task With_the_opt_in_a_registered_runtime_type_is_written_without_a_warning()
     {
         var logged = new ConcurrentQueue<string>();
@@ -245,6 +259,28 @@ public sealed class OpenHolder
 public sealed record UnregisteredPayload(string Name);
 
 /// <summary>
+/// A response root the context registers, which may be returned as a subclass it does not.
+/// </summary>
+public class RegisteredBase
+{
+    /// <summary>
+    /// Gets or sets the name.
+    /// </summary>
+    public string? Name { get; set; }
+}
+
+/// <summary>
+/// A subclass of <see cref="RegisteredBase" /> the context does not register.
+/// </summary>
+public sealed class UnregisteredSubclass : RegisteredBase
+{
+    /// <summary>
+    /// Gets or sets a value only the subclass has.
+    /// </summary>
+    public object? Extra { get; set; }
+}
+
+/// <summary>
 /// A type the context does not register, holding a nullable number.
 /// </summary>
 public sealed class NullableNumberPayload
@@ -318,5 +354,6 @@ public sealed class WidgetKeyConverter : JsonConverter<WidgetKey>
 /// Registers <see cref="OpenHolder" /> and <see cref="string" />, but not <see cref="UnregisteredPayload" />.
 /// </summary>
 [JsonSerializable(typeof(OpenHolder))]
+[JsonSerializable(typeof(RegisteredBase))]
 [JsonSerializable(typeof(string))]
 internal sealed partial class RuntimeTypeFallbackJsonContext : JsonSerializerContext;

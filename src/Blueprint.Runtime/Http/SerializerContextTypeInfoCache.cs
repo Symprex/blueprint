@@ -125,7 +125,10 @@ internal static class SerializerContextTypeInfoCache
 
         if (typeInfo is null)
         {
-            return null;
+            // An uncovered root - a registered root returned as a subclass the context does not register - goes through the
+            // runtime type fallback when the app allows it, so it is warned about and both writers agree; otherwise the
+            // caller's own runtime serialization applies.
+            return runtimeFallbackOptions?.GetTypeInfo(type);
         }
 
         // A problem's extensions and a resource event's payload and bags are open by design, so they are written

@@ -175,6 +175,10 @@ public sealed partial class AppDataModelSourceGenerator
         private readonly INamedTypeSymbol? _readOnlyDictionaryOfT = compilation.GetTypeByMetadataName("System.Collections.Generic.IReadOnlyDictionary`2");
         private readonly INamedTypeSymbol? _keyValuePair = compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2");
 
+        // Set while walking the declared type of a member with [BlueprintRuntimeTypes]: an object there holds the listed
+        // types, but an interface or abstract type is still written as itself, whatever the listed types say.
+        private bool _objectsDeclared;
+
         public List<DiagnosticInfo> Diagnostics { get; } = [];
 
         public void Walk(ITypeSymbol rootType, string rootName)
@@ -196,7 +200,11 @@ public sealed partial class AppDataModelSourceGenerator
 
             if (this.IsOpen(type))
             {
-                this.ReportOpen(member, rootName);
+                if (!(this._objectsDeclared && (type.SpecialType == SpecialType.System_Object || type.TypeKind == TypeKind.Dynamic)))
+                {
+                    this.ReportOpen(member, rootName);
+                }
+
                 return;
             }
 
@@ -235,7 +243,11 @@ public sealed partial class AppDataModelSourceGenerator
                 || named.AllInterfaces.Any(static i => i.SpecialType == SpecialType.System_Collections_IEnumerable))
             {
                 // A non-generic collection's elements are objects.
-                this.ReportOpen(member, rootName);
+                if (!this._objectsDeclared)
+                {
+                    this.ReportOpen(member, rootName);
+                }
+
                 return;
             }
 
@@ -250,9 +262,11 @@ public sealed partial class AppDataModelSourceGenerator
                 this.VisitMember(serialized, rootName, atRoot);
             }
 
+            // A [JsonDerivedType] alternative is the same value written as another type, not nested in it, so it keeps
+            // the root's standing: a problem root listing a subclass is still written with fallback metadata.
             foreach (var derived in GetDerivedTypes(named))
             {
-                this.VisitType(derived, member, rootName, atRoot: false);
+                this.VisitType(derived, member, rootName, atRoot);
             }
         }
 
@@ -267,9 +281,14 @@ public sealed partial class AppDataModelSourceGenerator
             var runtimeTypes = member.GetAttributes()
                 .FirstOrDefault(static attribute => attribute.AttributeClass?.ToFullMetadataName() == BlueprintRuntimeTypesAttributeMetadataName);
 
+            var objectsDeclared = this._objectsDeclared;
+            this._objectsDeclared = runtimeTypes is not null;
+            this.VisitType(GetMemberType(member), member, rootName, atRoot: false);
+            this._objectsDeclared = false;
+
             if (runtimeTypes is null)
             {
-                this.VisitType(GetMemberType(member), member, rootName, atRoot: false);
+                this._objectsDeclared = objectsDeclared;
                 return;
             }
 
@@ -288,6 +307,8 @@ public sealed partial class AppDataModelSourceGenerator
                 // element of a declared collection (object[]) is still the member's to report.
                 this.VisitType(runtimeType, member, rootName, atRoot: false);
             }
+
+            this._objectsDeclared = objectsDeclared;
         }
 
         private void ReportOpen(ISymbol? member, string rootName)
@@ -401,12 +422,13 @@ public sealed partial class AppDataModelSourceGenerator
 
             // Most-derived first, so a member that hides or overrides one on a base class is the one walked. Only a member
             // the contract considers - written, or ignored - takes its name from a base member: a non-public one hiding a
-            // public base property does not, and System.Text.Json writes the base property.
+            // public base property does not, and System.Text.Json writes the base property. Names are JSON names, so a
+            // derived member renamed with [JsonPropertyName] does not hide a base member it no longer collides with.
             foreach (var member in type.GetAllMembers())
             {
                 if (member is not (IPropertySymbol { IsIndexer: false } or IFieldSymbol { IsConst: false, IsImplicitlyDeclared: false })
                     || member.IsStatic
-                    || seen.Contains(member.Name))
+                    || seen.Contains(GetJsonName(member)))
                 {
                     continue;
                 }
@@ -425,7 +447,7 @@ public sealed partial class AppDataModelSourceGenerator
                     continue;
                 }
 
-                seen.Add(member.Name);
+                seen.Add(GetJsonName(member));
 
                 var ignoreCondition = GetIgnoreCondition(member);
                 if (ignoreCondition is IgnoreAlways or IgnoreWhenWriting)
@@ -469,6 +491,14 @@ public sealed partial class AppDataModelSourceGenerator
             }
 
             return false;
+        }
+
+        private static string GetJsonName(ISymbol member)
+        {
+            return member.GetAttributes()
+                .Where(static attribute => IsJsonAttribute(attribute.AttributeClass, "JsonPropertyNameAttribute"))
+                .Select(static attribute => attribute.ConstructorArguments.FirstOrDefault().Value as string)
+                .FirstOrDefault() ?? member.Name;
         }
 
         private static bool IsReadOnly(IPropertySymbol property, bool included)

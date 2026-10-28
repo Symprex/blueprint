@@ -240,6 +240,52 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
     }
 
     [Fact]
+    public void When_a_problem_root_lists_a_derived_problem_then_its_inherited_extensions_are_still_exempt()
+    {
+        // A [JsonDerivedType] alternative of the root is the root written as another type, not a value nested in another
+        // response, so the runtime still writes it with fallback metadata.
+        var stub = ProblemDetailsStub.Replace(
+            "public class ProblemDetails",
+            "[JsonDerivedType(typeof(TestNamespace.TemplateProblem), \"template\")] public class ProblemDetails",
+            StringComparison.Ordinal);
+
+        var result = Compile(
+            "public int Count { get; set; }",
+            "public sealed class TemplateProblem : ProblemDetails { public int Line { get; set; } }",
+            problemDetailsStubOverride: stub);
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_an_interface_member_declares_runtime_types_then_generator_still_reports_BP012()
+    {
+        // The value is written as the declared interface whatever its runtime type, so naming Circle does not make the
+        // contract write Circle's members.
+        var result = Compile(
+            "[BlueprintRuntimeTypes(typeof(Circle))] public IShape? Value { get; set; }",
+            "public interface IShape { } public sealed class Circle : IShape { public int Radius { get; set; } }",
+            extraRegistrations: ["Circle"]);
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id).Should().Equal("BP012");
+    }
+
+    [Fact]
+    public void When_a_renamed_derived_member_shadows_a_renamed_open_base_member_then_generator_reports_the_base_member()
+    {
+        // Their JSON names differ, so System.Text.Json writes both.
+        var result = Compile(
+            "[JsonPropertyName(\"derivedValue\")] public new string? Value { get; set; }",
+            "public class PayloadBase { [JsonPropertyName(\"baseValue\")] public object? Value { get; set; } }",
+            payloadBase: "PayloadBase");
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
+            .Should().ContainSingle()
+            .Which.GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .Should().Contain("'TestNamespace.PayloadBase.Value'");
+    }
+
+    [Fact]
     public void When_a_problem_carries_open_extensions_then_generator_does_not_report_BP012()
     {
         // ProblemDetails is a declared root of every HTTP app; its Extensions are written through reflection at runtime.
@@ -307,9 +353,10 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         string? payloadBase = null,
         string contextAttributes = "",
         bool nestedContext = false,
-        bool stubProblemDetails = true)
+        bool stubProblemDetails = true,
+        string? problemDetailsStubOverride = null)
     {
-        var problemDetailsStub = stubProblemDetails ? ProblemDetailsStub : ValidationProblemDetailsStub;
+        var problemDetailsStub = problemDetailsStubOverride ?? (stubProblemDetails ? ProblemDetailsStub : ValidationProblemDetailsStub);
         var contextOpen = nestedContext ? "public static partial class Outer {" : string.Empty;
         var contextClose = nestedContext ? "}" : string.Empty;
         var contextReference = nestedContext ? "Outer.TestBlueprintJsonContext" : "TestBlueprintJsonContext";
