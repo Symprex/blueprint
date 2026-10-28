@@ -88,6 +88,14 @@ public class BlueprintApp
     public ImmutableArray<string> AppOwnedSerializerContextBodyTypeNames { get; protected set; } = ImmutableArray<string>.Empty;
 
     /// <summary>
+    /// Gets a value indicating whether the app declared
+    /// <see cref="BlueprintAppSerializerContextAttribute.AllowRuntimeTypeFallback" />, so that a response root its
+    /// serializer context declares is written with reflection metadata behind the context for any nested runtime type the
+    /// context does not register, instead of failing.
+    /// </summary>
+    public bool AllowRuntimeTypeFallback { get; protected set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether this app populates no HATEOAS links, set by
     /// <c>BlueprintServiceBuilder.DisableHateoasLinks()</c> when the app is registered. It is held on the app rather than in
     /// the service provider, so every pipeline of the app, nested ones included, sees the same setting through its

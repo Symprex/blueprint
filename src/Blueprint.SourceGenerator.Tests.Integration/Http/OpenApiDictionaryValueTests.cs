@@ -97,8 +97,12 @@ public sealed class OpenApiDictionaryValueTests
 /// <summary>A resource with a dictionary of each value shape legacy told apart.</summary>
 public sealed class DictionaryShapeApiResource
 {
+    // Schema-only: these values are never written, so only a registered primitive is declared (BP012).
+    [BlueprintRuntimeTypes(typeof(string))]
     public Dictionary<string, object?> ObjectNullableValues { get; init; } = [];
 
+    // Schema-only: these values are never written, so only a registered primitive is declared (BP012).
+    [BlueprintRuntimeTypes(typeof(string))]
     public Dictionary<string, object> ObjectValues { get; init; } = [];
 
     public IReadOnlyDictionary<string, string?> ReadOnlyNullableStrings { get; init; } = new Dictionary<string, string?>();
