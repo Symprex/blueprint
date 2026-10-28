@@ -146,7 +146,22 @@ public interface IResourceAuthorizationProvider
 }
 ```
 
-`ResourceAuthorizationRequest` carries the operation's `ScopePairs` and the `Mode` the provider is asked in. Only `Execute` is asked today; `Link` (with the linked `Resource`) and `Listing` are reserved for link visibility and authorisation manifests (Symprex/blueprint#79, #81).
+`ResourceAuthorizationRequest` carries the operation being authorised (`Descriptor`), its `ScopePairs`, and the `Mode` the provider is asked in: `Execute`, or `Link` with the linked `Resource`. `Listing` is reserved for authorisation manifests (Symprex/blueprint#81). Read `request.Descriptor`, not the context's: when links are written, the context is the operation that returned the resource, and the request's descriptor is the linked one.
+
+### Link visibility
+
+Whether a link to a permissioned operation is written on a resource is decided by the same providers (Symprex/blueprint#79). `IApiAuthoriserAggregator.CanShowLinkAsync` asks them all-of, in `Link` mode:
+- after the `IApiAuthoriser`s and before the `ILinkVisibilityAuthoriser`s;
+- with the caller's `ApiOperationContext.UserPrincipal`, which the HTTP path sets from `HttpContext.User`;
+- with the operation's keys resolved against the **resource**, by generated code.
+
+For each resource type an operation links from (`[Link]`, `[SelfLink]`), the generator emits a resolver into the operation's descriptor, as `OperationLinkAuthorizationFeatureData`. The resolver reads the resource's properties directly, so a list's items are each decided by their own keys. Against a resource:
+- `{A:B}` uses `A` when the resource type has a public property `A`, and `B` only when it does not. Whether the property exists decides, not whether its value is null, as Signature 365 decides it.
+- A null value is written as an empty segment.
+- `{Auth.X}` resolves as it does at execution: from the user's context for the properties it has, otherwise from the claim of that name.
+- A token that matches no property of a linked resource type is a compile-time error (`BPAU011`).
+
+A link to a permissioned operation is hidden when no resolver handles the resource's type, or no provider is registered, as its execution would be refused. Providers are not asked about an operation without scope pairs, or about a link written without a resource.
 
 Each `ResolvedScopePair` carries the raw template (`/Tenants/{Auth:AccountId}/Templates/{Id}`) alongside the expanded resource key (`/Tenants/abc123/Templates/42`), giving providers full context for both pattern-based and instance-level authorization decisions.
 

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
@@ -21,11 +22,21 @@ namespace Blueprint.Authorization;
 /// An <see cref="IApiAuthoriser"/> may decide by the resource, so the links of a list whose items a caller may act on
 /// differently are each decided by their own item.
 /// </para>
+/// <para>
+/// For an operation that declares scope pairs, the registered <see cref="IResourceAuthorizationProvider"/>s are asked
+/// too, after the <see cref="IApiAuthoriser"/>s and before the <see cref="ILinkVisibilityAuthoriser"/>s, in
+/// <see cref="ResourceAuthorizationMode.Link"/> mode with the keys resolved against the resource. They compose all-of, as
+/// they do at execution, and a link nothing can judge is hidden, as its execution would be refused.
+/// </para>
 /// </remarks>
 internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
 {
+    // The caller when the context has none, which only an execution outside HTTP can lack.
+    private static readonly ClaimsPrincipal _unauthenticated = new(new ClaimsIdentity());
+
     private readonly IApiAuthoriser[] _apiAuthorisers;
     private readonly ILinkVisibilityAuthoriser[] _linkVisibilityAuthorisers;
+    private readonly IResourceAuthorizationProvider[] _resourceAuthorizationProviders;
     private readonly ILogger<ApiAuthoriserAggregator> _logger;
 
     // OperationType → the types of this instance's authorisers that apply to it. AppliesTo is deterministic for a given
@@ -37,15 +48,18 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
     /// </summary>
     /// <param name="apiAuthorisers">All registered combined authoriser implementations.</param>
     /// <param name="linkVisibilityAuthorisers">All registered link-visibility-only authoriser implementations.</param>
+    /// <param name="resourceAuthorizationProviders">All registered resource authorization providers, in registration order.</param>
     /// <param name="logger">Logger for trace-level diagnostics.</param>
     public ApiAuthoriserAggregator(
         IEnumerable<IApiAuthoriser> apiAuthorisers,
         IEnumerable<ILinkVisibilityAuthoriser> linkVisibilityAuthorisers,
+        IEnumerable<IResourceAuthorizationProvider> resourceAuthorizationProviders,
         ILogger<ApiAuthoriserAggregator> logger)
     {
         // Materialize once to avoid repeated enumeration
         this._apiAuthorisers = apiAuthorisers.ToArray();
         this._linkVisibilityAuthorisers = linkVisibilityAuthorisers.ToArray();
+        this._resourceAuthorizationProviders = resourceAuthorizationProviders.ToArray();
         this._logger = logger;
     }
 
@@ -70,9 +84,16 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
         // Asked for this resource, whatever was decided for another of the same operation.
         var apiResult = await this.EvaluateApiAuthorisersAsync(operationContext, descriptor, resource, applicableApiTypes).ConfigureAwait(false);
 
-        if (!apiResult.IsAllowed || applicableLinkTypes.Length == 0)
+        if (!apiResult.IsAllowed)
         {
             return apiResult;
+        }
+
+        var providerResult = await this.EvaluateResourceAuthorizationProvidersAsync(operationContext, descriptor, resource).ConfigureAwait(false);
+
+        if (!providerResult.IsAllowed || applicableLinkTypes.Length == 0)
+        {
+            return providerResult;
         }
 
         // Evaluate resource-dependent state checkers inline (avoids FilterByTypes allocation)
@@ -165,6 +186,102 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
         }
 
         return ExecutionAllowed.Yes;
+    }
+
+    /// <summary>
+    /// Asks the resource authorization providers whether a link to <paramref name="descriptor"/> may be written on
+    /// <paramref name="resource"/>, with the operation's keys resolved against the resource by the generated
+    /// <see cref="OperationLinkAuthorizationFeatureData"/>.
+    /// </summary>
+    /// <remarks>
+    /// An operation without scope pairs, or a link without a resource, is not the providers' to decide here: a link with no
+    /// resource is listing mode's (#81). Otherwise the link is refused when no key resolver handles the resource's type or
+    /// no provider is registered, as the operation's execution would be.
+    /// </remarks>
+    private async ValueTask<ExecutionAllowed> EvaluateResourceAuthorizationProvidersAsync(
+        ApiOperationContext operationContext,
+        ApiOperationDescriptor descriptor,
+        object? resource)
+    {
+        if (resource is null
+            || !descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var authorization)
+            || authorization.ScopePairs.IsDefaultOrEmpty)
+        {
+            return ExecutionAllowed.Yes;
+        }
+
+        var principal = operationContext.UserPrincipal ?? _unauthenticated;
+
+        if (!descriptor.TryGetFeatureData<OperationLinkAuthorizationFeatureData>(out var linkAuthorization)
+            || linkAuthorization.Resolve(resource, name => CallerValue(operationContext, principal, name)) is not { } scopePairs)
+        {
+            this._logger.LogWarning(
+                "Link hidden: {OperationType} declares scope pairs but has no key resolver for the resource type {ResourceType}",
+                descriptor.OperationType.Name,
+                resource.GetType().Name);
+
+            return ExecutionAllowed.No(
+                $"{descriptor.OperationType.Name} cannot resolve its resource keys against {resource.GetType().Name}",
+                "You do not have permission to perform this operation",
+                ExecutionAllowedFailureType.Authorisation);
+        }
+
+        if (this._resourceAuthorizationProviders.Length == 0)
+        {
+            this._logger.LogError(
+                "Link hidden: {OperationType} declares [Resource] scope pairs but no IResourceAuthorizationProvider is registered. Register one with AddResourceAuthorizationProvider",
+                descriptor.OperationType.Name);
+
+            return ExecutionAllowed.No(
+                $"No IResourceAuthorizationProvider is registered to judge {descriptor.OperationType.Name}",
+                "You do not have permission to perform this operation",
+                ExecutionAllowedFailureType.Authorisation);
+        }
+
+        var request = ResourceAuthorizationRequest.Link(descriptor, scopePairs, resource);
+
+        foreach (var provider in this._resourceAuthorizationProviders)
+        {
+            var result = await provider.AuthorizeAsync(operationContext, principal, request, operationContext.OperationCancelled).ConfigureAwait(false);
+
+            if (!result.IsAllowed)
+            {
+                if (this._logger.IsEnabled(LogLevel.Trace))
+                {
+                    this._logger.LogTrace(
+                        "Link check failed. type={OperationType} resource_type={ResourceType} reason={Reason} provider={ProviderType}",
+                        descriptor.OperationType.Name,
+                        resource.GetType().Name,
+                        result.Reason,
+                        provider.GetType().Name);
+                }
+
+                return result;
+            }
+        }
+
+        return ExecutionAllowed.Yes;
+    }
+
+    /// <summary>
+    /// Gives the caller's value for an <c>{Auth.X}</c> token, as an execution's generated check resolves it: a property of
+    /// <see cref="IUserAuthorisationContext"/> for the names the generator knows, falling back to the principal's claim of
+    /// that name.
+    /// </summary>
+    private static string? CallerValue(ApiOperationContext context, ClaimsPrincipal principal, string name)
+    {
+        var user = context.UserAuthorisationContext;
+
+        var known = user is null
+            ? null
+            : name.Equals("AccountId", StringComparison.OrdinalIgnoreCase) ? user.AccountId
+            : name.Equals("Id", StringComparison.OrdinalIgnoreCase) ? user.Id
+            : name.Equals("IdentityId", StringComparison.OrdinalIgnoreCase) ? user.IdentityId
+            : name.Equals("Email", StringComparison.OrdinalIgnoreCase) ? user.Email
+            : name.Equals("Name", StringComparison.OrdinalIgnoreCase) ? user.Name
+            : null;
+
+        return known ?? principal.FindFirst(name)?.Value;
     }
 
     /// <summary>

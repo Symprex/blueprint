@@ -91,7 +91,7 @@ public class AuthorizationBenchmarks
     [Benchmark(Baseline = true)]
     public ValueTask<ExecutionAllowed> ExactMatch_SingleScope()
     {
-        return _provider.AuthorizeAsync(_dummyContext, _exactMatch, ResourceAuthorizationRequest.Execute(_singleRequired), default);
+        return _provider.AuthorizeAsync(_dummyContext, _exactMatch, ResourceAuthorizationRequest.Execute(_dummyContext.Descriptor, _singleRequired), default);
     }
 
     /// <summary>
@@ -102,7 +102,7 @@ public class AuthorizationBenchmarks
     [Benchmark]
     public ValueTask<ExecutionAllowed> HierarchyMatch_ManageIncludesRead()
     {
-        return _provider.AuthorizeAsync(_dummyContext, _hierarchyMatch, ResourceAuthorizationRequest.Execute(_singleRequired), default);
+        return _provider.AuthorizeAsync(_dummyContext, _hierarchyMatch, ResourceAuthorizationRequest.Execute(_dummyContext.Descriptor, _singleRequired), default);
     }
 
     /// <summary>
@@ -113,7 +113,7 @@ public class AuthorizationBenchmarks
     [Benchmark]
     public ValueTask<ExecutionAllowed> NoScopes_AllowFullAccess()
     {
-        return _provider.AuthorizeAsync(_dummyContext, _noScopes, ResourceAuthorizationRequest.Execute(_singleRequired), default);
+        return _provider.AuthorizeAsync(_dummyContext, _noScopes, ResourceAuthorizationRequest.Execute(_dummyContext.Descriptor, _singleRequired), default);
     }
 
     /// <summary>
@@ -124,7 +124,7 @@ public class AuthorizationBenchmarks
     [Benchmark]
     public ValueTask<ExecutionAllowed> ManyScopes_ExactMatch()
     {
-        return _provider.AuthorizeAsync(_dummyContext, _manyScopes, ResourceAuthorizationRequest.Execute(_singleRequired), default);
+        return _provider.AuthorizeAsync(_dummyContext, _manyScopes, ResourceAuthorizationRequest.Execute(_dummyContext.Descriptor, _singleRequired), default);
     }
 
     /// <summary>
@@ -135,7 +135,7 @@ public class AuthorizationBenchmarks
     [Benchmark]
     public ValueTask<ExecutionAllowed> ManyScopes_MultiRequired()
     {
-        return _provider.AuthorizeAsync(_dummyContext, _manyScopes, ResourceAuthorizationRequest.Execute(_multiRequired), default);
+        return _provider.AuthorizeAsync(_dummyContext, _manyScopes, ResourceAuthorizationRequest.Execute(_dummyContext.Descriptor, _multiRequired), default);
     }
 
     /// <summary>
@@ -146,7 +146,7 @@ public class AuthorizationBenchmarks
     [Benchmark]
     public ValueTask<ExecutionAllowed> AuthorizationFailure()
     {
-        return _provider.AuthorizeAsync(_dummyContext, _noMatch, ResourceAuthorizationRequest.Execute(_singleRequired), default);
+        return _provider.AuthorizeAsync(_dummyContext, _noMatch, ResourceAuthorizationRequest.Execute(_dummyContext.Descriptor, _singleRequired), default);
     }
 
     private static ClaimsPrincipal BuildPrincipal(params string[] scopes)

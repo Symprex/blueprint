@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Blueprint.Authorization;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
+using Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 using FluentAssertions;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Authorization;
@@ -732,7 +733,7 @@ public class ScopePairClaimAuthorizationProviderTests
         var principal = CreatePrincipal("openid", "SentEmail::Read", "Outlook::Read");
 
         var result = await provider.AuthorizeAsync(
-            null!, principal, ResourceAuthorizationRequest.Execute(Resolve(new ScopePair("Template", "Read"), new ScopePair("Template", "Update"))), CancellationToken.None);
+            null!, principal, ResourceAuthorizationRequest.Execute(GetLinkTestResourceQuery.Configure(), Resolve(new ScopePair("Template", "Read"), new ScopePair("Template", "Update"))), CancellationToken.None);
 
         result.IsAllowed.Should().BeFalse();
         result.FailureType.Should().Be(ExecutionAllowedFailureType.Authorisation);
@@ -746,7 +747,7 @@ public class ScopePairClaimAuthorizationProviderTests
         var provider = ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy();
 
         var result = await provider.AuthorizeAsync(
-            null!, new ClaimsPrincipal(new ClaimsIdentity()), ResourceAuthorizationRequest.Execute(Resolve(new ScopePair("Template", "Read"))), CancellationToken.None);
+            null!, new ClaimsPrincipal(new ClaimsIdentity()), ResourceAuthorizationRequest.Execute(GetLinkTestResourceQuery.Configure(), Resolve(new ScopePair("Template", "Read"))), CancellationToken.None);
 
         result.IsAllowed.Should().BeFalse();
         result.FailureType.Should().Be(ExecutionAllowedFailureType.Authorisation, "the bool contract's false was always a 403");
@@ -766,7 +767,7 @@ internal static class ResourceAuthorizationProviderTestExtensions
         IReadOnlyList<ResolvedScopePair> scopePairs,
         CancellationToken cancellationToken)
     {
-        var result = await provider.AuthorizeAsync(operationContext, principal, ResourceAuthorizationRequest.Execute(scopePairs), cancellationToken);
+        var result = await provider.AuthorizeAsync(operationContext, principal, ResourceAuthorizationRequest.Execute(operationContext?.Descriptor ?? GetLinkTestResourceQuery.Configure(), scopePairs), cancellationToken);
 
         return result.IsAllowed;
     }

@@ -260,7 +260,8 @@ Current authentication IDs in active use:
 - `BPAU007`: Resource key template token `{PropertyName}` references a property that does not exist on the operation type AND there is no valid fallback path (error — authorization enforcement is suppressed, which is a security issue).
 - `BPAU008`: `[Resource]` or `[FromResource]` on a background task that is not exposed via an HTTP host and not marked `[MustBeAuthenticated]` (warning — a background task allows anonymous access, so the in-process provider check is skipped and the declaration is never enforced; any other in-process operation's declaration is enforced, taking its principal from `context.UserPrincipal`).
 - `BPAU009`: Duplicate noun+verb scope pair on the same operation via multiple `[Resource]` attributes (warning — redundant metadata, usually a copy-paste error).
-- `BPAU010`: Fallback property path in `{Primary:Fallback}` syntax does not exist on the operation type, but the primary property does (warning — authorization code is still generated using the primary; the fallback is dead code that should be removed).
+- `BPAU010`: Fallback property path in `{Primary:Fallback}` syntax does not exist on the operation type, but the primary property does, and no resource type the operation links from lacks the primary and has the fallback (warning — the fallback is used by no subject, so it is dead code that should be removed). A link resolves the template against the resource it is written on, so a fallback a linked resource uses is live.
+- `BPAU011`: A resource key template token matches no readable public property of a resource type the operation links from via `[Link]` or `[SelfLink]` — neither the primary nor the fallback, or the primary exists but has no public getter, which is reported rather than silently switching the key to the fallback (error — the key cannot be resolved against that resource, so a link from it could never be authorised).
 
 ### Validation fast-path strategies
 

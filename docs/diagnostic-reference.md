@@ -91,6 +91,8 @@ A type listed in `[BlueprintRuntimeTypes(...)]` is not registered on the app-own
 | BPAU007 | Error | Resource key template `{Token}` does not match a property |
 | BPAU008 | Warning | `[Resource]` on a background task that is not exposed over HTTP and not marked `[MustBeAuthenticated]` (never enforced). Narrowed from "any non-HTTP operation": other in-process operations are now checked by the providers (#78) |
 | BPAU009 | Warning | Duplicate `[Resource]` scope pair |
+| BPAU010 | Warning | Resource key template fallback is never used: not on the operation, nor on a linked resource type that lacks the primary |
+| BPAU011 | Error | Resource key template token matches no readable property of a resource type the operation links from |
 
 ## Link generation (BPLG)
 
