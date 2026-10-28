@@ -62,6 +62,21 @@ public static class WellKnownFeatureData
         AuthenticationRequirement.Authenticated);
 
     /// <summary>
+    /// Access feature data for operations that declare <c>[AllowAnonymous]</c>.
+    /// </summary>
+    public static readonly OperationAccessFeatureData AnonymousAccess = new(OperationAccessMode.Anonymous);
+
+    /// <summary>
+    /// Access feature data for operations that declare <c>[MustBeAuthenticated]</c> and no scope pairs.
+    /// </summary>
+    public static readonly OperationAccessFeatureData AuthenticatedAccess = new(OperationAccessMode.Authenticated);
+
+    /// <summary>
+    /// Access feature data for operations that declare <c>[Resource]</c> or <c>[FromResource]</c>.
+    /// </summary>
+    public static readonly OperationAccessFeatureData PermissionedAccess = new(OperationAccessMode.Permissioned);
+
+    /// <summary>
     /// The common serializer context coverage base for failure body types that most HTTP-exposed
     /// operations share: <c>ValidationProblemDetails</c> and <c>ProblemDetails</c>.
     /// </summary>
