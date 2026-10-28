@@ -30,8 +30,14 @@ namespace Blueprint.Authorization;
 /// case-insensitively, is demanded instead, so the resource places itself without an expander.
 /// </para>
 /// <para>
-/// <b>Listing.</b> <see cref="ResourceAuthorizationMode.Listing"/> is denied until it is supported
-/// (Symprex/blueprint#81). Nothing asks for it yet.
+/// <b>Listing.</b> In <see cref="ResourceAuthorizationMode.Listing"/> mode, asked when an operation is listed before any
+/// resource exists (an authorisation manifest), a key whose template has a property token was cut at it, so it is only a
+/// literal prefix. The grants are matched against it with <see cref="ResourceGrants.IsPrefixCompatibleWith"/>, as
+/// Signature 365 matched them. That accepts two shapes execution never honours, so an operation can be listed and then
+/// refused: an exact grant that is an ancestor of the prefix (<c>/Partners/p</c> for <c>/Partners/p/Users/</c>), and a
+/// grant beneath the prefix that diverges from the rest of the template (<c>/Tenants/ten_1/Groups/*</c> for
+/// <c>/Tenants/{TenantId}/Users</c>). A listing is never an execution decision. A key whose template has no property token
+/// is complete, so it is judged as at execution.
 /// </para>
 /// <para>
 /// A singleton, as every provider is. It resolves the scoped <see cref="IResourceAccessChecker"/> from the operation's own
@@ -55,11 +61,6 @@ public sealed class ResourceKeyAuthorizationProvider : IResourceAuthorizationPro
         "Operation does not have AllowAnonymous attribute. User is inactive",
         "Your account has been deactivated",
         ExecutionAllowedFailureType.Authentication);
-
-    private static readonly ExecutionAllowed _listingNotSupported = ExecutionAllowed.No(
-        "Listing mode is not supported by ResourceKeyAuthorizationProvider until Symprex/blueprint#81",
-        DeniedMessage,
-        ExecutionAllowedFailureType.Authorisation);
 
     private static readonly ExecutionAllowed _noScopePairs = ExecutionAllowed.No(
         "The request carries no scope pairs, so there is no resource key to judge",
@@ -87,12 +88,7 @@ public sealed class ResourceKeyAuthorizationProvider : IResourceAuthorizationPro
             return _inactive;
         }
 
-        if (request.Mode == ResourceAuthorizationMode.Listing)
-        {
-            return _listingNotSupported;
-        }
-
-        if (request.Mode is not (ResourceAuthorizationMode.Execute or ResourceAuthorizationMode.Link))
+        if (request.Mode is not (ResourceAuthorizationMode.Execute or ResourceAuthorizationMode.Link or ResourceAuthorizationMode.Listing))
         {
             return Deny($"ResourceKeyAuthorizationProvider does not support the {request.Mode} mode");
         }
@@ -158,6 +154,11 @@ public sealed class ResourceKeyAuthorizationProvider : IResourceAuthorizationPro
                 $"The resource key of the scope pair {scopePair.Noun}/{scopePair.Verb} ('{scopePair.ResourceKeyTemplate}') resolved empty, so it cannot be judged by resource grants"));
         }
 
+        if (request.Mode == ResourceAuthorizationMode.Listing && HasPropertyToken(scopePair.ResourceKeyTemplate))
+        {
+            return IsListedAsync(operationContext, principal, request.Descriptor, scopePair, cancellationToken);
+        }
+
         var key = new ResourceKey(scopePair.ExpandedResourceKey);
 
         if (request.Mode == ResourceAuthorizationMode.Link && !key.IsAbsolute && request.Resource is IHaveResourceKeys resource)
@@ -189,6 +190,65 @@ public sealed class ResourceKeyAuthorizationProvider : IResourceAuthorizationPro
         }
 
         return matched;
+    }
+
+    /// <summary>
+    /// Decides a listing whose key was cut at a property token: allowed when any grant from any source is not ruled out by
+    /// the literal prefix the key carries.
+    /// </summary>
+    private static async ValueTask<ExecutionAllowed> IsListedAsync(
+        ApiOperationContext operationContext,
+        ClaimsPrincipal principal,
+        ApiOperationDescriptor operation,
+        ResolvedScopePair scopePair,
+        CancellationToken cancellationToken)
+    {
+        var prefix = scopePair.ExpandedResourceKey!;
+
+        foreach (var source in operationContext.ServiceProvider.GetServices<IResourceGrantSource>())
+        {
+            var grants = await source.GetGrantsAsync(operationContext, principal, operation, scopePair, cancellationToken).ConfigureAwait(false);
+
+            if (grants.IsPrefixCompatibleWith(prefix))
+            {
+                return ExecutionAllowed.Yes;
+            }
+        }
+
+        return Deny($"No grant is compatible with the listed prefix '{prefix}' of {scopePair.Noun}/{scopePair.Verb} ('{scopePair.ResourceKeyTemplate}')");
+    }
+
+    /// <summary>
+    /// Whether a template has a property token, at which a listing's key was cut. A caller (<c>{Auth.X}</c>) token is
+    /// resolved for a listing, so it does not count.
+    /// </summary>
+    private static bool HasPropertyToken(string? template)
+    {
+        if (template is null)
+        {
+            return false;
+        }
+
+        for (var start = template.IndexOf('{'); start >= 0; start = template.IndexOf('{', start + 1))
+        {
+            var end = template.IndexOf('}', start + 1);
+
+            if (end < 0)
+            {
+                return false;
+            }
+
+            var token = template.AsSpan(start + 1, end - start - 1);
+            var separator = token.IndexOf(':');
+            var primary = separator >= 0 ? token[..separator] : token;
+
+            if (!primary.Equals("Auth", StringComparison.OrdinalIgnoreCase) && !primary.StartsWith("Auth.", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static ExecutionAllowed Deny(string reason)

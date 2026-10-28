@@ -1255,6 +1255,42 @@ public class AuthorizationModuleTests
             .Should().NotContain(static s => s.Contains(".TenantId?.ToString()"));
     }
 
+    [Theory]
+    [InlineData("/Accounts/{Id}", "$\"/Accounts/\"")]
+    [InlineData("/Tenants/{Auth.AccountId}/Accounts/{Id}", "$\"/Tenants/{callerValue(\"AccountId\") ?? \"\"}/Accounts/\"")]
+    [InlineData("/Tenants/{Auth.AccountId:Auth.Id}/Accounts", "$\"/Tenants/{callerValue(\"AccountId\") ?? callerValue(\"Id\") ?? \"\"}/Accounts\"")]
+    [InlineData("/Tenants/{Auth.AccountId:TenantId}/Accounts", "$\"/Tenants/{callerValue(\"AccountId\") ?? \"\"}/Accounts\"")]
+    [InlineData("/Accounts", "$\"/Accounts\"")]
+    public void When_operation_is_permissioned_then_descriptor_resolves_a_listing_prefix_from_caller_tokens_only(string template, string expectedPrefix)
+    {
+        // A listing has no resource: caller tokens resolve, and the key is cut at the first property token
+        var result = CompileDescriptor(
+            $$"""
+              [RootLink("/accounts/{Id}")]
+              [Resource("account", "read", "{{template}}")]
+              public partial class GetAccountQuery : IQuery<string>
+              {
+                  public string Id { get; set; }
+
+                  public string TenantId { get; set; }
+
+                  public static Task<string> HandleAsync(GetAccountQuery operation)
+                  {
+                      return Task.FromResult("ok");
+                  }
+              }
+              """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .Single(static s => s.Contains("GetAccountQueryDescriptor"));
+
+        descriptorSource.Should().Contain("OperationListingAuthorizationFeatureData");
+        descriptorSource.Should().Contain(expectedPrefix);
+    }
+
     [Fact]
     public void When_operation_has_no_links_then_descriptor_has_no_link_resolver()
     {

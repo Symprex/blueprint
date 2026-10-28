@@ -219,6 +219,9 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 : $"new global::Blueprint.Model.ScopePair(\"{sp.Noun}\", \"{sp.Verb}\")"));
 
         var linkResolverBranches = BuildLinkScopeResolverBranches(operationType, operationLocation, effectiveScopePairs, context);
+        var listingPairs = string.Join(", ", effectiveScopePairs.Select(static sp => sp.ResourceKeyTemplate is null
+            ? $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"
+            : $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {BuildListingPrefixExpression(sp.ResourceKeyTemplate)})"));
 
         // A [FromResource] operation records where its pairs came from, and any template it overrode them with, so an
         // app can read what the attributes declared without reflecting over them.
@@ -244,7 +247,52 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             {
                 RenderLinkScopeResolver(writer, linkResolverBranches);
             }
+
+            writer.AppendLine(
+                $"this.SetFeatureData(new global::Blueprint.Model.OperationListingAuthorizationFeatureData(static callerValue => [{listingPairs}]));");
         });
+    }
+
+    /// <summary>
+    /// Builds the interpolated string of a key's literal prefix for listing an operation before any resource exists: caller
+    /// (<c>Auth</c>) tokens resolve as an execution resolves them, and the key is cut at its first property token, whose
+    /// value cannot be known.
+    /// </summary>
+    /// <remarks>
+    /// A caller token's property fallback has no resource to read, so only a caller fallback is kept: a caller with no
+    /// value then gives an empty segment, as at execution.
+    /// </remarks>
+    private static string BuildListingPrefixExpression(string template)
+    {
+        var prefix = new System.Text.StringBuilder();
+        var position = 0;
+
+        foreach (var token in ResourceKeyTemplateParser.ParseTokens(template))
+        {
+            var tokenIndex = template.IndexOf(token.RawToken, position, StringComparison.Ordinal);
+
+            prefix.Append(template, position, tokenIndex - position);
+
+            if (!token.IsAuthPath)
+            {
+                return $"$\"{prefix}\"";
+            }
+
+            var parts = new List<string> { CallerValueExpression(token.Name) };
+
+            if (token.FallbackPropertyPath is { } fallback && ResourceKeyToken.IsAuthPropertyPath(fallback))
+            {
+                parts.Add(CallerValueExpression(fallback));
+            }
+
+            parts.Add("\"\"");
+            prefix.Append('{').Append(string.Join(" ?? ", parts)).Append('}');
+            position = tokenIndex + token.RawToken.Length;
+        }
+
+        prefix.Append(template, position, template.Length - position);
+
+        return $"$\"{prefix}\"";
     }
 
     /// <summary>

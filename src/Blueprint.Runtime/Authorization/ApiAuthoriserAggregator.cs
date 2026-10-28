@@ -25,7 +25,8 @@ namespace Blueprint.Authorization;
 /// <para>
 /// For an operation that declares scope pairs, the registered <see cref="IResourceAuthorizationProvider"/>s are asked
 /// too, after the <see cref="IApiAuthoriser"/>s and before the <see cref="ILinkVisibilityAuthoriser"/>s, in
-/// <see cref="ResourceAuthorizationMode.Link"/> mode with the keys resolved against the resource. They compose all-of, as
+/// <see cref="ResourceAuthorizationMode.Link"/> mode with the keys resolved against the resource, or in <see cref="ResourceAuthorizationMode.Listing"/>
+/// mode with no resource. They compose all-of, as
 /// they do at execution, and a link nothing can judge is hidden, as its execution would be refused.
 /// </para>
 /// </remarks>
@@ -190,38 +191,43 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
 
     /// <summary>
     /// Asks the resource authorization providers whether a link to <paramref name="descriptor"/> may be written on
-    /// <paramref name="resource"/>, with the operation's keys resolved against the resource by the generated
-    /// <see cref="OperationLinkAuthorizationFeatureData"/>.
+    /// <paramref name="resource"/>: in <see cref="ResourceAuthorizationMode.Link"/> mode with the operation's keys resolved
+    /// against the resource by the generated <see cref="OperationLinkAuthorizationFeatureData"/>, or, with no resource, in
+    /// <see cref="ResourceAuthorizationMode.Listing"/> mode with each key cut to its literal prefix by the generated
+    /// <see cref="OperationListingAuthorizationFeatureData"/>, as an authorisation manifest lists the operation.
     /// </summary>
     /// <remarks>
-    /// An operation without scope pairs, or a link without a resource, is not the providers' to decide here: a link with no
-    /// resource is listing mode's (#81). Otherwise the link is refused when no key resolver handles the resource's type or
-    /// no provider is registered, as the operation's execution would be.
+    /// An operation without scope pairs is not the providers' to decide. Otherwise the link is refused when no resolver can
+    /// resolve its keys or no provider is registered, as the operation's execution would be. Listing mode is reached only
+    /// here, with no resource: an execution always asks in <see cref="ResourceAuthorizationMode.Execute"/> mode.
     /// </remarks>
     private async ValueTask<ExecutionAllowed> EvaluateResourceAuthorizationProvidersAsync(
         ApiOperationContext operationContext,
         ApiOperationDescriptor descriptor,
         object? resource)
     {
-        if (resource is null
-            || !descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var authorization)
+        if (!descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var authorization)
             || authorization.ScopePairs.IsDefaultOrEmpty)
         {
             return ExecutionAllowed.Yes;
         }
 
         var principal = operationContext.UserPrincipal ?? _unauthenticated;
+        string? CallerValueOf(string name) => CallerValue(operationContext, principal, name);
 
-        if (!descriptor.TryGetFeatureData<OperationLinkAuthorizationFeatureData>(out var linkAuthorization)
-            || linkAuthorization.Resolve(resource, name => CallerValue(operationContext, principal, name)) is not { } scopePairs)
+        var scopePairs = resource is null
+            ? descriptor.TryGetFeatureData<OperationListingAuthorizationFeatureData>(out var listing) ? listing.Resolve(CallerValueOf) : null
+            : descriptor.TryGetFeatureData<OperationLinkAuthorizationFeatureData>(out var link) ? link.Resolve(resource, CallerValueOf) : null;
+
+        if (scopePairs is null)
         {
             this._logger.LogWarning(
                 "Link hidden: {OperationType} declares scope pairs but has no key resolver for the resource type {ResourceType}",
                 descriptor.OperationType.Name,
-                resource.GetType().Name);
+                resource?.GetType().Name ?? "(none)");
 
             return ExecutionAllowed.No(
-                $"{descriptor.OperationType.Name} cannot resolve its resource keys against {resource.GetType().Name}",
+                $"{descriptor.OperationType.Name} cannot resolve its resource keys against {resource?.GetType().Name ?? "a listing"}",
                 "You do not have permission to perform this operation",
                 ExecutionAllowedFailureType.Authorisation);
         }
@@ -238,7 +244,9 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
                 ExecutionAllowedFailureType.Authorisation);
         }
 
-        var request = ResourceAuthorizationRequest.Link(descriptor, scopePairs, resource);
+        var request = resource is null
+            ? ResourceAuthorizationRequest.Listing(descriptor, scopePairs)
+            : ResourceAuthorizationRequest.Link(descriptor, scopePairs, resource);
 
         foreach (var provider in this._resourceAuthorizationProviders)
         {
@@ -249,9 +257,10 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
                 if (this._logger.IsEnabled(LogLevel.Trace))
                 {
                     this._logger.LogTrace(
-                        "Link check failed. type={OperationType} resource_type={ResourceType} reason={Reason} provider={ProviderType}",
+                        "Link check failed. type={OperationType} resource_type={ResourceType} mode={Mode} reason={Reason} provider={ProviderType}",
                         descriptor.OperationType.Name,
-                        resource.GetType().Name,
+                        resource?.GetType().Name,
+                        request.Mode,
                         result.Reason,
                         provider.GetType().Name);
                 }
