@@ -206,7 +206,7 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 | BPAU005 | Error | Both `[Resource]` and `[FromResource]` on the same operation |
 | BPAU006 | Warning | `[FromResource]` references a type with no `[Resource]` attributes |
 | BPAU007 | Error | Unknown token in resource key template |
-| BPAU008 | Warning | `[Resource]` or `[FromResource]` on a background task that is not exposed over HTTP: it allows anonymous access, so the declaration is never enforced |
+| BPAU008 | Warning | `[Resource]` or `[FromResource]` on a background task that is not exposed over HTTP and not marked `[MustBeAuthenticated]`: it allows anonymous access, so the declaration is never enforced |
 
 ---
 

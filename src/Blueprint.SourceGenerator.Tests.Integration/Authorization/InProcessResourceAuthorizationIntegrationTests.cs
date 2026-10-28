@@ -135,6 +135,31 @@ public sealed class InProcessResourceAuthorizationIntegrationTests
     }
 
     [Theory]
+    [InlineData(true, 0)]
+    [InlineData(false, 1)]
+    public async Task Over_HTTP_the_shared_check_asks_about_the_requests_user_unless_the_context_skips_authorisation(bool skip, int expectedRequests)
+    {
+        // Every permissioned pipeline, HTTP included, calls this one check. A context skipping authorisation, as a resource
+        // event's self query does, skips the providers as it skips the authentication step and the authorisers: as
+        // legacy Blueprint skipped every authoriser, Signature 365's resource check among them
+        var provider = new RecordingProvider(ExecutionAllowed.Yes);
+        var app = new IntegrationTestBlueprintApp();
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = AuthenticatedUser() };
+        var context = new ApiOperationContext(new ServiceCollection().BuildServiceProvider(), app, app.FindOperation(typeof(PermissionedUnlinkedCommand))!, httpContext.RequestAborted)
+        {
+            HttpContext = httpContext,
+            UserPrincipal = httpContext.User,
+            SkipAuthorisation = skip,
+        };
+
+        var denial = await PipelineHelpers.CheckOperationResourceAuthorizationAsync(context, [provider], new ResolvedScopePair("widget", "read", null, null));
+
+        denial.Should().BeNull();
+        provider.Requests.Should().HaveCount(expectedRequests);
+        provider.Principals.Where(p => !ReferenceEquals(p, httpContext.User)).Should().BeEmpty();
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task An_unlinked_permissioned_operation_whose_descriptor_allows_anonymous_access_is_not_asked_of_the_providers(bool withUser)

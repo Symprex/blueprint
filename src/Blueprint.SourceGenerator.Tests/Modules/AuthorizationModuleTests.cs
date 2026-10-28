@@ -914,6 +914,37 @@ public class AuthorizationModuleTests
     }
 
     [Fact]
+    public void When_Resource_on_background_task_marked_MustBeAuthenticated_then_does_not_report_BPAU008()
+    {
+        // [MustBeAuthenticated] turns the anonymous convention off, so the task's descriptor does not allow anonymous
+        // access and its [Resource] is enforced
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Tasks;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [MustBeAuthenticated]
+            [Resource("account", "read")]
+            public partial class ProcessAccountTask : ICommand<string>, IBackgroundTask
+            {
+                public static Task<string> HandleAsync(ProcessAccountTask operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.ProcessAccountTask", compilation);
+
+        result.Diagnostics.Should().NotContain(static d => d.Descriptor.Id == "BPAU008");
+    }
+
+    [Fact]
     public void When_Resource_on_non_HTTP_operation_that_is_not_a_background_task_then_does_not_report_BPAU008()
     {
         var compilation = CreateCompilation(

@@ -36,6 +36,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private const string ResourceAttributeName = "ResourceAttribute";
     private const string FromResourceAttributeName = "FromResourceAttribute";
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
+    private const string MustBeAuthenticatedAttributeName = "MustBeAuthenticatedAttribute";
     private const string BackgroundTaskInterfaceName = "IBackgroundTask";
 
     /// <inheritdoc />
@@ -284,10 +285,11 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         // from the context instead.
         var isHttpExposed = HttpHostExposureHelper.HasHttpHostExposure(operationType);
 
-        if (!isHttpExposed && IsBackgroundTask(operationType))
+        if (!isHttpExposed && IsBackgroundTask(operationType) && !HasAttribute(operationType, MustBeAuthenticatedAttributeName))
         {
             // BPAU008: a background task's descriptor allows anonymous access by convention, so the in-process check is
-            // skipped at runtime and the declaration is never enforced. The check is still generated.
+            // skipped at runtime and the declaration is never enforced. The check is still generated. [MustBeAuthenticated]
+            // turns the convention off (AuthenticationModule), so such a task's declaration is enforced.
             context.AddDiagnostic(
                 new DiagnosticInfo(
                     AuthorizationDiagnosticDescriptors.ResourceOnBackgroundTask,
