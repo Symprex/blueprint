@@ -101,6 +101,7 @@ public class AuthorizationMetadataIntegrationTests
     [InlineData(typeof(NoResourceQuery), OperationAccessMode.Anonymous)]
     [InlineData(typeof(ExplicitlyAuthenticatedQuery), OperationAccessMode.Authenticated)]
     [InlineData(typeof(AuthenticatedAndPermissionedQuery), OperationAccessMode.Permissioned)]
+    [InlineData(typeof(NonHttpAuthenticatedCommand), OperationAccessMode.Authenticated)]
     public void Descriptor_exposes_the_declared_access_mode(Type operationType, OperationAccessMode expected)
     {
         var descriptor = new IntegrationTestBlueprintApp().Operations.Single(d => d.OperationType == operationType);
@@ -146,6 +147,20 @@ public class AuthorizationMetadataIntegrationTests
         });
     }
 
+    [Theory]
+    [InlineData(typeof(EmptyOverrideInheritedResourceQuery), "")]
+    [InlineData(typeof(WhitespaceOverrideInheritedResourceQuery), "  ")]
+    public void Descriptor_records_a_blank_FromResource_override_as_declared_but_keeps_the_source_templates(Type operationType, string declared)
+    {
+        // The attribute holds the blank override as written, so the declaration data does too; a blank override is not a
+        // template, so the inherited pairs keep their own
+        var descriptor = new IntegrationTestBlueprintApp().Operations.Single(d => d.OperationType == operationType);
+
+        descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var meta).Should().BeTrue();
+        meta!.InheritedTemplateOverride.Should().Be(declared);
+        meta.ScopePairs.Should().BeEquivalentTo(new[] { new ScopePair("account", "read") });
+    }
+
     [Fact]
     public void Descriptor_of_a_direct_Resource_records_no_inheritance()
     {
@@ -187,10 +202,12 @@ public class AuthorizationMetadataIntegrationTests
 
             hasMeta.Should().BeTrue(because);
 
+            // A blank override is recorded as declared but is not a template, so the inherited pairs keep their own
+            var effectiveOverride = string.IsNullOrWhiteSpace(fromResource?.ResourceKeyTemplate) ? null : fromResource!.ResourceKeyTemplate;
             var expectedPairs = fromResource is null
                 ? direct.Select(static a => new ScopePair(a.Noun, a.Verb, a.ResourceKeyTemplate))
                 : fromResource.SourceOperation.GetCustomAttributes(typeof(ResourceAttribute), false).OfType<ResourceAttribute>()
-                    .Select(a => new ScopePair(a.Noun, a.Verb, fromResource.ResourceKeyTemplate ?? a.ResourceKeyTemplate));
+                    .Select(a => new ScopePair(a.Noun, a.Verb, effectiveOverride ?? a.ResourceKeyTemplate));
 
             meta!.ScopePairs.Should().BeEquivalentTo(expectedPairs, because);
             meta.InheritedFrom.Should().Be(fromResource?.SourceOperation, because);
@@ -235,6 +252,62 @@ public partial class OverriddenInheritedResourceQuery : IQuery<string>
     public static Task<string> HandleAsync(OverriddenInheritedResourceQuery query)
     {
         return Task.FromResult("overridden-inherited-resource");
+    }
+}
+
+/// <summary>
+/// Operation that inherits <see cref="SingleResourceQuery"/>'s scope pair with an empty override.
+/// </summary>
+[RootLink("/authz-test/accounts/{Id}/empty-override")]
+[FromResource(typeof(SingleResourceQuery), "")]
+public partial class EmptyOverrideInheritedResourceQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the account ID.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Handles the query.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A test result.</returns>
+    public static Task<string> HandleAsync(EmptyOverrideInheritedResourceQuery query)
+    {
+        return Task.FromResult("empty-override");
+    }
+}
+
+/// <summary>
+/// Operation that inherits <see cref="SingleResourceQuery"/>'s scope pair with a whitespace override.
+/// </summary>
+[RootLink("/authz-test/accounts/{Id}/whitespace-override")]
+[FromResource(typeof(SingleResourceQuery), "  ")]
+public partial class WhitespaceOverrideInheritedResourceQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the account ID.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Handles the query.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A test result.</returns>
+    public static Task<string> HandleAsync(WhitespaceOverrideInheritedResourceQuery query)
+    {
+        return Task.FromResult("whitespace-override");
+    }
+}
+
+/// <summary>
+/// Operation declaring <c>[MustBeAuthenticated]</c> that no host exposes over HTTP. BPAU001 warns that no HTTP check is
+/// generated for it, but the declaration is still recorded.
+/// </summary>
+#pragma warning disable BPAU001 // The point of this operation is a [MustBeAuthenticated] with no HTTP host
+[MustBeAuthenticated]
+public partial class NonHttpAuthenticatedCommand : ICommand<string>
+#pragma warning restore BPAU001
+{
+    /// <summary>Handles the command.</summary>
+    /// <param name="command">The command instance.</param>
+    /// <returns>A test result.</returns>
+    public static Task<string> HandleAsync(NonHttpAuthenticatedCommand command)
+    {
+        return Task.FromResult("non-http-authenticated");
     }
 }
 
