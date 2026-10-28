@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Marten" Version="6.4.2" />
+        <PackageReference Include="Marten" Version="9.13.0" />
         <!-- Marten 6.4.2 pulls in Npgsql 7.0.6 (via Npgsql.Json.NET), which carries a known high
              severity vulnerability (GHSA-x9vc-6hfv-hg8c). Pinned explicitly to the first patched
              7.x release to clear it. -->
