@@ -19,6 +19,37 @@ For detailed explanations, see [compile-time-validation.md](compile-time-validat
 | BP009 | Error | Duplicate descriptor name once Query/Command is removed and the name is cased |
 | BP010 | Warning | Non-evaluable ApiExceptionFactory initializer |
 | BP011 | Error | Duplicate or empty descriptor name after the app's `[BlueprintAppOperationNames]` removal |
+| BP012 | Error | Response body member is open-typed |
+| BP013 | Error | Declared runtime type is not registered with the serializer context |
+
+### BP012 — open-typed member reachable from a declared response root
+
+A declared response root is written by the app's source-generated `JsonSerializerContext` alone. A member typed `object` (or a collection or dictionary of `object`) is written as whatever runtime type it holds, and a type the context does not register fails the response when it is written. An interface or abstract class without `[JsonPolymorphic]`/`[JsonDerivedType]` is written as the declared type, dropping the rest. Say what the member holds:
+
+```csharp
+// ❌ BP012 — a proxied JsonElement or a List<Error> fails the response when written
+public Dictionary<string, object?> Details { get; set; }
+
+// ✅ the listed types must be [JsonSerializable] on the app's context (BP013 otherwise)
+[BlueprintRuntimeTypes(typeof(JsonElement), typeof(List<Error>))]
+public Dictionary<string, object?> Details { get; set; }
+
+// ✅ or a converter owns the member's shape
+[JsonConverter(typeof(DetailsConverter))]
+public Dictionary<string, object?> Details { get; set; }
+```
+
+Or opt the whole app into the runtime fallback, which writes unregistered types with reflection and logs each once (no trimming/AOT; see [compile-time-validation.md](compile-time-validation.md)):
+
+```csharp
+[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(AppJsonContext), AllowRuntimeTypeFallback = true)]
+```
+
+`ProblemDetails.Extensions` and `ResourceEvent`'s `Data`/`Metadata`/`SecureData`/`ChangedValues` are not reported: they are written with fallback metadata at runtime.
+
+### BP013 — declared runtime type is not registered
+
+A type listed in `[BlueprintRuntimeTypes(...)]` is not registered on the app-owned context. Add `[JsonSerializable(typeof(...))]` for it.
 
 ### Pipeline and handler (BP100–BP199)
 
