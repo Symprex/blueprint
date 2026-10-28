@@ -40,6 +40,7 @@ public class AuthenticationModuleTests
             .FirstOrDefault(static s => s.Contains("WellKnownFeatureData.RequiresAuthentication"));
 
         descriptorSource.Should().NotBeNull("descriptor should contain auth feature data");
+        descriptorSource!.Should().Contain("WellKnownFeatureData.AuthenticatedAccess", "it declares [MustBeAuthenticated]");
     }
 
     [Fact]
@@ -66,6 +67,7 @@ public class AuthenticationModuleTests
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain("WellKnownFeatureData.RequiresAuthentication",
             "HTTP operations should require authentication by default (legacy Blueprint parity)");
+        descriptorSource.Should().NotContain("Access);", "it declares no access attribute");
     }
 
     [Fact]
@@ -117,6 +119,7 @@ public class AuthenticationModuleTests
         descriptorSource.Should().NotBeNull("descriptor should be generated");
         descriptorSource!.Should().Contain("AuthenticationRequirement.Anonymous",
             "descriptor should project anonymous access mode");
+        descriptorSource.Should().Contain("WellKnownFeatureData.AnonymousAccess", "it declares [AllowAnonymous]");
     }
 
     [Fact]
