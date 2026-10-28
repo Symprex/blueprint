@@ -2434,8 +2434,10 @@ public static class PipelineHelpers
         }
         else
         {
+            var options = Http.SerializerContextTypeInfoCache.GetUncoveredRootOptions(operationContext.App, httpContext.RequestServices)
+                ?? serializerContext?.Options;
             return System.Text.Json.JsonSerializer.SerializeAsync(
-                httpContext.Response.Body, content, contentType, serializerContext?.Options, httpContext.RequestAborted);
+                httpContext.Response.Body, content, contentType, options, httpContext.RequestAborted);
         }
     }
 

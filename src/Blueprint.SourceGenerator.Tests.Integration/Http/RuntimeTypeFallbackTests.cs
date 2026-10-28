@@ -69,23 +69,34 @@ public sealed class RuntimeTypeFallbackTests
         logged.Should().Contain(static message => message.Contains(typeof(UnregisteredSubclass).FullName!, StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task With_the_opt_in_an_async_iterator_root_is_still_written_asynchronously()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task With_the_opt_in_an_async_iterator_root_is_still_written_asynchronously(bool inlineWriter)
     {
         using var services = CreateServices(new ConcurrentQueue<string>());
         var app = new FallbackTestApp(allowRuntimeTypeFallback: true);
 
-        static async IAsyncEnumerable<string> ItemsAsync()
-        {
-            await Task.Yield();
-            yield return "a";
-            yield return "b";
-        }
-
         var httpContext = CreateHttpContext(services);
-        await HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, app, ItemsAsync());
+        await WriteAsync(inlineWriter, httpContext, app, ItemsAsync());
 
         ReadBody(httpContext).Should().Be("""["a","b"]""");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task With_the_opt_in_an_unregistered_root_holding_an_async_iterator_is_still_written_asynchronously(bool inlineWriter)
+    {
+        var logged = new ConcurrentQueue<string>();
+        using var services = CreateServices(logged);
+        var app = new FallbackTestApp(allowRuntimeTypeFallback: true);
+
+        var httpContext = CreateHttpContext(services);
+        await WriteAsync(inlineWriter, httpContext, app, new StreamingSubclass { Name = "streamed", Items = ItemsAsync() });
+
+        ReadBody(httpContext).Should().Be("""{"Items":["a","b"],"Name":"streamed"}""");
+        logged.Should().Contain(static message => message.Contains(typeof(StreamingSubclass).FullName!, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -207,6 +218,32 @@ public sealed class RuntimeTypeFallbackTests
         logged.Should().Contain(static message => message.Contains(typeof(WidgetKey).FullName!, StringComparison.Ordinal));
     }
 
+    private static async IAsyncEnumerable<string> ItemsAsync()
+    {
+        await Task.Yield();
+        yield return "a";
+        yield return "b";
+    }
+
+    // Both writers: the executor's, and the generated pipelines' inline one, which needs an operation to write for.
+    private static Task WriteAsync(bool inlineWriter, HttpContext httpContext, BlueprintApp app, object content)
+    {
+        if (!inlineWriter)
+        {
+            return HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, app, content);
+        }
+
+        var hostServices = new ServiceCollection()
+            .AddLogging()
+            .AddBlueprintApi<Generators.OperationDescriptors.IntegrationTestBlueprintApp, Generators.OperationDescriptors.IntegrationTestBlueprintAppExecutor>()
+            .BuildServiceProvider();
+        var descriptor = hostServices.GetRequiredService<Generators.OperationDescriptors.IntegrationTestBlueprintApp>()
+            .FindOperation(typeof(GetLinkWireWidgetQuery));
+        var context = new Blueprint.Runtime.Exec.ApiOperationContext(httpContext.RequestServices, app, descriptor, CancellationToken.None);
+
+        return Blueprint.Runtime.Exec.PipelineHelpers.WriteOkJsonResponseAsync(httpContext, context, content);
+    }
+
     private static ServiceProvider CreateServices(ConcurrentQueue<string> logged)
     {
         return new ServiceCollection()
@@ -289,6 +326,17 @@ public sealed class OpenHolder
 /// </summary>
 /// <param name="Name">The payload's name.</param>
 public sealed record UnregisteredPayload(string Name);
+
+/// <summary>
+/// A subclass of <see cref="RegisteredBase" /> the context does not register, holding an async stream.
+/// </summary>
+public sealed class StreamingSubclass : RegisteredBase
+{
+    /// <summary>
+    /// Gets or sets the streamed items.
+    /// </summary>
+    public IAsyncEnumerable<string>? Items { get; set; }
+}
 
 /// <summary>
 /// A base type whose converter also writes its subclasses.

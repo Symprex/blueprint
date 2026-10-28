@@ -483,7 +483,9 @@ public class HttpOperationResultExecutor
         else
         {
             var serializerOptions = serializerContext?.Options ?? _emptyFallbackOptions;
-            return JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, CreateFallbackSerializerOptions(serializerOptions), httpContext.RequestAborted);
+            var options = SerializerContextTypeInfoCache.GetUncoveredRootOptions(app, httpContext.RequestServices)
+                ?? CreateFallbackSerializerOptions(serializerOptions);
+            return JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, options, httpContext.RequestAborted);
         }
     }
 

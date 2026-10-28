@@ -133,23 +133,30 @@ internal static class SerializerContextTypeInfoCache
 
         if (typeInfo is null)
         {
-            // An uncovered root - a registered root returned as a subclass the context does not register - goes through the
-            // runtime type fallback when the app allows it, so it is warned about and both writers agree; otherwise the
-            // caller's own runtime serialization applies. An async stream is left to that too: its metadata would send it
-            // to a synchronous write, which cannot enumerate it.
-            return runtimeFallbackOptions is null || IsAsyncEnumerable(type) ? null : runtimeFallbackOptions.GetTypeInfo(type);
+            // An uncovered root - a registered root returned as a subclass the context does not register - gets no
+            // metadata, so each writer serializes it asynchronously, which an async stream anywhere in it needs, through
+            // GetUncoveredRootOptions.
+            return null;
         }
 
         return runtimeFallbackOptions?.GetTypeInfo(type) ?? typeInfo;
     }
 
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2070",
-        Justification = "Asked only on the runtime type fallback's path, which is reflection by definition; an app that opts in has given up trimming.")]
-    private static bool IsAsyncEnumerable(Type type)
+    /// <summary>
+    /// Gets the options a writer serializes an uncovered root with - one <see cref="Get" /> returned no metadata for - when
+    /// the app allows the runtime type fallback: the fallback's own, which warn once per unregistered type written.
+    /// </summary>
+    /// <param name="app">The app whose serializer context and runtime type fallback apply.</param>
+    /// <param name="services">The request's services, which the warning is logged through.</param>
+    /// <returns>The runtime type fallback's options, or <see langword="null" /> when the app has not opted in.</returns>
+    public static JsonSerializerOptions? GetUncoveredRootOptions(BlueprintApp app, IServiceProvider? services)
     {
-        return type.GetInterfaces().Any(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAsyncEnumerable<>));
+        if (!app.AllowRuntimeTypeFallback || app.AppOwnedSerializerContext is not { } context)
+        {
+            return null;
+        }
+
+        return _entries.GetValue(context, static _ => new ContextEntry()).GetRuntimeFallbackOptions(context, services);
     }
 
     /// <summary>
