@@ -172,6 +172,8 @@ public sealed partial class AppDataModelSourceGenerator
         // a visited set, so each member typed as the same collection is still checked and reported on its own.
         private readonly HashSet<ITypeSymbol> _activeCollections = new(SymbolEqualityComparer.Default);
         private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
+        private readonly HashSet<IAssemblySymbol> _rootAssemblies = new(SymbolEqualityComparer.Default);
+        private readonly Dictionary<IAssemblySymbol, bool> _referencesBlueprint = new(SymbolEqualityComparer.Default);
         private readonly INamedTypeSymbol? _enumerableOfT = compilation.GetSpecialType(SpecialType.System_Collections_Generic_IEnumerable_T);
         private readonly INamedTypeSymbol? _dictionaryOfT = compilation.GetTypeByMetadataName("System.Collections.Generic.IDictionary`2");
         private readonly INamedTypeSymbol? _readOnlyDictionaryOfT = compilation.GetTypeByMetadataName("System.Collections.Generic.IReadOnlyDictionary`2");
@@ -185,7 +187,32 @@ public sealed partial class AppDataModelSourceGenerator
 
         public void Walk(ITypeSymbol rootType, string rootName)
         {
+            this.AddRootAssemblies(rootType);
             this.VisitType(rootType, null, rootName, atRoot: true);
+        }
+
+        // A declared root's own assembly is walked wherever it is: an app commonly declares roots from another service's
+        // contract assembly that it does not scan. So is each assembly its type arguments come from (PagedApiResource<T>).
+        private void AddRootAssemblies(ITypeSymbol type)
+        {
+            switch (type)
+            {
+                case IArrayTypeSymbol array:
+                    this.AddRootAssemblies(array.ElementType);
+                    break;
+                case INamedTypeSymbol named:
+                    if (named.ContainingAssembly is { } assembly)
+                    {
+                        this._rootAssemblies.Add(assembly);
+                    }
+
+                    foreach (var argument in named.TypeArguments)
+                    {
+                        this.AddRootAssemblies(argument);
+                    }
+
+                    break;
+            }
         }
 
         private void VisitType(ITypeSymbol type, ISymbol? member, string rootName, bool atRoot)
@@ -396,10 +423,46 @@ public sealed partial class AppDataModelSourceGenerator
                 return false;
             }
 
+            if (IsProblemDetails(type))
+            {
+                return true;
+            }
+
+            // The framework's types are leaves: their JSON is the framework's converters, not their public properties.
+            if (IsFrameworkAssembly(assembly))
+            {
+                return false;
+            }
+
             return SymbolEqualityComparer.Default.Equals(assembly, compilation.Assembly)
                 || scannedAssemblies.Contains(assembly)
                 || assembly.Name.StartsWith("Blueprint.", StringComparison.Ordinal)
-                || IsProblemDetails(type);
+                || this._rootAssemblies.Contains(assembly)
+                || this.ReferencesBlueprint(assembly);
+        }
+
+        private static bool IsFrameworkAssembly(IAssemblySymbol assembly)
+        {
+            var name = assembly.Name;
+            return name is "mscorlib" or "netstandard" or "System"
+                || name.StartsWith("System.", StringComparison.Ordinal)
+                || name.StartsWith("Microsoft.", StringComparison.Ordinal);
+        }
+
+        // An assembly that references Blueprint is one of the app's own contract assemblies, whose types are written by
+        // their properties. A third-party library that does not (NodaTime) is a leaf, written by converters registered on
+        // the options, which no attribute shows - its public properties say nothing about its JSON.
+        private bool ReferencesBlueprint(IAssemblySymbol assembly)
+        {
+            if (!this._referencesBlueprint.TryGetValue(assembly, out var references))
+            {
+                references = assembly.Modules
+                    .SelectMany(static module => module.ReferencedAssemblies)
+                    .Any(static reference => reference.Name.StartsWith("Blueprint.", StringComparison.Ordinal));
+                this._referencesBlueprint[assembly] = references;
+            }
+
+            return references;
         }
 
         private LocationInfo? GetLocation(AttributeData? attribute, ISymbol member)

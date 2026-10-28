@@ -163,10 +163,23 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
             .Select((context, _) => FindOperations(context.Left.Left, context.Left.Right, context.Right))
             .WithTrackingName(Stages.FindServicesToRegister);
 
+        // BP012/BP013's configured severities, read from the app class's file. The compiler applies only global
+        // configuration to a generator's diagnostics, not an .editorconfig's [*.cs] section, where a consumer phases a new
+        // rule in, so the generator applies that itself.
+        var configuredSeverityProvider = context.SyntaxProvider.ForAttributeWithMetadataName(
+                "Blueprint.Model.BlueprintAppScanAttribute",
+                predicate: static (syntaxNode, _) => syntaxNode is ClassDeclarationSyntax,
+                transform: static (context, _) => context.TargetNode.SyntaxTree)
+            .Combine(context.AnalyzerConfigOptionsProvider)
+            .Select(static (pair, _) => ConfiguredSeverities.Read(pair.Right.GetOptions(pair.Left)))
+            .Collect()
+            .Select(static (severities, _) => severities.FirstOrDefault() ?? ConfiguredSeverities.None);
+
         context.RegisterSourceOutput(
-            generationModelProvider,
-            (spc, result) =>
+            generationModelProvider.Combine(configuredSeverityProvider),
+            (spc, pair) =>
             {
+                var (result, severities) = pair;
                 result!.ReportDiagnostics(spc);
 
                 if (result.Value is not { } classToGenerate)
@@ -176,7 +189,15 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
 
                 foreach (var diagnostic in classToGenerate.Diagnostics)
                 {
-                    spc.ReportDiagnostic(diagnostic.ToDiagnostic());
+                    var configured = severities.For(diagnostic.Descriptor.Id);
+                    if (configured is null)
+                    {
+                        spc.ReportDiagnostic(diagnostic.ToDiagnostic());
+                    }
+                    else if (configured.Value.Report)
+                    {
+                        spc.ReportDiagnostic(diagnostic.ToDiagnostic(configured.Value.Severity));
+                    }
                 }
 
                 spc.AddSource(

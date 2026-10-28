@@ -1,5 +1,8 @@
+using System.Collections.Immutable;
 using Blueprint.SourceGenerator.Generators.App;
 using FluentAssertions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Blueprint.SourceGenerator.Tests.Generators.AppDataModel;
 
@@ -299,6 +302,84 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
     }
 
     [Fact]
+    public void When_a_declared_root_lives_in_a_referenced_assembly_the_app_does_not_scan_then_generator_still_walks_it()
+    {
+        // Signature365's AdminPortal declares roots from other services' contract assemblies it does not scan; the UAT
+        // 500 was a Dictionary<string, object?> on one of them.
+        var contract = TestHelpers.CreateReferenceFromSource(
+            "namespace Contract { public sealed class ContractRoot { public System.Collections.Generic.Dictionary<string, object?> Data { get; set; } = new(); } }",
+            "Contract.Unscanned");
+
+        var result = Compile(
+            "public int Count { get; set; }",
+            string.Empty,
+            extraRegistrations: ["Contract.ContractRoot"],
+            responseType: "Contract.ContractRoot",
+            references: [contract]);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
+            .Should().ContainSingle()
+            .Which.GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .Should().Contain("'Contract.ContractRoot.Data'");
+    }
+
+    [Fact]
+    public void When_a_nested_type_lives_in_a_referenced_assembly_that_uses_Blueprint_then_generator_walks_it()
+    {
+        var contract = TestHelpers.CreateReferenceFromSource(
+            """
+            namespace Contract
+            {
+                public sealed class Nested
+                {
+                    [Blueprint.Model.BlueprintRuntimeTypes(typeof(string))]
+                    public object? Tagged { get; set; }
+
+                    public object? Loose { get; set; }
+                }
+            }
+            """,
+            "Contract.UsesBlueprint");
+
+        var result = Compile("public Contract.Nested? Value { get; set; }", string.Empty, extraRegistrations: ["string"], references: [contract]);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
+            .Should().ContainSingle()
+            .Which.GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .Should().Contain("'Contract.Nested.Loose'");
+    }
+
+    [Theory]
+    [InlineData(null, DiagnosticSeverity.Error)]
+    [InlineData("warning", DiagnosticSeverity.Warning)]
+    [InlineData("suggestion", DiagnosticSeverity.Info)]
+    [InlineData("error", DiagnosticSeverity.Error)]
+    public void When_the_consumer_configures_BP012s_severity_then_generator_reports_it_at_that_severity(string? severity, DiagnosticSeverity expected)
+    {
+        // The compiler applies only global configuration to a generator's diagnostics, and keeps dotnet_diagnostic keys
+        // to itself, so the generator reads Blueprint's own key from an .editorconfig's [*.cs] section, where consumers
+        // phase a new rule in.
+        var options = severity is null ? null : new TestOptionsProvider(("blueprint_diagnostic.BP012.severity", severity));
+
+        var result = Compile("public object? Value { get; set; }", string.Empty, options: options ?? new TestOptionsProvider());
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
+            .Should().ContainSingle()
+            .Which.Severity.Should().Be(expected);
+    }
+
+    [Fact]
+    public void When_the_consumer_turns_BP013_off_then_generator_does_not_report_it()
+    {
+        var result = Compile(
+            "[BlueprintRuntimeTypes(typeof(Unknown))] public object? Value { get; set; }",
+            "public sealed class Unknown { }",
+            options: new TestOptionsProvider(("blueprint_diagnostic.BP013.severity", "none")));
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
+    [Fact]
     public void When_a_problem_carries_open_extensions_then_generator_does_not_report_BP012()
     {
         // ProblemDetails is a declared root of every HTTP app; its Extensions are written through reflection at runtime.
@@ -323,6 +404,34 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
             public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options) => writer.WriteStringValue(value.ToString());
         }
         """;
+
+    private sealed class TestOptionsProvider(params (string Key, string Value)[] values) : AnalyzerConfigOptionsProvider
+    {
+        private readonly TestOptions _options = new(values.ToImmutableDictionary(static pair => pair.Key, static pair => pair.Value));
+
+        public override AnalyzerConfigOptions GlobalOptions { get; } = new TestOptions(ImmutableDictionary<string, string>.Empty);
+
+        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree)
+        {
+            return this._options;
+        }
+
+        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile)
+        {
+            return this._options;
+        }
+    }
+
+    private sealed class TestOptions(ImmutableDictionary<string, string> values) : AnalyzerConfigOptions
+    {
+        // The generator's own NotNullWhenAttribute polyfill makes the BCL's ambiguous here, so the override goes without.
+#pragma warning disable CS8765
+        public override bool TryGetValue(string key, out string? value)
+#pragma warning restore CS8765
+        {
+            return values.TryGetValue(key, out value);
+        }
+    }
 
     private const string ProblemDetailsStub = """
         namespace Microsoft.AspNetCore.Mvc
@@ -367,7 +476,10 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         string contextAttributes = "",
         bool nestedContext = false,
         bool stubProblemDetails = true,
-        string? problemDetailsStubOverride = null)
+        string? problemDetailsStubOverride = null,
+        string responseType = "Payload",
+        MetadataReference[]? references = null,
+        AnalyzerConfigOptionsProvider? options = null)
     {
         var problemDetailsStub = problemDetailsStubOverride ?? (stubProblemDetails ? ProblemDetailsStub : ValidationProblemDetailsStub);
         var contextOpen = nestedContext ? "public static partial class Outer {" : string.Empty;
@@ -433,7 +545,7 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
                 {{contextClose}}
 
                 [RootLink("/open-typed-members")]
-                public partial class IncludedOperation : IQuery<OkResult<Payload>>
+                public partial class IncludedOperation : IQuery<OkResult<{{responseType}}>>
                 {
                     public static ApiOperationDescriptor Configure() => throw new NotImplementedException();
                 }
@@ -446,6 +558,8 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
             }
             """;
 
-        return TestHelpers.Compile<AppDataModelSourceGenerator>(source);
+        return references is null && options is null
+            ? TestHelpers.Compile<AppDataModelSourceGenerator>(source)
+            : TestHelpers.CompileOnce<AppDataModelSourceGenerator>(source, options, references);
     }
 }

@@ -240,6 +240,70 @@ public static class TestHelpers
     }
 
     /// <summary>
+    /// Runs a single generator once against one source string with analyzer config options and extra references, for the
+    /// few tests that need what the default harness does not provide: a consumer's <c>.editorconfig</c> values, or types
+    /// that live in another, referenced assembly rather than in source.
+    /// </summary>
+    /// <remarks>
+    /// Cacheability is not asserted here; the tests that need it run through <see cref="Compile{T}(string, bool)" /> as
+    /// well. Diagnostics are the generator's own, as reported, before the compiler applies any severity configuration.
+    /// </remarks>
+    /// <typeparam name="T">The incremental generator under test.</typeparam>
+    /// <param name="source">The handwritten source that should trigger the generator.</param>
+    /// <param name="optionsProvider">The analyzer config options the generator sees, or <see langword="null" /> for none.</param>
+    /// <param name="additionalReferences">Extra metadata references, for example from <see cref="CreateReferenceFromSource" />.</param>
+    /// <returns>The captured diagnostics and generated syntax trees for the run.</returns>
+    public static GenerationResult CompileOnce<T>(
+        string source,
+        Microsoft.CodeAnalysis.Diagnostics.AnalyzerConfigOptionsProvider? optionsProvider = null,
+        MetadataReference[]? additionalReferences = null)
+        where T : IIncrementalGenerator, new()
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var compilation = CreateCompilation([source], filePaths: null, parseOptions);
+        if (additionalReferences is { Length: > 0 })
+        {
+            compilation = compilation.AddReferences(additionalReferences);
+        }
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new T().AsSourceGenerator()],
+            parseOptions: parseOptions,
+            optionsProvider: optionsProvider);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+        var runResult = driver.GetRunResult();
+        if (runResult.Results[0].Exception is not null)
+        {
+            ExceptionDispatchInfo.Throw(runResult.Results[0].Exception!);
+        }
+
+        return new GenerationResult(compilation.SyntaxTrees.ToArray(), runResult.Diagnostics.ToArray(), runResult.GeneratedTrees.ToArray());
+    }
+
+    /// <summary>
+    /// Compiles <paramref name="source" /> into an in-memory assembly and returns a reference to it, so a test can put
+    /// types in an assembly the compilation under test references but does not scan.
+    /// </summary>
+    /// <param name="source">The source of the referenced assembly.</param>
+    /// <param name="assemblyName">The referenced assembly's name.</param>
+    /// <returns>A metadata reference to the compiled assembly.</returns>
+    public static MetadataReference CreateReferenceFromSource(string source, string assemblyName)
+    {
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            [CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview))],
+            CreateMetadataReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        using var stream = new MemoryStream();
+        var emitResult = compilation.Emit(stream);
+        emitResult.Success.Should().BeTrue(string.Join(Environment.NewLine, emitResult.Diagnostics));
+
+        return MetadataReference.CreateFromImage(stream.ToArray());
+    }
+
+    /// <summary>
     /// Creates a tracked generator definition that records the stage names a locality test is allowed to reason about.
     /// </summary>
     /// <typeparam name="T">The tracked incremental generator to instantiate.</typeparam>
