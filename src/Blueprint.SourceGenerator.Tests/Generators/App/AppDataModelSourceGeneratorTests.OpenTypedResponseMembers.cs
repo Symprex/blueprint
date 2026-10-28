@@ -27,6 +27,10 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         { "public Nested? Value { get; set; }", "public sealed class Nested { public object? Inner { get; set; } }", "TestNamespace.Nested.Inner" },
         { "public List<Nested> Value { get; set; } = new();", "public sealed class Nested { public object? Inner { get; set; } }", "TestNamespace.Nested.Inner" },
         { "public Wrapper<object>? Value { get; set; }", "public sealed class Wrapper<T> { public T? Item { get; set; } }", "TestNamespace.Wrapper<object>.Item" },
+        { "public KeyValuePair<object, string> Value { get; set; }", string.Empty, "TestNamespace.Payload.Value" },
+        { "[JsonInclude] public object? Value;", string.Empty, "TestNamespace.Payload.Value" },
+        { "public object? Value { get; }", string.Empty, "TestNamespace.Payload.Value" },
+        { "public ProblemDetails? Value { get; set; }", string.Empty, "Microsoft.AspNetCore.Mvc.ProblemDetails.Extensions" },
     };
 
     public static TheoryData<string, string> ClosedShapes => new()
@@ -39,6 +43,10 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         { "[JsonIgnore] public object? Value { get; set; }", string.Empty },
         { "[JsonConverter(typeof(ObjectAsStringConverter))] public object? Value { get; set; }", ObjectAsStringConverter },
         { "public ConvertedShape? Value { get; set; }", "[JsonConverter(typeof(ConvertedShapeConverter))] public abstract class ConvertedShape { } " + ConvertedShapeConverter },
+        { "public Tree? Value { get; set; }", "public sealed class Tree : List<Tree> { }" },
+        { "public TreeMap? Value { get; set; }", "public sealed class TreeMap : Dictionary<string, TreeMap> { }" },
+        { "public object? Value;", string.Empty },
+        { "[ObjectAsString] public object? Value { get; set; }", "public sealed class ObjectAsStringAttribute : JsonConverterAttribute { public override JsonConverter? CreateConverter(Type typeToConvert) => new ObjectAsStringConverter(); } " + ObjectAsStringConverter },
         { "public PolymorphicShape? Value { get; set; }", "[JsonDerivedType(typeof(Circle), \"circle\")] public abstract class PolymorphicShape { } public sealed class Circle : PolymorphicShape { public int Radius { get; set; } }" },
     };
 
@@ -121,6 +129,51 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
     }
 
     [Fact]
+    public void When_the_context_ignores_read_only_properties_then_a_getter_only_open_member_is_not_reported()
+    {
+        var result = Compile("public object? Value { get; }", string.Empty, contextAttributes: "[JsonSourceGenerationOptions(IgnoreReadOnlyProperties = true)]");
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_the_context_ignores_read_only_properties_but_the_member_is_never_ignored_then_generator_reports_BP012()
+    {
+        var result = Compile(
+            "[JsonIgnore(Condition = JsonIgnoreCondition.Never)] public object? Value { get; }",
+            string.Empty,
+            contextAttributes: "[JsonSourceGenerationOptions(IgnoreReadOnlyProperties = true)]");
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id).Should().Equal("BP012");
+    }
+
+    [Fact]
+    public void When_the_context_includes_fields_then_an_open_public_field_is_reported()
+    {
+        var result = Compile("public object? Value;", string.Empty, contextAttributes: "[JsonSourceGenerationOptions(IncludeFields = true)]");
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id).Should().Equal("BP012");
+    }
+
+    [Fact]
+    public void When_a_field_declares_an_unregistered_runtime_type_then_generator_reports_BP013()
+    {
+        var result = Compile(
+            "[JsonInclude, BlueprintRuntimeTypes(typeof(Unknown))] public object? Value;",
+            "public sealed class Unknown { }");
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id).Should().Equal("BP013");
+    }
+
+    [Fact]
+    public void When_the_serializer_context_is_nested_then_generator_still_reports_BP012()
+    {
+        var result = Compile("public object? Value { get; set; }", string.Empty, nestedContext: true);
+
+        result.Diagnostics.Select(static diagnostic => diagnostic.Id).Should().Equal("BP012");
+    }
+
+    [Fact]
     public void When_a_problem_carries_open_extensions_then_generator_does_not_report_BP012()
     {
         // ProblemDetails is a declared root of every HTTP app; its Extensions are written through reflection at runtime.
@@ -160,8 +213,13 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         string declarations,
         string appArguments = "",
         string[]? extraRegistrations = null,
-        string? payloadBase = null)
+        string? payloadBase = null,
+        string contextAttributes = "",
+        bool nestedContext = false)
     {
+        var contextOpen = nestedContext ? "public static partial class Outer {" : string.Empty;
+        var contextClose = nestedContext ? "}" : string.Empty;
+        var contextReference = nestedContext ? "Outer.TestBlueprintJsonContext" : "TestBlueprintJsonContext";
         var registrations = string.Concat((extraRegistrations ?? []).Select(static type => $"\n        [JsonSerializable(typeof({type}))]"));
         var baseClause = payloadBase is null ? string.Empty : " : " + payloadBase;
 
@@ -212,6 +270,8 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
 
                 {{declarations}}
 
+                {{contextOpen}}
+                {{contextAttributes}}
                 [JsonSerializable(typeof(ProblemDetails))]
                 [JsonSerializable(typeof(ValidationProblemDetails))]
                 [JsonSerializable(typeof(Payload))]{{registrations}}
@@ -229,6 +289,7 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
                         return null;
                     }
                 }
+                {{contextClose}}
 
                 [RootLink("/open-typed-members")]
                 public partial class IncludedOperation : IQuery<OkResult<Payload>>
@@ -237,7 +298,7 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
                 }
 
                 [BlueprintAppScan]
-                [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(TestBlueprintJsonContext){{appArguments}})]
+                [BlueprintAppSerializerContext(JsonSerializerContextType = typeof({{contextReference}}){{appArguments}})]
                 public partial class TestBlueprintApp : BlueprintApp
                 {
                 }

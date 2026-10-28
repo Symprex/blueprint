@@ -46,6 +46,8 @@ namespace TestNamespace
 
     
 
+    
+    
     [JsonSerializable(typeof(ProblemDetails))]
     [JsonSerializable(typeof(ValidationProblemDetails))]
     [JsonSerializable(typeof(Payload))]
@@ -63,6 +65,7 @@ namespace TestNamespace
             return null;
         }
     }
+    
 
     [RootLink("/open-typed-members")]
     public partial class IncludedOperation : IQuery<OkResult<Payload>>

@@ -45,7 +45,7 @@ Or opt the whole app into the runtime fallback, which writes unregistered types 
 [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(AppJsonContext), AllowRuntimeTypeFallback = true)]
 ```
 
-`ProblemDetails.Extensions` and `ResourceEvent`'s `Data`/`Metadata`/`SecureData`/`ChangedValues` are not reported: they are written with fallback metadata at runtime.
+`ProblemDetails.Extensions` and `ResourceEvent`'s `Data`/`Metadata`/`SecureData`/`ChangedValues` are not reported when the problem or event is itself the response root: it is written with fallback metadata at runtime. Nested inside another response type they are reported.
 
 ### BP013 — declared runtime type is not registered
 

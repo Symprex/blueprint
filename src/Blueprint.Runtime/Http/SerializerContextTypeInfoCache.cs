@@ -86,14 +86,19 @@ internal static class SerializerContextTypeInfoCache
 
         var entry = _entries.GetValue(context, static _ => new ContextEntry());
 
-        if (entry.TypeInfos.TryGetValue(type, out var typeInfo))
+        // Partitioned by policy: two apps may share one context instance while choosing differently, and neither may get
+        // the other's metadata - strict metadata would fail the opted-in app, fallback metadata would let the strict one
+        // write an unregistered object through reflection.
+        var typeInfos = app.AllowRuntimeTypeFallback ? entry.FallbackTypeInfos : entry.StrictTypeInfos;
+
+        if (typeInfos.TryGetValue(type, out var typeInfo))
         {
             return typeInfo;
         }
 
         var runtimeFallbackOptions = app.AllowRuntimeTypeFallback ? entry.GetRuntimeFallbackOptions(context, services) : null;
 
-        return entry.TypeInfos.GetOrAdd(type, Resolve(context, type, runtimeFallbackOptions));
+        return typeInfos.GetOrAdd(type, Resolve(context, type, runtimeFallbackOptions));
     }
 
     /// <summary>
@@ -141,7 +146,9 @@ internal static class SerializerContextTypeInfoCache
     {
         private JsonSerializerOptions? _runtimeFallbackOptions;
 
-        public ConcurrentDictionary<Type, JsonTypeInfo?> TypeInfos { get; } = new();
+        public ConcurrentDictionary<Type, JsonTypeInfo?> StrictTypeInfos { get; } = new();
+
+        public ConcurrentDictionary<Type, JsonTypeInfo?> FallbackTypeInfos { get; } = new();
 
         public JsonSerializerOptions GetRuntimeFallbackOptions(JsonSerializerContext context, IServiceProvider? services)
         {
@@ -170,9 +177,10 @@ internal static class SerializerContextTypeInfoCache
     /// <see cref="IComparable" />, and an ancestor's element types follow (<see cref="char" /> for
     /// <see cref="IEnumerable{T}" />). A value written is never of an interface or abstract type, so those are never
     /// warned about. An object's warning waits for its first instance written (<see cref="JsonTypeInfo.OnSerializing" />),
-    /// and a value-shaped type's - a primitive, a <see cref="JsonElement" /> - for its converter's first write, since only
-    /// objects have that callback. A concrete collection is warned about when it is resolved, which in practice is when
-    /// it is written.
+    /// and a value-shaped type's - a <see cref="JsonElement" />, a type with its own converter - for its converter's first
+    /// write (or first key written), since only objects have that callback. Numbers and enums are written as they would
+    /// be by the context and are not warned about. A concrete collection is warned about when it is resolved, which in
+    /// practice is when it is written.
     /// </remarks>
     private sealed class LoggingFallbackResolver(string contextName, ILogger logger) : IJsonTypeInfoResolver
     {
@@ -210,6 +218,13 @@ internal static class SerializerContextTypeInfoCache
 
                     return typeInfo;
 
+                case JsonTypeInfoKind.None when IsNumberLike(type):
+                    // Not wrapped, and so not warned about: a built-in number converter applies the options' number
+                    // handling only when the serializer dispatches to it, never through its public Write. A number is
+                    // also the commonest ancestor probe (an IEnumerable<int> brings int), and reflection writes it
+                    // exactly as the context would.
+                    return typeInfo;
+
                 case JsonTypeInfoKind.None:
                     return (JsonTypeInfo)_createValueInfo.MakeGenericMethod(type).Invoke(null, [typeInfo, options, this])!;
 
@@ -217,6 +232,16 @@ internal static class SerializerContextTypeInfoCache
                     this.LogOnce(type);
                     return typeInfo;
             }
+        }
+
+        private static bool IsNumberLike(Type type)
+        {
+            return type.IsPrimitive
+                || type.IsEnum
+                || type == typeof(decimal)
+                || type == typeof(Half)
+                || type == typeof(Int128)
+                || type == typeof(UInt128);
         }
 
         private static JsonTypeInfo<T> CreateLoggingValueInfo<T>(JsonTypeInfo inner, JsonSerializerOptions options, LoggingFallbackResolver owner)
@@ -248,6 +273,18 @@ internal static class SerializerContextTypeInfoCache
             {
                 owner.LogOnce(typeof(T));
                 inner.Write(writer, value, options);
+            }
+
+            // A dictionary keyed by the type writes its keys through these, which the base class does not support.
+            public override T ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            {
+                return inner.ReadAsPropertyName(ref reader, typeToConvert, options);
+            }
+
+            public override void WriteAsPropertyName(Utf8JsonWriter writer, [DisallowNull] T value, JsonSerializerOptions options)
+            {
+                owner.LogOnce(typeof(T));
+                inner.WriteAsPropertyName(writer, value, options);
             }
         }
     }
