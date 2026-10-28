@@ -68,17 +68,14 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
         // BackgroundTask convention: auto-project anonymous when no explicit auth attribute is present
         // and the operation is exposed on the tasks host. Background tasks execute server-side without
         // HTTP identity, matching legacy Blueprint's BackgroundTaskAllowAnonymousConvention behavior.
-        if (!hasMustBeAuthenticated)
-        {
-            var isTaskExposed = context.GetMetadata<HostExposureRegistration>()
-                .Any(static r => string.Equals(r.HostName, HostExposureRegistration.Tasks.HostName, StringComparison.Ordinal));
+        var isTaskExposed = context.GetMetadata<HostExposureRegistration>()
+            .Any(static r => string.Equals(r.HostName, HostExposureRegistration.Tasks.HostName, StringComparison.Ordinal));
 
-            if (isTaskExposed)
-            {
-                context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: false));
-                context.AddRenderStep(RenderAnonymousFeatureData);
-                return;
-            }
+        if (!hasMustBeAuthenticated && isTaskExposed)
+        {
+            context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: false));
+            context.AddRenderStep(RenderAnonymousFeatureData);
+            return;
         }
 
         // Default-on authentication: HTTP operations require authentication unless [AllowAnonymous].
@@ -92,9 +89,10 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
             context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: true));
             context.AddRenderStep(RenderAuthenticatedFeatureData);
         }
-        else if (hasMustBeAuthenticated)
+        else if (hasMustBeAuthenticated && !isTaskExposed)
         {
-            // [MustBeAuthenticated] on a non-HTTP operation is invalid
+            // [MustBeAuthenticated] on a non-HTTP operation is invalid. On a background task it is not: it turns the anonymous
+            // convention above off, so the task's authorisers and resource requirements are enforced in process.
             context.AddDiagnostic(
                 new DiagnosticInfo(
                     AuthenticationDiagnosticDescriptors.AuthAttributeOnNonHttpOperation,

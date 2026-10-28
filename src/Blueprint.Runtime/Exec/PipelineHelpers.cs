@@ -1381,9 +1381,11 @@ public static class PipelineHelpers
     /// background task or a nested execution) alike, by asking the resource providers through
     /// <see cref="CheckResourceAuthorizationAsync(ApiOperationContext, ClaimsPrincipal, Authorization.IResourceAuthorizationProvider[], IReadOnlyList{ResolvedScopePair}, CancellationToken)"/>
     /// with the context's own caller and cancellation: over HTTP they are the request's <c>User</c> and <c>RequestAborted</c>.
-    /// Nothing is asked when the context skips authorisation or the operation's descriptor allows anonymous access, as the
-    /// authentication step and <see cref="RunUnlinkedOperationAuthorisersAsync"/> skip theirs. A subscribed Rebus message
-    /// allows anonymous access but is not exposed over HTTP, so that never skips a request's check.
+    /// Nothing is asked when the context skips authorisation, as the authentication step and the authorisers skip theirs,
+    /// or, in process only, when the operation's descriptor allows anonymous access, as
+    /// <see cref="RunUnlinkedOperationAuthorisersAsync"/> skips the authorisers. Over HTTP a descriptor allowing anonymous
+    /// access is still checked: a Rebus consumer marks a subscribed operation's descriptor so, but the operation is still
+    /// routed when it has a URL.
     /// </summary>
     /// <remarks>
     /// The caller is <see cref="ApiOperationContext.UserPrincipal"/>. A provider's judgement is of a principal's claims, so
@@ -1403,7 +1405,10 @@ public static class PipelineHelpers
         Authorization.IResourceAuthorizationProvider[] providers,
         IReadOnlyList<ResolvedScopePair> resolvedScopes)
     {
-        if (context.Descriptor.AnonymousAccessAllowed || context.SkipAuthorisation)
+        // A descriptor that allows anonymous access is skipped only in process. A Rebus consumer marks a subscribed
+        // operation's descriptor anonymous, but MapBlueprintApi still routes it when it has a URL, so over HTTP the
+        // providers must still be asked. SkipAuthorisation is skipped everywhere, as the authentication step skips it.
+        if (context.SkipAuthorisation || (context.Descriptor.AnonymousAccessAllowed && context.HttpContext is null))
         {
             return default;
         }

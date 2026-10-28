@@ -240,8 +240,11 @@ public class AuthenticationModuleTests
             }
             """);
 
-        // [MustBeAuthenticated] on non-HTTP should still produce BPAU001,
-        // but should NOT project anonymous (the explicit intent takes precedence)
+        // [MustBeAuthenticated] should NOT project anonymous (the explicit intent takes precedence), and on a background task
+        // it does something, turning the anonymous convention off so the task's requirements are enforced in process, so
+        // BPAU001's "has no effect" does not apply to it
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BPAU001");
+
         var descriptorSource = result.Output
             .Select(static t => t.ToString())
             .FirstOrDefault(static s => s.Contains("ProcessItemTaskDescriptor"));

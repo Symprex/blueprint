@@ -82,7 +82,7 @@ A type listed in `[BlueprintRuntimeTypes(...)]` is not registered on the app-own
 
 | ID | Severity | Title |
 |----|----------|-------|
-| BPAU001 | Warning | `[MustBeAuthenticated]` on non-HTTP operation |
+| BPAU001 | Warning | `[MustBeAuthenticated]` on non-HTTP operation (not a background task, where it turns the anonymous convention off) |
 | BPAU002 | Error | Conflicting `[AllowAnonymous]` and `[MustBeAuthenticated]` |
 | BPAU003 | Error | `[Resource]`/`[FromResource]` combined with `[AllowAnonymous]` |
 | BPAU004 | Error | Empty scope pair value in `[Resource]` |

@@ -159,6 +159,28 @@ public sealed class InProcessResourceAuthorizationIntegrationTests
         provider.Principals.Where(p => !ReferenceEquals(p, httpContext.User)).Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task Over_HTTP_a_descriptor_that_allows_anonymous_access_is_still_asked_of_the_providers()
+    {
+        // A Rebus consumer marks a subscribed operation's descriptor anonymous, but MapBlueprintApi still routes the operation
+        // when it has a URL: a request to it must not skip the providers that would deny it
+        var provider = new RecordingProvider(ExecutionAllowed.No("no", "Denied", ExecutionAllowedFailureType.Authorisation));
+        var app = new IntegrationTestBlueprintApp();
+        var descriptor = app.FindOperation(typeof(PermissionedUnlinkedCommand))!;
+        descriptor.AnonymousAccessAllowed = true;
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = AuthenticatedUser() };
+        var context = new ApiOperationContext(new ServiceCollection().BuildServiceProvider(), app, descriptor, httpContext.RequestAborted)
+        {
+            HttpContext = httpContext,
+            UserPrincipal = httpContext.User,
+        };
+
+        var denial = await PipelineHelpers.CheckOperationResourceAuthorizationAsync(context, [provider], new ResolvedScopePair("widget", "read", null, null));
+
+        denial.Should().BeOfType<ForbiddenResult>();
+        provider.Requests.Should().ContainSingle();
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
