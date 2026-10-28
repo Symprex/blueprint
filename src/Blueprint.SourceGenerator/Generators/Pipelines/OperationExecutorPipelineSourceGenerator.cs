@@ -72,7 +72,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
             {
                 var compilation = context.Compilation;
                 var result = context.Result;
-                result!.ReportDiagnostics(spc);
+                result!.ReportDiagnostics(spc, compilation);
 
                 if (result.Value is not { } compilationModel)
                 {
@@ -80,7 +80,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
                 }
 
                 var executionPlanResult = this._config.BuildExecutionPlan();
-                executionPlanResult.ReportDiagnostics(spc);
+                executionPlanResult.ReportDiagnostics(spc, compilation);
 
                 if (executionPlanResult.Value is null)
                 {
@@ -88,7 +88,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
                 }
 
                 var exceptionTranslatorPolicyResult = CreateExceptionTranslatorPolicy(executionPlanResult);
-                exceptionTranslatorPolicyResult.ReportDiagnostics(spc);
+                exceptionTranslatorPolicyResult.ReportDiagnostics(spc, compilation);
 
                 if (exceptionTranslatorPolicyResult.Value is null)
                 {
@@ -113,7 +113,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
                         handler,
                         sharedOperationLookup,
                         compilationModel.TenantIdTypeName);
-                    pipelinePlanResult.ReportDiagnostics(spc);
+                    pipelinePlanResult.ReportDiagnostics(spc, compilation);
 
                     if (pipelinePlanResult.Value is null)
                     {

@@ -175,11 +175,11 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
     protected IAuditSink? AuditSink { get; }
 
     /// <summary>
-    /// Gets the resource authorization provider cached at pipeline construction time, or
-    /// <see langword="null"/> when none is registered. Receives pre-expanded resource keys
-    /// (compile-time string interpolation) for zero-reflection authorization checks.
+    /// Gets the resource authorization providers cached at pipeline construction time, in registration order, or an
+    /// empty array when none is registered. Each receives pre-expanded resource keys (compile-time string interpolation)
+    /// for zero-reflection authorization checks, and every one must allow.
     /// </summary>
-    protected IResourceAuthorizationProvider? ResourceAuthorizationProvider { get; }
+    protected IResourceAuthorizationProvider[] ResourceAuthorizationProviders { get; }
 
     /// <summary>
     /// Gets the API authoriser instances cached at pipeline construction time. Returns an empty
@@ -361,6 +361,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         this._activityName = activityName;
         this._suppressActivity = suppressActivity;
         this.PropertyPopulators = [];
+        this.ResourceAuthorizationProviders = [];
         this.ApiAuthorisers = [];
         this.OperationAuthorisers = [];
     }
@@ -392,7 +393,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         this.TenantResolver = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<ITenantResolver>(serviceProvider);
         this.PropertyPopulators = PipelineHelpers.ResolveServiceArray<IPropertyPopulator>(serviceProvider);
         this.AuditSink = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IAuditSink>(serviceProvider);
-        this.ResourceAuthorizationProvider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IResourceAuthorizationProvider>(serviceProvider);
+        this.ResourceAuthorizationProviders = PipelineHelpers.ResolveServiceArray<IResourceAuthorizationProvider>(serviceProvider);
         this.ApiAuthorisers = PipelineHelpers.ResolveServiceArray<IApiAuthoriser>(serviceProvider);
         this.OperationAuthorisers = PipelineHelpers.ResolveServiceArray<IOperationAuthoriser>(serviceProvider);
         this.UserAuthorisationContextFactory = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IUserAuthorisationContextFactory>(serviceProvider);
@@ -426,7 +427,7 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
         this.TenantResolver = services.TenantResolver;
         this.PropertyPopulators = services.PropertyPopulators;
         this.AuditSink = services.AuditSink;
-        this.ResourceAuthorizationProvider = services.ResourceAuthorizationProvider;
+        this.ResourceAuthorizationProviders = services.ResourceAuthorizationProviders;
         this.ApiAuthorisers = services.ApiAuthorisers;
         this.OperationAuthorisers = services.OperationAuthorisers;
         this.UserAuthorisationContextFactory = services.UserAuthorisationContextFactory;

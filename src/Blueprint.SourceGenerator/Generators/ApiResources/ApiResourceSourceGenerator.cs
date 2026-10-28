@@ -37,13 +37,13 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
             .Where(static m => m != null)
             .WithTrackingName(Stages.InitialExtraction);
 
+        context.RegisterDiagnosticOutput(classDeclarations.Select(static (result, _) => result!.Diagnostics));
+
         context.RegisterSourceOutput(
             classDeclarations,
             static (spc, result) =>
             {
-                result!.ReportDiagnostics(spc);
-
-                if (result.Value is not { } classToGenerate)
+                if (result!.Value is not { } classToGenerate)
                 {
                     return;
                 }

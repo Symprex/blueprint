@@ -91,7 +91,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
 
         context.RegisterSourceOutput(
             executionPlanProvider,
-            (spc, result) => result.ReportDiagnostics(spc));
+            (spc, result) => result.ReportDiagnostics(spc, compilation: null));
 
         var classProvider = context.SyntaxProvider
             .CreateSyntaxProvider(
@@ -111,13 +111,13 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             .Select((x, _) => Configure(x.Left.Left, x.Left.Right, x.Right))
             .WithTrackingName(Stages.Configuration);
 
+        context.RegisterDiagnosticOutput(configuredModels.Select(static (result, _) => result!.Diagnostics));
+
         context.RegisterSourceOutput(
             configuredModels,
             (spc, result) =>
             {
-                result!.ReportDiagnostics(spc);
-
-                if (result.Value is not { } classToGenerate)
+                if (result!.Value is not { } classToGenerate)
                 {
                     return;
                 }
