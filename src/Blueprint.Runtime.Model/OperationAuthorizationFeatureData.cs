@@ -14,8 +14,8 @@ namespace Blueprint.Model;
 /// </para>
 /// <para>
 /// For a <c>[FromResource]</c> operation, <see cref="ScopePairs"/> are the source operation's direct <c>[Resource]</c>
-/// pairs, one level and not transitive, each carrying <see cref="InheritedTemplateOverride"/> when one was given and the
-/// source's own template otherwise.
+/// pairs, one level and not transitive, each carrying <see cref="InheritedTemplateOverride"/> when it is not blank, and the
+/// source's own template otherwise: an empty or whitespace-only override is recorded as declared but replaces nothing.
 /// </para>
 /// </remarks>
 /// <param name="ScopePairs">
@@ -31,8 +31,9 @@ public sealed record OperationAuthorizationFeatureData(ImmutableArray<ScopePair>
     public Type? InheritedFrom { get; init; }
 
     /// <summary>
-    /// Gets the resource key template <c>[FromResource]</c> gave to override the source operation's templates, or
-    /// <see langword="null"/> when it gave none or the pairs are declared directly.
+    /// Gets the resource key template <c>[FromResource]</c> gave to override the source operation's templates, exactly as
+    /// declared, or <see langword="null"/> when it gave none or the pairs are declared directly. Only a non-blank override
+    /// replaces the source's templates in <see cref="ScopePairs"/>.
     /// </summary>
     public string? InheritedTemplateOverride { get; init; }
 }
