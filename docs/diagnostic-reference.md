@@ -47,21 +47,6 @@ Or opt the whole app into the runtime fallback, which writes unregistered types 
 
 `ProblemDetails.Extensions` and `ResourceEvent`'s `Data`/`Metadata`/`SecureData`/`ChangedValues` are not reported when the problem or event is itself the response root: it is written with fallback metadata at runtime. Nested inside another response type they are reported.
 
-#### Phasing BP012/BP013 in
-
-Both are errors by default. To report them as warnings while a codebase is fixed, set Blueprint's own key in the consuming project's `.editorconfig` (a `[*.cs]` section of the file that declares the app, or any section that covers it):
-
-```ini
-[*.cs]
-# error (the default), warning, suggestion, silent or none
-blueprint_diagnostic.BP012.severity = warning
-blueprint_diagnostic.BP013.severity = warning
-```
-
-EditorConfig has no inline comments: text after a value on the same line becomes part of the value, which Blueprint then does not recognise. Each app reads the setting in effect for the file that declares it.
-
-`dotnet_diagnostic.BP012.severity` in an `.editorconfig` does **not** work: the compiler applies only global configuration to a source generator's diagnostics and keeps `dotnet_diagnostic` keys to itself. In a `.globalconfig` (`is_global = true`) it does work, as a compiler-applied alternative. With `TreatWarningsAsErrors`, a warning still fails the build unless the project also sets `<WarningsNotAsErrors>$(WarningsNotAsErrors);BP012;BP013</WarningsNotAsErrors>`.
-
 A member in a referenced assembly has no source location, so its diagnostic is reported on the app's `[BlueprintAppSerializerContext]` and names the member in its message.
 
 ### BP013 — declared runtime type is not registered

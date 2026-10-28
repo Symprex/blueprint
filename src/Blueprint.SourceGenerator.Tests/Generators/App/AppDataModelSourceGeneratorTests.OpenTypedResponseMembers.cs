@@ -1,8 +1,6 @@
-using System.Collections.Immutable;
 using Blueprint.SourceGenerator.Generators.App;
 using FluentAssertions;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Blueprint.SourceGenerator.Tests.Generators.AppDataModel;
 
@@ -349,54 +347,6 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
             .Should().Contain("'Contract.Nested.Loose'");
     }
 
-    [Theory]
-    [InlineData(null, DiagnosticSeverity.Error)]
-    [InlineData("warning", DiagnosticSeverity.Warning)]
-    [InlineData("suggestion", DiagnosticSeverity.Info)]
-    [InlineData("error", DiagnosticSeverity.Error)]
-    public void When_the_consumer_configures_BP012s_severity_then_generator_reports_it_at_that_severity(string? severity, DiagnosticSeverity expected)
-    {
-        // The compiler applies only global configuration to a generator's diagnostics, and keeps dotnet_diagnostic keys
-        // to itself, so the generator reads Blueprint's own key from an .editorconfig's [*.cs] section, where consumers
-        // phase a new rule in.
-        var options = severity is null ? null : new TestOptionsProvider(("blueprint_diagnostic.BP012.severity", severity));
-
-        var result = Compile("public object? Value { get; set; }", string.Empty, options: options ?? new TestOptionsProvider());
-
-        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
-            .Should().ContainSingle()
-            .Which.Severity.Should().Be(expected);
-    }
-
-    [Theory]
-    [InlineData("Input0.cs")]
-    [InlineData("Input1.cs")]
-    public void When_two_apps_configure_BP012_differently_then_each_apps_own_setting_applies(string suppressedFile)
-    {
-        // Both apps host the same operation, so each reports the same BP012; only the app whose file turns it off drops
-        // its own, and the other's still fails the build.
-        const string secondApp = """
-            using Blueprint.Model;
-
-            namespace TestNamespace
-            {
-                [BlueprintAppScan]
-                [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(TestBlueprintJsonContext))]
-                public partial class SecondBlueprintApp : BlueprintApp
-                {
-                }
-            }
-            """;
-
-        var options = new TestOptionsProvider { PerFile = { [suppressedFile] = [("blueprint_diagnostic.BP012.severity", "none")] } };
-
-        var result = Compile("public object? Value { get; set; }", string.Empty, options: options, extraSources: [secondApp]);
-
-        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
-            .Should().ContainSingle()
-            .Which.Severity.Should().Be(DiagnosticSeverity.Error);
-    }
-
     [Fact]
     public void When_an_earlier_root_reaches_a_type_from_a_later_roots_unscanned_assembly_then_generator_still_walks_it()
     {
@@ -427,17 +377,6 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
     }
 
     [Fact]
-    public void When_the_consumer_turns_BP013_off_then_generator_does_not_report_it()
-    {
-        var result = Compile(
-            "[BlueprintRuntimeTypes(typeof(Unknown))] public object? Value { get; set; }",
-            "public sealed class Unknown { }",
-            options: new TestOptionsProvider(("blueprint_diagnostic.BP013.severity", "none")));
-
-        result.Diagnostics.Should().BeEmpty();
-    }
-
-    [Fact]
     public void When_a_problem_carries_open_extensions_then_generator_does_not_report_BP012()
     {
         // ProblemDetails is a declared root of every HTTP app; its Extensions are written through reflection at runtime.
@@ -462,39 +401,6 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
             public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options) => writer.WriteStringValue(value.ToString());
         }
         """;
-
-    private sealed class TestOptionsProvider(params (string Key, string Value)[] values) : AnalyzerConfigOptionsProvider
-    {
-        private readonly TestOptions _options = new(values.ToImmutableDictionary(static pair => pair.Key, static pair => pair.Value));
-
-        // Per file, for a test whose files are configured differently; any file not named gets the shared values.
-        public Dictionary<string, (string Key, string Value)[]> PerFile { get; init; } = [];
-
-        public override AnalyzerConfigOptions GlobalOptions { get; } = new TestOptions(ImmutableDictionary<string, string>.Empty);
-
-        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree)
-        {
-            return this.PerFile.TryGetValue(tree.FilePath, out var perFile)
-                ? new TestOptions(perFile.ToImmutableDictionary(static pair => pair.Key, static pair => pair.Value))
-                : this._options;
-        }
-
-        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile)
-        {
-            return this._options;
-        }
-    }
-
-    private sealed class TestOptions(ImmutableDictionary<string, string> values) : AnalyzerConfigOptions
-    {
-        // The generator's own NotNullWhenAttribute polyfill makes the BCL's ambiguous here, so the override goes without.
-#pragma warning disable CS8765
-        public override bool TryGetValue(string key, out string? value)
-#pragma warning restore CS8765
-        {
-            return values.TryGetValue(key, out value);
-        }
-    }
 
     private const string ZetaOperation = """
         [RootLink("/open-typed-members/zeta")]
@@ -550,9 +456,7 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         string? problemDetailsStubOverride = null,
         string responseType = "Payload",
         MetadataReference[]? references = null,
-        AnalyzerConfigOptionsProvider? options = null,
-        string extraOperations = "",
-        string[]? extraSources = null)
+        string extraOperations = "")
     {
         var problemDetailsStub = problemDetailsStubOverride ?? (stubProblemDetails ? ProblemDetailsStub : ValidationProblemDetailsStub);
         var contextOpen = nestedContext ? "public static partial class Outer {" : string.Empty;
@@ -633,8 +537,8 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
             }
             """;
 
-        return references is null && options is null && extraSources is null
+        return references is null
             ? TestHelpers.Compile<AppDataModelSourceGenerator>(source)
-            : TestHelpers.CompileOnce<AppDataModelSourceGenerator>([source, .. extraSources ?? []], options, references);
+            : TestHelpers.CompileOnce<AppDataModelSourceGenerator>(source, additionalReferences: references);
     }
 }

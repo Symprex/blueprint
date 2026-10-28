@@ -48,18 +48,6 @@ public sealed record DiagnosticInfo
     }
 
     /// <summary>
-    /// Creates the diagnostic at a severity other than its descriptor's default, for a rule whose severity the consumer
-    /// configured and the generator applies itself.
-    /// </summary>
-    /// <param name="severity">The severity to report it at.</param>
-    /// <returns>The diagnostic.</returns>
-    public Diagnostic ToDiagnostic(DiagnosticSeverity severity)
-    {
-        // ReSharper disable once CoVariantArrayConversion The array is not for writing, the covariant conversion is fine
-        return Diagnostic.Create(this._descriptor, this._location?.ToLocation(), severity, additionalLocations: null, properties: null, this._messageArgs?.AsArray());
-    }
-
-    /// <summary>
     /// Converts this <see cref="DiagnosticInfo"/> to a <see cref="Diagnostic"/> to report.
     /// </summary>
     /// <returns>This diagnostic as a <see cref="Diagnostic"/>.</returns>
