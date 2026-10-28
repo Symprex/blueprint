@@ -1,7 +1,12 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using Blueprint.Model;
+using Microsoft.Extensions.Logging.Abstractions;
+using MvcProblemDetails = Microsoft.AspNetCore.Mvc.ProblemDetails;
 
 namespace Blueprint.Runtime.Http;
 
@@ -21,27 +26,226 @@ namespace Blueprint.Runtime.Http;
 /// Shared by <see cref="HttpOperationResultExecutor" /> and the generated pipelines' inline writer
 /// (<see cref="Exec.PipelineHelpers.WriteOkJsonResponseAsync" />), which resolve the same pairs.
 /// </para>
+/// <para>
+/// A declared root is resolved strictly - by the context alone, so a nested type the context does not register throws -
+/// except a problem. <see cref="MvcProblemDetails.Extensions" /> is open by design and no context can register what a
+/// caller puts in it, so a problem the context declares is resolved through <see cref="GetFallbackOptions" />: the
+/// context's metadata first, and reflection only for what it does not cover, the extension values.
+/// </para>
+/// <para>
+/// An app that sets <see cref="BlueprintApp.AllowRuntimeTypeFallback" /> has every declared root resolved that way, with
+/// a reflection resolver of its own that logs a warning the first time it is asked for each type, so a runtime type the
+/// context does not register is written instead of failing and the gap is still visible.
+/// </para>
 /// </remarks>
 internal static class SerializerContextTypeInfoCache
 {
-    private static readonly ConditionalWeakTable<JsonSerializerContext, ConcurrentDictionary<Type, JsonTypeInfo?>> _typeInfos = new();
+    private const string RuntimeTypeFallbackLoggerCategory = "Blueprint.Runtime.Http.RuntimeTypeFallback";
+
+    private static readonly Action<ILogger, string, string, Exception?> _logRuntimeTypeFallback =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Warning,
+            new EventId(34, "RuntimeTypeFallback"),
+            "{SerializerContext} does not register {Type}, so it was written with reflection metadata because the app allows the runtime type fallback. Register it with [JsonSerializable] to write it with the context's own metadata");
+
+    private static readonly ConditionalWeakTable<JsonSerializerContext, ContextEntry> _entries = new();
+
+    // Keyed weakly for the same reason: the key is an app's context options, and this static must not keep a dropped
+    // app's options alive.
+    private static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptions = new();
+
+    // Shared singleton avoids allocating a new resolver each time the fallback cache is populated.
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Only the fallback options use it, for types the app-owned serializer context does not cover.")]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "DefaultJsonTypeInfoResolver requires dynamic code. This is only used as a fallback when the app-owned serializer context does not cover a type.")]
+    private static readonly DefaultJsonTypeInfoResolver _sharedDefaultTypeInfoResolver = new();
 
     /// <summary>
-    /// Gets the metadata <paramref name="context" /> holds for <paramref name="type" />, or <see langword="null" /> when
-    /// there is no context or it does not cover the type, in which case the caller falls back to runtime serialization.
+    /// Gets the metadata <paramref name="type" /> is written with when <paramref name="app" />'s serializer context
+    /// declares it, or <see langword="null" /> when the app has no context or it does not cover the type, in which case
+    /// the caller falls back to runtime serialization.
     /// </summary>
-    /// <param name="context">The app-owned serializer context, if the app has one.</param>
+    /// <param name="app">The app whose serializer context and runtime type fallback apply.</param>
     /// <param name="type">The runtime type of the value to serialize.</param>
-    /// <returns>The context's metadata for the type, or <see langword="null" />.</returns>
-    public static JsonTypeInfo? Get(JsonSerializerContext? context, Type type)
+    /// <param name="services">The request's services, which the runtime type fallback's warning is logged through.</param>
+    /// <returns>The metadata to write the type with, or <see langword="null" />.</returns>
+    public static JsonTypeInfo? Get(BlueprintApp app, Type type, IServiceProvider? services)
     {
-        if (context is null)
+        if (app.AppOwnedSerializerContext is not { } context)
         {
             return null;
         }
 
-        return _typeInfos
-            .GetValue(context, static _ => new ConcurrentDictionary<Type, JsonTypeInfo?>())
-            .GetOrAdd(type, static (t, c) => c.GetTypeInfo(t), context);
+        var entry = _entries.GetValue(context, static _ => new ContextEntry());
+
+        if (entry.TypeInfos.TryGetValue(type, out var typeInfo))
+        {
+            return typeInfo;
+        }
+
+        var runtimeFallbackOptions = app.AllowRuntimeTypeFallback ? entry.GetRuntimeFallbackOptions(context, services) : null;
+
+        return entry.TypeInfos.GetOrAdd(type, Resolve(context, type, runtimeFallbackOptions));
+    }
+
+    /// <summary>
+    /// Gets a copy of <paramref name="serializerOptions" /> (made once per options instance) that resolves through their
+    /// own resolver first and reflection second, so an app's converters and naming apply to a type its context does not
+    /// cover.
+    /// </summary>
+    /// <param name="serializerOptions">The app-owned context's options, or empty options when the app has no context.</param>
+    /// <returns>The fallback options.</returns>
+    public static JsonSerializerOptions GetFallbackOptions(JsonSerializerOptions serializerOptions)
+    {
+        return _fallbackOptions.GetValue(serializerOptions, static opts =>
+            new JsonSerializerOptions(opts)
+            {
+                TypeInfoResolver = opts.TypeInfoResolver is null
+                    ? _sharedDefaultTypeInfoResolver
+                    : JsonTypeInfoResolver.Combine(opts.TypeInfoResolver, _sharedDefaultTypeInfoResolver),
+            });
+    }
+
+    private static JsonTypeInfo? Resolve(JsonSerializerContext context, Type type, JsonSerializerOptions? runtimeFallbackOptions)
+    {
+        var typeInfo = context.GetTypeInfo(type);
+
+        if (typeInfo is null)
+        {
+            return null;
+        }
+
+        // A problem's extensions are written through reflection without the runtime type fallback's warning: no context
+        // could register them, so the warning would only be noise.
+        if (typeof(MvcProblemDetails).IsAssignableFrom(type))
+        {
+            return GetFallbackOptions(context.Options).GetTypeInfo(type);
+        }
+
+        return runtimeFallbackOptions?.GetTypeInfo(type) ?? typeInfo;
+    }
+
+    /// <summary>
+    /// What one serializer context's response writing has resolved: each type's metadata and, for an app that allows the
+    /// runtime type fallback, the options that fallback resolves through.
+    /// </summary>
+    private sealed class ContextEntry
+    {
+        private JsonSerializerOptions? _runtimeFallbackOptions;
+
+        public ConcurrentDictionary<Type, JsonTypeInfo?> TypeInfos { get; } = new();
+
+        public JsonSerializerOptions GetRuntimeFallbackOptions(JsonSerializerContext context, IServiceProvider? services)
+        {
+            if (this._runtimeFallbackOptions is { } existing)
+            {
+                return existing;
+            }
+
+            var logger = services?.GetService<ILoggerFactory>()?.CreateLogger(RuntimeTypeFallbackLoggerCategory) ?? NullLogger.Instance;
+            var options = new JsonSerializerOptions(context.Options)
+            {
+                TypeInfoResolver = JsonTypeInfoResolver.Combine(context, new LoggingFallbackResolver(context.GetType().FullName!, logger)),
+            };
+
+            return Interlocked.CompareExchange(ref this._runtimeFallbackOptions, options, null) ?? options;
+        }
+    }
+
+    /// <summary>
+    /// The runtime type fallback's reflection resolver, asked only for what the context does not register, which warns
+    /// once per type that is actually written.
+    /// </summary>
+    /// <remarks>
+    /// Being asked is not being written: resolving any type's metadata also asks for its interfaces and base classes, to
+    /// find inherited polymorphism configuration, so a registered <see cref="string" /> brings a request for
+    /// <see cref="IComparable" />, and an ancestor's element types follow (<see cref="char" /> for
+    /// <see cref="IEnumerable{T}" />). A value written is never of an interface or abstract type, so those are never
+    /// warned about. An object's warning waits for its first instance written (<see cref="JsonTypeInfo.OnSerializing" />),
+    /// and a value-shaped type's - a primitive, a <see cref="JsonElement" /> - for its converter's first write, since only
+    /// objects have that callback. A concrete collection is warned about when it is resolved, which in practice is when
+    /// it is written.
+    /// </remarks>
+    private sealed class LoggingFallbackResolver(string contextName, ILogger logger) : IJsonTypeInfoResolver
+    {
+        private static readonly System.Reflection.MethodInfo _createValueInfo =
+            typeof(LoggingFallbackResolver).GetMethod(nameof(CreateLoggingValueInfo), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        private readonly ConcurrentDictionary<Type, byte> _logged = new();
+
+        [UnconditionalSuppressMessage(
+            "AOT",
+            "IL3050",
+            Justification = "The runtime type fallback is reflection by definition; an app that opts in has given up AOT.")]
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2060",
+            Justification = "CreateLoggingValueInfo has no generic constraints or annotations, and the runtime type fallback is reflection by definition; an app that opts in has given up trimming.")]
+        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
+        {
+            var typeInfo = _sharedDefaultTypeInfoResolver.GetTypeInfo(type, options);
+
+            if (typeInfo is null || type.IsInterface || type.IsAbstract)
+            {
+                return typeInfo;
+            }
+
+            switch (typeInfo.Kind)
+            {
+                case JsonTypeInfoKind.Object:
+                    var onSerializing = typeInfo.OnSerializing;
+                    typeInfo.OnSerializing = value =>
+                    {
+                        this.LogOnce(type);
+                        onSerializing?.Invoke(value);
+                    };
+
+                    return typeInfo;
+
+                case JsonTypeInfoKind.None:
+                    return (JsonTypeInfo)_createValueInfo.MakeGenericMethod(type).Invoke(null, [typeInfo, options, this])!;
+
+                default:
+                    this.LogOnce(type);
+                    return typeInfo;
+            }
+        }
+
+        private static JsonTypeInfo<T> CreateLoggingValueInfo<T>(JsonTypeInfo inner, JsonSerializerOptions options, LoggingFallbackResolver owner)
+        {
+            return JsonMetadataServices.CreateValueInfo<T>(options, new LoggingValueConverter<T>((JsonConverter<T>)inner.Converter, owner));
+        }
+
+        private void LogOnce(Type type)
+        {
+            if (this._logged.TryAdd(type, 0))
+            {
+                _logRuntimeTypeFallback(logger, contextName, type.FullName ?? type.Name, null);
+            }
+        }
+
+        /// <summary>
+        /// A value-shaped type's own converter, which warns the first time it writes.
+        /// </summary>
+        private sealed class LoggingValueConverter<T>(JsonConverter<T> inner, LoggingFallbackResolver owner) : JsonConverter<T>
+        {
+            public override bool HandleNull => inner.HandleNull;
+
+            public override T? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            {
+                return inner.Read(ref reader, typeToConvert, options);
+            }
+
+            public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+            {
+                owner.LogOnce(typeof(T));
+                inner.Write(writer, value, options);
+            }
+        }
     }
 }

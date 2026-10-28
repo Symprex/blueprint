@@ -51,6 +51,7 @@ public sealed partial class AppDataModelSourceGenerator
             serializerContext.Location,
             serializerContext.BodyTypeNames,
             serializerContext.BodyTypeTypeNames,
+            serializerContext.AllowRuntimeTypeFallback,
             operationNameRemoval,
             operationNameRemovalLocation);
 
@@ -96,6 +97,9 @@ public sealed partial class AppDataModelSourceGenerator
                 continue;
             }
 
+            var allowRuntimeTypeFallback = attribute.NamedArguments
+                .Any(static namedArgument => namedArgument is { Key: "AllowRuntimeTypeFallback", Value.Value: true });
+
             foreach (var namedArgument in attribute.NamedArguments)
             {
                 if (namedArgument.Key == "JsonSerializerContextType"
@@ -109,12 +113,13 @@ public sealed partial class AppDataModelSourceGenerator
                         serializerContextType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         serializerContextLocation,
                         GetSerializerContextBodyTypeNames(serializerContextType),
-                        GetSerializerContextBodyTypeTypeNames(serializerContextType));
+                        GetSerializerContextBodyTypeTypeNames(serializerContextType),
+                        allowRuntimeTypeFallback);
                 }
             }
         }
 
-        return new SerializerContextDeclaration(null, null, EquatableList<string>.Empty, EquatableList<string>.Empty);
+        return new SerializerContextDeclaration(null, null, EquatableList<string>.Empty, EquatableList<string>.Empty, false);
     }
 
     private static EquatableList<string> GetSerializerContextBodyTypeNames(INamedTypeSymbol serializerContextType)
@@ -147,7 +152,8 @@ public sealed partial class AppDataModelSourceGenerator
         string? TypeName,
         LocationInfo? Location,
         EquatableList<string> BodyTypeNames,
-        EquatableList<string> BodyTypeTypeNames);
+        EquatableList<string> BodyTypeTypeNames,
+        bool AllowRuntimeTypeFallback);
 }
 
 

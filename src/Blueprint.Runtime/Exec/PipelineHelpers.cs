@@ -2395,7 +2395,7 @@ public static class PipelineHelpers
         var serializerContext = operationContext.App.AppOwnedSerializerContext;
         var contentType = content.GetType();
 
-        var jsonTypeInfo = Http.SerializerContextTypeInfoCache.Get(serializerContext, contentType);
+        var jsonTypeInfo = Http.SerializerContextTypeInfoCache.Get(operationContext.App, contentType, httpContext.RequestServices);
 
         if (jsonTypeInfo is not null)
         {
