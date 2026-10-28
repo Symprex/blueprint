@@ -158,6 +158,8 @@ public sealed class RequiredShapeApiResource
     [Required]
     public string? RequiredNullableString { get; init; }
 
+    // Schema-only: these values are never written, so only a registered primitive is declared (BP012).
+    [BlueprintRuntimeTypes(typeof(string))]
     public Dictionary<string, object?> Extensions { get; init; } = [];
 
     public DateTimeOffset When { get; init; }

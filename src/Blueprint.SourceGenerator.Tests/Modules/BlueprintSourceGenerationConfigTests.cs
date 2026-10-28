@@ -65,7 +65,7 @@ public class BlueprintSourceGenerationConfigTests
 
         result.Value.Should().BeNull();
         result.Diagnostics.Should().ContainSingle();
-        result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BPMOD001");
+        result.Diagnostics[0].ToDiagnostic(null).Id.Should().Be("BPMOD001");
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class BlueprintSourceGenerationConfigTests
         var result = config.BuildExecutionPlan();
 
         result.Value.Should().BeNull();
-        result.Diagnostics.Select(d => d.ToDiagnostic().Id).Should().Contain("BPMOD002");
+        result.Diagnostics.Select(d => d.ToDiagnostic(null).Id).Should().Contain("BPMOD002");
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public class BlueprintSourceGenerationConfigTests
         var result = config.BuildExecutionPlan();
 
         result.Value.Should().BeNull();
-        result.Diagnostics.Select(d => d.ToDiagnostic().Id).Should().Contain("BPMOD003");
+        result.Diagnostics.Select(d => d.ToDiagnostic(null).Id).Should().Contain("BPMOD003");
     }
 
     [Fact]
