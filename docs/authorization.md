@@ -176,6 +176,12 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 
 **Denials**: every denial is a `403` titled `ScopePairClaimAuthorizationProvider.DeniedMessage` ("You do not have enough permissions to perform this operation"). Its logged reason names the scope pairs required and the API scope claims the caller held.
 
+**Verb hierarchy is transitive**: with `Admin → [Manage]` and `Manage → [Read]`, a user with `Template.Admin` satisfies `Template.Read`. Blueprint computes the closure once, at construction, and tolerates cycles.
+
+**Exact ignored scopes**: the full constructor uses `ignoredScopes` exactly as given. Only the parameterless constructor and `WithCrudVerbHierarchy` add the OAuth2 defaults (`openid`, `profile`, `email`, `offline_access`), so leave a scope out of the set to have it count as an API scope.
+
+**Unauthenticated callers**: refused by default. Pass `allowUnauthenticated: true` when another provider registered beside this one refuses them itself, for example with a `401`, so this one does not answer first with a `403`.
+
 **No-API-scope behavior**: When the user's only scopes are ignored scopes (e.g. `openid`, `Signature365.ReadWrite.All`), the `AllowWhenNoScopeClaims` virtual method is called. Override to `true` for full-access semantics (S365 pattern).
 
 ---

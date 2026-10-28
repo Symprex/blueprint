@@ -278,6 +278,20 @@ public sealed partial class AppDataModelSourceGenerator
             {
                 diagnostics.Add(diagnostic);
             }
+
+            // BP012/BP013: BP006 checks that each root is declared; this checks what the declared roots can hold.
+            if (!dataModelClass.AllowRuntimeTypeFallback)
+            {
+                foreach (var diagnostic in GetOpenTypedResponseMemberDiagnostics(
+                             compilation,
+                             dataModelClass,
+                             coveredSerializerContextTypeNames,
+                             requiredSerializerCoverageTypeNames.Where(coveredSerializerContextTypeNames.Contains),
+                             scannedAssemblies))
+                {
+                    diagnostics.Add(diagnostic);
+                }
+            }
         }
 
         // Only scan for link checkers, api authorisers, and resource expanders when the compilation references Blueprint.Runtime (has BlueprintServiceBuilder)

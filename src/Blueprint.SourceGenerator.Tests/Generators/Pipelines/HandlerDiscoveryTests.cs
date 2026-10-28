@@ -177,8 +177,8 @@ public class HandlerDiscoveryTests
         // Assert
         result.Value.Should().BeNull();
         result.Diagnostics.Should().HaveCount(1);
-        result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BP101");
-        result.Diagnostics[0].ToDiagnostic().GetMessage().Should().Contain("multiple handlers");
+        result.Diagnostics[0].ToDiagnostic(null).Id.Should().Be("BP101");
+        result.Diagnostics[0].ToDiagnostic(null).GetMessage().Should().Contain("multiple handlers");
     }
 
     [Fact]
@@ -211,7 +211,7 @@ public class HandlerDiscoveryTests
         // Assert
         result.Value.Should().BeNull();
         result.Diagnostics.Should().HaveCount(1);
-        result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BP101");
+        result.Diagnostics[0].ToDiagnostic(null).Id.Should().Be("BP101");
     }
 
     [Fact]
@@ -237,8 +237,8 @@ public class HandlerDiscoveryTests
         // Assert
         result.Value.Should().BeNull();
         result.Diagnostics.Should().HaveCount(1);
-        result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BP100");
-        result.Diagnostics[0].ToDiagnostic().GetMessage().Should().Contain("does not have a handler method");
+        result.Diagnostics[0].ToDiagnostic(null).Id.Should().Be("BP100");
+        result.Diagnostics[0].ToDiagnostic(null).GetMessage().Should().Contain("does not have a handler method");
     }
 
     [Fact]

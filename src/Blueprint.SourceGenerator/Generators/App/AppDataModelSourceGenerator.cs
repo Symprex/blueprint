@@ -144,7 +144,7 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
 
         context.RegisterSourceOutput(
             executionPlanProvider,
-            (spc, result) => result.ReportDiagnostics(spc));
+            (spc, result) => result.ReportDiagnostics(spc, compilation: null));
 
         var classProvider = context.SyntaxProvider.ForAttributeWithMetadataName(
                 "Blueprint.Model.BlueprintAppScanAttribute",
@@ -163,20 +163,18 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
             .Select((context, _) => FindOperations(context.Left.Left, context.Left.Right, context.Right))
             .WithTrackingName(Stages.FindServicesToRegister);
 
+        context.RegisterDiagnosticOutput(generationModelProvider.Select(
+            static (result, _) => result!.Value is { Diagnostics.Count: > 0 } classToGenerate
+                ? new EquatableList<DiagnosticInfo>([.. result.Diagnostics, .. classToGenerate.Diagnostics])
+                : result.Diagnostics));
+
         context.RegisterSourceOutput(
             generationModelProvider,
             (spc, result) =>
             {
-                result!.ReportDiagnostics(spc);
-
-                if (result.Value is not { } classToGenerate)
+                if (result!.Value is not { } classToGenerate)
                 {
                     return;
-                }
-
-                foreach (var diagnostic in classToGenerate.Diagnostics)
-                {
-                    spc.ReportDiagnostic(diagnostic.ToDiagnostic());
                 }
 
                 spc.AddSource(
@@ -213,6 +211,11 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                     if (compilationModel.Class.SerializerContextBodyTypeNames.Count > 0)
                     {
                         c.AppendLine($"this.AppOwnedSerializerContextBodyTypeNames = {RenderStringArray(compilationModel.Class.SerializerContextBodyTypeNames)};");
+                    }
+
+                    if (compilationModel.Class.AllowRuntimeTypeFallback)
+                    {
+                        c.AppendLine("this.AllowRuntimeTypeFallback = true;");
                     }
                 }
 
