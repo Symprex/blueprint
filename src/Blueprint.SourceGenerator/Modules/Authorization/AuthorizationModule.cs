@@ -227,9 +227,10 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     /// against a resource of that type, most-derived type first so that a resource is resolved against its own type.
     /// </summary>
     /// <remarks>
-    /// A <c>{A:B}</c> token uses <c>A</c> when the resource type has a public property <c>A</c>, and <c>B</c> only when it
-    /// has not, as Signature 365's link authorisation chose it. Reports BPAU011 for a token that matches neither, and builds
-    /// no statement for that type.
+    /// Each token is resolved on its own, by its complete property path. A <c>{A:B}</c> token uses <c>A</c> when the whole
+    /// of path <c>A</c> exists on the resource type as public properties, and <c>B</c> only when it does not, as Signature
+    /// 365's link authorisation chose it. Reports BPAU011 for a token that resolves to neither, and builds no statement for
+    /// that type.
     /// </remarks>
     private static List<string> BuildLinkScopeResolverBranches(
         INamedTypeSymbol operationType,
@@ -244,25 +245,24 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         {
             var resourceType = linkedResourceTypes[index];
             var resourceExpression = $"resource{index}";
-            var valueTypePropertyNames = new HashSet<string>();
-            var fallbackOnlyTokenNames = new HashSet<string>();
-            var primaryOnlyTokenNames = new HashSet<string>();
-            var unresolvedTokens = new HashSet<string>();
+            var unresolvedTokens = new List<string>();
+            var resolvedPairs = new List<string>();
 
-            foreach (var (_, _, template) in scopePairs)
+            foreach (var (noun, verb, template) in scopePairs)
             {
                 if (template is null)
                 {
+                    resolvedPairs.Add($"new global::Blueprint.Model.ResolvedScopePair(\"{noun}\", \"{verb}\", null, null)");
+
                     continue;
                 }
 
-                foreach (var token in ResourceKeyTemplateParser.ParseTokens(template))
-                {
-                    ClassifyTokenForLinkedResource(token, resourceType, valueTypePropertyNames, fallbackOnlyTokenNames, primaryOnlyTokenNames, unresolvedTokens);
-                }
+                var keyExpression = BuildLinkKeyExpression(template, resourceType, resourceExpression, unresolvedTokens);
+
+                resolvedPairs.Add($"new global::Blueprint.Model.ResolvedScopePair(\"{noun}\", \"{verb}\", \"{template}\", {keyExpression})");
             }
 
-            foreach (var unresolved in unresolvedTokens)
+            foreach (var unresolved in unresolvedTokens.Distinct(StringComparer.Ordinal))
             {
                 context.AddDiagnostic(
                     new DiagnosticInfo(
@@ -276,27 +276,6 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 continue;
             }
 
-            var resolvedPairs = scopePairs.Select(sp =>
-            {
-                if (sp.ResourceKeyTemplate is null)
-                {
-                    return $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
-                }
-
-                var expansion = ResourceKeyTemplateParser.GenerateExpansionExpression(
-                    sp.ResourceKeyTemplate,
-                    ResourceKeyTemplateParser.ParseTokens(sp.ResourceKeyTemplate),
-                    resourceExpression,
-                    principalExpression: "principal",
-                    contextExpression: null,
-                    valueTypePropertyNames,
-                    fallbackOnlyTokenNames,
-                    primaryOnlyTokenNames,
-                    callerValueExpression: "callerValue");
-
-                return $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expansion})";
-            });
-
             var resourceTypeName = resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             branches.Add($"if (linkResource is {resourceTypeName} {resourceExpression}) {{ return [{string.Join(", ", resolvedPairs)}]; }}");
@@ -306,76 +285,107 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     }
 
     /// <summary>
-    /// Decides how one token resolves against a linked resource type: the primary alone when the type has it, the fallback
-    /// alone when it lacks the primary, and unresolved when it has neither. A caller (<c>Auth</c>) path always resolves.
+    /// Builds the interpolated string that expands <paramref name="template"/> against a resource of
+    /// <paramref name="resourceType"/>, adding to <paramref name="unresolvedTokens"/> each token that resolves to nothing.
     /// </summary>
-    private static void ClassifyTokenForLinkedResource(
-        ResourceKeyToken token,
+    /// <remarks>
+    /// A caller (<c>Auth</c>) path calls the runtime's <c>callerValue</c> lookup and always resolves; a property fallback
+    /// after it is used when the caller has no value and the path exists on the type. A property path is used alone when it
+    /// exists, whatever its value, and its fallback only when it does not.
+    /// </remarks>
+    private static string BuildLinkKeyExpression(
+        string template,
         INamedTypeSymbol resourceType,
-        HashSet<string> valueTypePropertyNames,
-        HashSet<string> fallbackOnlyTokenNames,
-        HashSet<string> primaryOnlyTokenNames,
-        HashSet<string> unresolvedTokens)
+        string resourceExpression,
+        List<string> unresolvedTokens)
     {
-        var fallback = token.FallbackPropertyPath;
-        var fallbackIsCaller = fallback is not null && ResourceKeyToken.IsAuthPropertyPath(fallback);
-        var fallbackProperty = fallback is not null && !fallbackIsCaller ? FindPublicProperty(resourceType, fallback) : null;
+        var tokens = ResourceKeyTemplateParser.ParseTokens(template);
 
-        if (token.IsAuthPath)
+        if (tokens.Count == 0)
         {
-            // The caller's value is always available; a property fallback is used only when the type has it
-            if (fallback is not null && !fallbackIsCaller)
+            return $"\"{template}\"";
+        }
+
+        var result = template;
+
+        foreach (var token in tokens)
+        {
+            var parts = new List<string>();
+            var fallback = token.FallbackPropertyPath;
+
+            if (token.IsAuthPath)
             {
-                if (fallbackProperty is null)
+                parts.Add(CallerValueExpression(token.Name));
+
+                if (fallback is not null && LinkPathExpression(fallback, resourceType, resourceExpression) is { } fallbackExpression)
                 {
-                    primaryOnlyTokenNames.Add(token.Name);
-                }
-                else if (fallbackProperty.Type.IsValueType)
-                {
-                    valueTypePropertyNames.Add(fallbackProperty.Name);
+                    parts.Add(fallbackExpression);
                 }
             }
-
-            return;
-        }
-
-        var primaryProperty = FindPublicProperty(resourceType, token.Name);
-
-        if (primaryProperty is not null)
-        {
-            if (primaryProperty.Type.IsValueType)
+            else if (LinkPathExpression(token.Name, resourceType, resourceExpression) is { } primaryExpression)
             {
-                valueTypePropertyNames.Add(primaryProperty.Name);
+                parts.Add(primaryExpression);
+            }
+            else if (fallback is not null && LinkPathExpression(fallback, resourceType, resourceExpression) is { } fallbackExpression)
+            {
+                parts.Add(fallbackExpression);
+            }
+            else
+            {
+                unresolvedTokens.Add(token.RawToken.Trim('{', '}'));
+
+                continue;
             }
 
-            if (fallback is not null)
-            {
-                primaryOnlyTokenNames.Add(token.Name);
-            }
-
-            return;
+            parts.Add("\"\"");
+            result = result.Replace(token.RawToken, "{" + string.Join(" ?? ", parts) + "}");
         }
 
-        if (fallbackIsCaller)
+        return $"$\"{result}\"";
+    }
+
+    /// <summary>
+    /// Gives the expression of a caller or property path against the resource, or <see langword="null"/> when a property
+    /// path does not exist on <paramref name="resourceType"/>.
+    /// </summary>
+    private static string? LinkPathExpression(string path, INamedTypeSymbol resourceType, string resourceExpression)
+    {
+        if (ResourceKeyToken.IsAuthPropertyPath(path))
         {
-            fallbackOnlyTokenNames.Add(token.Name);
-
-            return;
+            return CallerValueExpression(path);
         }
 
-        if (fallbackProperty is not null)
+        var properties = ResolvePublicPropertyPath(resourceType, path);
+
+        if (properties is null)
         {
-            if (fallbackProperty.Type.IsValueType)
-            {
-                valueTypePropertyNames.Add(fallbackProperty.Name);
-            }
-
-            fallbackOnlyTokenNames.Add(token.Name);
-
-            return;
+            return null;
         }
 
-        unresolvedTokens.Add(token.RawToken.Trim('{', '}'));
+        // Each step reads the next property with ?. only where the value before it can be null (a reference or a
+        // Nullable<T>), so a struct's members and a non-nullable value are read with . and the expression compiles.
+        var expression = new System.Text.StringBuilder(resourceExpression);
+        var receiverCanBeNull = false;
+
+        foreach (var property in properties)
+        {
+            expression.Append(receiverCanBeNull ? "?." : ".").Append(property.Name);
+            receiverCanBeNull = CanBeNull(property.Type);
+        }
+
+        expression.Append(receiverCanBeNull ? "?.ToString()" : ".ToString()");
+
+        return expression.ToString();
+    }
+
+    private static string CallerValueExpression(string authPath)
+    {
+        return $"callerValue(\"{ResourceKeyToken.GetAuthPropertyName(authPath)}\")";
+    }
+
+    private static bool CanBeNull(ITypeSymbol type)
+    {
+        return !type.IsValueType || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
     }
 
     /// <summary>
@@ -446,27 +456,48 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     }
 
     /// <summary>
-    /// Finds the public instance property named by a property path's first segment, matching the name exactly, as the
-    /// generated access needs it and as Signature 365's link authorisation looked it up.
+    /// Resolves every segment of a dotted property path to a public instance property, starting at
+    /// <paramref name="type"/>, matching names exactly, as the generated access needs it and as Signature 365's link
+    /// authorisation looked them up. A <see cref="Nullable{T}"/> segment is navigated through its underlying type. Gives
+    /// <see langword="null"/> when any segment does not exist.
     /// </summary>
-    private static IPropertySymbol? FindPublicProperty(INamedTypeSymbol type, string propertyPath)
+    private static List<IPropertySymbol>? ResolvePublicPropertyPath(ITypeSymbol type, string propertyPath)
     {
-        var firstSegment = propertyPath.Split('.')[0];
+        var properties = new List<IPropertySymbol>();
+        var current = type;
 
-        return type.GetAllMembers()
-            .OfType<IPropertySymbol>()
-            .FirstOrDefault(p => p.Name == firstSegment && !p.IsStatic && p.DeclaredAccessibility == Accessibility.Public);
+        foreach (var segment in propertyPath.Split('.'))
+        {
+            if (current is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            {
+                current = nullable.TypeArguments[0];
+            }
+
+            var property = current.GetAllMembers()
+                .OfType<IPropertySymbol>()
+                .FirstOrDefault(p => p.Name == segment && !p.IsStatic && p.DeclaredAccessibility == Accessibility.Public);
+
+            if (property is null)
+            {
+                return null;
+            }
+
+            properties.Add(property);
+            current = property.Type;
+        }
+
+        return properties;
     }
 
     /// <summary>
-    /// Whether some resource type the operation links from lacks <paramref name="token"/>'s primary and has its fallback,
-    /// so that a link from it uses the fallback.
+    /// Whether some resource type the operation links from lacks <paramref name="token"/>'s primary path and has its
+    /// fallback path, so that a link from it uses the fallback.
     /// </summary>
     private static bool IsFallbackUsedByALinkedResourceType(INamedTypeSymbol operationType, ResourceKeyToken token)
     {
         return GetLinkedResourceTypes(operationType).Any(resourceType =>
-            FindPublicProperty(resourceType, token.Name) is null
-            && FindPublicProperty(resourceType, token.FallbackPropertyPath!) is not null);
+            ResolvePublicPropertyPath(resourceType, token.Name) is null
+            && ResolvePublicPropertyPath(resourceType, token.FallbackPropertyPath!) is not null);
     }
 
     /// <inheritdoc />

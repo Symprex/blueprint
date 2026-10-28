@@ -74,6 +74,8 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.SourceGenerator.Tests.Integration.Http.RelLessLinkWireWidgetApiResource",
             "Blueprint.Model.ListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LinkAuthTenantApiResource>",
             "Blueprint.SourceGenerator.Tests.Integration.Http.LinkAuthUserApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LinkAuthTenantRef",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.LinkAuthCodeRef",
             "Blueprint.SourceGenerator.Tests.Integration.Http.OperationIdMixedLinkApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.NestedLinkHolderApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.RefWrapperApiResource",

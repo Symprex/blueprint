@@ -125,6 +125,34 @@ public sealed class ResourceProviderLinkVisibilityTests
         result.IsAllowed.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task Each_token_resolves_by_its_full_property_path_against_the_resource()
+    {
+        // Tenant.Id is a struct's int on the resource, so it is written without null-conditional access. The resource's
+        // Code has no Value, so the whole path is missing and the CodeId fallback is used. The two region tokens share a
+        // primary: the first falls back to the resource's TenantId; the second's OwnerId does not exist on the resource,
+        // so it is empty, and does not take the first's fallback away.
+        const string expectedKey = "/LinkAuth/Shapes/42/c9/ten_1/";
+        var provider = new KeyProvider(expectedKey);
+        var app = new IntegrationTestBlueprintApp();
+
+        var result = await CanShowAsync(
+            new LinkAuthShapeApiResource
+            {
+                Id = "x",
+                Tenant = new LinkAuthTenantKey(42),
+                Code = new LinkAuthCodeName { Name = "unused" },
+                CodeId = "c9",
+                TenantId = "ten_1",
+            },
+            [provider],
+            app.FindOperation(typeof(TouchLinkAuthShapeCommand))!,
+            new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "user-1")], "Test")));
+
+        provider.LastKey.Should().Be(expectedKey);
+        result.IsAllowed.Should().BeTrue();
+    }
+
     private static async Task<ExecutionAllowed> CanShowAsync(
         object? resource,
         IResourceAuthorizationProvider[] providers,

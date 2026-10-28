@@ -240,6 +240,70 @@ public partial class RenameLinkAuthAccountCommand : ICommand<string>
     }
 }
 
+/// <summary>A tenant key held by value, whose <c>Id</c> is a number.</summary>
+public readonly record struct LinkAuthTenantKey(int Id);
+
+/// <summary>A code reference with no <c>Value</c>.</summary>
+public sealed class LinkAuthCodeName
+{
+    public string Name { get; init; } = null!;
+}
+
+/// <summary>An operation-side tenant reference whose <c>Id</c> is a string.</summary>
+public sealed class LinkAuthTenantRef
+{
+    public string? Id { get; set; }
+}
+
+/// <summary>An operation-side code reference with a <c>Value</c>.</summary>
+public sealed class LinkAuthCodeRef
+{
+    public string? Value { get; set; }
+}
+
+/// <summary>
+/// A resource whose shape differs from <see cref="TouchLinkAuthShapeCommand"/>'s: its <c>Tenant</c> is a struct with a
+/// numeric <c>Id</c>, its <c>Code</c> has no <c>Value</c>, and it has a <c>TenantId</c> but no <c>OwnerId</c>.
+/// </summary>
+public partial class LinkAuthShapeApiResource : ApiResource
+{
+    public string Id { get; init; } = null!;
+
+    public LinkAuthTenantKey Tenant { get; init; }
+
+    public LinkAuthCodeName Code { get; init; } = null!;
+
+    public string CodeId { get; init; } = null!;
+
+    public string TenantId { get; init; } = null!;
+}
+
+/// <summary>
+/// Touches a shape. Its key has a nested value-type path, a nested path the resource lacks with a fallback it has, and two
+/// caller tokens sharing a primary but with different fallbacks, only one of which the resource has.
+/// </summary>
+[Resource("linkAuthShape", "touch", "/LinkAuth/Shapes/{Tenant.Id}/{Code.Value:CodeId}/{Auth.region:TenantId}/{Auth.region:OwnerId}")]
+[Link(typeof(LinkAuthShapeApiResource), "/link-auth/shapes/{Id}/touch", "touch")]
+[HttpPost]
+[Blueprint.Auditing.DoNotAudit]
+public partial class TouchLinkAuthShapeCommand : ICommand<string>
+{
+    public string Id { get; set; } = null!;
+
+    public LinkAuthTenantRef? Tenant { get; set; }
+
+    public LinkAuthCodeRef? Code { get; set; }
+
+    public string? TenantId { get; set; }
+
+    public string? OwnerId { get; set; }
+
+    public static string Handle(TouchLinkAuthShapeCommand command)
+    {
+        return "touched";
+    }
+}
+
 /// <summary>
 /// Archives a tenant or a user. Its key's primary, <c>UserTenantId</c>, is its own property; the fallback,
 /// <c>TenantId</c>, is not, but a tenant uses it because a tenant lacks the primary, so BPAU010 does not fire.
