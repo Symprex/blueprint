@@ -476,6 +476,7 @@ These integrations are consumer-owned by design and require companion generator 
 - Forgetting `partial`, `[BlueprintAppScan]`, or analyzer wiring
 - Forgetting to declare `[BlueprintAppSerializerContext(...)]` for an app that maps Blueprint through `MapBlueprintApi<...>()` and has body-bearing HTTP response contracts; the current build-time repair path is to add the declaration so `BP007` can stop failing before `BP006` starts checking completeness
 - Forgetting to keep `[BlueprintAppSerializerContext(...)]` aligned with the app-owned `JsonSerializerContext`; the current build-time repair path is to add the missing `JsonSerializable(typeof(...))` coverage required by `BP006`
+- Leaving an `object`-typed member (or `Dictionary<string, object>`, an interface, an abstract base) reachable from a response body; `BP012` fails the build because a value of a type the context does not register would fail the response at runtime. Repair: `[BlueprintRuntimeTypes(typeof(...))]` on the member listing what it holds (each must be `[JsonSerializable]`, else `BP013`), a `[JsonConverter]` on the member, or, app-wide and at the cost of trimming/AOT, `[BlueprintAppSerializerContext(..., AllowRuntimeTypeFallback = true)]`, which writes unregistered types with reflection and logs each once. `ProblemDetails.Extensions` needs none of these: its values are always written with fallback metadata
 - Expecting runtime fallbacks to repair a missing compile-time contract
 - Ignoring generator diagnostics or generated output diffs
 

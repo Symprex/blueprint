@@ -212,6 +212,11 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
                     {
                         c.AppendLine($"this.AppOwnedSerializerContextBodyTypeNames = {RenderStringArray(compilationModel.Class.SerializerContextBodyTypeNames)};");
                     }
+
+                    if (compilationModel.Class.AllowRuntimeTypeFallback)
+                    {
+                        c.AppendLine("this.AllowRuntimeTypeFallback = true;");
+                    }
                 }
 
                 foreach (var registration in compilationModel.Operations)
