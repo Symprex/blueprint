@@ -39,8 +39,11 @@ public readonly struct ResourceGrant : IEquatable<ResourceGrant>
     /// </summary>
     public bool IncludesDescendants => this.Value.EndsWith(DescendantsSuffix, StringComparison.Ordinal);
 
-    // The key the grant is anchored at: the value without a trailing /*, which is empty for the root grant /*
-    private string Base => this.IncludesDescendants ? this.Value[..^DescendantsSuffix.Length] : this.Value;
+    // The key the grant is anchored at: the value without a trailing /*, which is empty for the root grant /*. A span over
+    // the value, so matching allocates nothing.
+    private ReadOnlySpan<char> Base => this.IncludesDescendants
+        ? this.Value.AsSpan(0, this.Value.Length - DescendantsSuffix.Length)
+        : this.Value.AsSpan();
 
     /// <summary>
     /// Compares two grants ordinally.
@@ -114,13 +117,12 @@ public readonly struct ResourceGrant : IEquatable<ResourceGrant>
             return false;
         }
 
-        var demanded = key.Value;
-
         if (!this.IncludesDescendants)
         {
-            return string.Equals(this.Value, demanded, StringComparison.Ordinal);
+            return string.Equals(this.Value, key.Value, StringComparison.Ordinal);
         }
 
+        var demanded = key.Value.AsSpan();
         var grantBase = this.Base;
 
         return demanded.StartsWith(grantBase, StringComparison.Ordinal)
@@ -158,12 +160,14 @@ public readonly struct ResourceGrant : IEquatable<ResourceGrant>
         }
 
         var grantBase = this.Base;
-        var prefixEndsWithSlash = resourceKeyPrefix.EndsWith('/');
-        var trimmedPrefix = prefixEndsWithSlash ? resourceKeyPrefix[..^1] : resourceKeyPrefix;
+        var prefix = resourceKeyPrefix.AsSpan();
+        var prefixEndsWithSlash = prefix is [.., '/'];
+        var trimmedPrefix = prefixEndsWithSlash ? prefix[..^1] : prefix;
 
+        // The middle case is "the prefix starts with the base followed by /", compared without building that string
         return grantBase.Equals(trimmedPrefix, StringComparison.Ordinal)
-               || resourceKeyPrefix.StartsWith(grantBase + "/", StringComparison.Ordinal)
-               || (prefixEndsWithSlash && grantBase.StartsWith(resourceKeyPrefix, StringComparison.Ordinal));
+               || (prefix.Length > grantBase.Length && prefix.StartsWith(grantBase, StringComparison.Ordinal) && prefix[grantBase.Length] == '/')
+               || (prefixEndsWithSlash && grantBase.StartsWith(prefix, StringComparison.Ordinal));
     }
 
     /// <inheritdoc/>

@@ -45,6 +45,35 @@ public class ResourceGrantTests
         ResourceGrant.Parse("/*").Covers(default).Should().BeFalse();
     }
 
+    [Fact]
+    public void Matching_allocates_nothing()
+    {
+        // Run for every link of every response, so the base and prefix are compared as spans, not new strings
+        var wildcard = ResourceGrant.Parse("/Tenants/ten_1/*");
+        var exact = ResourceGrant.Parse("/Tenants/ten_1/Users/usr_1");
+        var key = new ResourceKey("/Tenants/ten_1/Users/usr_1");
+
+        Match();
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        for (var i = 0; i < 100; i++)
+        {
+            Match();
+        }
+
+        (GC.GetAllocatedBytesForCurrentThread() - before).Should().Be(0);
+
+        void Match()
+        {
+            wildcard.Covers(key);
+            exact.Covers(key);
+            wildcard.IsPrefixCompatibleWith("/Tenants/ten_1/Users/");
+            wildcard.IsPrefixCompatibleWith("/Tenants/ten_12/");
+            exact.IsPrefixCompatibleWith("/Tenants/ten_1/Users/");
+        }
+    }
+
     [Theory]
     [InlineData("/Tenants/tenant-1/*", true)]
     [InlineData("/*", true)]
