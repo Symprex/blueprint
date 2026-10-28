@@ -368,6 +368,64 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
             .Which.Severity.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("Input0.cs")]
+    [InlineData("Input1.cs")]
+    public void When_two_apps_configure_BP012_differently_then_each_apps_own_setting_applies(string suppressedFile)
+    {
+        // Both apps host the same operation, so each reports the same BP012; only the app whose file turns it off drops
+        // its own, and the other's still fails the build.
+        const string secondApp = """
+            using Blueprint.Model;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(TestBlueprintJsonContext))]
+                public partial class SecondBlueprintApp : BlueprintApp
+                {
+                }
+            }
+            """;
+
+        var options = new TestOptionsProvider { PerFile = { [suppressedFile] = [("blueprint_diagnostic.BP012.severity", "none")] } };
+
+        var result = Compile("public object? Value { get; set; }", string.Empty, options: options, extraSources: [secondApp]);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
+            .Should().ContainSingle()
+            .Which.Severity.Should().Be(DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void When_an_earlier_root_reaches_a_type_from_a_later_roots_unscanned_assembly_then_generator_still_walks_it()
+    {
+        // Roots are walked in name order: TestNamespace.Payload reaches Zeta.Nested before the Zeta.ZetaRoot root makes
+        // that assembly walkable, unless every root's assembly is known before any root is walked.
+        var contract = TestHelpers.CreateReferenceFromSource(
+            """
+            namespace Zeta
+            {
+                public sealed class ZetaRoot { public int Count { get; set; } }
+
+                public sealed class Nested { public object? Loose { get; set; } }
+            }
+            """,
+            "Zeta.Unscanned");
+
+        var result = Compile(
+            "public Zeta.Nested? Value { get; set; }",
+            string.Empty,
+            extraRegistrations: ["Zeta.ZetaRoot"],
+            references: [contract],
+            extraOperations: ZetaOperation);
+
+        result.Diagnostics.Where(static diagnostic => diagnostic.Id == "BP012")
+            .Should().ContainSingle()
+            .Which.GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .Should().Contain("'Zeta.Nested.Loose'");
+    }
+
     [Fact]
     public void When_the_consumer_turns_BP013_off_then_generator_does_not_report_it()
     {
@@ -409,11 +467,16 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
     {
         private readonly TestOptions _options = new(values.ToImmutableDictionary(static pair => pair.Key, static pair => pair.Value));
 
+        // Per file, for a test whose files are configured differently; any file not named gets the shared values.
+        public Dictionary<string, (string Key, string Value)[]> PerFile { get; init; } = [];
+
         public override AnalyzerConfigOptions GlobalOptions { get; } = new TestOptions(ImmutableDictionary<string, string>.Empty);
 
         public override AnalyzerConfigOptions GetOptions(SyntaxTree tree)
         {
-            return this._options;
+            return this.PerFile.TryGetValue(tree.FilePath, out var perFile)
+                ? new TestOptions(perFile.ToImmutableDictionary(static pair => pair.Key, static pair => pair.Value))
+                : this._options;
         }
 
         public override AnalyzerConfigOptions GetOptions(AdditionalText textFile)
@@ -432,6 +495,14 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
             return values.TryGetValue(key, out value);
         }
     }
+
+    private const string ZetaOperation = """
+        [RootLink("/open-typed-members/zeta")]
+        public partial class ZetaOperation : IQuery<OkResult<Zeta.ZetaRoot>>
+        {
+            public static ApiOperationDescriptor Configure() => throw new NotImplementedException();
+        }
+        """;
 
     private const string ProblemDetailsStub = """
         namespace Microsoft.AspNetCore.Mvc
@@ -479,7 +550,9 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
         string? problemDetailsStubOverride = null,
         string responseType = "Payload",
         MetadataReference[]? references = null,
-        AnalyzerConfigOptionsProvider? options = null)
+        AnalyzerConfigOptionsProvider? options = null,
+        string extraOperations = "",
+        string[]? extraSources = null)
     {
         var problemDetailsStub = problemDetailsStubOverride ?? (stubProblemDetails ? ProblemDetailsStub : ValidationProblemDetailsStub);
         var contextOpen = nestedContext ? "public static partial class Outer {" : string.Empty;
@@ -550,6 +623,8 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
                     public static ApiOperationDescriptor Configure() => throw new NotImplementedException();
                 }
 
+                {{extraOperations}}
+
                 [BlueprintAppScan]
                 [BlueprintAppSerializerContext(JsonSerializerContextType = typeof({{contextReference}}){{appArguments}})]
                 public partial class TestBlueprintApp : BlueprintApp
@@ -558,8 +633,8 @@ public class AppDataModelSourceGeneratorTestsOpenTypedResponseMembers
             }
             """;
 
-        return references is null && options is null
+        return references is null && options is null && extraSources is null
             ? TestHelpers.Compile<AppDataModelSourceGenerator>(source)
-            : TestHelpers.CompileOnce<AppDataModelSourceGenerator>(source, options, references);
+            : TestHelpers.CompileOnce<AppDataModelSourceGenerator>([source, .. extraSources ?? []], options, references);
     }
 }

@@ -73,6 +73,8 @@ namespace TestNamespace
         public static ApiOperationDescriptor Configure() => throw new NotImplementedException();
     }
 
+    
+
     [BlueprintAppScan]
     [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(TestBlueprintJsonContext))]
     public partial class TestBlueprintApp : BlueprintApp

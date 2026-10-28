@@ -163,29 +163,34 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
             .Select((context, _) => FindOperations(context.Left.Left, context.Left.Right, context.Right))
             .WithTrackingName(Stages.FindServicesToRegister);
 
-        // BP012/BP013's configured severities, read from the app class's file. The compiler applies only global
-        // configuration to a generator's diagnostics, not an .editorconfig's [*.cs] section, where a consumer phases a new
-        // rule in, so the generator applies that itself.
+        // BP012/BP013's configured severities, read from each app class's own file and kept per app, so one app's setting
+        // never applies to another's diagnostics. The compiler applies only global configuration to a generator's
+        // diagnostics, not an .editorconfig's [*.cs] section, where a consumer phases a new rule in, so the generator
+        // applies that itself.
         var configuredSeverityProvider = context.SyntaxProvider.ForAttributeWithMetadataName(
                 "Blueprint.Model.BlueprintAppScanAttribute",
                 predicate: static (syntaxNode, _) => syntaxNode is ClassDeclarationSyntax,
-                transform: static (context, _) => context.TargetNode.SyntaxTree)
+                transform: static (context, _) => (AppMetadataName: context.TargetSymbol.ToFullMetadataName(), Tree: context.TargetNode.SyntaxTree))
             .Combine(context.AnalyzerConfigOptionsProvider)
-            .Select(static (pair, _) => ConfiguredSeverities.Read(pair.Right.GetOptions(pair.Left)))
-            .Collect()
-            .Select(static (severities, _) => severities.FirstOrDefault() ?? ConfiguredSeverities.None);
+            .Select(static (pair, _) => (pair.Left.AppMetadataName, Severities: ConfiguredSeverities.Read(pair.Right.GetOptions(pair.Left.Tree))))
+            .Collect();
 
         context.RegisterSourceOutput(
             generationModelProvider.Combine(configuredSeverityProvider),
             (spc, pair) =>
             {
-                var (result, severities) = pair;
+                var (result, configuredSeverities) = pair;
                 result!.ReportDiagnostics(spc);
 
                 if (result.Value is not { } classToGenerate)
                 {
                     return;
                 }
+
+                var severities = configuredSeverities
+                    .Where(entry => entry.AppMetadataName == classToGenerate.Class.MetadataName)
+                    .Select(static entry => entry.Severities)
+                    .FirstOrDefault() ?? ConfiguredSeverities.None;
 
                 foreach (var diagnostic in classToGenerate.Diagnostics)
                 {

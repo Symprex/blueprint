@@ -259,8 +259,26 @@ public static class TestHelpers
         MetadataReference[]? additionalReferences = null)
         where T : IIncrementalGenerator, new()
     {
+        return CompileOnce<T>([source], optionsProvider, additionalReferences);
+    }
+
+    /// <summary>
+    /// Runs a single generator once against several sources, named <c>Input0.cs</c>, <c>Input1.cs</c> and so on, with
+    /// analyzer config options and extra references; see <see cref="CompileOnce{T}(string, Microsoft.CodeAnalysis.Diagnostics.AnalyzerConfigOptionsProvider?, MetadataReference[])" />.
+    /// </summary>
+    /// <typeparam name="T">The incremental generator under test.</typeparam>
+    /// <param name="sources">The handwritten sources, each its own file, so options can differ between them.</param>
+    /// <param name="optionsProvider">The analyzer config options the generator sees, or <see langword="null" /> for none.</param>
+    /// <param name="additionalReferences">Extra metadata references.</param>
+    /// <returns>The captured diagnostics and generated syntax trees for the run.</returns>
+    public static GenerationResult CompileOnce<T>(
+        string[] sources,
+        Microsoft.CodeAnalysis.Diagnostics.AnalyzerConfigOptionsProvider? optionsProvider = null,
+        MetadataReference[]? additionalReferences = null)
+        where T : IIncrementalGenerator, new()
+    {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
-        var compilation = CreateCompilation([source], filePaths: null, parseOptions);
+        var compilation = CreateCompilation(sources, filePaths: null, parseOptions);
         if (additionalReferences is { Length: > 0 })
         {
             compilation = compilation.AddReferences(additionalReferences);

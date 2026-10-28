@@ -68,7 +68,8 @@ public sealed partial class AppDataModelSourceGenerator
             .Where(root => required.Contains(root.Name))
             .GroupBy(static root => root.Name, StringComparer.Ordinal)
             .Select(static group => group.First())
-            .OrderBy(static root => root.Name, StringComparer.Ordinal);
+            .OrderBy(static root => root.Name, StringComparer.Ordinal)
+            .ToArray();
 
         var walker = new OpenTypedMemberWalker(
             compilation,
@@ -77,6 +78,13 @@ public sealed partial class AppDataModelSourceGenerator
             ContextMemberOptions.From(contextType),
             registeredTypeNames,
             scannedAssemblies);
+
+        // Every root's assembly is known before any root is walked, so an earlier root reaching a type from a later root's
+        // assembly walks it whatever the roots' order.
+        foreach (var (type, _) in roots)
+        {
+            walker.AddRootAssemblies(type);
+        }
 
         foreach (var (type, name) in roots)
         {
@@ -187,13 +195,12 @@ public sealed partial class AppDataModelSourceGenerator
 
         public void Walk(ITypeSymbol rootType, string rootName)
         {
-            this.AddRootAssemblies(rootType);
             this.VisitType(rootType, null, rootName, atRoot: true);
         }
 
         // A declared root's own assembly is walked wherever it is: an app commonly declares roots from another service's
         // contract assembly that it does not scan. So is each assembly its type arguments come from (PagedApiResource<T>).
-        private void AddRootAssemblies(ITypeSymbol type)
+        public void AddRootAssemblies(ITypeSymbol type)
         {
             switch (type)
             {

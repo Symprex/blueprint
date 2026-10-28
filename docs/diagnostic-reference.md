@@ -53,9 +53,12 @@ Both are errors by default. To report them as warnings while a codebase is fixed
 
 ```ini
 [*.cs]
-blueprint_diagnostic.BP012.severity = warning   # error (default), warning, suggestion, silent or none
+# error (the default), warning, suggestion, silent or none
+blueprint_diagnostic.BP012.severity = warning
 blueprint_diagnostic.BP013.severity = warning
 ```
+
+EditorConfig has no inline comments: text after a value on the same line becomes part of the value, which Blueprint then does not recognise. Each app reads the setting in effect for the file that declares it.
 
 `dotnet_diagnostic.BP012.severity` in an `.editorconfig` does **not** work: the compiler applies only global configuration to a source generator's diagnostics and keeps `dotnet_diagnostic` keys to itself. In a `.globalconfig` (`is_global = true`) it does work, as a compiler-applied alternative. With `TreatWarningsAsErrors`, a warning still fails the build unless the project also sets `<WarningsNotAsErrors>$(WarningsNotAsErrors);BP012;BP013</WarningsNotAsErrors>`.
 
