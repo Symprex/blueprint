@@ -254,6 +254,75 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers <see cref="Blueprint.Authorization.ResourceKeyAuthorizationProvider"/>, which decides each scope pair by the
+    /// caller's grants on its resource key, and the default <see cref="Blueprint.Authorization.IResourceAccessChecker"/> it
+    /// asks. Register the grants it reads with <see cref="AddResourceGrantSource{T}"/> and any partial-key expansion with
+    /// <see cref="AddResourceKeyExpander{T}"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The provider is asked in the position this is called, among the other resource authorization providers, and must
+    /// allow as every one must. Calling this more than once registers it once.
+    /// </para>
+    /// <para>
+    /// The checker is scoped, because the expanders and grant sources behind it may be. It is only added when no
+    /// <see cref="Blueprint.Authorization.IResourceAccessChecker"/> is registered yet, so an app may register its own first.
+    /// </para>
+    /// </remarks>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddResourceKeyAuthorization()
+    {
+        this.Services.TryAddEnumerable(ServiceDescriptor.Singleton<Blueprint.Authorization.IResourceAuthorizationProvider, Blueprint.Authorization.ResourceKeyAuthorizationProvider>());
+        this.Services.TryAddScoped<Blueprint.Authorization.IResourceAccessChecker, Blueprint.Authorization.ResourceAccessChecker>();
+
+        return this;
+    }
+
+    /// <summary>
+    /// Registers a source of the grants <see cref="Blueprint.Authorization.IResourceAccessChecker"/> matches demands against,
+    /// scoped so that it may read scoped services. The grants of every registered source are combined.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Authorization.IResourceGrantSource"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddResourceGrantSource<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Authorization.IResourceGrantSource
+    {
+        this.Services.AddScoped<Blueprint.Authorization.IResourceGrantSource, T>();
+
+        return this;
+    }
+
+    /// <summary>
+    /// Registers a pre-configured <see cref="Blueprint.Authorization.IResourceGrantSource"/> instance as a singleton, such as
+    /// a <see cref="Blueprint.Authorization.ScopePairClaimResourceGrantSource"/> given its claim type and separator. The
+    /// grants of every registered source are combined.
+    /// </summary>
+    /// <param name="instance">The grant source to register.</param>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddResourceGrantSource(Blueprint.Authorization.IResourceGrantSource instance)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+
+        this.Services.AddSingleton(instance);
+
+        return this;
+    }
+
+    /// <summary>
+    /// Registers an <see cref="Blueprint.Authorization.IResourceKeyExpander"/>, scoped, after any already registered. Expanders
+    /// are asked in registration order, and the first that handles a partial key decides its expansion.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="Blueprint.Authorization.IResourceKeyExpander"/> implementation type.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddResourceKeyExpander<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, Blueprint.Authorization.IResourceKeyExpander
+    {
+        this.Services.AddScoped<Blueprint.Authorization.IResourceKeyExpander, T>();
+
+        return this;
+    }
+
+    /// <summary>
     /// Registers a custom HTTP result executor that translates operation results to HTTP responses.
     /// </summary>
     /// <typeparam name="T">The <see cref="HttpOperationResultExecutor"/> implementation type.</typeparam>
