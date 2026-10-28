@@ -152,7 +152,7 @@ public sealed class InProcessResourceAuthorizationIntegrationTests
             SkipAuthorisation = skip,
         };
 
-        var denial = await PipelineHelpers.CheckOperationResourceAuthorizationAsync(context, [provider], new ResolvedScopePair("widget", "read", null, null));
+        var denial = await PipelineHelpers.CheckOperationResourceAuthorizationAsync(context, [provider], new ResolvedScopePair("widget", "read", null, null), isHttpExposed: true);
 
         denial.Should().BeNull();
         provider.Requests.Should().HaveCount(expectedRequests);
@@ -175,7 +175,7 @@ public sealed class InProcessResourceAuthorizationIntegrationTests
             UserPrincipal = httpContext.User,
         };
 
-        var denial = await PipelineHelpers.CheckOperationResourceAuthorizationAsync(context, [provider], new ResolvedScopePair("widget", "read", null, null));
+        var denial = await PipelineHelpers.CheckOperationResourceAuthorizationAsync(context, [provider], new ResolvedScopePair("widget", "read", null, null), isHttpExposed: true);
 
         denial.Should().BeOfType<ForbiddenResult>();
         provider.Requests.Should().ContainSingle();
@@ -287,6 +287,25 @@ public sealed class InProcessResourceAuthorizationIntegrationTests
     }
 
     [Fact]
+    public async Task A_nested_unlinked_operation_whose_descriptor_allows_anonymous_access_is_not_asked_of_the_providers_inside_a_request()
+    {
+        // CreateNested copies the request's HttpContext to an unlinked child, so the child's own exposure, not whether its
+        // context has an HttpContext, decides whether its anonymous descriptor skips the providers
+        var provider = new RecordingProvider(ExecutionAllowed.No("no", "Denied", ExecutionAllowedFailureType.Authorisation));
+        await using var services = BuildAppProvider(s => s.AddSingleton<IResourceAuthorizationProvider>(provider));
+        services.GetRequiredService<IntegrationTestBlueprintApp>().FindOperation(typeof(PermissionedUnlinkedCommand))!.AnonymousAccessAllowed = true;
+        var (parent, executor) = CreateParentContext(services, AuthenticatedUser(), inRequest: true);
+
+        var nested = parent.CreateNested(new PermissionedUnlinkedCommand());
+        nested.HttpContext.Should().NotBeNull("a nested context inherits the request's HttpContext");
+
+        var result = await executor.ExecuteAsync(nested);
+
+        result.Should().BeOfType<OkResult<string>>();
+        provider.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_permissioned_message_that_is_not_marked_anonymous_is_denied_or_allowed_by_the_providers()
     {
         // Not subscribed, so its descriptor does not allow anonymous access: it is authorised as any unlinked operation is.
@@ -358,7 +377,7 @@ public sealed class InProcessResourceAuthorizationIntegrationTests
         return await executor.ExecuteAsync(context);
     }
 
-    private static (ApiOperationContext Context, IntegrationTestBlueprintAppExecutor Executor) CreateParentContext(ServiceProvider provider, ClaimsPrincipal? user)
+    private static (ApiOperationContext Context, IntegrationTestBlueprintAppExecutor Executor) CreateParentContext(ServiceProvider provider, ClaimsPrincipal? user, bool inRequest = false)
     {
         var app = provider.GetRequiredService<IntegrationTestBlueprintApp>();
         var executor = provider.GetRequiredService<IntegrationTestBlueprintAppExecutor>();
@@ -367,6 +386,7 @@ public sealed class InProcessResourceAuthorizationIntegrationTests
         {
             Operation = new UnlinkedAuthorisedCommand(),
             UserPrincipal = user,
+            HttpContext = inRequest ? new Microsoft.AspNetCore.Http.DefaultHttpContext { User = user! } : null,
         };
 
         return (context, executor);

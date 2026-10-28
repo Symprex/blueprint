@@ -1382,10 +1382,11 @@ public static class PipelineHelpers
     /// <see cref="CheckResourceAuthorizationAsync(ApiOperationContext, ClaimsPrincipal, Authorization.IResourceAuthorizationProvider[], IReadOnlyList{ResolvedScopePair}, CancellationToken)"/>
     /// with the context's own caller and cancellation: over HTTP they are the request's <c>User</c> and <c>RequestAborted</c>.
     /// Nothing is asked when the context skips authorisation, as the authentication step and the authorisers skip theirs,
-    /// or, in process only, when the operation's descriptor allows anonymous access, as
-    /// <see cref="RunUnlinkedOperationAuthorisersAsync"/> skips the authorisers. Over HTTP a descriptor allowing anonymous
-    /// access is still checked: a Rebus consumer marks a subscribed operation's descriptor so, but the operation is still
-    /// routed when it has a URL.
+    /// or, for an operation that is not exposed over HTTP, when its descriptor allows anonymous access, as
+    /// <see cref="RunUnlinkedOperationAuthorisersAsync"/> skips the authorisers. An HTTP-exposed operation whose descriptor
+    /// allows anonymous access is still checked: a Rebus consumer marks a subscribed operation's descriptor so, but the
+    /// operation is still routed when it has a URL. Exposure is the pipeline's, known at compile time, not whether the
+    /// context has an <c>HttpContext</c>: a nested context inherits its parent's, whatever the child's exposure.
     /// </summary>
     /// <remarks>
     /// The caller is <see cref="ApiOperationContext.UserPrincipal"/>. A provider's judgement is of a principal's claims, so
@@ -1398,17 +1399,20 @@ public static class PipelineHelpers
     /// <param name="context">The current operation execution context.</param>
     /// <param name="providers">The registered resource authorization providers, in registration order; empty if none.</param>
     /// <param name="resolvedScopes">The compile-time expanded scope pairs for this operation.</param>
+    /// <param name="isHttpExposed">Whether the operation is exposed over HTTP, which the generated pipeline knows.</param>
     /// <returns><c>null</c> when the operation may execute; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ValueTask<OperationResult?> CheckOperationResourceAuthorizationAsync(
         ApiOperationContext context,
         Authorization.IResourceAuthorizationProvider[] providers,
-        IReadOnlyList<ResolvedScopePair> resolvedScopes)
+        IReadOnlyList<ResolvedScopePair> resolvedScopes,
+        bool isHttpExposed)
     {
-        // A descriptor that allows anonymous access is skipped only in process. A Rebus consumer marks a subscribed
-        // operation's descriptor anonymous, but MapBlueprintApi still routes it when it has a URL, so over HTTP the
-        // providers must still be asked. SkipAuthorisation is skipped everywhere, as the authentication step skips it.
-        if (context.SkipAuthorisation || (context.Descriptor.AnonymousAccessAllowed && context.HttpContext is null))
+        // A descriptor that allows anonymous access is skipped only for an operation not exposed over HTTP. A Rebus
+        // consumer marks a subscribed operation's descriptor anonymous, but MapBlueprintApi still routes it when it has a
+        // URL, so an exposed one must still be checked. SkipAuthorisation is skipped everywhere, as the authentication
+        // step skips it.
+        if (context.SkipAuthorisation || (context.Descriptor.AnonymousAccessAllowed && !isHttpExposed))
         {
             return default;
         }
@@ -1422,19 +1426,21 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Single-element overload for <see cref="CheckOperationResourceAuthorizationAsync(ApiOperationContext, Authorization.IResourceAuthorizationProvider[], IReadOnlyList{ResolvedScopePair})"/>,
+    /// Single-element overload for <see cref="CheckOperationResourceAuthorizationAsync(ApiOperationContext, Authorization.IResourceAuthorizationProvider[], IReadOnlyList{ResolvedScopePair}, bool)"/>,
     /// which avoids the per-execution array allocation for an operation with exactly one <c>[Resource]</c> attribute.
     /// </summary>
     /// <param name="context">The current operation execution context.</param>
     /// <param name="providers">The registered resource authorization providers, in registration order; empty if none.</param>
     /// <param name="singleScope">The single compile-time expanded scope pair for this operation.</param>
+    /// <param name="isHttpExposed">Whether the operation is exposed over HTTP, which the generated pipeline knows.</param>
     /// <returns><c>null</c> when the operation may execute; otherwise an <see cref="UnauthenticatedResult"/> or <see cref="ForbiddenResult"/>.</returns>
     public static ValueTask<OperationResult?> CheckOperationResourceAuthorizationAsync(
         ApiOperationContext context,
         Authorization.IResourceAuthorizationProvider[] providers,
-        ResolvedScopePair singleScope)
+        ResolvedScopePair singleScope,
+        bool isHttpExposed)
     {
-        return CheckOperationResourceAuthorizationAsync(context, providers, new SingleItemList<ResolvedScopePair>(singleScope));
+        return CheckOperationResourceAuthorizationAsync(context, providers, new SingleItemList<ResolvedScopePair>(singleScope), isHttpExposed);
     }
 
     /// <summary>

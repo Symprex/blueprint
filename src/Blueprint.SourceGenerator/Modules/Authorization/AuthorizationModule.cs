@@ -281,8 +281,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             effectiveScopePairs = directResourceAttributes;
         }
 
-        // An operation with no link is executed in process only, with no HttpContext, so its check reads the principal
-        // from the context instead.
+        // An operation with no link is executed in process only, so its check skips a descriptor allowing anonymous access,
+        // as its authoriser step does. An exposed one is checked even so, as MapBlueprintApi routes it whatever its descriptor.
         var isHttpExposed = HttpHostExposureHelper.HasHttpHostExposure(operationType);
 
         if (!isHttpExposed && IsBackgroundTask(operationType) && !HasAttribute(operationType, MustBeAuthenticatedAttributeName))
@@ -415,7 +415,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         context.AddRenderStep(
             PipelineStage.Authorisation,
-            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames));
+            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, isHttpExposed, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames));
     }
 
     private static bool IsBackgroundTask(INamedTypeSymbol operationType)
@@ -429,6 +429,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
         bool hasTemplateValidationErrors,
+        bool isHttpExposed,
         HashSet<string> valueTypePropertyNames,
         HashSet<string> fallbackOnlyTokenNames,
         HashSet<string> invalidFallbackTokenNames)
@@ -441,17 +442,18 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             return;
         }
 
-        RenderResolvedAuthorizationCheck(context, scopePairs, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames);
+        RenderResolvedAuthorizationCheck(context, scopePairs, isHttpExposed, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames);
     }
 
     /// <summary>
     /// Generates pipeline code that calls <c>PipelineHelpers.CheckOperationResourceAuthorizationAsync</c> with compile-time–
     /// expanded <c>ResolvedScopePair</c> instances. It is the same call over HTTP and in process: the helper takes the caller
-    /// and cancellation from the context, which over HTTP are the request's.
+    /// and cancellation from the context, which over HTTP are the request's, and the operation's exposure from the call.
     /// </summary>
     private static void RenderResolvedAuthorizationCheck(
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
+        bool isHttpExposed,
         HashSet<string> valueTypePropertyNames,
         HashSet<string> fallbackOnlyTokenNames,
         HashSet<string> invalidFallbackTokenNames)
@@ -482,7 +484,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             resolvedScopeArg = $"[{resolvedElements}]";
         }
 
-        var checkExpr = $"CheckOperationResourceAuthorizationAsync(context, this.ResourceAuthorizationProviders, {resolvedScopeArg})";
+        var checkExpr = $"CheckOperationResourceAuthorizationAsync(context, this.ResourceAuthorizationProviders, {resolvedScopeArg}, isHttpExposed: {(isHttpExposed ? "true" : "false")})";
 
         context.DeclareVariable(
             "authorizationDenial",
