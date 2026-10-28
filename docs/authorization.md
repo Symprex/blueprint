@@ -185,6 +185,17 @@ Each `ResolvedScopePair` carries the raw template (`/Tenants/{Auth:AccountId}/Te
 - An app with no `[Resource]`/`[FromResource]` operations needs no provider.
 - To let every caller through deliberately, register a provider that returns `ExecutionAllowed.Yes`.
 
+### In-process executions
+
+Providers are asked wherever an `IApiAuthoriser` is (Symprex/blueprint#78), not only for HTTP requests. An operation with a `[Resource]` or `[FromResource]` and no link is executed in process only, with no `HttpContext`: an unlinked operation, a Rebus message, a background task or a nested execution (`CreateNested`, `ExecuteWithNewScopeAsync`). Every permissioned pipeline, HTTP or not, calls the same `PipelineHelpers.CheckOperationResourceAuthorizationAsync` (all-of providers, fail closed with none registered):
+- the principal is `context.UserPrincipal`, which over HTTP is the request's user and in a nested context is the parent's; the cancellation is `context.OperationCancelled`, which over HTTP is the request's;
+- with no authenticated principal the caller is refused as anonymous (`UnauthenticatedResult`) and no provider is asked, because a provider judges a principal's claims (over HTTP the authentication step has already refused such a caller);
+- nothing is asked when `context.SkipAuthorisation` is set, as the authentication and authoriser steps do not run either; or, for an operation with no link, when its descriptor allows anonymous access, as the authorisers are not run. An operation with a link is still checked when its descriptor allows anonymous access: a Rebus consumer marks a subscribed operation's descriptor anonymous, but `MapBlueprintApi` still routes the operation when it has a URL. The generated pipeline knows which it is, so a nested execution, which inherits the request's `HttpContext`, is judged by its own exposure.
+
+A descriptor allows anonymous access when it is `[AllowAnonymous]`, a background task, or a message a Rebus consumer subscribes to (marked when the app is made). So a subscribed message's `[Resource]` is not checked on delivery, as its authorisers are not run; the same operation executed with no such marking is.
+
+> **Breaking change (Symprex/blueprint#78):** an in-process execution of a permissioned operation used to skip the provider, and `[Resource]` on a non-HTTP operation only drew BPAU008. It is now enforced: an app with such operations needs a registered provider and an authenticated `UserPrincipal` on the context, or the execution is refused.
+
 ### `ScopePairClaimAuthorizationProvider`
 
 A production-ready built-in provider that implements both interfaces. It evaluates scope claims from JWT tokens using zero-allocation span-based string comparison.
@@ -298,7 +309,7 @@ public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery quer
 | BPAU005 | Error | Both `[Resource]` and `[FromResource]` on the same operation |
 | BPAU006 | Warning | `[FromResource]` references a type with no `[Resource]` attributes |
 | BPAU007 | Error | Unknown token in resource key template |
-| BPAU008 | Error | Template references a property that doesn't exist on the operation |
+| BPAU008 | Warning | `[Resource]` or `[FromResource]` on a background task that is not exposed over HTTP and not marked `[MustBeAuthenticated]`: it allows anonymous access, so the declaration is never enforced |
 
 ---
 

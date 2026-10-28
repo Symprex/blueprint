@@ -70,15 +70,16 @@ internal static class AuthorizationDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPAU008: <c>[Resource]</c> or <c>[FromResource]</c> declared on an operation that is not exposed
-    /// via an HTTP host. The pipeline authorization check will not be generated because authorization
-    /// requires an HTTP context to extract the authenticated principal. The descriptor metadata is still
-    /// projected, but the runtime enforcement is absent — which is almost certainly a misconfiguration.
+    /// BPAU008: <c>[Resource]</c> or <c>[FromResource]</c> declared on a background task that is not exposed
+    /// via an HTTP host and not marked <c>[MustBeAuthenticated]</c>. A background task's descriptor allows anonymous access
+    /// by convention, and the in-process resource check is skipped for such a descriptor, so the declaration is never
+    /// enforced — which is almost certainly a misconfiguration. <c>[MustBeAuthenticated]</c> turns the convention off, so
+    /// the declaration is then enforced. (Any other in-process operation's declaration is enforced.)
     /// </summary>
-    public static readonly DiagnosticDescriptor ResourceOnNonHttpOperation = new(
+    public static readonly DiagnosticDescriptor ResourceOnBackgroundTask = new(
         id: "BPAU008",
-        title: "[Resource] on non-HTTP operation",
-        messageFormat: "Operation '{0}' declares resource authorization requirements but is not exposed via an HTTP host. The authorization check will not be generated. Add an HTTP link or remove the authorization attributes.",
+        title: "[Resource] on a background task is never enforced",
+        messageFormat: "Operation '{0}' is a background task, which allows anonymous access, so its resource authorization requirements are never checked. Add [MustBeAuthenticated] to enforce them, or remove the authorization attributes.",
         category: "Blueprint.Authorization",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);

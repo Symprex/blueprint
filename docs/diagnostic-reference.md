@@ -82,14 +82,14 @@ A type listed in `[BlueprintRuntimeTypes(...)]` is not registered on the app-own
 
 | ID | Severity | Title |
 |----|----------|-------|
-| BPAU001 | Warning | `[MustBeAuthenticated]` on non-HTTP operation |
+| BPAU001 | Warning | `[MustBeAuthenticated]` on non-HTTP operation (not a background task, where it turns the anonymous convention off) |
 | BPAU002 | Error | Conflicting `[AllowAnonymous]` and `[MustBeAuthenticated]` |
 | BPAU003 | Error | `[Resource]`/`[FromResource]` combined with `[AllowAnonymous]` |
 | BPAU004 | Error | Empty scope pair value in `[Resource]` |
 | BPAU005 | Error | Both `[FromResource]` and `[Resource]` applied |
 | BPAU006 | Error | `[FromResource]` target has no `[Resource]` attributes |
 | BPAU007 | Error | Resource key template `{Token}` does not match a property |
-| BPAU008 | Warning | `[Resource]` on non-HTTP operation |
+| BPAU008 | Warning | `[Resource]` on a background task that is not exposed over HTTP and not marked `[MustBeAuthenticated]` (never enforced). Narrowed from "any non-HTTP operation": other in-process operations are now checked by the providers (#78) |
 | BPAU009 | Warning | Duplicate `[Resource]` scope pair |
 | BPAU010 | Warning | Resource key template fallback is never used: not on the operation, nor on a linked resource type that lacks the primary |
 | BPAU011 | Error | Resource key template token matches no readable property of a resource type the operation links from |

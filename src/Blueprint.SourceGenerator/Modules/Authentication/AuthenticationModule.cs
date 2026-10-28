@@ -71,17 +71,14 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
         // BackgroundTask convention: auto-project anonymous when no explicit auth attribute is present
         // and the operation is exposed on the tasks host. Background tasks execute server-side without
         // HTTP identity, matching legacy Blueprint's BackgroundTaskAllowAnonymousConvention behavior.
-        if (!hasMustBeAuthenticated)
-        {
-            var isTaskExposed = context.GetMetadata<HostExposureRegistration>()
-                .Any(static r => string.Equals(r.HostName, HostExposureRegistration.Tasks.HostName, StringComparison.Ordinal));
+        var isTaskExposed = context.GetMetadata<HostExposureRegistration>()
+            .Any(static r => string.Equals(r.HostName, HostExposureRegistration.Tasks.HostName, StringComparison.Ordinal));
 
-            if (isTaskExposed)
-            {
-                context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: false));
-                context.AddRenderStep(RenderAnonymousFeatureData);
-                return;
-            }
+        if (!hasMustBeAuthenticated && isTaskExposed)
+        {
+            context.AddMetadata(new AuthenticationDescriptorRegistration(RequiresIdentityCheck: false));
+            context.AddRenderStep(RenderAnonymousFeatureData);
+            return;
         }
 
         // Default-on authentication: HTTP operations require authentication unless [AllowAnonymous].
@@ -107,13 +104,18 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
         }
         else if (hasMustBeAuthenticated)
         {
-            // [MustBeAuthenticated] on a non-HTTP operation gets no HTTP identity check, which BPAU001 warns about, but
-            // what it declares is still recorded, as reflection over the attribute would read it
-            context.AddDiagnostic(
-                new DiagnosticInfo(
-                    AuthenticationDiagnosticDescriptors.AuthAttributeOnNonHttpOperation,
-                    operationType.Locations.FirstOrDefault(),
-                    [operationType.Name]));
+            // [MustBeAuthenticated] on a non-HTTP operation gets no HTTP identity check, which BPAU001 warns about. On a
+            // background task it is not warned about: it turns the anonymous convention above off, so the task's
+            // authorisers and resource requirements are enforced in process. Either way what it declares is still
+            // recorded, as reflection over the attribute would read it
+            if (!isTaskExposed)
+            {
+                context.AddDiagnostic(
+                    new DiagnosticInfo(
+                        AuthenticationDiagnosticDescriptors.AuthAttributeOnNonHttpOperation,
+                        operationType.Locations.FirstOrDefault(),
+                        [operationType.Name]));
+            }
 
             if (!HasAttribute(operationType, ResourceAttributeName) && !HasAttribute(operationType, FromResourceAttributeName))
             {

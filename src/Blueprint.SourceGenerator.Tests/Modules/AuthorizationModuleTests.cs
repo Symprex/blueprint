@@ -401,7 +401,7 @@ public class AuthorizationModuleTests
     }
 
     [Fact]
-    public void When_Resource_on_non_http_operation_then_no_authentication_stage_and_warns_BPAU008()
+    public void When_Resource_on_non_http_operation_then_no_authentication_stage_and_providers_are_asked_in_process()
     {
         var compilation = CreateCompilation(
             """
@@ -424,15 +424,18 @@ public class AuthorizationModuleTests
         var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
         var result = config.BuildPipelinePlan("TestNamespace.ProcessAccountCommand", compilation);
 
-        result.Diagnostics.Should().ContainSingle(
-            static d => d.Descriptor.Id == "BPAU008",
-            "resource authorization on a non-HTTP operation should warn");
+        result.Diagnostics.Should().BeEmpty("[Resource] on a non-HTTP operation is enforced in process, so there is nothing to warn about");
         result.Value.Should().NotBeNull();
 
-        // Non-HTTP operations don't get pipeline checks
+        // The identity check is HTTP's: an in-process caller has no HttpContext to read it from
         result.Value!.Contributions.Should().NotContain(
             static c => c.Stage == PipelineStage.Authentication,
-            "non-HTTP [Resource] operations should not have authentication pipeline checks");
+            "non-HTTP [Resource] operations should not have the HTTP authentication pipeline check");
+
+        // The providers are asked all the same, from the context's principal
+        result.Value!.Contributions.Should().Contain(
+            new PipelineContribution(PipelineStage.Authorisation, nameof(AuthorizationModule)),
+            "non-HTTP [Resource] operations are authorised by the resource providers in process");
     }
 
     [Fact]
@@ -924,7 +927,68 @@ public class AuthorizationModuleTests
     // ── Resource key template validation tests ──────────────────────
 
     [Fact]
-    public void When_Resource_on_non_HTTP_operation_then_reports_BPAU008()
+    public void When_Resource_on_background_task_then_reports_BPAU008()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Tasks;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [Resource("account", "read")]
+            public partial class ProcessAccountTask : ICommand<string>, IBackgroundTask
+            {
+                public static Task<string> HandleAsync(ProcessAccountTask operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.ProcessAccountTask", compilation);
+
+        result.Diagnostics.Should().ContainSingle(
+            static d => d.Descriptor.Id == "BPAU008",
+            "a background task allows anonymous access, so the provider check is skipped and [Resource] is never enforced");
+    }
+
+    [Fact]
+    public void When_Resource_on_background_task_marked_MustBeAuthenticated_then_does_not_report_BPAU008()
+    {
+        // [MustBeAuthenticated] turns the anonymous convention off, so the task's descriptor does not allow anonymous
+        // access and its [Resource] is enforced
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Tasks;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [MustBeAuthenticated]
+            [Resource("account", "read")]
+            public partial class ProcessAccountTask : ICommand<string>, IBackgroundTask
+            {
+                public static Task<string> HandleAsync(ProcessAccountTask operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.ProcessAccountTask", compilation);
+
+        result.Diagnostics.Should().NotContain(static d => d.Descriptor.Id == "BPAU008");
+    }
+
+    [Fact]
+    public void When_Resource_on_non_HTTP_operation_that_is_not_a_background_task_then_does_not_report_BPAU008()
     {
         var compilation = CreateCompilation(
             """
@@ -949,9 +1013,42 @@ public class AuthorizationModuleTests
         var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
         var result = config.BuildPipelinePlan("TestNamespace.ProcessAccountCommand", compilation);
 
-        result.Diagnostics.Should().Contain(
+        result.Diagnostics.Should().NotContain(
             static d => d.Descriptor.Id == "BPAU008",
-            "resource authorization on a non-HTTP operation should warn because the runtime check cannot be generated");
+            "[Resource] on an in-process operation is enforced, so it is meaningful");
+    }
+
+    [Fact]
+    public void When_Resource_on_HTTP_operation_that_is_also_a_background_task_then_does_not_report_BPAU008()
+    {
+        var compilation = CreateCompilation(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Tasks;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class ProcessAccountTask : ICommand<string>, IBackgroundTask
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(ProcessAccountTask operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var config = new BlueprintSourceGenerationConfig([new AuthenticationModule(), new AuthorizationModule()]);
+        var result = config.BuildPipelinePlan("TestNamespace.ProcessAccountTask", compilation);
+
+        result.Diagnostics.Should().NotContain(
+            static d => d.Descriptor.Id == "BPAU008",
+            "the HTTP check does not skip on the anonymous flag, so [Resource] is enforced over HTTP");
     }
 
     [Fact]
@@ -1396,6 +1493,42 @@ public class AuthorizationModuleTests
             }
             """;
 
+        await VerifyPipelineSnapshotAsync(source);
+    }
+
+    [Fact]
+    public async Task When_Resource_with_template_on_unlinked_operation_then_pipeline_snapshot_matches()
+    {
+        // No link, so executed in process only: the providers are asked from context.UserPrincipal, not an HttpContext.
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [Resource("account", "read", "/tenants/{Auth.AccountId}/accounts/{Id}")]
+                public partial class GetAccountQuery : IQuery<string>
+                {
+                    public string Id { get; set; }
+
+                    public static Task<string> HandleAsync(GetAccountQuery operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        await VerifyPipelineSnapshotAsync(source);
+    }
+
+    private static async Task VerifyPipelineSnapshotAsync(string source)
+    {
         var generators = new[]
         {
             TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),

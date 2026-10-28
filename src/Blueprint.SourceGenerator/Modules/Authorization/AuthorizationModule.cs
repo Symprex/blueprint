@@ -18,7 +18,14 @@ namespace Blueprint.SourceGenerator.Modules.Authorization;
 /// BPAU004 when noun or verb values are empty or whitespace,
 /// BPAU005 when both <c>[FromResource]</c> and <c>[Resource]</c> are used on the same operation,
 /// BPAU006 when <c>[FromResource]</c> references a type that has no <c>[Resource]</c> attributes,
-/// and BPAU008 when resource authorization is declared on a non-HTTP operation.
+/// and BPAU008 when resource authorization is declared on a background task, whose descriptor allows anonymous access
+/// by convention, so the declaration is never enforced.
+/// </para>
+/// <para>
+/// An HTTP-exposed operation's check takes its principal from the request's <c>HttpContext</c>. An operation with no
+/// link is executed in process only (unlinked, a Rebus message, <c>ExecuteWithNewScopeAsync</c>, nested), so its check
+/// takes the principal from <c>context.UserPrincipal</c> and is skipped, as the authoriser step is, when the context
+/// skips authorisation or the descriptor allows anonymous access.
 /// </para>
 /// <para>
 /// Permissioned operations implicitly require authentication; this module coordinates
@@ -33,6 +40,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
     private const string LinkAttributeName = "LinkAttribute";
     private const string SelfLinkAttributeName = "SelfLinkAttribute";
+    private const string MustBeAuthenticatedAttributeName = "MustBeAuthenticatedAttribute";
+    private const string BackgroundTaskInterfaceName = "IBackgroundTask";
 
     /// <summary>
     /// Whether a property path exists on a linked resource type and, if it does, whether generated code can read it.
@@ -674,17 +683,20 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             effectiveScopePairs = directResourceAttributes;
         }
 
-        if (!HttpHostExposureHelper.HasHttpHostExposure(operationType))
+        // An operation with no link is executed in process only, so its check skips a descriptor allowing anonymous access,
+        // as its authoriser step does. An exposed one is checked even so, as MapBlueprintApi routes it whatever its descriptor.
+        var isHttpExposed = HttpHostExposureHelper.HasHttpHostExposure(operationType);
+
+        if (!isHttpExposed && IsBackgroundTask(operationType) && !HasAttribute(operationType, MustBeAuthenticatedAttributeName))
         {
-            // BPAU008: Resource authorization requires an HTTP context to extract the principal.
-            // Descriptor metadata is still projected above, but the pipeline check is absent.
+            // BPAU008: a background task's descriptor allows anonymous access by convention, so the in-process check is
+            // skipped at runtime and the declaration is never enforced. The check is still generated. [MustBeAuthenticated]
+            // turns the convention off (AuthenticationModule), so such a task's declaration is enforced.
             context.AddDiagnostic(
                 new DiagnosticInfo(
-                    AuthorizationDiagnosticDescriptors.ResourceOnNonHttpOperation,
+                    AuthorizationDiagnosticDescriptors.ResourceOnBackgroundTask,
                     operationLocation,
                     [operationType.Name]));
-
-            return;
         }
 
         // Validate template property tokens exist on the operation type
@@ -810,13 +822,21 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         context.AddRenderStep(
             PipelineStage.Authorisation,
-            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames));
+            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, isHttpExposed, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames));
+    }
+
+    private static bool IsBackgroundTask(INamedTypeSymbol operationType)
+    {
+        return operationType.AllInterfaces.Any(static candidate =>
+            candidate.Name == BackgroundTaskInterfaceName
+            && candidate.IsInNamespace("Blueprint", "Tasks"));
     }
 
     private static void RenderAuthorizationCheck(
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
         bool hasTemplateValidationErrors,
+        bool isHttpExposed,
         HashSet<string> valueTypePropertyNames,
         HashSet<string> fallbackOnlyTokenNames,
         HashSet<string> invalidFallbackTokenNames)
@@ -829,23 +849,27 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             return;
         }
 
-        RenderResolvedAuthorizationCheck(context, scopePairs, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames);
+        RenderResolvedAuthorizationCheck(context, scopePairs, isHttpExposed, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames);
     }
 
     /// <summary>
-    /// Generates pipeline code that calls <c>PipelineHelpers.CheckResourceAuthorizationAsync</c>
-    /// with compile-time–expanded <c>ResolvedScopePair</c> instances.
+    /// Generates pipeline code that calls <c>PipelineHelpers.CheckOperationResourceAuthorizationAsync</c> with compile-time–
+    /// expanded <c>ResolvedScopePair</c> instances. It is the same call over HTTP and in process: the helper takes the caller
+    /// and cancellation from the context, which over HTTP are the request's, and the operation's exposure from the call.
     /// </summary>
     private static void RenderResolvedAuthorizationCheck(
         PipelineRenderContext context,
         List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
+        bool isHttpExposed,
         HashSet<string> valueTypePropertyNames,
         HashSet<string> fallbackOnlyTokenNames,
         HashSet<string> invalidFallbackTokenNames)
     {
         var operationExpr = context.GetOperationExpression();
-        var httpContextExpr = context.GetHttpContextExpression();
-        var principalExpr = $"{httpContextExpr}.User";
+
+        // Over HTTP the context's principal is the request's user. In process it may be null, and the check refuses a caller
+        // with none: the trailing '?' makes the template's claim reads null-safe, so expanding the key never fails before then.
+        const string principalExpr = "context.UserPrincipal?";
 
         string resolvedScopeArg;
 
@@ -867,9 +891,11 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             resolvedScopeArg = $"[{resolvedElements}]";
         }
 
+        var checkExpr = $"CheckOperationResourceAuthorizationAsync(context, this.ResourceAuthorizationProviders, {resolvedScopeArg}, isHttpExposed: {(isHttpExposed ? "true" : "false")})";
+
         context.DeclareVariable(
             "authorizationDenial",
-            $"await CheckResourceAuthorizationAsync(context, {principalExpr}, this.ResourceAuthorizationProviders, {resolvedScopeArg}, {httpContextExpr}.RequestAborted).ConfigureAwait(false)");
+            $"await {checkExpr}.ConfigureAwait(false)");
 
         context.If(
             "authorizationDenial != null",

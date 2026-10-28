@@ -730,7 +730,7 @@ The collection and resource types that show up repeatedly in S365 are already pr
 ## Compile-Time Diagnostics
 
 ### Authorization and resource-template diagnostics
-The migration now fails early when auth metadata is wrong. `BPAU004` reports nonexistent template-property references, `BPAU008` warns when resource attributes are placed on non-HTTP operations where they have no effect, and `BPAU003` covers special-permission validation such as anonymous/authenticated markers. This replaces a large class of runtime surprises that the legacy stack could only detect indirectly.
+The migration now fails early when auth metadata is wrong. `BPAU004` reports nonexistent template-property references, `BPAU008` warns when resource attributes are placed on a background task, where they have no effect, and `BPAU003` covers special-permission validation such as anonymous/authenticated markers. This replaces a large class of runtime surprises that the legacy stack could only detect indirectly.
 
 ### Property-ownership diagnostics
 The property-ownership diagnostics are important because they describe most migration mistakes precisely. `BPPO006` catches mixed ownership such as `[FromAuthContext]` plus `[FromBody]`, `BPPO009` flags claim-based auth mapping on non-string properties, `BPPO010` warns when auth and route ownership overlap, `BPPO011` points out TypeConverter-only binding paths that would be faster with `TryParse`, `BPPO012` fails unresolved route placeholders, and `BPPO013` warns about nullable route parameters that can never actually be omitted.

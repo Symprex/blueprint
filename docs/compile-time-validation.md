@@ -251,14 +251,14 @@ Reserved direction:
 
 Current authentication IDs in active use:
 
-- `BPAU001`: `[MustBeAuthenticated]` applied to an operation that is not exposed via an HTTP host (warning — the authentication pipeline check cannot be generated without HTTP context).
+- `BPAU001`: `[MustBeAuthenticated]` applied to an operation that is not exposed via an HTTP host (warning — the authentication pipeline check cannot be generated without HTTP context). Not reported for a background task, where the attribute turns the anonymous convention off so its requirements are enforced in process.
 - `BPAU002`: Both `[AllowAnonymous]` and `[MustBeAuthenticated]` applied to the same operation (error — the access mode must be unambiguous).
 - `BPAU003`: `[Resource]` or `[FromResource]` combined with `[AllowAnonymous]` on the same operation (error — permissioned operations cannot simultaneously allow anonymous access).
 - `BPAU004`: `[Resource]` attribute with an empty or whitespace-only noun or verb value (error — scope pairs must be meaningful).
 - `BPAU005`: Both `[FromResource]` and `[Resource]` applied to the same operation (error — use one mechanism to declare scope pairs, not both).
 - `BPAU006`: `[FromResource(typeof(X))]` referencing a type that has no `[Resource]` attributes (error — the target must declare at least one scope pair to inherit).
 - `BPAU007`: Resource key template token `{PropertyName}` references a property that does not exist on the operation type AND there is no valid fallback path (error — authorization enforcement is suppressed, which is a security issue).
-- `BPAU008`: `[Resource]` or `[FromResource]` on an operation that is not exposed via an HTTP host (warning — the authorization pipeline check cannot be generated without HTTP context to extract the principal; descriptor metadata is still projected).
+- `BPAU008`: `[Resource]` or `[FromResource]` on a background task that is not exposed via an HTTP host and not marked `[MustBeAuthenticated]` (warning — a background task allows anonymous access, so the in-process provider check is skipped and the declaration is never enforced; any other in-process operation's declaration is enforced, taking its principal from `context.UserPrincipal`).
 - `BPAU009`: Duplicate noun+verb scope pair on the same operation via multiple `[Resource]` attributes (warning — redundant metadata, usually a copy-paste error).
 - `BPAU010`: Fallback property path in `{Primary:Fallback}` syntax does not exist on the operation type, but the primary property does, and no resource type the operation links from lacks the primary and has the fallback (warning — the fallback is used by no subject, so it is dead code that should be removed). A link resolves the template against the resource it is written on, so a fallback a linked resource uses is live.
 - `BPAU011`: A resource key template token matches no readable public property of a resource type the operation links from via `[Link]` or `[SelfLink]` — neither the primary nor the fallback, or the primary exists but has no public getter, which is reported rather than silently switching the key to the fallback (error — the key cannot be resolved against that resource, so a link from it could never be authorised).
