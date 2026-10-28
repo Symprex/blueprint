@@ -5,6 +5,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Blueprint.SourceGenerator.Tests.Scale;
 
+[Collection(RealBuildCollection.Name)]
 public class SyntheticBuildTelemetryRunnerTests
 {
     [Fact]

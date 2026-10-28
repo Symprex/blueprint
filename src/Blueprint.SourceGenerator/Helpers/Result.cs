@@ -16,11 +16,17 @@ public sealed record Result<TValue>(TValue? Value, EquatableList<DiagnosticInfo>
     /// Reports any diagnostics that have been generated.
     /// </summary>
     /// <param name="spc">The context to report the diagnostics in.</param>
-    public void ReportDiagnostics(SourceProductionContext spc)
+    /// <param name="compilation">
+    /// The current compilation, so each location is bound to its syntax tree (see
+    /// <see cref="DiagnosticInfo.ToDiagnostic"/>). Never pass a compilation cached alongside a model by a comparer that
+    /// ignores it: its trees may be stale. Where no current compilation is at hand, report through
+    /// <see cref="DiagnosticOutput.RegisterDiagnosticOutput"/> instead.
+    /// </param>
+    public void ReportDiagnostics(SourceProductionContext spc, Compilation? compilation)
     {
         foreach (var diagnosticInfo in this.Diagnostics)
         {
-            spc.ReportDiagnostic(diagnosticInfo.ToDiagnostic());
+            spc.ReportDiagnostic(diagnosticInfo.ToDiagnostic(compilation));
         }
     }
 
