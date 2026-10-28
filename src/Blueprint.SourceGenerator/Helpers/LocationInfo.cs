@@ -33,12 +33,44 @@ public sealed record LocationInfo(string FilePath, TextSpan TextSpan, LinePositi
     }
 
     /// <summary>
-    /// Converts this <see cref="LocationInfo"/> to a <see cref="Location"/>.
+    /// Converts this <see cref="LocationInfo"/> to a <see cref="Location"/>, bound to its syntax tree in
+    /// <paramref name="compilation"/> when it has one.
     /// </summary>
+    /// <remarks>
+    /// Roslyn reads <c>#pragma warning</c> from a diagnostic's syntax tree, so only a tree-bound location can be
+    /// suppressed in source. A location with no matching tree (a metadata location, or one whose span no longer fits the
+    /// tree) is reported against its file path instead.
+    /// </remarks>
+    /// <param name="compilation">The compilation being generated for, or <see langword="null"/> when none is available.</param>
     /// <returns>A <see cref="Location"/> representing this <see cref="LocationInfo"/>.</returns>
-    public Location ToLocation()
+    public Location ToLocation(Compilation? compilation)
     {
-        return Location.Create(this.FilePath, this.TextSpan, this.LinePositionSpan);
+        return this.FindSyntaxTree(compilation) is { } tree && this.TextSpan.End <= tree.Length
+            ? Location.Create(tree, this.TextSpan)
+            : Location.Create(this.FilePath, this.TextSpan, this.LinePositionSpan);
+    }
+
+    /// <summary>
+    /// Finds the syntax tree in <paramref name="compilation"/> that this location's file path names.
+    /// </summary>
+    /// <param name="compilation">The compilation to search, or <see langword="null"/>.</param>
+    /// <returns>The matching syntax tree, or <see langword="null"/> when there is none.</returns>
+    internal SyntaxTree? FindSyntaxTree(Compilation? compilation)
+    {
+        if (compilation is null || this.FilePath.Length == 0)
+        {
+            return null;
+        }
+
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            if (string.Equals(tree.FilePath, this.FilePath, StringComparison.Ordinal))
+            {
+                return tree;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

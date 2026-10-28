@@ -22,7 +22,7 @@ public class DebugManifestContributorCompatibilityTests
 
         result.Value.Should().BeNull();
         result.Diagnostics.Should().ContainSingle();
-        var diagnostic = result.Diagnostics[0].ToDiagnostic();
+        var diagnostic = result.Diagnostics[0].ToDiagnostic(null);
         diagnostic.Id.Should().Be("BPMOD006");
         diagnostic.GetMessage().Should().ContainAll("shared", "first", "second", "TestNamespace.ListUsersQuery");
     }

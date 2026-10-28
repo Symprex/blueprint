@@ -21,6 +21,11 @@ public sealed record DiagnosticInfo
     public DiagnosticDescriptor Descriptor => this._descriptor;
 
     /// <summary>
+    /// Gets the normalised location this diagnostic is reported at, if it has one.
+    /// </summary>
+    internal LocationInfo? Location => this._location;
+
+    /// <summary>
     /// Initializes a cacheable diagnostic wrapper from an already-normalized <see cref="LocationInfo"/> instance.
     /// </summary>
     /// <param name="descriptor">The diagnostic descriptor to report.</param>
@@ -50,10 +55,14 @@ public sealed record DiagnosticInfo
     /// <summary>
     /// Converts this <see cref="DiagnosticInfo"/> to a <see cref="Diagnostic"/> to report.
     /// </summary>
+    /// <param name="compilation">
+    /// The compilation being generated for, so the location can be bound to its syntax tree and suppressed in source.
+    /// Pass <see langword="null"/> only where the diagnostic has no source location, or when inspecting it.
+    /// </param>
     /// <returns>This diagnostic as a <see cref="Diagnostic"/>.</returns>
-    public Diagnostic ToDiagnostic()
+    public Diagnostic ToDiagnostic(Compilation? compilation)
     {
         // ReSharper disable once CoVariantArrayConversion The array is not for writing, the covariant conversion is fine
-        return Diagnostic.Create(this._descriptor, this._location?.ToLocation(), this._messageArgs?.AsArray());
+        return Diagnostic.Create(this._descriptor, this._location?.ToLocation(compilation), this._messageArgs?.AsArray());
     }
 }
