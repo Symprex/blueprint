@@ -3,6 +3,7 @@ using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Blueprint.SourceGenerator.Modules.Authorization;
 
@@ -32,6 +33,21 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private const string AllowAnonymousAttributeName = "AllowAnonymousAttribute";
     private const string LinkAttributeName = "LinkAttribute";
     private const string SelfLinkAttributeName = "SelfLinkAttribute";
+
+    /// <summary>
+    /// Whether a property path exists on a linked resource type and, if it does, whether generated code can read it.
+    /// </summary>
+    private enum PropertyPathState
+    {
+        /// <summary>A segment is not a public instance property of the type.</summary>
+        Missing,
+
+        /// <summary>Every segment exists, but one has no public getter.</summary>
+        Unreadable,
+
+        /// <summary>Every segment is a public instance property with a public getter.</summary>
+        Readable,
+    }
 
     /// <inheritdoc />
     public string ModuleId => nameof(AuthorizationModule);
@@ -313,25 +329,43 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             var parts = new List<string>();
             var fallback = token.FallbackPropertyPath;
 
+            var (primaryState, primaryExpression) = LinkPathExpression(token.Name, resourceType, resourceExpression);
+
             if (token.IsAuthPath)
             {
-                parts.Add(CallerValueExpression(token.Name));
+                parts.Add(primaryExpression!);
 
-                if (fallback is not null && LinkPathExpression(fallback, resourceType, resourceExpression) is { } fallbackExpression)
+                if (fallback is not null)
                 {
-                    parts.Add(fallbackExpression);
+                    var (fallbackState, fallbackExpression) = LinkPathExpression(fallback, resourceType, resourceExpression);
+
+                    if (fallbackState == PropertyPathState.Unreadable)
+                    {
+                        unresolvedTokens.Add(token.RawToken.Trim('{', '}'));
+
+                        continue;
+                    }
+
+                    if (fallbackState == PropertyPathState.Readable)
+                    {
+                        parts.Add(fallbackExpression!);
+                    }
                 }
             }
-            else if (LinkPathExpression(token.Name, resourceType, resourceExpression) is { } primaryExpression)
+            else if (primaryState == PropertyPathState.Readable)
             {
-                parts.Add(primaryExpression);
+                parts.Add(primaryExpression!);
             }
-            else if (fallback is not null && LinkPathExpression(fallback, resourceType, resourceExpression) is { } fallbackExpression)
+            else if (primaryState == PropertyPathState.Missing
+                     && fallback is not null
+                     && LinkPathExpression(fallback, resourceType, resourceExpression) is (PropertyPathState.Readable, { } fallbackExpression))
             {
                 parts.Add(fallbackExpression);
             }
             else
             {
+                // Neither path can be read. A primary that exists but cannot be read is not treated as missing, which
+                // would silently switch the key to the fallback.
                 unresolvedTokens.Add(token.RawToken.Trim('{', '}'));
 
                 continue;
@@ -345,37 +379,45 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     }
 
     /// <summary>
-    /// Gives the expression of a caller or property path against the resource, or <see langword="null"/> when a property
-    /// path does not exist on <paramref name="resourceType"/>.
+    /// Gives the expression of a caller or property path against the resource, and whether the path can be read: a caller
+    /// path always can; a property path can when every segment is a public instance property with a public getter.
     /// </summary>
-    private static string? LinkPathExpression(string path, INamedTypeSymbol resourceType, string resourceExpression)
+    private static (PropertyPathState State, string? Expression) LinkPathExpression(string path, INamedTypeSymbol resourceType, string resourceExpression)
     {
         if (ResourceKeyToken.IsAuthPropertyPath(path))
         {
-            return CallerValueExpression(path);
+            return (PropertyPathState.Readable, CallerValueExpression(path));
         }
 
-        var properties = ResolvePublicPropertyPath(resourceType, path);
+        var (state, properties) = ResolvePublicPropertyPath(resourceType, path);
 
-        if (properties is null)
+        if (state != PropertyPathState.Readable)
         {
-            return null;
+            return (state, null);
         }
 
         // Each step reads the next property with ?. only where the value before it can be null (a reference or a
-        // Nullable<T>), so a struct's members and a non-nullable value are read with . and the expression compiles.
+        // Nullable<T>), so a struct's members and a non-nullable value are read with . and the expression compiles. A name
+        // that is a C# keyword is written verbatim (@event), as its declaration was.
         var expression = new System.Text.StringBuilder(resourceExpression);
         var receiverCanBeNull = false;
 
         foreach (var property in properties)
         {
-            expression.Append(receiverCanBeNull ? "?." : ".").Append(property.Name);
+            expression.Append(receiverCanBeNull ? "?." : ".");
+
+            if (SyntaxFacts.GetKeywordKind(property.Name) != SyntaxKind.None)
+            {
+                expression.Append('@');
+            }
+
+            expression.Append(property.Name);
             receiverCanBeNull = CanBeNull(property.Type);
         }
 
         expression.Append(receiverCanBeNull ? "?.ToString()" : ".ToString()");
 
-        return expression.ToString();
+        return (PropertyPathState.Readable, expression.ToString());
     }
 
     private static string CallerValueExpression(string authPath)
@@ -458,10 +500,14 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     /// <summary>
     /// Resolves every segment of a dotted property path to a public instance property, starting at
     /// <paramref name="type"/>, matching names exactly, as the generated access needs it and as Signature 365's link
-    /// authorisation looked them up. A <see cref="Nullable{T}"/> segment is navigated through its underlying type. Gives
-    /// <see langword="null"/> when any segment does not exist.
+    /// authorisation looked them up. An interface's members include those it inherits from other interfaces, and a
+    /// <see cref="Nullable{T}"/> segment is navigated through its underlying type.
     /// </summary>
-    private static List<IPropertySymbol>? ResolvePublicPropertyPath(ITypeSymbol type, string propertyPath)
+    /// <returns>
+    /// <see cref="PropertyPathState.Missing"/> when a segment does not exist; <see cref="PropertyPathState.Unreadable"/>
+    /// when one exists but has no public getter; otherwise <see cref="PropertyPathState.Readable"/> with the properties.
+    /// </returns>
+    private static (PropertyPathState State, List<IPropertySymbol> Properties) ResolvePublicPropertyPath(ITypeSymbol type, string propertyPath)
     {
         var properties = new List<IPropertySymbol>();
         var current = type;
@@ -473,31 +519,42 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 current = nullable.TypeArguments[0];
             }
 
-            var property = current.GetAllMembers()
-                .OfType<IPropertySymbol>()
-                .FirstOrDefault(p => p.Name == segment && !p.IsStatic && p.DeclaredAccessibility == Accessibility.Public);
+            var candidates = current.GetAllMembers().OfType<IPropertySymbol>();
+
+            if (current.TypeKind == TypeKind.Interface)
+            {
+                candidates = candidates.Concat(current.AllInterfaces.SelectMany(static i => i.GetMembers().OfType<IPropertySymbol>()));
+            }
+
+            var property = candidates.FirstOrDefault(p =>
+                p.Name == segment && !p.IsStatic && !p.IsIndexer && p.DeclaredAccessibility == Accessibility.Public);
 
             if (property is null)
             {
-                return null;
+                return (PropertyPathState.Missing, properties);
+            }
+
+            if (property.GetMethod is not { DeclaredAccessibility: Accessibility.Public })
+            {
+                return (PropertyPathState.Unreadable, properties);
             }
 
             properties.Add(property);
             current = property.Type;
         }
 
-        return properties;
+        return (PropertyPathState.Readable, properties);
     }
 
     /// <summary>
-    /// Whether some resource type the operation links from lacks <paramref name="token"/>'s primary path and has its
+    /// Whether some resource type the operation links from lacks <paramref name="token"/>'s primary path and can read its
     /// fallback path, so that a link from it uses the fallback.
     /// </summary>
     private static bool IsFallbackUsedByALinkedResourceType(INamedTypeSymbol operationType, ResourceKeyToken token)
     {
         return GetLinkedResourceTypes(operationType).Any(resourceType =>
-            ResolvePublicPropertyPath(resourceType, token.Name) is null
-            && ResolvePublicPropertyPath(resourceType, token.FallbackPropertyPath!) is not null);
+            ResolvePublicPropertyPath(resourceType, token.Name).State == PropertyPathState.Missing
+            && ResolvePublicPropertyPath(resourceType, token.FallbackPropertyPath!).State == PropertyPathState.Readable);
     }
 
     /// <inheritdoc />

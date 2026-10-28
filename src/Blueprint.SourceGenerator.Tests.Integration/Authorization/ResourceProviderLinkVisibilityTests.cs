@@ -153,6 +153,23 @@ public sealed class ResourceProviderLinkVisibilityTests
         result.IsAllowed.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task Interface_inherited_and_keyword_named_properties_resolve_against_the_resource()
+    {
+        const string expectedKey = "/LinkAuth/Edges/own_1/evt_9";
+        var provider = new KeyProvider(expectedKey);
+        var app = new IntegrationTestBlueprintApp();
+
+        var result = await CanShowAsync(
+            new LinkAuthEdgeApiResource { Id = "x", Owner = new LinkAuthOwner { Id = "own_1" }, @event = "evt_9" },
+            [provider],
+            app.FindOperation(typeof(TouchLinkAuthEdgeCommand))!,
+            new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "user-1")], "Test")));
+
+        provider.LastKey.Should().Be(expectedKey);
+        result.IsAllowed.Should().BeTrue();
+    }
+
     private static async Task<ExecutionAllowed> CanShowAsync(
         object? resource,
         IResourceAuthorizationProvider[] providers,

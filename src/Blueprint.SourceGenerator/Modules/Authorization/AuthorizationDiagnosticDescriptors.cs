@@ -110,14 +110,15 @@ internal static class AuthorizationDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPAU011: A token in a resource key template matches no public property of a resource type the operation links
-    /// from (<c>[Link]</c> or <c>[SelfLink]</c>): neither the primary nor, for <c>{Primary:Fallback}</c>, the fallback.
-    /// The key cannot be resolved against that resource, so a link from it could never be authorised.
+    /// BPAU011: A token in a resource key template matches no readable public property of a resource type the operation
+    /// links from (<c>[Link]</c> or <c>[SelfLink]</c>): neither the primary nor, for <c>{Primary:Fallback}</c>, the
+    /// fallback, or the primary exists but has no public getter. The key cannot be resolved against that resource, so a
+    /// link from it could never be authorised.
     /// </summary>
     public static readonly DiagnosticDescriptor ResourceKeyTemplateTokenNotFoundOnLinkedResource = new(
         id: "BPAU011",
         title: "Resource key template token does not match a property of a linked resource type",
-        messageFormat: "Resource key template for operation '{0}' contains token '{{{1}}}', which matches no public property of '{2}', a resource type the operation links from. A link from '{2}' cannot be authorised. Fix the template or add the property to '{2}'.",
+        messageFormat: "Resource key template for operation '{0}' contains token '{{{1}}}', which matches no readable public property of '{2}', a resource type the operation links from. A link from '{2}' cannot be authorised. Fix the template, or add the property or its public getter to '{2}'.",
         category: "Blueprint.Authorization",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

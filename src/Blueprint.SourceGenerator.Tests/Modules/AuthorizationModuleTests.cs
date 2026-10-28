@@ -1193,6 +1193,25 @@ public class AuthorizationModuleTests
         descriptorSource.Should().NotContain(".TenantId?.ToString()");
     }
 
+    [Theory]
+    [InlineData("public string UserTenantId { private get; set; }")]
+    [InlineData("public string UserTenantId { set { } }")]
+    public void When_linked_resource_has_the_primary_but_cannot_read_it_then_reports_BPAU011_and_does_not_fall_back(string primary)
+    {
+        // The primary exists, so silently using the fallback instead would change the key
+        var result = CompileDescriptor(LinkedResourceDeclarations(
+            "/Tenants/{UserTenantId:TenantId}",
+            primary + "\n    public string TenantId { get; set; }"));
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPAU011")
+            .Which.GetMessage().Should().Contain("UserTenantId:TenantId");
+
+        // An error stops the descriptor being written at all; nothing generated may read the fallback either way
+        result.Output
+            .Select(static t => t.ToString())
+            .Should().NotContain(static s => s.Contains(".TenantId?.ToString()"));
+    }
+
     [Fact]
     public void When_operation_has_no_links_then_descriptor_has_no_link_resolver()
     {

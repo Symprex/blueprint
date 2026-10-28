@@ -304,6 +304,60 @@ public partial class TouchLinkAuthShapeCommand : ICommand<string>
     }
 }
 
+/// <summary>Something with an id, inherited by <see cref="ILinkAuthOwner"/>.</summary>
+public interface ILinkAuthHasId
+{
+    string Id { get; }
+}
+
+/// <summary>An owner whose <c>Id</c> comes from the interface it inherits.</summary>
+public interface ILinkAuthOwner : ILinkAuthHasId
+{
+}
+
+/// <summary>An owner.</summary>
+public sealed class LinkAuthOwner : ILinkAuthOwner
+{
+    public string Id { get; init; } = null!;
+}
+
+/// <summary>
+/// An edge whose <c>Owner</c> is an interface inheriting its <c>Id</c>, and whose key segment is a property named with a C#
+/// keyword.
+/// </summary>
+public partial class LinkAuthEdgeApiResource : ApiResource
+{
+    public string Id { get; init; } = null!;
+
+    public ILinkAuthOwner Owner { get; init; } = null!;
+
+#pragma warning disable SA1300 // A keyword-named property is what this resource exists to prove
+    public string @event { get; init; } = null!;
+#pragma warning restore SA1300
+}
+
+/// <summary>
+/// Touches an edge. <c>{Owner.Id}</c> reaches through an interface-inherited member on the resource, and
+/// <c>{EventId:event}</c> falls back to a keyword-named property the resource has.
+/// </summary>
+[Resource("linkAuthEdge", "touch", "/LinkAuth/Edges/{Owner.Id}/{EventId:event}")]
+[Link(typeof(LinkAuthEdgeApiResource), "/link-auth/edges/{Id}/touch", "touch")]
+[HttpPost]
+[Blueprint.Auditing.DoNotAudit]
+public partial class TouchLinkAuthEdgeCommand : ICommand<string>
+{
+    public string Id { get; set; } = null!;
+
+    public LinkAuthTenantRef? Owner { get; set; }
+
+    public string? EventId { get; set; }
+
+    public static string Handle(TouchLinkAuthEdgeCommand command)
+    {
+        return "touched";
+    }
+}
+
 /// <summary>
 /// Archives a tenant or a user. Its key's primary, <c>UserTenantId</c>, is its own property; the fallback,
 /// <c>TenantId</c>, is not, but a tenant uses it because a tenant lacks the primary, so BPAU010 does not fire.
