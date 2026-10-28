@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using Blueprint.Http;
 using Blueprint.Model;
 using Microsoft.Extensions.Logging.Abstractions;
 using MvcProblemDetails = Microsoft.AspNetCore.Mvc.ProblemDetails;
@@ -28,9 +29,11 @@ namespace Blueprint.Runtime.Http;
 /// </para>
 /// <para>
 /// A declared root is resolved strictly - by the context alone, so a nested type the context does not register throws -
-/// except a problem. <see cref="MvcProblemDetails.Extensions" /> is open by design and no context can register what a
-/// caller puts in it, so a problem the context declares is resolved through <see cref="GetFallbackOptions" />: the
-/// context's metadata first, and reflection only for what it does not cover, the extension values.
+/// except Blueprint's own open-by-design roots. <see cref="MvcProblemDetails.Extensions" />, and a
+/// <see cref="ResourceEvent" />'s <c>Data</c>, <c>Metadata</c>, <c>SecureData</c> and <c>ChangedValues</c>, hold
+/// whatever a caller puts in them, which no context can register, so such a root is resolved through
+/// <see cref="GetFallbackOptions" />: the context's metadata first, and reflection only for what it does not cover. The
+/// resource event envelope writer already wrote those bags that way; this covers an event returned as itself.
 /// </para>
 /// <para>
 /// An app that sets <see cref="BlueprintApp.AllowRuntimeTypeFallback" /> has every declared root resolved that way, with
@@ -120,9 +123,9 @@ internal static class SerializerContextTypeInfoCache
             return null;
         }
 
-        // A problem's extensions are written through reflection without the runtime type fallback's warning: no context
-        // could register them, so the warning would only be noise.
-        if (typeof(MvcProblemDetails).IsAssignableFrom(type))
+        // A problem's extensions and a resource event's payload and bags are open by design, so they are written
+        // through reflection without the runtime type fallback's warning: no context could register what they hold.
+        if (typeof(MvcProblemDetails).IsAssignableFrom(type) || typeof(ResourceEvent).IsAssignableFrom(type))
         {
             return GetFallbackOptions(context.Options).GetTypeInfo(type);
         }
