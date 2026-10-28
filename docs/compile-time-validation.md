@@ -348,6 +348,30 @@ For migration diagnostics specifically:
 
 Good diagnostics here should help both humans and AI agents repair the issue quickly.
 
+### Suppressing one occurrence
+
+A consumer can suppress a single occurrence of a generator warning in source, as with any compiler warning:
+
+```csharp
+#pragma warning disable BPAU010 // The fallback names a property only the linked resource has
+[Resource("tenant", "read", "/Tenants/{TenantId:LinkedTenantId}")]
+public partial class GetTenantQuery : IQuery<TenantResource> { ... }
+#pragma warning restore BPAU010
+```
+
+`[SuppressMessage("Blueprint", "BPAU010", Justification = "...")]` on the type works too. Prefer either over a
+project-wide `NoWarn`, which hides the next occurrence as well.
+
+This only works because each diagnostic is reported against the syntax tree it came from. Pipeline models carry
+`LocationInfo`, not a tree, so they stay cacheable; the tree is found again when the diagnostic is reported:
+
+- an output that already reads the current compilation passes it to `Result.ReportDiagnostics(spc, compilation)`;
+- any other output reports through `context.RegisterDiagnosticOutput(...)`, which pairs the diagnostics with the
+  compilation and replays from cache until the file they point into changes.
+
+Never pass the compilation from a provider combined with `CombinedProviderComparer`: it ignores the compilation, so the
+one it hands over can be stale. Pass `null` only for a diagnostic with no source location.
+
 ## Snapshot and cacheability tests are part of the harness
 
 `TestHelpers.Compile<T>()` is not just a snapshot helper (`src\Blueprint.SourceGenerator.Tests\TestHelpers.cs`).
