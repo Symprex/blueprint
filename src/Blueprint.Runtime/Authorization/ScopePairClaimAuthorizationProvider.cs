@@ -41,15 +41,6 @@ namespace Blueprint.Authorization;
 /// after scope renames (e.g. <c>"CompiledSignature::Read"</c> → <c>"MyCompiledSignature::Read"</c>).
 /// </para>
 /// </remarks>
-/// <summary>
-/// A function that maps a legacy scope claim value to zero or more replacement scope values.
-/// Returning <see langword="null"/> or an empty array means no legacy mapping exists for the value.
-/// </summary>
-/// <param name="scopeClaimValue">The raw scope claim value that did not match any required scope pair directly.</param>
-/// <returns>Replacement scope values, or <see langword="null"/> if no mapping exists.</returns>
-public delegate string[]? LegacyScopeMapperFunc(string scopeClaimValue);
-
-/// <inheritdoc cref="ScopePairClaimAuthorizationProvider"/>
 public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvider
 {
     /// <summary>
@@ -100,7 +91,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// <summary>
     /// Initialises a new instance of the <see cref="ScopePairClaimAuthorizationProvider"/> class
     /// with default settings: <c>"scope"</c> claim type, <c>"::"</c> separator, and the standard
-    /// OAuth2 non-API scopes (<c>openid</c>, <c>profile</c>, <c>email</c>) ignored.
+    /// OAuth2 non-API scopes (<c>openid</c>, <c>profile</c>, <c>email</c>, <c>offline_access</c>) ignored.
     /// </summary>
     public ScopePairClaimAuthorizationProvider()
         : this("scope", "::", ["openid", "profile", "email", "offline_access"])
