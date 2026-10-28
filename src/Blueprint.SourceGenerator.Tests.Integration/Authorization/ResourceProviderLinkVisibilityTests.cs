@@ -12,7 +12,8 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Authorization;
 
 /// <summary>
 /// Proves how <see cref="IApiAuthoriserAggregator.CanShowLinkAsync"/> asks the resource authorization providers: all-of,
-/// only for an operation that declares scope pairs and only with a resource, and refusing when nothing can judge the link.
+/// only for an operation that declares scope pairs, in listing mode when there is no resource, and refusing when nothing
+/// can judge the link.
 /// </summary>
 public sealed class ResourceProviderLinkVisibilityTests
 {
@@ -64,15 +65,54 @@ public sealed class ResourceProviderLinkVisibilityTests
     }
 
     [Fact]
-    public async Task Providers_are_not_asked_without_a_resource()
+    public async Task Without_a_resource_the_providers_are_asked_in_listing_mode_with_the_key_cut_at_its_first_property_token()
     {
-        // A link with no resource is listing mode's to decide (#81), which this aggregator does not ask yet.
-        var provider = new KeyProvider();
+        // An authorisation manifest asks with no resource: /LinkAuth/Tenants/{UserTenantId:TenantId} can only be known up to
+        // its first property token
+        var provider = new KeyProvider("/LinkAuth/Tenants/");
 
         var result = await CanShowAsync(null, [provider]);
 
         result.IsAllowed.Should().BeTrue();
-        provider.Calls.Should().Be(0);
+        provider.LastMode.Should().Be(ResourceAuthorizationMode.Listing);
+        provider.LastKey.Should().Be("/LinkAuth/Tenants/");
+        provider.LastDescriptor!.OperationType.Should().Be(typeof(ArchiveLinkAuthResourceCommand));
+    }
+
+    [Theory]
+    [InlineData(null, "/LinkAuth/Accounts/acc_ctx/Departments/dept_1/Regions//Seq/")]
+    [InlineData("eu", "/LinkAuth/Accounts/acc_ctx/Departments/dept_1/Regions/eu/Seq/")]
+    public async Task A_listing_resolves_caller_tokens_as_execution_does_and_cuts_at_the_first_property_token(string? region, string expectedKey)
+    {
+        // With no resource, {Auth.region:TenantId}'s property fallback has nothing to read, so a caller without a region
+        // gives an empty segment; {Sequence} is the first property token, so the key ends before it
+        var claims = new List<Claim> { new("AccountId", "acc_claim"), new("department", "dept_1") };
+
+        if (region is not null)
+        {
+            claims.Add(new Claim("region", region));
+        }
+
+        var provider = new KeyProvider(expectedKey);
+        var app = new IntegrationTestBlueprintApp();
+
+        var result = await CanShowAsync(
+            null,
+            [provider],
+            app.FindOperation(typeof(RenameLinkAuthAccountCommand))!,
+            new ClaimsPrincipal(new ClaimsIdentity(claims, "Test")),
+            new FixedUserAuthorisationContext("acc_ctx"));
+
+        provider.LastKey.Should().Be(expectedKey);
+        result.IsAllowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_listing_is_hidden_when_no_provider_is_registered()
+    {
+        var result = await CanShowAsync(null, []);
+
+        result.IsAllowed.Should().BeFalse("with nothing to judge the operation's scope pairs, it is not listed");
     }
 
     [Fact]
@@ -234,6 +274,10 @@ public sealed class ResourceProviderLinkVisibilityTests
 
         public string? LastKey { get; private set; }
 
+        public ResourceAuthorizationMode? LastMode { get; private set; }
+
+        public ApiOperationDescriptor? LastDescriptor { get; private set; }
+
         public ValueTask<ExecutionAllowed> AuthorizeAsync(
             ApiOperationContext operationContext,
             ClaimsPrincipal principal,
@@ -243,6 +287,8 @@ public sealed class ResourceProviderLinkVisibilityTests
             this.Calls++;
             this.LastPrincipal = principal;
             this.LastKey = request.ScopePairs.FirstOrDefault().ExpandedResourceKey;
+            this.LastMode = request.Mode;
+            this.LastDescriptor = request.Descriptor;
 
             return new ValueTask<ExecutionAllowed>(
                 request.ScopePairs.Any(p => grantedKeys.Contains(p.ExpandedResourceKey))
