@@ -112,3 +112,12 @@ Changing any of these silently breaks publishing:
 
 In Signature365, every `Blueprint.*` package is pinned to the same version in
 `backend/Directory.Packages.props`. Bump them all together, never one at a time.
+
+## Packing locally to try a change in a consumer
+
+Build before you pack, and pack without building. A bare `dotnet pack` with no prior build produces a `Blueprint.SourceGenerator` package that contains only `Newtonsoft.Json.dll` and no generator, so the consumer silently generates nothing (the reason is in `src/Blueprint.SourceGenerator/Blueprint.SourceGenerator.csproj`):
+
+```powershell
+dotnet build .\Blueprint.sln -c Release
+dotnet pack .\Blueprint.sln -c Release --no-build -p:Version=1.0.11-local -o .\.scratch\packages
+```

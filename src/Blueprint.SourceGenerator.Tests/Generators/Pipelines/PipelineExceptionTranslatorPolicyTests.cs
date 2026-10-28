@@ -39,7 +39,7 @@ public class PipelineExceptionTranslatorPolicyTests
 
         result.Value.Should().BeNull();
         result.Diagnostics.Should().ContainSingle();
-        result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BP113");
+        result.Diagnostics[0].ToDiagnostic(null).Id.Should().Be("BP113");
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public class PipelineExceptionTranslatorPolicyTests
 
         result.Value.Should().BeNull();
         result.Diagnostics.Should().ContainSingle();
-        result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BP113");
+        result.Diagnostics[0].ToDiagnostic(null).Id.Should().Be("BP113");
     }
 
     [Fact]

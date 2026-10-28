@@ -191,6 +191,49 @@ public class AuthorizationModuleTests
 
         descriptorSource.Should().NotBeNull();
         descriptorSource!.Should().Contain("ScopePair");
+        descriptorSource.Should().Contain("WellKnownFeatureData.PermissionedAccess");
+        descriptorSource.Should().NotContain("WellKnownFeatureData.AuthenticatedAccess", "scope pairs make it permissioned whatever else it declares");
+    }
+
+    [Fact]
+    public void When_FromResource_overrides_the_template_then_descriptor_records_its_source_and_override()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/accounts/{Id}")]
+            [Resource("account", "read")]
+            public partial class GetAccountQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [RootLink("/accounts/{Id}/details")]
+            [FromResource(typeof(GetAccountQuery), "/accounts/{Id}")]
+            public partial class GetAccountDetailsQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetAccountDetailsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var descriptorSource = result.Output
+            .Select(static t => t.ToString())
+            .First(static s => s.Contains("GetAccountDetailsQueryDescriptor"));
+
+        descriptorSource.Should().Contain("InheritedFrom = typeof(global::");
+        descriptorSource.Should().Contain(".GetAccountQuery), InheritedTemplateOverride = \"/accounts/{Id}\" }");
+        descriptorSource.Should().Contain("WellKnownFeatureData.PermissionedAccess");
     }
 
     [Fact]

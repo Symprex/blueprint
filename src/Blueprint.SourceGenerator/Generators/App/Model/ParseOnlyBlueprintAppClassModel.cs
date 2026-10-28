@@ -15,6 +15,7 @@ namespace Blueprint.SourceGenerator.Generators.App.Model;
 /// <param name="SerializerContextLocation">The source location of the serializer-context declaration, when present.</param>
 /// <param name="SerializerContextBodyTypeNames">The distinct body payload CLR type names declared through the app-owned serializer context.</param>
 /// <param name="SerializerContextBodyTypeTypeNames">The fully-qualified CLR type expressions declared through the app-owned serializer context.</param>
+/// <param name="AllowRuntimeTypeFallback">Whether the app's <c>[BlueprintAppSerializerContext]</c> sets <c>AllowRuntimeTypeFallback = true</c>, which clears BP012 and has the runtime write declared roots with reflection behind the context.</param>
 /// <param name="OperationNameRemoval">The text the app removes from every operation name through <c>[BlueprintAppOperationNames(Remove = ...)]</c>, or <see langword="null"/> when it renames nothing.</param>
 /// <param name="OperationNameRemovalLocation">The source location of the <c>[BlueprintAppOperationNames]</c> declaration, when present.</param>
 internal record ParseOnlyBlueprintAppClassModel(
@@ -26,6 +27,7 @@ internal record ParseOnlyBlueprintAppClassModel(
     LocationInfo? SerializerContextLocation,
     EquatableList<string> SerializerContextBodyTypeNames,
     EquatableList<string> SerializerContextBodyTypeTypeNames,
+    bool AllowRuntimeTypeFallback,
     string? OperationNameRemoval,
     LocationInfo? OperationNameRemovalLocation)
 {
@@ -38,6 +40,7 @@ internal record ParseOnlyBlueprintAppClassModel(
     /// <param name="serializerContextLocation">The source location of the serializer-context declaration, when present.</param>
     /// <param name="serializerContextBodyTypeNames">The distinct body payload CLR type names declared through the app-owned serializer context.</param>
     /// <param name="serializerContextBodyTypeTypeNames">The fully-qualified CLR type expressions declared through the app-owned serializer context.</param>
+    /// <param name="allowRuntimeTypeFallback">Whether the app's serializer-context declaration allows the runtime type fallback.</param>
     /// <param name="operationNameRemoval">The text the app removes from every operation name, or <see langword="null"/> when it renames nothing.</param>
     /// <param name="operationNameRemovalLocation">The source location of the <c>[BlueprintAppOperationNames]</c> declaration, when present.</param>
     /// <returns>A compact model describing the app type.</returns>
@@ -48,6 +51,7 @@ internal record ParseOnlyBlueprintAppClassModel(
         LocationInfo? serializerContextLocation,
         EquatableList<string> serializerContextBodyTypeNames,
         EquatableList<string> serializerContextBodyTypeTypeNames,
+        bool allowRuntimeTypeFallback,
         string? operationNameRemoval,
         LocationInfo? operationNameRemovalLocation)
     {
@@ -66,6 +70,7 @@ internal record ParseOnlyBlueprintAppClassModel(
             SerializerContextLocation: serializerContextLocation,
             SerializerContextBodyTypeNames: serializerContextBodyTypeNames,
             SerializerContextBodyTypeTypeNames: serializerContextBodyTypeTypeNames,
+            AllowRuntimeTypeFallback: allowRuntimeTypeFallback,
             OperationNameRemoval: operationNameRemoval,
             OperationNameRemovalLocation: operationNameRemovalLocation);
     }

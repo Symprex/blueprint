@@ -20,7 +20,7 @@ public class OperationDescriptorSourceGeneratorTests
 
         result.Value.Should().BeNull();
         result.Diagnostics.Should().ContainSingle();
-        result.Diagnostics[0].ToDiagnostic().Id.Should().Be("BPMOD002");
+        result.Diagnostics[0].ToDiagnostic(null).Id.Should().Be("BPMOD002");
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class OperationDescriptorSourceGeneratorTests
         var result = config.BuildPipelinePlan("TestNamespace.IncludedOperation", compilation);
 
         result.Value.Should().BeNull();
-        result.Diagnostics.Select(static d => d.ToDiagnostic().Id).Should().Contain("BPMOD004");
+        result.Diagnostics.Select(static d => d.ToDiagnostic(null).Id).Should().Contain("BPMOD004");
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class OperationDescriptorSourceGeneratorTests
         var result = config.BuildPipelinePlan("TestNamespace.IncludedOperation", compilation);
 
         result.Value.Should().BeNull();
-        result.Diagnostics.Select(static d => d.ToDiagnostic().Id).Should().Contain("BPMOD004");
+        result.Diagnostics.Select(static d => d.ToDiagnostic(null).Id).Should().Contain("BPMOD004");
     }
 
     [Fact]

@@ -131,7 +131,9 @@ public sealed class ExtensionBucketNullableValues
 {
     public int Status { get; init; }
 
+    // Schema-only: these values are never written, so only a registered primitive is declared (BP012).
     [JsonExtensionData]
+    [BlueprintRuntimeTypes(typeof(string))]
     public IDictionary<string, object?>? Extensions { get; set; }
 }
 
@@ -140,7 +142,9 @@ public sealed class ExtensionBucketNonNullValues
 {
     public int Status { get; init; }
 
+    // Schema-only: these values are never written, so only a registered primitive is declared (BP012).
     [JsonExtensionData]
+    [BlueprintRuntimeTypes(typeof(string))]
     public IDictionary<string, object>? Extensions { get; set; }
 }
 
@@ -149,7 +153,9 @@ public sealed class ExtensionBucketNonNullDictionary
 {
     public int Status { get; init; }
 
+    // Schema-only: these values are never written, so only a registered primitive is declared (BP012).
     [JsonExtensionData]
+    [BlueprintRuntimeTypes(typeof(string))]
     public Dictionary<string, object?> Extra { get; set; } = [];
 }
 
