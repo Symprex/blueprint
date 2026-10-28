@@ -1,0 +1,78 @@
+﻿File: Input0.cs
+#nullable enable
+
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Microsoft.AspNetCore.Mvc
+{
+    public class ProblemDetails
+    {
+        [JsonExtensionData]
+        public IDictionary<string, object?> Extensions { get; set; } = new Dictionary<string, object?>();
+    }
+
+    public sealed class ValidationProblemDetails : ProblemDetails
+    {
+        public IDictionary<string, string[]> Errors { get; set; } = new Dictionary<string, string[]>();
+    }
+}
+
+namespace Blueprint.Model.Attributes
+{
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
+    internal sealed class RootLinkAttribute : Attribute
+    {
+        public RootLinkAttribute(string url)
+        {
+        }
+    }
+}
+
+namespace TestNamespace
+{
+    public sealed class Payload
+    {
+        public object? Value { get; set; }
+                       ^^^^^ [Error:BP012] Member 'TestNamespace.Payload.Value' of type 'object?', reachable from HTTP response body type 'TestNamespace.Payload', can hold runtime types the app-owned serializer context 'TestNamespace.TestBlueprintJsonContext' cannot see at build time, so a value of a type it does not register fails the response when it is written. Declare the types it holds with [BlueprintRuntimeTypes(typeof(...))], give it a [JsonConverter], or set AllowRuntimeTypeFallback = true on the app's [BlueprintAppSerializerContext].
+    }
+
+    
+
+    [JsonSerializable(typeof(ProblemDetails))]
+    [JsonSerializable(typeof(ValidationProblemDetails))]
+    [JsonSerializable(typeof(Payload))]
+    public partial class TestBlueprintJsonContext : JsonSerializerContext
+    {
+        public TestBlueprintJsonContext()
+            : base(new JsonSerializerOptions())
+        {
+        }
+
+        protected override JsonSerializerOptions? GeneratedSerializerOptions => new JsonSerializerOptions();
+
+        public override JsonTypeInfo? GetTypeInfo(Type type)
+        {
+            return null;
+        }
+    }
+
+    [RootLink("/open-typed-members")]
+    public partial class IncludedOperation : IQuery<OkResult<Payload>>
+    {
+        public static ApiOperationDescriptor Configure() => throw new NotImplementedException();
+    }
+
+    [BlueprintAppScan]
+    [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(TestBlueprintJsonContext))]
+    public partial class TestBlueprintApp : BlueprintApp
+    {
+    }
+}
