@@ -219,6 +219,70 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 
 **No-API-scope behavior**: When the user's only scopes are ignored scopes (e.g. `openid`, `Signature365.ReadWrite.All`), the `AllowWhenNoScopeClaims` virtual method is called. Override to `true` for full-access semantics (S365 pattern).
 
+### `ResourceKeyAuthorizationProvider`
+
+A built-in provider for instance-level authorisation (Symprex/blueprint#80). It decides each scope pair by whether the caller holds a grant covering the pair's resource key, such as "may rename folders under `/Accounts/acc_1`". `ScopePairClaimAuthorizationProvider` checks noun and verb only; register both when you need both, and each must allow.
+
+```csharp
+services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint => blueprint
+    .AddResourceAuthorizationProvider(ScopePairClaimAuthorizationProvider.WithCrudVerbHierarchy()) // the token's scopes
+    .AddResourceKeyAuthorization()                                                                  // the caller's grants
+    .AddResourceGrantSource(new ScopePairClaimResourceGrantSource("grant", "::"))
+    .AddResourceKeyExpander<FolderKeyExpander>());
+```
+
+`AddResourceKeyAuthorization()` registers the provider, a singleton, once however often it is called, and the default `IResourceAccessChecker`, scoped, unless one is registered already. `AddResourceGrantSource<T>()` and `AddResourceKeyExpander<T>()` register scoped; `AddResourceGrantSource(instance)` registers a configured source as a singleton.
+
+**Keys and grants.** A `ResourceKey` is a key being asked about: absolute when it starts with `/`, otherwise partial. A `ResourceGrant` is a key held, and is always absolute:
+- an exact grant covers its own key alone;
+- a grant ending in `/*` covers its base and every key beneath it, at a segment boundary only, so `/Accounts/acc_1/*` covers `/Accounts/acc_1/Folders/f1` and never `/Accounts/acc_12`;
+- `/*` alone is the root grant, which covers every absolute key;
+- comparison is ordinal, and there is no global key.
+
+**Deciding a request.** In `Execute` and `Link` modes the request is allowed when any scope pair is. For each pair:
+1. Its resolved key is demanded, as a `ResourceDemand` of `request.Descriptor` (for a link, the linked operation) and the key.
+2. In `Link` mode, when the resource implements `IHaveResourceKeys` and the key is partial, the resource's own key that ends with it is demanded instead. The comparison is case-insensitive, and when several keys match, the last one wins, as in Signature 365.
+3. A partial key goes through the `IResourceKeyExpander`s in registration order, and the first answer that is not `null` is its expansion. When none handles it, the pair is denied with a reason naming the key, and a warning is logged: a grant can only ever cover an absolute key.
+4. The grants of every `IResourceGrantSource` are combined, and the pair is allowed when any grant covers any of its keys.
+
+**Refusals.**
+
+| Case | Result |
+|------|--------|
+| The principal is unauthenticated, or the user context is anonymous | `401`, "Please log in" |
+| The user context is not active | `401`, "Your account has been deactivated" |
+| A pair has no resource key, or its key resolved empty | That pair is denied |
+| No pair is satisfied, the request has no pairs, or the mode is `Listing` (until Symprex/blueprint#81) | `403`, `ResourceKeyAuthorizationProvider.DeniedMessage` |
+
+A caller with no user context at all, as in an app without an `IUserAuthorisationContextFactory`, is judged by grants. Each reason is logged, never written.
+
+**Grant sources.** `IResourceGrantSource.GetGrantsAsync(context, principal, operation, scopePair, ct)` returns the `ResourceGrants` the caller holds. It is given both the operation and the scope pair, so a source keyed by either fits. The built-in `ScopePairClaimResourceGrantSource(claimType, separator)` reads claims of that type whose value is `{resourceKey};{Noun}{separator}{Verb}`, such as `/Accounts/acc_1/*;Folder::Rename`:
+- noun and verb match case-insensitively, and no verb implies another;
+- only the claims of authenticated identities are read;
+- a value without exactly one `;`, for another pair, or whose key does not start with `/` is skipped, never thrown on.
+
+**Expanders.** `IResourceKeyExpander.ExpandAsync(partialKey, context, ct)` returns the absolute keys a partial key stands for, an empty list for a key it handles that identifies nothing (which is then denied), or `null` when the key is not its to expand.
+
+**Checking access directly.** `IResourceAccessChecker.HasAccessAsync(context, principal, demand, scopePair, ct)` makes the decision the provider makes for each pair, without the authentication checks. A handler that must filter by what the caller may do asks it directly:
+
+```csharp
+public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery query, IResourceAccessChecker checker, ApiOperationContext context)
+{
+    var create = context.App.FindOperation(typeof(CreateFolderCommand))!;
+    var pair = create.GetFeatureData<OperationAuthorizationFeatureData>()!.ScopePairs[0];
+    var key = $"/Accounts/{context.UserAuthorisationContext!.AccountId}";
+
+    var canCreate = await checker.HasAccessAsync(
+        context,
+        context.UserPrincipal!,
+        new ResourceDemand(create, new ResourceKey(key)),
+        new ResolvedScopePair(pair.Noun, pair.Verb, pair.ResourceKeyTemplate, key),
+        context.OperationCancelled);
+
+    // ...
+}
+```
+
 ---
 
 ## Compile-Time Diagnostics
@@ -255,14 +319,18 @@ S365:                                           Blueprint:
 ScopeApiAuthoriser : IApiAuthoriser        →    ScopePairClaimAuthorizationProvider
                                                 (built-in, or custom IResourceAuthorizationProvider)
 
-S365ClaimInspector                         →    Generated pipeline code + ScopePairClaimAuthorizationProvider
-                                                (template expansion is compile-time, not runtime)
+S365ClaimsApiAuthoriser                    →    Generated pipeline code + ResourceKeyAuthorizationProvider
+(with S365ResourceAccessChecker)                (template expansion is compile-time, not runtime)
 
 AuthResourceKeyTemplateExpander            →    ResourceKeyTemplateParser (compile-time)
 {Auth:AccountId} expansion                 →    Generated inline string interpolation
 
-IS365ResourceKeyExpander                   →    IResourceAuthorizationProvider.AuthorizeAsync
-(hierarchical key expansion)                    (consumer implements hierarchical matching)
+IS365ResourceKeyExpander                   →    IResourceKeyExpander
+(hierarchical key expansion)
+
+IS365ResourceAccessChecker                 →    IResourceAccessChecker
+
+IS365ResourceGrantsHolder                  →    IResourceGrantSource, keyed by operation type
 ```
 
 ### User Authorization Context
@@ -339,7 +407,7 @@ public class S365AuthorizationProvider : ScopePairClaimAuthorizationProvider
 These remain consumer-level concerns:
 
 - **`Signature365UserAuthorisationContext`** — S365's implementation of `IUserAuthorisationContext` with app-specific properties
-- **`IS365ResourceKeyExpander`** — Hierarchical permission expansion (Tenant, Folder, FieldDefinition) is implemented inside the custom `IResolvedResourceAuthorizationProvider`
+- **Grants and key expanders** — the builder of each user's per-operation grants, supplied as an `IResourceGrantSource`, and the expanders (Tenant, Folder, FieldDefinition), supplied as `IResourceKeyExpander`s. The matching is `ResourceKeyAuthorizationProvider`'s
 - **Role-based convenience helpers** — `AuthenticateAsTenantAdministrator`, `AuthenticateAsPartnerUser`, etc. stay in S365's test helpers
 
 ### What Blueprint Handles at Compile Time
