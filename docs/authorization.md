@@ -126,7 +126,7 @@ public interface IResourceAuthorizationProvider
 }
 ```
 
-`ResourceAuthorizationRequest` carries the operation being authorised (`Descriptor`), its `ScopePairs`, and the `Mode` the provider is asked in: `Execute`, or `Link` with the linked `Resource`. `Listing` is reserved for authorisation manifests (Symprex/blueprint#81). Read `request.Descriptor`, not the context's: when links are written, the context is the operation that returned the resource, and the request's descriptor is the linked one.
+`ResourceAuthorizationRequest` carries the operation being authorised (`Descriptor`), its `ScopePairs`, and the `Mode` the provider is asked in: `Execute`, `Link` with the linked `Resource`, or `Listing` when an operation is listed before any resource exists (an authorisation manifest). Read `request.Descriptor`, not the context's: when links are written, the context is the operation that returned the resource, and the request's descriptor is the linked one.
 
 ### Link visibility
 
@@ -141,7 +141,11 @@ For each resource type an operation links from (`[Link]`, `[SelfLink]`), the gen
 - `{Auth.X}` resolves as it does at execution: from the user's context for the properties it has, otherwise from the claim of that name.
 - A token that matches no property of a linked resource type is a compile-time error (`BPAU011`).
 
-A link to a permissioned operation is hidden when no resolver handles the resource's type, or no provider is registered, as its execution would be refused. Providers are not asked about an operation without scope pairs, or about a link written without a resource.
+A link to a permissioned operation is hidden when no resolver handles the resource's type, or no provider is registered, as its execution would be refused. Providers are not asked about an operation without scope pairs.
+
+### Listing
+
+An authorisation manifest lists the operations a caller may reach before any resource exists, by asking `IApiAuthoriserAggregator.CanShowLinkAsync` with no resource. The providers are then asked in `Listing` mode (Symprex/blueprint#81). The generated `OperationListingAuthorizationFeatureData` resolves the caller's `{Auth.X}` tokens as an execution does and cuts each key at its first property token, so `/Tenants/{Auth.AccountId}/Users/{Id}` is listed as the prefix `/Tenants/ten_1/Users/`. `ResourceKeyAuthorizationProvider` matches grants against a cut key prefix-compatibly, which accepts two shapes execution never honours (an exact ancestor such as `/Partners/p` for `/Partners/p/Users/`, and a grant beneath the prefix that diverges from the rest of the template), so an operation can be listed and still refused. A key with no property token is complete, and is judged as at execution. Listing mode is reached only from the aggregator: an execution is always asked in `Execute` mode.
 
 Each `ResolvedScopePair` carries the raw template (`/Tenants/{Auth:AccountId}/Templates/{Id}`) alongside the expanded resource key (`/Tenants/abc123/Templates/42`), giving providers full context for both pattern-based and instance-level authorization decisions.
 
@@ -226,7 +230,7 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint => blueprint
 | The principal is unauthenticated, or the user context is anonymous | `401`, "Please log in" |
 | The user context is not active | `401`, "Your account has been deactivated" |
 | A pair has no resource key, or its key resolved empty | That pair is denied |
-| No pair is satisfied, the request has no pairs, or the mode is `Listing` (until Symprex/blueprint#81) | `403`, `ResourceKeyAuthorizationProvider.DeniedMessage` |
+| No pair is satisfied, or the request has no pairs | `403`, `ResourceKeyAuthorizationProvider.DeniedMessage` |
 
 A caller with no user context at all, as in an app without an `IUserAuthorisationContextFactory`, is judged by grants. Each reason is logged, never written.
 

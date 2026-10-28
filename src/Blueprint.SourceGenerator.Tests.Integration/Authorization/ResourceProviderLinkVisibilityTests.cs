@@ -108,6 +108,25 @@ public sealed class ResourceProviderLinkVisibilityTests
     }
 
     [Fact]
+    public async Task An_execution_is_always_asked_in_execute_mode_never_listing()
+    {
+        // Listing mode judges a prefix, which is never valid for an execution: the pipeline's check only ever executes
+        var provider = new KeyProvider("/LinkAuth/Tenants/ten_1");
+        var app = new IntegrationTestBlueprintApp();
+        var services = new ServiceCollection().BuildServiceProvider();
+        var context = new ApiOperationContext(services, app, app.FindOperation(typeof(ArchiveLinkAuthResourceCommand))!, CancellationToken.None);
+
+        await PipelineHelpers.CheckResourceAuthorizationAsync(
+            context,
+            new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "user-1")], "Test")),
+            [provider],
+            new ResolvedScopePair("linkAuthResource", "archive", "/LinkAuth/Tenants/{UserTenantId:TenantId}", "/LinkAuth/Tenants/ten_1"),
+            CancellationToken.None);
+
+        provider.LastMode.Should().Be(ResourceAuthorizationMode.Execute);
+    }
+
+    [Fact]
     public async Task A_listing_is_hidden_when_no_provider_is_registered()
     {
         var result = await CanShowAsync(null, []);

@@ -413,16 +413,68 @@ public sealed class ResourceKeyAuthorizationProviderTests
         result.IsAllowed.Should().BeFalse();
     }
 
-    [Fact]
-    public async Task Listing_mode_is_denied_until_it_is_supported()
+    // ─── Listing (#81) ────────────────────────────────────────────────
+
+    // In order: the listed resource itself, an ancestor of it, the root; a grant beneath the prefix; the two shapes a listing
+    // accepts but execution never honours (an exact ancestor, and a grant beneath the prefix that diverges from the rest of
+    // the template); then a sibling that only shares a prefix, another hierarchy, and another case
+    [Theory]
+    [InlineData("/T/{Auth.AccountId}/Users/{Id}", "/T/ten_1/Users/", "/T/ten_1/Users/*", true)]
+    [InlineData("/T/{Auth.AccountId}/Users/{Id}", "/T/ten_1/Users/", "/T/ten_1/*", true)]
+    [InlineData("/T/{Auth.AccountId}/Users/{Id}", "/T/ten_1/Users/", "/*", true)]
+    [InlineData("/T/{Auth.AccountId}/Users/{Id}", "/T/ten_1/Users/", "/T/ten_1/Users/usr_1", true)]
+    [InlineData("/P/{Auth.AccountId}/Users/{Id}", "/P/p/Users/", "/P/p", true)]
+    [InlineData("/T/{Auth.AccountId}/Users/{Id}", "/T/ten_1/", "/T/ten_1/Groups/*", true)]
+    [InlineData("/T/{Auth.AccountId}/Users/{Id}", "/T/ten_12/", "/T/ten_1/*", false)]
+    [InlineData("/T/{Auth.AccountId}/Users/{Id}", "/T/ten_1/Users/", "/I/ident_1/*", false)]
+    [InlineData("/T/{Auth.AccountId}/Users/{Id}", "/T/ten_1/Users/", "/t/ten_1/*", false)]
+    public async Task A_listing_cut_at_a_property_token_matches_grants_prefix_compatibly(string template, string prefix, string grant, bool allowed)
     {
         var result = await AuthorizeAsync(
-            ResourceAuthorizationRequest.Listing(Rename, [Pair("/T/ten_1/Folders/f1")]),
+            ResourceAuthorizationRequest.Listing(Rename, [new ResolvedScopePair("grantFolder", "rename", template, prefix)]),
+            b => b.AddResourceGrantSource(new FixedGrantSource(grant)));
+
+        result.IsAllowed.Should().Be(allowed);
+    }
+
+    // With no property token the key is complete, so it is judged as execution judges it: an exact ancestor that a cut
+    // prefix would accept does not cover it
+    [Theory]
+    [InlineData("/Accounts/Users", "/Accounts", false)]
+    [InlineData("/Accounts/Users", "/Accounts/*", true)]
+    [InlineData("/T/{Auth.AccountId}/Users", "/T/ten_1", false)]
+    [InlineData("/T/{Auth.AccountId}/Users", "/T/ten_1/*", true)]
+    public async Task A_listing_key_with_no_property_token_is_judged_as_execution_judges_it(string template, string grant, bool allowed)
+    {
+        var key = template.Replace("{Auth.AccountId}", "ten_1", StringComparison.Ordinal);
+
+        var result = await AuthorizeAsync(
+            ResourceAuthorizationRequest.Listing(Rename, [new ResolvedScopePair("grantFolder", "rename", template, key)]),
+            b => b.AddResourceGrantSource(new FixedGrantSource(grant)));
+
+        result.IsAllowed.Should().Be(allowed);
+    }
+
+    [Fact]
+    public async Task A_listing_of_a_scope_pair_with_no_key_is_denied()
+    {
+        var result = await AuthorizeAsync(
+            ResourceAuthorizationRequest.Listing(Rename, [new ResolvedScopePair("grantFolder", "rename", null, null)]),
             b => b.AddResourceGrantSource(new FixedGrantSource("/*")));
 
         result.IsAllowed.Should().BeFalse();
-        result.FailureType.Should().Be(ExecutionAllowedFailureType.Authorisation);
-        result.Reason.Should().Contain("#81");
+    }
+
+    [Fact]
+    public async Task A_listing_asks_the_grant_sources_for_the_listed_operation()
+    {
+        // The grants are keyed by operation, as Signature 365's are, so the wrong operation would find none
+        var result = await AuthorizeAsync(
+            ResourceAuthorizationRequest.Listing(Rename, [new ResolvedScopePair("grantFolder", "rename", "/T/{Id}", "/T/")]),
+            b => b.AddResourceGrantSource(new OperationGrantSource(typeof(RenameGrantFolderCommand), "/T/ten_1/*")),
+            contextDescriptor: ListFolders);
+
+        result.IsAllowed.Should().BeTrue();
     }
 
     // ─── The checker on its own ───────────────────────────────────────
