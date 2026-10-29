@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
@@ -12,6 +13,10 @@ namespace Blueprint.HttpClient;
 /// </summary>
 public sealed class RuntimeScanBlueprintApp : BlueprintApp
 {
+    // A scanned app is frozen, so one per assembly serves every client. Scanning on every registration reflected over
+    // every exported type each time, which a process building many hosts (a test suite) paid for every client of each.
+    private static readonly ConcurrentDictionary<Assembly, RuntimeScanBlueprintApp> _scanned = new();
+
     private RuntimeScanBlueprintApp()
     {
     }
@@ -22,8 +27,18 @@ public sealed class RuntimeScanBlueprintApp : BlueprintApp
     /// for descriptor lookups, URL resolution, and HTTP method determination.
     /// </summary>
     /// <param name="assembly">The assembly to scan (typically the contract assembly).</param>
-    /// <returns>A fully-populated, frozen <see cref="RuntimeScanBlueprintApp"/>.</returns>
+    /// <returns>
+    /// A fully-populated, frozen <see cref="RuntimeScanBlueprintApp"/>, the same instance for every call with the same
+    /// assembly.
+    /// </returns>
     public static RuntimeScanBlueprintApp ScanAssembly(Assembly assembly)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+
+        return _scanned.GetOrAdd(assembly, Scan);
+    }
+
+    private static RuntimeScanBlueprintApp Scan(Assembly assembly)
     {
         var app = new RuntimeScanBlueprintApp();
 
