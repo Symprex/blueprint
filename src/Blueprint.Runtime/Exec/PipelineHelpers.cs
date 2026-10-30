@@ -785,6 +785,23 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Begins the unit of work for the context's operation when an <see cref="Blueprint.Persistence.IUnitOfWork"/> is
+    /// registered, so a unit of work over a relational session can open its transaction before the handler writes.
+    /// Extracted from per-pipeline inline code to reduce IL size across hundreds of generated pipelines.
+    /// </summary>
+    /// <param name="context">The operation context whose service provider, operation and descriptor are used.</param>
+    /// <returns>A task that completes when the unit of work has begun (or immediately when none is registered).</returns>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static ValueTask BeginUnitOfWorkAsync(ApiOperationContext context)
+    {
+        var unitOfWork = context.ServiceProvider.GetService<Blueprint.Persistence.IUnitOfWork>();
+
+        return unitOfWork != null
+            ? unitOfWork.BeginAsync(context.Operation, context.Descriptor, context.OperationCancelled)
+            : default;
+    }
+
+    /// <summary>
     /// Saves unit-of-work changes when an <see cref="Blueprint.Persistence.IUnitOfWork"/> is registered.
     /// Extracted from per-pipeline inline code to reduce IL size across hundreds of generated pipelines.
     /// </summary>
