@@ -848,6 +848,49 @@ Blueprint did all three after any operation: Signature365's `SaveMartenChangesMi
 A query that stores or sends something it must not keep needs `[DoNotSaveChanges]`. A query that must not share a Rebus
 transaction needs `[NoRebusTransaction]`.
 
+**Beginning a unit of work before the handler.** On the same rule as the save — every operation without
+`[DoNotSaveChanges]`, skipped when nested where the save is — the pipeline calls
+`IUnitOfWork.BeginAsync(operation, descriptor, cancellationToken)` once the operation is authorised and validated, and
+before the Rebus transaction scope opens and the handler runs. The default implementation does nothing, so a Marten unit
+of work is unaffected. A unit of work over a relational session opens its transaction here, which legacy apps did with a
+custom first-frame `IMiddlewareBuilder` (Timestamp's `NHibernateBeforeMiddleware`): without it, an identity-keyed
+`session.Save` or an auto-flush before a query commits on its own and survives a handler that then throws.
+
+```csharp
+public sealed class NHibernateUnitOfWork(ISession session) : IUnitOfWork
+{
+    public ValueTask BeginAsync(object operation, ApiOperationDescriptor descriptor, CancellationToken cancellationToken)
+    {
+        // Legacy opened no transaction for a GET or an operation marked [NoTransaction].
+        if (descriptor.TypeAttributes.Any(static a => a is NoTransactionAttribute)
+            || descriptor.GetFeatureData<OperationHttpMethodMetadataFeatureData>()?.HttpMethods.Contains("GET") == true)
+        {
+            return default;
+        }
+
+        session.BeginTransaction();
+        return default;
+    }
+
+    public async Task SaveChangesAsync(CancellationToken cancellationToken)
+    {
+        if (session.GetCurrentTransaction() is { IsActive: true } transaction)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+        else
+        {
+            await session.FlushAsync(cancellationToken);
+        }
+    }
+}
+```
+
+Nothing calls a rollback when the handler throws or the operation fails: the DI scope disposes the session, and an
+uncommitted transaction is rolled back with it. `SaveChangesAsync` can be called more than once per operation — a
+resource event's self query saves first so it can read the command's writes — so an implementation that commits must
+cope with a second save.
+
 **Behaviour change for Marten domain events (v1.0.3).** Before v1.0.3, domain events raised by Marten entities were
 dispatched to in-process `IDomainEventHandler<TEvent>` implementations and never published:
 `AddBlueprintMarten` registered `DomainEventDispatchingSessionListener` before `OutboxPublishingSessionListener`, and the

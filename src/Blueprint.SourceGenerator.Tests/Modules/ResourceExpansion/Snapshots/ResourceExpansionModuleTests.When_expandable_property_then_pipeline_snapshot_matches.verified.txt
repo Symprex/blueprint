@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class GetParentQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceExpansionModule", "PipelineReturnModule"];
+            ["TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "UnitOfWorkModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceExpansionModule", "PipelineReturnModule"];
 
         internal GetParentQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "GetParentQuery", pipelineServices)
@@ -80,6 +80,11 @@ namespace Blueprint.Generated
                 return authoriserDenial;
             }
 
+
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await BeginUnitOfWorkAsync(context).ConfigureAwait(false);
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::TestNamespace.ParentResource>(await global::TestNamespace.GetParentQuery.HandleAsync(operation).ConfigureAwait(false));
 
 

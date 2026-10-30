@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class GetAccountQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "AuthorizationModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "AuthorizationModule", "UnitOfWorkModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal GetAccountQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "GetAccountQuery", pipelineServices)
@@ -104,6 +104,11 @@ namespace Blueprint.Generated
                 return authoriserDenial;
             }
 
+
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await BeginUnitOfWorkAsync(context).ConfigureAwait(false);
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.GetAccountQuery.HandleAsync(operation).ConfigureAwait(false));
 
 

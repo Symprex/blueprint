@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class EnrichedCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["TestTenantEnrichmentModule", "TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["TestTenantEnrichmentModule", "TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "UnitOfWorkModule", "HandlerExecutionModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
 
         internal EnrichedCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "EnrichedCommand", pipelineServices)
@@ -82,6 +82,11 @@ namespace Blueprint.Generated
                 return authoriserDenial;
             }
 
+
+            if (this.HasUnitOfWork)
+            {
+                await BeginUnitOfWorkAsync(context).ConfigureAwait(false);
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.EnrichedCommand.HandleAsync(operation).ConfigureAwait(false));
 
 

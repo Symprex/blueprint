@@ -18,7 +18,7 @@ namespace Blueprint.Generated
     internal sealed partial class CreateUserCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "ValidationModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "ValidationModule", "UnitOfWorkModule", "HandlerExecutionModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
         private static readonly Blueprint.Validation.PasswordAttribute _va_Password =
             new global::Blueprint.Validation.PasswordAttribute("Weak password.");
         private static readonly Blueprint.Validation.UkPostcodeAttribute _va_Postcode =
@@ -116,6 +116,11 @@ namespace Blueprint.Generated
                 return CreateValidationFailure(context, validationResults);
             }
 
+
+            if (this.HasUnitOfWork)
+            {
+                await BeginUnitOfWorkAsync(context).ConfigureAwait(false);
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.CreateUserCommand.HandleAsync(operation).ConfigureAwait(false));
 
 
