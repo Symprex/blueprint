@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace Blueprint.Runtime.Http;
@@ -28,9 +29,20 @@ namespace Blueprint.Runtime.Http;
 /// </remarks>
 internal static class OpenApiXmlDocs
 {
-    // Each assembly's documented members by their documentation id, or null when it has no documentation file. The
-    // elements are never changed: an inheritdoc is resolved on a copy.
-    private static readonly ConcurrentDictionary<string, IReadOnlyDictionary<string, XElement>?> _membersByAssembly = new(StringComparer.OrdinalIgnoreCase);
+    // Each assembly's described members (types and properties, the only members described) by their documentation id, or
+    // null when it has no documentation file. Only what is read is kept, as the strings it is read as: the parsed file
+    // was several times its size on disk, and most of it was the parameters, returns and methods nothing reads. The
+    // entries are never changed: an inheritdoc is resolved on a copy.
+    private static readonly ConcurrentDictionary<string, IReadOnlyDictionary<string, MemberDocs>?> _membersByAssembly = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Gets the number of assemblies whose documentation is held.</summary>
+    internal static int CachedAssemblyCount => _membersByAssembly.Count;
+
+    /// <summary>Drops every held assembly's documentation; the next lookup reads it again.</summary>
+    internal static void Release()
+    {
+        _membersByAssembly.Clear();
+    }
 
     /// <summary>
     /// Returns the summary of <paramref name="member"/> as legacy described a schema or a property with it (through
@@ -83,24 +95,25 @@ internal static class OpenApiXmlDocs
 
     private static string? GetTag(MemberInfo member, string tagName, bool escapeText)
     {
-        var content = ToContent(GetElement(member)?.Element(tagName), escapeText);
+        var tag = tagName == "summary" ? DocKind.Summary : DocKind.Remarks;
+        var content = GetElement(member)?.Find(tag)?.GetContent(escapeText) ?? string.Empty;
 
         return content.Length == 0 ? null : content;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Legacy treated documentation it could not read, for whatever reason, as none.")]
-    private static XElement? GetElement(MemberInfo member)
+    private static ResolvedDocs? GetElement(MemberInfo member)
     {
         try
         {
             var members = GetMembers(member.Module.Assembly);
 
-            if (members is null || !members.TryGetValue(GetMemberElementName(member), out var element))
+            if (members is null || !members.TryGetValue(GetMemberElementName(member), out var docs))
             {
                 return null;
             }
 
-            var copy = new XElement(element);
+            var copy = new ResolvedDocs(docs);
             ReplaceInheritdocElements(member, copy);
 
             return copy;
@@ -111,7 +124,7 @@ internal static class OpenApiXmlDocs
         }
     }
 
-    private static IReadOnlyDictionary<string, XElement>? GetMembers(Assembly assembly)
+    private static IReadOnlyDictionary<string, MemberDocs>? GetMembers(Assembly assembly)
     {
         var assemblyName = assembly.GetName();
 
@@ -124,7 +137,7 @@ internal static class OpenApiXmlDocs
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Legacy treated a documentation file it could not read as none.")]
-    private static IReadOnlyDictionary<string, XElement>? LoadMembers(Assembly assembly, string assemblyName)
+    private static IReadOnlyDictionary<string, MemberDocs>? LoadMembers(Assembly assembly, string assemblyName)
     {
         var path = GetXmlDocsPath(assembly, assemblyName);
 
@@ -135,16 +148,20 @@ internal static class OpenApiXmlDocs
 
         try
         {
-            var document = XDocument.Load(path, LoadOptions.PreserveWhitespace);
-            var members = new Dictionary<string, XElement>(StringComparer.Ordinal);
+            // The file is read a member at a time, so no more of it than the member being kept is ever in memory.
+            // Legacy loaded the whole document, so a file that is not well formed throughout has no documentation at all.
+            using var reader = XmlReader.Create(path, new XmlReaderSettings { DtdProcessing = DtdProcessing.Parse, XmlResolver = null });
+            var members = new Dictionary<string, MemberDocs>(StringComparer.Ordinal);
 
-            foreach (var element in document.Root?.Element("members")?.Elements("member") ?? [])
+            reader.MoveToContent();
+
+            if (reader.NodeType == XmlNodeType.Element && !reader.IsEmptyElement)
             {
-                // The first of a name is the one legacy's XPath query found.
-                if (element.Attribute("name")?.Value is { } name)
-                {
-                    members.TryAdd(name, element);
-                }
+                ReadMembers(reader, members);
+            }
+
+            while (reader.Read())
+            {
             }
 
             return members;
@@ -153,6 +170,58 @@ internal static class OpenApiXmlDocs
         {
             return null;
         }
+    }
+
+    // The first "members" element of the root, as legacy's document.Root.Element("members") found it.
+    private static void ReadMembers(XmlReader reader, Dictionary<string, MemberDocs> members)
+    {
+        var rootDepth = reader.Depth;
+        var found = false;
+
+        reader.Read();
+
+        while (!found && reader.Depth > rootDepth)
+        {
+            if (reader.NodeType == XmlNodeType.Element && reader.Depth == rootDepth + 1 && reader.Name == "members" && reader.NamespaceURI.Length == 0)
+            {
+                found = true;
+
+                if (!reader.IsEmptyElement)
+                {
+                    var membersDepth = reader.Depth;
+
+                    reader.Read();
+
+                    while (reader.Depth > membersDepth)
+                    {
+                        if (reader.NodeType == XmlNodeType.Element && reader.Depth == membersDepth + 1 && reader.Name == "member" && reader.NamespaceURI.Length == 0)
+                        {
+                            var element = (XElement)XNode.ReadFrom(reader);
+
+                            // The first of a name is the one legacy's XPath query found.
+                            if (element.Attribute("name")?.Value is { } name && IsDescribed(name))
+                            {
+                                members.TryAdd(name, MemberDocs.From(element));
+                            }
+                        }
+                        else
+                        {
+                            reader.Skip();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                reader.Skip();
+            }
+        }
+    }
+
+    // Only types and properties are described: GetMemberElementName writes no other prefix.
+    private static bool IsDescribed(string name)
+    {
+        return name.StartsWith("T:", StringComparison.Ordinal) || name.StartsWith("P:", StringComparison.Ordinal);
     }
 
     // Beside the assembly, else in the base directory or its bin folder, else in the current directory or its bin
@@ -189,31 +258,26 @@ internal static class OpenApiXmlDocs
 
     // An <inheritdoc/> takes every node of the base type's member of the same name, or failing that an interface's.
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Documentation of a base or interface member that has been trimmed away is none, as for any member without documentation.")]
-    private static void ReplaceInheritdocElements(MemberInfo member, XElement element)
+    private static void ReplaceInheritdocElements(MemberInfo member, ResolvedDocs docs)
     {
-        foreach (var child in element.Nodes().ToList().OfType<XElement>())
+        foreach (var child in docs.Nodes.Where(static n => n.Kind == DocKind.Inheritdoc).ToList())
         {
-            if (!string.Equals(child.Name.LocalName, "inheritdoc", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
             var baseMember = member.DeclaringType!.GetTypeInfo().BaseType?.GetTypeInfo().DeclaredMembers.SingleOrDefault(m => m.Name == member.Name);
             var baseElement = baseMember is null ? null : GetElement(baseMember);
 
             if (baseElement is not null)
             {
-                child.ReplaceWith(baseElement.Nodes().ToArray());
+                docs.Replace(child, baseElement.Nodes);
             }
             else
             {
-                ReplaceInheritdocFromInterfaces(member, child);
+                ReplaceInheritdocFromInterfaces(member, docs, child);
             }
         }
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Documentation of an interface member that has been trimmed away is none, as for any member without documentation.")]
-    private static void ReplaceInheritdocFromInterfaces(MemberInfo member, XElement inheritdoc)
+    private static void ReplaceInheritdocFromInterfaces(MemberInfo member, ResolvedDocs docs, DocNode inheritdoc)
     {
         foreach (var implemented in member.DeclaringType!.GetTypeInfo().ImplementedInterfaces)
         {
@@ -222,7 +286,7 @@ internal static class OpenApiXmlDocs
 
             if (interfaceElement is not null)
             {
-                inheritdoc.ReplaceWith(interfaceElement.Nodes().ToArray());
+                docs.Replace(inheritdoc, interfaceElement.Nodes);
             }
         }
     }
@@ -326,5 +390,108 @@ internal static class OpenApiXmlDocs
         }
 
         return $"{prefix}:{memberName.Replace('+', '.')}";
+    }
+
+    private enum DocKind
+    {
+        Summary,
+        Remarks,
+        Inheritdoc,
+    }
+
+    // A child of a member's documentation that is read: its content as each caller formats it, which depends on nothing
+    // else, so the element need not be kept.
+    private sealed class DocNode
+    {
+        private readonly string _plain;
+        private readonly string _escaped;
+
+        private DocNode(DocKind kind, string plain, string escaped)
+        {
+            this.Kind = kind;
+            this._plain = plain;
+            this._escaped = escaped;
+        }
+
+        public DocKind Kind { get; }
+
+        public static DocNode? From(XElement element)
+        {
+            if (string.Equals(element.Name.LocalName, "inheritdoc", StringComparison.OrdinalIgnoreCase))
+            {
+                return new DocNode(DocKind.Inheritdoc, string.Empty, string.Empty);
+            }
+
+            var kind = element.Name == "summary" ? DocKind.Summary : element.Name == "remarks" ? DocKind.Remarks : (DocKind?)null;
+
+            if (kind is null)
+            {
+                return null;
+            }
+
+            var plain = ToContent(element, escapeText: false);
+            var escaped = ToContent(element, escapeText: true);
+
+            // Most text has nothing to escape, so one string serves both.
+            return new DocNode(kind.Value, plain, string.Equals(plain, escaped, StringComparison.Ordinal) ? plain : escaped);
+        }
+
+        public string GetContent(bool escapeText)
+        {
+            return escapeText ? this._escaped : this._plain;
+        }
+    }
+
+    // What is read of one member's documentation: its summary, remarks and inheritdoc children, in order, as the first of
+    // a kind is the one read.
+    private sealed class MemberDocs
+    {
+        private static readonly MemberDocs _none = new([]);
+
+        private MemberDocs(DocNode[] nodes)
+        {
+            this.Nodes = nodes;
+        }
+
+        public DocNode[] Nodes { get; }
+
+        public static MemberDocs From(XElement member)
+        {
+            var nodes = member.Elements().Select(DocNode.From).OfType<DocNode>().ToArray();
+
+            return nodes.Length == 0 ? _none : new MemberDocs(nodes);
+        }
+    }
+
+    // A member's documentation with its inheritdoc children replaced, on a copy: the held MemberDocs are never changed.
+    private sealed class ResolvedDocs
+    {
+        private readonly List<DocNode> _nodes;
+
+        public ResolvedDocs(MemberDocs docs)
+        {
+            this._nodes = [.. docs.Nodes];
+        }
+
+        public IReadOnlyList<DocNode> Nodes => this._nodes;
+
+        public DocNode? Find(DocKind kind)
+        {
+            return this._nodes.Find(n => n.Kind == kind);
+        }
+
+        // An inheritdoc is replaced once: a second replacement finds it gone, as replacing a node with no parent failed.
+        public void Replace(DocNode child, IReadOnlyList<DocNode> with)
+        {
+            var index = this._nodes.IndexOf(child);
+
+            if (index < 0)
+            {
+                throw new InvalidOperationException("The inheritdoc has already been replaced.");
+            }
+
+            this._nodes.RemoveAt(index);
+            this._nodes.InsertRange(index, with);
+        }
     }
 }

@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Blueprint.Runtime.Http;
 
 /// <summary>
@@ -8,19 +10,36 @@ namespace Blueprint.Runtime.Http;
 /// </summary>
 public sealed class PreRenderedOpenApiDocument
 {
+    private readonly ReadOnlyMemory<byte> _utf8Json;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="PreRenderedOpenApiDocument"/> class.
     /// </summary>
     /// <param name="json">The pre-rendered OpenAPI 3.x JSON string.</param>
     public PreRenderedOpenApiDocument(string json)
+        : this(Encoding.UTF8.GetBytes(json ?? throw new ArgumentNullException(nameof(json))))
     {
-        this.Json = json;
     }
 
     /// <summary>
-    /// Gets the pre-rendered OpenAPI 3.x JSON document string.
+    /// Initializes a new instance of the <see cref="PreRenderedOpenApiDocument"/> class from the document as UTF-8.
     /// </summary>
-    public string Json { get; }
+    /// <param name="utf8Json">The pre-rendered OpenAPI 3.x JSON, UTF-8 encoded without a byte order mark. It is not copied.</param>
+    public PreRenderedOpenApiDocument(ReadOnlyMemory<byte> utf8Json)
+    {
+        this._utf8Json = utf8Json;
+    }
+
+    /// <summary>
+    /// Gets the pre-rendered OpenAPI 3.x JSON document, UTF-8 encoded: how it is held and served.
+    /// </summary>
+    public ReadOnlyMemory<byte> Utf8Json => this._utf8Json;
+
+    /// <summary>
+    /// Gets the pre-rendered OpenAPI 3.x JSON document string, decoded from <see cref="Utf8Json"/> on each read: the
+    /// document is held as UTF-8, and a string of it would double what a service keeps for its life.
+    /// </summary>
+    public string Json => Encoding.UTF8.GetString(this._utf8Json.Span);
 
     /// <summary>
     /// Gets what the document could not describe as it would have, each named for the consumer to act on: for example,
