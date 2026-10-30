@@ -367,6 +367,11 @@ Two settings decide what there is to read:
 `ProblemDetails` and `ValidationProblemDetails` stay undescribed: their documentation ships only in the SDK's reference
 packs, which a deployed app does not have.
 
+The documentation is read once per render and released once the document is rendered, as nothing reads it again; a
+process that renders many documents, such as a test suite that builds a host per test, can set
+`BlueprintHttpOptions.RetainXmlDocumentationAfterRender` to read each file once. The rendered document itself is held as
+UTF-8 (`PreRenderedOpenApiDocument.Utf8Json`), and `Json` decodes it on each read.
+
 ### Issue: TenantId in Path Parameters
 
 S365 operations may expose `TenantId` as a path parameter in OpenAPI, but this is resolved from the JWT claim, not the URL.
