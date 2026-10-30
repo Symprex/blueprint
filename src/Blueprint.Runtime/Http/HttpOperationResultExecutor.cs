@@ -48,10 +48,10 @@ public class HttpOperationResultExecutor
     private static readonly Task<bool> _trueTask = Task.FromResult(true);
     private static readonly Task<bool> _falseTask = Task.FromResult(false);
 
-    // Thread-local ArrayBufferWriter to avoid per-request allocation for response body serialization. Cleared before each
+    // Thread-local PooledBufferWriter to avoid per-request allocation for response body serialization. Cleared before each
     // use; a write that does not finish at once takes it and leaves the thread a new one (WriteThreadBufferAsync).
     [ThreadStatic]
-    private static System.Buffers.ArrayBufferWriter<byte>? _threadLocalBuffer;
+    private static PooledBufferWriter? _threadLocalBuffer;
 
     // Thread-local Utf8JsonWriter to eliminate the per-request class allocation (~96 B).
     // Reset via Utf8JsonWriter.Reset(IBufferWriter<byte>) before each use (.NET 8+ API).
@@ -231,7 +231,7 @@ public class HttpOperationResultExecutor
             return WritePreserializedAndReturnTrue(httpContext, preserialized);
         }
 
-        var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+        var buffer = _threadLocalBuffer ??= new PooledBufferWriter();
         buffer.Clear();
 
         var writer = _threadLocalWriter;
@@ -454,7 +454,7 @@ public class HttpOperationResultExecutor
         {
             // Serialize to thread-local buffer to enable Content-Length (avoids chunked encoding)
             // and eliminate the internal buffer allocation within SerializeAsync.
-            var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+            var buffer = _threadLocalBuffer ??= new PooledBufferWriter();
             buffer.Clear();
 
             var writer = _threadLocalWriter;
@@ -534,9 +534,9 @@ public class HttpOperationResultExecutor
         var serializerContext = operationContext.App.AppOwnedSerializerContext;
         var serializerOptions = serializerContext?.Options ?? _emptyFallbackOptions;
 
-        // Reuse a thread-local ArrayBufferWriter to avoid per-request allocation for the
+        // Reuse a thread-local PooledBufferWriter to avoid per-request allocation for the
         // resource event envelope (typically < 1KB). The buffer is cleared after each use.
-        var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+        var buffer = _threadLocalBuffer ??= new PooledBufferWriter();
         buffer.Clear();
 
         // Reuse a thread-local Utf8JsonWriter to avoid per-request class allocation (~96 B).
@@ -634,7 +634,7 @@ public class HttpOperationResultExecutor
         var serializerContext = operationContext.App.AppOwnedSerializerContext;
         var serializerOptions = serializerContext?.Options ?? _emptyFallbackOptions;
 
-        var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+        var buffer = _threadLocalBuffer ??= new PooledBufferWriter();
         buffer.Clear();
 
         var writer = _threadLocalWriter;
@@ -728,15 +728,17 @@ public class HttpOperationResultExecutor
     /// request to serialize into the same buffer, the pending write would send its bytes, one user's response carrying
     /// another's data. So memory handed to an unfinished write is never reachable from the thread again. A write that
     /// finishes at once, the usual case under Kestrel, keeps the buffer on the thread, so that path still allocates nothing.
+    /// The buffer's array comes from <see cref="System.Buffers.ArrayPool{T}.Shared"/> and goes back to it (once the write
+    /// completes, for one that does not finish at once), so a large body costs no array of its own on either path.
     /// </remarks>
     /// <param name="httpContext">The HTTP context whose response body is written.</param>
     /// <param name="buffer">The thread's buffer, holding the serialized body.</param>
     /// <returns>The body stream's write.</returns>
-    private static ValueTask WriteThreadBufferAsync(HttpContext httpContext, System.Buffers.ArrayBufferWriter<byte> buffer)
+    private static ValueTask WriteThreadBufferAsync(HttpContext httpContext, PooledBufferWriter buffer)
     {
-        var writeTask = httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted);
+        var writeTask = buffer.WriteToAsync(httpContext.Response.Body, httpContext.RequestAborted, out var detached);
 
-        if (!writeTask.IsCompleted)
+        if (detached)
         {
             _threadLocalBuffer = null;
         }

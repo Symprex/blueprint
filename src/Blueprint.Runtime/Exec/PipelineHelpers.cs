@@ -2423,7 +2423,7 @@ public static class PipelineHelpers
     // These are the same pattern as HttpOperationResultExecutor's fields — thread locality eliminates contention, and a
     // write that does not finish at once takes the buffer from the thread.
     [ThreadStatic]
-    private static System.Buffers.ArrayBufferWriter<byte>? _inlineResponseBuffer;
+    private static Http.PooledBufferWriter? _inlineResponseBuffer;
 
     [ThreadStatic]
     private static System.Text.Json.Utf8JsonWriter? _inlineResponseWriter;
@@ -2466,7 +2466,7 @@ public static class PipelineHelpers
 
         if (jsonTypeInfo is not null)
         {
-            var buffer = _inlineResponseBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+            var buffer = _inlineResponseBuffer ??= new Http.PooledBufferWriter();
             buffer.Clear();
 
             var writer = _inlineResponseWriter;
@@ -2485,12 +2485,12 @@ public static class PipelineHelpers
 
             httpContext.Response.ContentLength = buffer.WrittenCount;
 
-            var writeTask = httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted);
+            var writeTask = buffer.WriteToAsync(httpContext.Response.Body, httpContext.RequestAborted, out var detached);
 
             // A write that has not finished may still read the buffer after an await (a compressing body stream does),
             // while this thread serves another request: that write takes the buffer, and the thread's next one gets a
             // new buffer, so one response can never carry another's bytes (HttpOperationResultExecutor.WriteThreadBufferAsync).
-            if (!writeTask.IsCompleted)
+            if (detached)
             {
                 _inlineResponseBuffer = null;
             }
