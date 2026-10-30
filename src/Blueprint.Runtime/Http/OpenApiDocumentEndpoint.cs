@@ -96,15 +96,24 @@ internal static class OpenApiDocumentEndpoint
             () =>
             {
                 var (json, warnings) = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions, basePath);
-                var document = new PreRenderedOpenApiDocument(json) { Warnings = warnings };
+
+                // The document is held, and served, as the UTF-8 it is written in: half the memory of the string.
+                var jsonBytes = Encoding.UTF8.GetBytes(json);
+                var document = new PreRenderedOpenApiDocument(jsonBytes) { Warnings = warnings };
 
                 // Compute a stable ETag from the document content so clients can use If-None-Match
                 // to avoid redundant downloads of the static spec.
-                var jsonBytes = Encoding.UTF8.GetBytes(json);
                 var hashBytes = SHA256.HashData(jsonBytes);
                 var etag = new EntityTagHeaderValue($"\"{Convert.ToHexString(hashBytes)[..16]}\"").ToString();
 
                 onRendered?.Invoke(document);
+
+                // Nothing reads the XML documentation again, and it is read again if a later document needs it, so it
+                // is not kept for the process's life unless the host renders many documents and asks to.
+                if (httpOptions?.RetainXmlDocumentationAfterRender != true)
+                {
+                    OpenApiXmlDocs.Release();
+                }
 
                 return new RenderedOpenApiDocument(document, etag);
             },
@@ -137,7 +146,7 @@ internal static class OpenApiDocumentEndpoint
             httpContext.Response.ContentType = "application/json; charset=utf-8";
             httpContext.Response.Headers.ETag = etag;
             httpContext.Response.Headers.CacheControl = "public, max-age=3600";
-            await httpContext.Response.WriteAsync(document.Json, httpContext.RequestAborted).ConfigureAwait(false);
+            await httpContext.Response.Body.WriteAsync(document.Utf8Json, httpContext.RequestAborted).ConfigureAwait(false);
         });
 
         return (handler, new Lazy<PreRenderedOpenApiDocument>(() => rendered.Value.Document, LazyThreadSafetyMode.ExecutionAndPublication));

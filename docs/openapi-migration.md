@@ -11,7 +11,7 @@ This document covers how Blueprint source-gen renders OpenAPI documents, differe
 | Legacy Blueprint (S365) | `/api/openapi.json` or configured path |
 | Blueprint Source-Gen | `/{basePath}/.blueprint/openapi.json`, and legacy's `/{basePath}/openapi` (the same document, or a Scalar page for a browser) |
 
-The new Blueprint pre-renders the OpenAPI document at startup and serves it as a static response, making it faster than runtime-generated documents. A process that builds many hosts, such as a test suite that builds one per test, can set `BlueprintHttpOptions.RenderOpenApiDocumentOnFirstRequest` to render it on the first request (or first read of `PreRenderedOpenApiDocumentHolder.Document`, which `OutputOpenApi` makes) instead; a document that cannot be rendered then fails that request rather than the startup.
+The new Blueprint pre-renders the OpenAPI document at startup and serves it as a static response, making it faster than runtime-generated documents. A process that builds many hosts, such as a test suite that builds one per test, can set `BlueprintHttpOptions.RenderOpenApiDocumentOnFirstRequest` to render it on the first request (or first read of `PreRenderedOpenApiDocumentHolder.Document`, which `OutputOpenApi` makes) instead; a document that cannot be rendered then fails that request rather than the startup. The XML documentation read to describe the API is released once a document is rendered, as nothing reads it again; a process that renders many documents can set `BlueprintHttpOptions.RetainXmlDocumentationAfterRender` to read each file once. The rendered document is held as UTF-8 (`PreRenderedOpenApiDocument.Utf8Json`), and `Json` decodes it on each read.
 
 ---
 

@@ -58,6 +58,23 @@ public sealed class BlueprintHttpOptions
     public bool RenderOpenApiDocumentOnFirstRequest { get; set; }
 
     /// <summary>
+    /// Whether the XML documentation read to describe the API in the OpenAPI document is kept in memory after the
+    /// document is rendered. <see langword="false"/> by default, which releases it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing reads the documentation once the document is rendered, and a service renders once, so a process that
+    /// kept it would carry the summaries and remarks of every documented type for its whole life.
+    /// </para>
+    /// <para>
+    /// The documentation is shared by every host in the process, and a document rendered later reads it again, so
+    /// releasing is always safe and only costs that rereading. Turn this on in a process that renders many documents,
+    /// as a test suite that builds a host per test does, to read each documentation file once.
+    /// </para>
+    /// </remarks>
+    public bool RetainXmlDocumentationAfterRender { get; set; }
+
+    /// <summary>
     /// Gets or sets the optional embedded resource name for the canonical operations manifest that hosted inspection
     /// surfaces should expose. Keeping this explicit avoids introducing a hidden runtime resource-discovery convention
     /// before the manifest emission story is widened deliberately.
