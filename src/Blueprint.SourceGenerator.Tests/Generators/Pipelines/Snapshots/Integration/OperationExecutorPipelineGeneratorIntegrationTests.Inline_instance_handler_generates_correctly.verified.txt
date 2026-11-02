@@ -18,7 +18,7 @@ namespace Blueprint.Generated
     internal sealed partial class TestQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
+            ["TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "UnitOfWorkModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "PipelineReturnModule"];
 
         internal TestQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "TestQuery", pipelineServices)
@@ -52,6 +52,11 @@ namespace Blueprint.Generated
                 return authoriserDenial;
             }
 
+
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await BeginUnitOfWorkAsync(context).ConfigureAwait(false);
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await operation.HandleAsync().ConfigureAwait(false));
 
 

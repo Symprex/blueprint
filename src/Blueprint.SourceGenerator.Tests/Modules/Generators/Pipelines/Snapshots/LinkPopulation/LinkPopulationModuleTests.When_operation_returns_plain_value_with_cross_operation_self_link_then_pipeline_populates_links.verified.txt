@@ -47,7 +47,7 @@ namespace Blueprint.Generated
     internal sealed partial class GetWidgetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "UnitOfWorkModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal GetWidgetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "GetWidgetQuery", pipelineServices)
@@ -95,6 +95,11 @@ namespace Blueprint.Generated
                 return authoriserDenial;
             }
 
+
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await BeginUnitOfWorkAsync(context).ConfigureAwait(false);
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::TestNamespace.WidgetApiResource>(await global::TestNamespace.GetWidgetQuery.HandleAsync(operation).ConfigureAwait(false));
 
 
@@ -148,7 +153,7 @@ namespace Blueprint.Generated
     internal sealed partial class UpdateWidgetCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceEventAuditModule", "LinkGenerationModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "UnitOfWorkModule", "HandlerExecutionModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceEventAuditModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal UpdateWidgetCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "UpdateWidgetCommand", pipelineServices)
@@ -202,6 +207,11 @@ namespace Blueprint.Generated
                 return authoriserDenial;
             }
 
+
+            if (this.HasUnitOfWork)
+            {
+                await BeginUnitOfWorkAsync(context).ConfigureAwait(false);
+            }
             var handlerResult = await global::TestNamespace.UpdateWidgetCommand.HandleAsync(operation).ConfigureAwait(false);
 
             if (handlerResult.WasSuccessful)

@@ -47,7 +47,7 @@ namespace Blueprint.Generated
     internal sealed partial class AllTypesGetQueryExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "UnitOfWorkModule", "HandlerExecutionModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal AllTypesGetQueryExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "AllTypesGetQuery", pipelineServices)
@@ -214,6 +214,11 @@ namespace Blueprint.Generated
                 return authoriserDenial;
             }
 
+
+            if (this.HasUnitOfWork && !context.IsNested)
+            {
+                await BeginUnitOfWorkAsync(context).ConfigureAwait(false);
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesGetQuery.HandleAsync(operation).ConfigureAwait(false));
 
 
@@ -267,7 +272,7 @@ namespace Blueprint.Generated
     internal sealed partial class AllTypesPostCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
+            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "UnitOfWorkModule", "HandlerExecutionModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal AllTypesPostCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "AllTypesPostCommand", pipelineServices)
@@ -339,6 +344,11 @@ namespace Blueprint.Generated
                 return authoriserDenial;
             }
 
+
+            if (this.HasUnitOfWork)
+            {
+                await BeginUnitOfWorkAsync(context).ConfigureAwait(false);
+            }
             var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<string>(await global::TestNamespace.AllTypesPostCommand.HandleAsync(operation).ConfigureAwait(false));
 
 

@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class UpdateAddOnCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "HandlerExecutionModule", "ResourceEventSelfQueryModule", "UnitOfWorkModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceExpansionModule", "ResourceEventAuditModule", "PipelineReturnModule"];
+            ["TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "UnitOfWorkModule", "HandlerExecutionModule", "ResourceEventSelfQueryModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "ResourceExpansionModule", "ResourceEventAuditModule", "PipelineReturnModule"];
 
         internal UpdateAddOnCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "UpdateAddOnCommand", pipelineServices)
@@ -80,6 +80,11 @@ namespace Blueprint.Generated
                 return authoriserDenial;
             }
 
+
+            if (this.HasUnitOfWork)
+            {
+                await BeginUnitOfWorkAsync(context).ConfigureAwait(false);
+            }
             var handlerResult = await global::TestNamespace.UpdateAddOnCommand.HandleAsync(operation).ConfigureAwait(false);
 
             await ResolveResourceEventSelfQueryAsync(this.Executor, context, handlerResult, this.Logger, "UpdateAddOnCommand").ConfigureAwait(false);
