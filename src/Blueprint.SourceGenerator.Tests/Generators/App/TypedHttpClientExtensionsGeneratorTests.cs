@@ -145,6 +145,40 @@ public class TypedHttpClientExtensionsGeneratorTests
     }
 
     [Fact]
+    public async Task When_operation_has_properties_named_like_csharp_keywords_then_generated_client_compiles()
+    {
+        // A property camel-cases to its parameter name, so `Throw` became a parameter named `throw` (CS1001, CS1003,
+        // CS1525) and the consumer's build broke. A property declared `@class` has the name `class` itself, which broke
+        // the operation's initialiser too. Contextual keywords such as `Value` and `Async` are legal parameter names.
+        var source = """
+                     public class ScheduleEventCommand : ICommand
+                     {
+                         [Required]
+                         public string Event { get; set; } = default!;
+
+                         public bool Throw { get; set; }
+
+                         public string? Default { get; set; }
+
+                         public string? @class { get; set; }
+
+                         public string? Value { get; set; }
+
+                         public bool Async { get; set; }
+
+                         public static ApiOperationDescriptor Configure() => default!;
+                     }
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                     }
+                     """;
+
+        await Compile(source).VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
     public async Task When_operation_is_shaped_like_S365_CompleteAiChatCommand_then_generated_client_compiles()
     {
         // Signature365 AiGateway's CompleteAiChatCommand, property for property (AiGateway.Contract/Api/CompleteAiChatCommand.cs):
