@@ -483,13 +483,13 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
         foreach (var param in positionalParams)
         {
-            var paramName = ToCamelCase(param.Name);
+            var paramName = ToParameterIdentifier(param.Name);
             paramParts.Add($"{param.TypeFqn} {paramName}");
         }
 
         foreach (var param in optionalParams)
         {
-            var paramName = ToCamelCase(param.Name);
+            var paramName = ToParameterIdentifier(param.Name);
             paramParts.Add($"{param.TypeFqn} {paramName} = default");
         }
 
@@ -532,14 +532,14 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
         foreach (var param in positionalParams)
         {
-            var paramName = ToCamelCase(param.Name);
-            sb.AppendLine($"                {param.Name} = {paramName},");
+            var paramName = ToParameterIdentifier(param.Name);
+            sb.AppendLine($"                {EscapeIdentifier(param.Name)} = {paramName},");
         }
 
         foreach (var param in optionalParams)
         {
-            var paramName = ToCamelCase(param.Name);
-            sb.AppendLine($"                {param.Name} = {paramName},");
+            var paramName = ToParameterIdentifier(param.Name);
+            sb.AppendLine($"                {EscapeIdentifier(param.Name)} = {paramName},");
         }
 
         sb.AppendLine("            };");
@@ -660,6 +660,30 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         }
 
         sb.AppendLine("        }");
+    }
+
+    /// <summary>
+    /// The parameter name a property is exposed as: its camel-cased name, escaped when that is a reserved keyword.
+    /// </summary>
+    /// <remarks>
+    /// A property named <c>Throw</c> or <c>Event</c> camel-cases to a keyword, which is not a legal parameter name
+    /// unescaped. The escaped name is the same identifier, so callers still pass it as <c>throw:</c>.
+    /// </remarks>
+    private static string ToParameterIdentifier(string propertyName)
+    {
+        return EscapeIdentifier(ToCamelCase(propertyName));
+    }
+
+    /// <summary>
+    /// Returns <paramref name="name"/> prefixed with <c>@</c> when it is a reserved C# keyword. A symbol's name is
+    /// unescaped, so a property declared <c>@class</c> is named <c>class</c> and must be escaped again when emitted.
+    /// Contextual keywords (<c>value</c>, <c>async</c>, <c>var</c>) are legal identifiers here and are left alone.
+    /// </summary>
+    private static string EscapeIdentifier(string name)
+    {
+        return Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
+            ? "@" + name
+            : name;
     }
 
     private static string ToCamelCase(string name)
