@@ -115,6 +115,30 @@ public sealed class ValidationErrorKeyNamingTests
         errors.Keys.Should().Equal("x_Address.x_Street");
     }
 
+    [Theory]
+    [MemberData(nameof(Paths))]
+    public async Task Nested_members_whose_names_differ_only_in_case_keep_their_own_messages(string path)
+    {
+        // Both members' camelCased paths are address.name, the one key of the exception's dictionary, which used to put
+        // both messages under the first member's path and none under the second's.
+        var nested = RecursiveDataAnnotationValidator.ValidateChildObject(
+            "Address",
+            new CaseCollidingAddress(),
+            new ValidationContext(new object())).ToList();
+
+        var result = path == "grouped"
+            ? new ValidationFailedResult(nested)
+            : new ValidationFailedResult(new BlueprintValidationException(nested));
+
+        var errors = await WriteAsync(result, static json => json.DictionaryKeyPolicy = new PrefixNamingPolicy());
+
+        errors.Should().BeEquivalentTo(new Dictionary<string, string[]>
+        {
+            ["x_Address.x_Name"] = ["Upper"],
+            ["x_Address.x_name"] = ["Lower"],
+        });
+    }
+
     [Fact]
     public async Task Keys_that_a_policy_makes_equal_are_written_as_one_with_both_messages()
     {
@@ -181,6 +205,18 @@ public sealed class ValidationErrorKeyNamingTests
             static property => property.Name,
             static property => property.Value.EnumerateArray().Select(static message => message.GetString()!).ToArray(),
             StringComparer.Ordinal);
+    }
+
+    /// <summary>A child object with two members whose names differ only in case, as a case-sensitive body can have.</summary>
+    public sealed class CaseCollidingAddress
+    {
+        [Required(ErrorMessage = "Upper")]
+        public string? Name { get; set; }
+
+#pragma warning disable SA1300, IDE1006 // The member's casing is the point.
+        [Required(ErrorMessage = "Lower")]
+        public string? name { get; set; }
+#pragma warning restore SA1300, IDE1006
     }
 
     /// <summary>A naming policy that renames a name it has already renamed, so applying it twice shows.</summary>

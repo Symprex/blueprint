@@ -833,16 +833,17 @@ public class HttpOperationResultExecutor
             if (validationFailedResult.Errors is { Count: > 0 } errors)
             {
                 // An exception made from results keys its dictionary by their member names, which for the recursive
-                // validator's are camelCased paths; those keys are named from the results' own paths instead.
+                // validator's are camelCased paths, so members whose names differ only in case share a key. Each message
+                // is named from the path of the result it came from instead.
                 var memberPaths = GetMemberPaths(validationFailedResult.ValidationResults);
 
                 foreach (var kvp in errors)
                 {
-                    var source = memberPaths is not null && memberPaths.TryGetValue(kvp.Key, out var memberPath) ? memberPath : kvp.Key;
+                    var candidates = memberPaths?.GetValueOrDefault(kvp.Key);
 
                     foreach (var errorMessage in kvp.Value)
                     {
-                        AddValidationError(grouped, NameErrorKey(source, keyPolicy!), errorMessage);
+                        AddValidationError(grouped, NameErrorKey(TakeMemberPath(candidates, errorMessage) ?? kvp.Key, keyPolicy!), errorMessage);
                     }
                 }
             }
@@ -898,20 +899,57 @@ public class HttpOperationResultExecutor
         }
     }
 
-    private static Dictionary<string, string>? GetMemberPaths(List<ValidationResult> validationResults)
+    /// <summary>
+    /// Gets, for each member name the recursive validator's results carry, the message and member path of each of those
+    /// results in order: the message as <see cref="Blueprint.Validation.ValidationException"/> puts it in its dictionary.
+    /// </summary>
+    private static Dictionary<string, List<(string Message, string MemberPath)>>? GetMemberPaths(List<ValidationResult> validationResults)
     {
-        Dictionary<string, string>? memberPaths = null;
+        Dictionary<string, List<(string Message, string MemberPath)>>? memberPaths = null;
 
         foreach (var validationResult in validationResults)
         {
             if (validationResult is Blueprint.Validation.MemberPathValidationResult nested)
             {
-                memberPaths ??= new Dictionary<string, string>(StringComparer.Ordinal);
-                memberPaths.TryAdd(nested.MemberNames.First(), nested.MemberPath);
+                memberPaths ??= new Dictionary<string, List<(string Message, string MemberPath)>>(StringComparer.Ordinal);
+
+                var memberName = nested.MemberNames.First();
+
+                if (!memberPaths.TryGetValue(memberName, out var candidates))
+                {
+                    candidates = [];
+                    memberPaths[memberName] = candidates;
+                }
+
+                candidates.Add((nested.ErrorMessage ?? "Validation failed", nested.MemberPath));
             }
         }
 
         return memberPaths;
+    }
+
+    /// <summary>
+    /// Takes the member path of the first of <paramref name="candidates"/> with <paramref name="errorMessage"/>, so a
+    /// repeated message goes to each of its members in turn, or returns <see langword="null"/> when none has it.
+    /// </summary>
+    private static string? TakeMemberPath(List<(string Message, string MemberPath)>? candidates, string errorMessage)
+    {
+        if (candidates is null)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            if (candidates[i].Message == errorMessage)
+            {
+                var memberPath = candidates[i].MemberPath;
+                candidates.RemoveAt(i);
+                return memberPath;
+            }
+        }
+
+        return null;
     }
 
     private static void AddValidationError(Dictionary<string, List<string>> grouped, string key, string errorMessage)
