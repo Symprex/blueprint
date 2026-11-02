@@ -3,8 +3,8 @@ namespace Blueprint.Runtime.Http;
 /// <summary>
 /// Holds the pre-rendered OpenAPI 3.x JSON document that was assembled at endpoint registration time.
 /// Registered in DI by <see cref="EndpointRouteBuilderExtensions.MapBlueprintApi{T, TExec}"/>
-/// so that development utilities like <see cref="BlueprintOpenApiExportExtensions.OutputOpenApi"/>
-/// can retrieve the document without re-rendering.
+/// so that <see cref="BlueprintOpenApiDocumentMode"/>, which writes the document at build time,
+/// can retrieve it without re-rendering.
 /// </summary>
 public sealed class PreRenderedOpenApiDocument
 {
@@ -32,7 +32,7 @@ public sealed class PreRenderedOpenApiDocument
 /// <summary>
 /// A mutable singleton registered in DI before endpoint mapping so that
 /// <see cref="EndpointRouteBuilderExtensions.MapBlueprintApi{T, TExec}"/> can store the
-/// pre-rendered document for later retrieval by <see cref="BlueprintOpenApiExportExtensions.OutputOpenApi"/>.
+/// pre-rendered document for later retrieval by <see cref="BlueprintOpenApiDocumentMode"/>.
 /// </summary>
 public sealed class PreRenderedOpenApiDocumentHolder
 {

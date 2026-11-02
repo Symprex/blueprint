@@ -18,7 +18,9 @@ public static class BlueprintOpenApiExportExtensions
     /// </summary>
     /// <remarks>
     /// This mirrors the legacy <c>OutputOpenApi</c> helper from Signature365 and is designed for local
-    /// development workflows only. The method is compiled out entirely in Release builds.
+    /// development workflows only. The method is compiled out entirely in Release builds. It is replaced by the
+    /// <c>BlueprintEmitOpenApi</c> MSBuild property, which writes the document on every build, in any configuration,
+    /// without running the app by hand (see <see cref="BlueprintOpenApiDocumentMode" />).
     /// </remarks>
     /// <param name="host">The configured host whose Blueprint app provides the OpenAPI document.</param>
     /// <param name="outputPath">
@@ -26,6 +28,7 @@ public static class BlueprintOpenApiExportExtensions
     /// <c>Spec/openapi.json</c> path is used.
     /// </param>
     [Conditional("DEBUG")]
+    [Obsolete("Set <BlueprintEmitOpenApi>true</BlueprintEmitOpenApi> in the app's project file instead, which writes Spec/openapi.json at build time. See docs/openapi-migration.md. OutputOpenApi will be removed in the next major version.")]
     public static void OutputOpenApi(this IHost host, string? outputPath = null)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -44,23 +47,13 @@ public static class BlueprintOpenApiExportExtensions
             return;
         }
 
-        var resolvedPath = outputPath ?? Path.Combine("Spec", "openapi.json");
-        var fullPath = Path.GetFullPath(resolvedPath);
-        var directory = Path.GetDirectoryName(fullPath)!;
+        var fullPath = Path.GetFullPath(outputPath ?? Path.Combine("Spec", "openapi.json"));
 
         // Only write when content has changed to avoid unnecessary file-system churn
-        if (File.Exists(fullPath))
+        if (!BlueprintOpenApiDocumentMode.WriteIfChanged(json, fullPath))
         {
-            var existing = File.ReadAllText(fullPath);
-
-            if (string.Equals(existing, json, StringComparison.Ordinal))
-            {
-                return;
-            }
+            return;
         }
-
-        Directory.CreateDirectory(directory);
-        File.WriteAllText(fullPath, json);
 
         var logger = host.Services.GetService<ILoggerFactory>()
             ?.CreateLogger(typeof(BlueprintOpenApiExportExtensions));

@@ -11,7 +11,92 @@ This document covers how Blueprint source-gen renders OpenAPI documents, differe
 | Legacy Blueprint (S365) | `/api/openapi.json` or configured path |
 | Blueprint Source-Gen | `/{basePath}/.blueprint/openapi.json`, and legacy's `/{basePath}/openapi` (the same document, or a Scalar page for a browser) |
 
-The new Blueprint pre-renders the OpenAPI document at startup and serves it as a static response, making it faster than runtime-generated documents. A process that builds many hosts, such as a test suite that builds one per test, can set `BlueprintHttpOptions.RenderOpenApiDocumentOnFirstRequest` to render it on the first request (or first read of `PreRenderedOpenApiDocumentHolder.Document`, which `OutputOpenApi` makes) instead; a document that cannot be rendered then fails that request rather than the startup.
+The new Blueprint pre-renders the OpenAPI document at startup and serves it as a static response, making it faster than runtime-generated documents. A process that builds many hosts, such as a test suite that builds one per test, can set `BlueprintHttpOptions.RenderOpenApiDocumentOnFirstRequest` to render it on the first request (or first read of `PreRenderedOpenApiDocumentHolder.Document`, which writing it at build time makes) instead; a document that cannot be rendered then fails that request rather than the startup.
+
+---
+
+## Writing `Spec/openapi.json` at build time
+
+Set `BlueprintEmitOpenApi` on the app's project and every build writes its document:
+
+```xml
+<PropertyGroup>
+  <BlueprintEmitOpenApi>true</BlueprintEmitOpenApi>
+  <!-- Optional. The default is Spec/openapi.json, relative to the project. -->
+  <BlueprintOpenApiPath>Spec/openapi.json</BlueprintOpenApiPath>
+</PropertyGroup>
+```
+
+Or for one build only:
+
+```powershell
+dotnet build src/MyApi -p:BlueprintEmitOpenApi=true
+```
+
+The target comes with the `Blueprint.Runtime` package (its `buildTransitive` folder), so an app that references the
+package directly or through another package has it. Only app projects act on the property; libraries and test
+projects ignore it, so it can be passed to a whole solution's build, which writes each app's own `Spec/openapi.json`. A project that references `Blueprint.Runtime` as a project imports
+`src/Blueprint.Runtime/buildTransitive/Blueprint.Runtime.targets` itself, as the sample gateway does.
+
+After the build, the target starts the built app in **document-only mode** (`BlueprintOpenApiDocumentMode`):
+
+- The app starts as it always does — `Program`, `Startup`, `ConfigureServices`, `MapBlueprintApi` — in the
+  `Development` environment, as `dotnet run` would start it. `BlueprintOpenApiEnvironment` names another.
+- It binds no port. `AddBlueprintApi` replaces the server with one that never listens.
+- Once the app has started, the document its `MapBlueprintApi` call mapped is written, and the app stops itself.
+- The file is written only when the document has changed, so a build that changes nothing in the API leaves the file
+  and its timestamp untouched. A file that differs only in its line endings counts as unchanged.
+- An app that maps no API, or whose document cannot be rendered, fails the build with the app's error.
+
+Everything else the app starts still starts, hosted services included. An app whose start-up needs what a build
+machine does not have, such as a database or a message broker, checks `BlueprintOpenApiDocumentMode.IsActive` and skips
+it:
+
+```csharp
+if (!BlueprintOpenApiDocumentMode.IsActive)
+{
+    services.AddHostedService<OutboxDispatcher>();
+}
+```
+
+An app that never stops on its own — for example, one that never calls `AddBlueprintApi` — is ended after
+`BlueprintOpenApiTimeout` milliseconds (120000 by default), which fails the build. One host writes one document: the one
+its last `MapBlueprintApi` call mapped.
+
+This replaces `host.OutputOpenApi()`, which wrote the same file only from a `DEBUG` build run by hand in the
+`Development` environment. `OutputOpenApi` still works and is obsolete; remove the call when the property is set. It
+will be removed in the next major version.
+
+### A CI gate on the spec
+
+A committed spec is only useful if it is current. With `BlueprintEmitOpenApi` set, CI can check that and then compare it
+against the base branch. These steps are PowerShell, as on a `windows-latest` runner (`shell: pwsh` elsewhere).
+
+1. **Fail when the committed spec is stale.** The build rewrites the file only if the API changed, so a diff means the
+   pull request changed the API without committing the regenerated spec:
+
+   ```powershell
+   dotnet build src/MyApi -c Release -p:BlueprintEmitOpenApi=true
+   git diff --exit-code -- src/MyApi/Spec/openapi.json
+   if ($LASTEXITCODE -ne 0) { throw 'Spec/openapi.json is out of date: build with -p:BlueprintEmitOpenApi=true and commit it.' }
+   ```
+
+   For an app that uses `[Expose<T>]`, this is how drift in an inner operation shows up: a new inner property becomes a
+   spec diff in the pull request that adds it.
+
+2. **Fail on breaking changes.** Compare the base branch's spec with the pull request's using
+   [oasdiff](https://github.com/oasdiff/oasdiff):
+
+   ```powershell
+   git show "origin/main:src/MyApi/Spec/openapi.json" | Set-Content -Encoding utf8NoBOM base-openapi.json
+   oasdiff breaking base-openapi.json src/MyApi/Spec/openapi.json --fail-on ERR
+   ```
+
+   The checkout needs the base branch's history (`fetch-depth: 0` with `actions/checkout`). oasdiff also publishes a
+   GitHub Action, `oasdiff/oasdiff-action/breaking`, that takes the same two files.
+
+Which changes a team accepts, and how it versions an API that must break, is the team's own policy; this recipe only
+reports them.
 
 ---
 

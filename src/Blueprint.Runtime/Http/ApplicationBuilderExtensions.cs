@@ -119,7 +119,7 @@ public static class EndpointRouteBuilderExtensions
                 }
             });
 
-        // Register the pre-rendered document in DI so development utilities (e.g. OutputOpenApi) can retrieve it
+        // Register the pre-rendered document in DI so the build-time document-only mode can retrieve it
         endpoints.ServiceProvider.GetService<PreRenderedOpenApiDocumentHolder>()?.Set(openApiDocument);
 
         var openApiBuilder = endpoints.Map(

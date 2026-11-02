@@ -94,6 +94,9 @@ public static class ServiceCollectionExtensions
         // Pre-rendered OpenAPI document holder — populated at endpoint mapping time
         services.TryAddSingleton<PreRenderedOpenApiDocumentHolder>();
 
+        // The BlueprintEmitOpenApi build target starts the app only to write that document.
+        BlueprintOpenApiDocumentMode.EnableIfRequested(services);
+
         configure?.Invoke(builder);
 
         return services;

@@ -1,0 +1,53 @@
+<Project>
+  <!--
+    BlueprintEmitOpenApi: writes the app's OpenAPI document on build.
+
+      <BlueprintEmitOpenApi>true</BlueprintEmitOpenApi>
+      <BlueprintOpenApiPath>Spec/openapi.json</BlueprintOpenApiPath>          (the default; relative to the project)
+      <BlueprintOpenApiEnvironment>Development</BlueprintOpenApiEnvironment>  (the default)
+
+    After the build, the built app is started in Blueprint's document-only mode (BlueprintOpenApiDocumentMode): it
+    starts as it always does but binds no port, writes the document its MapBlueprintApi call mapped (only if it has
+    changed, so an unchanged API leaves the file and its timestamp alone) and stops. See docs/openapi-migration.md.
+
+    A package consumer gets this file from Blueprint.Runtime's buildTransitive folder. A project in this repository
+    references Blueprint.Runtime as a project, which imports nothing, so it imports this file itself.
+  -->
+  <PropertyGroup>
+    <BlueprintEmitOpenApi Condition="'$(BlueprintEmitOpenApi)' == ''">false</BlueprintEmitOpenApi>
+    <BlueprintOpenApiPath Condition="'$(BlueprintOpenApiPath)' == ''">Spec/openapi.json</BlueprintOpenApiPath>
+    <BlueprintOpenApiEnvironment Condition="'$(BlueprintOpenApiEnvironment)' == ''">Development</BlueprintOpenApiEnvironment>
+    <!-- Milliseconds. An app that never calls AddBlueprintApi never stops on its own; this ends it and fails the build. -->
+    <BlueprintOpenApiTimeout Condition="'$(BlueprintOpenApiTimeout)' == ''">120000</BlueprintOpenApiTimeout>
+  </PropertyGroup>
+
+  <!-- Apps only: a library has nothing to start, and a test project's entry point runs its tests. Both ignore the
+       property, so it can be passed to a whole solution's build. -->
+  <Target Name="BlueprintEmitOpenApi"
+          AfterTargets="Build"
+          Condition="'$(BlueprintEmitOpenApi)' == 'true' and '$(DesignTimeBuild)' != 'true' and ('$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe') and '$(IsTestProject)' != 'true'">
+    <PropertyGroup>
+      <_BlueprintOpenApiFullPath>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildProjectDirectory)', '$(BlueprintOpenApiPath)'))))</_BlueprintOpenApiFullPath>
+      <_BlueprintOpenApiDotnet>$(DOTNET_HOST_PATH)</_BlueprintOpenApiDotnet>
+      <_BlueprintOpenApiDotnet Condition="'$(_BlueprintOpenApiDotnet)' == ''">dotnet</_BlueprintOpenApiDotnet>
+    </PropertyGroup>
+
+    <!-- The app runs from the project directory, as `dotnet run` runs it. ASPNETCORE_URLS only matters for a server
+         registered after AddBlueprintApi, which replaces the one that never listens: it then listens on a free
+         loopback port until it stops. -->
+    <Exec Command="&quot;$(_BlueprintOpenApiDotnet)&quot; exec &quot;$(TargetPath)&quot;"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          EnvironmentVariables="BLUEPRINT_OPENAPI_OUTPUT_PATH=$(_BlueprintOpenApiFullPath);DOTNET_ENVIRONMENT=$(BlueprintOpenApiEnvironment);ASPNETCORE_ENVIRONMENT=$(BlueprintOpenApiEnvironment);ASPNETCORE_URLS=http://127.0.0.1:0"
+          StandardOutputImportance="low"
+          StandardErrorImportance="high"
+          Timeout="$(BlueprintOpenApiTimeout)"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_BlueprintOpenApiExitCode" />
+    </Exec>
+
+    <Error Condition="'$(_BlueprintOpenApiExitCode)' != '0'"
+           Text="$(MSBuildProjectName) could not write its OpenAPI document to $(_BlueprintOpenApiFullPath): the app exited with code $(_BlueprintOpenApiExitCode). Its error output is above." />
+
+    <Message Importance="high" Text="$(MSBuildProjectName) -> $(_BlueprintOpenApiFullPath)" />
+  </Target>
+</Project>
