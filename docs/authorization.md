@@ -250,6 +250,8 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint => blueprint
 
 `AddResourceKeyAuthorization()` registers the provider, a singleton, once however often it is called, and the default `IResourceAccessChecker`, scoped, unless one is registered already. `AddResourceGrantSource<T>()` and `AddResourceKeyExpander<T>()` register scoped; `AddResourceGrantSource(instance)` registers a configured source as a singleton.
 
+`AddResourceAccessChecker()` registers that default `IResourceAccessChecker` alone, on the same terms, without enlisting the provider among those every operation must satisfy. Use it when only an app's own code asks the checker, or to run it beside an existing authoriser before Blueprint enforces, as Signature 365 does while it proves the two agree. `AddResourceKeyAuthorization()` calls it.
+
 **Keys and grants.** A `ResourceKey` is a key being asked about: absolute when it starts with `/`, otherwise partial. A `ResourceGrant` is a key held, and is always absolute:
 - an exact grant covers its own key alone;
 - a grant ending in `/*` covers its base and every key beneath it, at a segment boundary only, so `/Accounts/acc_1/*` covers `/Accounts/acc_1/Folders/f1` and never `/Accounts/acc_12`;
