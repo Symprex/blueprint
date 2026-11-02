@@ -861,9 +861,13 @@ public sealed class NHibernateUnitOfWork(ISession session) : IUnitOfWork
 {
     public ValueTask BeginAsync(object operation, ApiOperationDescriptor descriptor, CancellationToken cancellationToken)
     {
-        // Legacy opened no transaction for a GET or an operation marked [NoTransaction].
-        if (descriptor.TypeAttributes.Any(static a => a is NoTransactionAttribute)
-            || descriptor.GetFeatureData<OperationHttpMethodMetadataFeatureData>()?.HttpMethods.Contains("GET") == true)
+        // Legacy opened no transaction for a GET or an operation marked [NoTransaction]. TryGetFeatureData, not
+        // GetFeatureData, which throws for an operation with no HTTP metadata (a background task, an in-process-only
+        // operation); those are not GETs.
+        var isGet = descriptor.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var http)
+            && http.HttpMethods.Contains("GET");
+
+        if (isGet || descriptor.TypeAttributes.Any(static a => a is NoTransactionAttribute))
         {
             return default;
         }
