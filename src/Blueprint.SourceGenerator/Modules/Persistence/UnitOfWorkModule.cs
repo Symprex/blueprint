@@ -5,8 +5,9 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Modules;
 
 /// <summary>
-/// Contributes a PostExecution render step that calls <c>IUnitOfWork.SaveChangesAsync</c> after
-/// successful handler execution. Participates for every operation without <c>[DoNotSaveChanges]</c> — commands,
+/// Contributes a render step at the end of the Validation stage that calls <c>IUnitOfWork.BeginAsync</c> before the
+/// handler, and a PostExecution render step that calls <c>IUnitOfWork.SaveChangesAsync</c> after successful handler
+/// execution. Participates for every operation without <c>[DoNotSaveChanges]</c> — commands,
 /// background tasks and queries alike — and skips gracefully at runtime if no <c>IUnitOfWork</c> is registered in DI.
 /// </summary>
 /// <remarks>
@@ -18,6 +19,14 @@ namespace Blueprint.SourceGenerator.Modules;
 /// makes only for a resource event's self query, sharing its command's session. So a query's save, and that of any
 /// operation that is neither a command nor a background task (<see cref="IsSkippedWhenNested"/>), is skipped when the
 /// context is nested. A command's and a background task's save runs nested or not, as it always has here.
+/// </para>
+/// <para>
+/// The begin step follows the save's rule, nested skip included. It is rendered once the operation is authorised and
+/// validated, so a refused or invalid request begins nothing, and before the Rebus transaction scope opens (a Consumer
+/// module, so later in the stage), so a unit of work enlisted in that scope has already begun. It lets a unit of work over
+/// a relational session open its transaction before the handler writes, as Timestamp's legacy
+/// <c>NHibernateBeforeMiddleware</c> did; without it, writes the session issues before the save commit on their own and
+/// survive a handler that then throws.
 /// </para>
 /// <para>
 /// Disposal of the unit-of-work instance is owned by the DI scope, not by this module.
@@ -63,10 +72,13 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             new VariableKey(HandlerExecutionModule.HandlerResultTypeName, HandlerExecutionModule.HandlerResultPurpose),
             requiredBy: PipelineStage.PostExecution);
 
+        var isSkippedWhenNested = IsSkippedWhenNested(operationType);
+
         context.RequireAsync();
+        context.AddRenderStep(PipelineStage.Validation, isSkippedWhenNested ? RenderBeginUnlessNested : RenderBegin);
         context.AddSuccessGuardedRenderStep(
             PipelineStage.PostExecution,
-            IsSkippedWhenNested(operationType) ? RenderSaveChangesUnlessNested : RenderSaveChanges);
+            isSkippedWhenNested ? RenderSaveChangesUnlessNested : RenderSaveChanges);
     }
 
     /// <summary>
@@ -103,6 +115,24 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     internal static bool IsSkippedWhenNested(INamedTypeSymbol operationType)
     {
         return !IsCommand(operationType) && !IsBackgroundTask(operationType);
+    }
+
+    private static void RenderBegin(PipelineRenderContext context)
+    {
+        context.WriteBlankLine();
+        context.WriteStatement("if (this.HasUnitOfWork)");
+        context.WriteStatement("{");
+        context.WriteStatement("    await BeginUnitOfWorkAsync(context).ConfigureAwait(false);");
+        context.WriteStatement("}");
+    }
+
+    private static void RenderBeginUnlessNested(PipelineRenderContext context)
+    {
+        context.WriteBlankLine();
+        context.WriteStatement("if (this.HasUnitOfWork && !context.IsNested)");
+        context.WriteStatement("{");
+        context.WriteStatement("    await BeginUnitOfWorkAsync(context).ConfigureAwait(false);");
+        context.WriteStatement("}");
     }
 
     private static void RenderSaveChanges(PipelineRenderContext context)

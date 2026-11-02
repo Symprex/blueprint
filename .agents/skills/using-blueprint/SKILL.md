@@ -310,6 +310,7 @@ Blueprint's `UnitOfWorkModule` generates a `SaveChangesAsync` call for every ope
 - **Optional DI:** If no `IUnitOfWork` is registered, the step is skipped gracefully.
 - **DI scope owns disposal:** The unit-of-work instance is disposed by the DI container scope, not by Blueprint. Register as scoped.
 - **Opt-out:** `[DoNotSaveChanges]` on any operation suppresses the generated save call.
+- **Begin before the handler:** On the same rule (including the nested skip), the pipeline calls `IUnitOfWork.BeginAsync(operation, descriptor, ct)` after authorisation and validation and before the handler and the Rebus scope. A refused or invalid request begins nothing. The default implementation does nothing; a unit of work over a relational session (NHibernate, an EF Core explicit transaction) opens its transaction here so writes issued before the save commit with it. Nothing calls a rollback: disposing the scope's session rolls back an uncommitted transaction.
 
 ### Implementation pattern
 
@@ -324,7 +325,7 @@ public sealed class EfCoreUnitOfWork(AppDbContext db) : IUnitOfWork
 }
 ```
 
-Pipeline order: Handler → UoW Save (900) → Audit (950) → Background Task Flush (1000). This ensures committed state is audited and tasks reference committed data.
+Pipeline order: Authorisation → Validation → UoW Begin → Rebus scope → Handler → UoW Save (900) → Audit (950) → Background Task Flush (1000). This ensures committed state is audited and tasks reference committed data.
 
 ## Result contract
 
