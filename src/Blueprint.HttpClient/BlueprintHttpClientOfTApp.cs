@@ -98,7 +98,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         var (method, url) = this.ResolveRequest(operation);
 
-        return await this.SendAsync(method, url, operation, operationTypeInfo: null, AppResponseReaders.For<TResponse>(), operation.GetType().Name, options, cancellationToken)
+        return await this.SendAsync(method, url, operation, operationTypeInfo: null, AppResponseReaders.For<TResponse>(), operation.GetType().Name, options, requestModifier: null, credential: null, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -135,7 +135,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         var (method, url) = this.ResolveRequest(operation);
 
-        await this.SendAsync(method, url, operation, operationTypeInfo: null, NoResponseBodyReader.Instance, operation.GetType().Name, options, cancellationToken)
+        await this.SendAsync(method, url, operation, operationTypeInfo: null, NoResponseBodyReader.Instance, operation.GetType().Name, options, requestModifier: null, credential: null, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -179,7 +179,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         var (method, url) = this.ResolveRequest(operation);
 
-        return await this.SendAsync(method, url, operation, operationTypeInfo: null, ResourceEventDataReader<TResource>.Instance, operation.GetType().Name, options, cancellationToken)
+        return await this.SendAsync(method, url, operation, operationTypeInfo: null, ResourceEventDataReader<TResource>.Instance, operation.GetType().Name, options, requestModifier: null, credential: null, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -230,7 +230,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         var (method, url) = this.ResolveRequest(operation);
 
-        return await this.SendAsync(method, url, operation, operationTypeInfo: null, ResourceEventEnvelopeReader<TResource>.Instance, operation.GetType().Name, options, cancellationToken)
+        return await this.SendAsync(method, url, operation, operationTypeInfo: null, ResourceEventEnvelopeReader<TResource>.Instance, operation.GetType().Name, options, requestModifier: null, credential: null, cancellationToken)
             .ConfigureAwait(false);
     }
 

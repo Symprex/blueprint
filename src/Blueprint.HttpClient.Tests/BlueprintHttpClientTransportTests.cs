@@ -636,6 +636,58 @@ public sealed class BlueprintHttpClientTransportTests
             options: null);
     }
 
+    [Fact]
+    public void Transports_given_no_options_share_one_read_only_default()
+    {
+        var first = new BlueprintHttpClient(new System.Net.Http.HttpClient());
+        var second = new BlueprintHttpClient(new System.Net.Http.HttpClient());
+
+        first.JsonOptions.Should().BeSameAs(second.JsonOptions, "metadata resolved from options is cached by the options, so each transport's own copy would resolve it again");
+        first.JsonOptions.IsReadOnly.Should().BeTrue("options every transport shares cannot be open to change");
+        first.JsonOptions.PropertyNamingPolicy.Should().Be(JsonNamingPolicy.CamelCase);
+    }
+
+    [Fact]
+    public void Metadata_is_resolved_once_from_options_no_call_has_used_yet()
+    {
+        // Options with no resolver of their own, as JsonSerializerDefaults.Web and Blueprint's defaults are, have one only once
+        // a serializer call has used them; metadata asked of them before then, as a typed client asks when it is made, has none.
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var client = new BlueprintHttpClient(new System.Net.Http.HttpClient(), options);
+
+        var typeInfo = client.ResolveTypeInfo<ArchiveTemplateCommand>();
+
+        typeInfo.Should().BeSameAs(client.ResolveTypeInfo<ArchiveTemplateCommand>(), "metadata of locked options is cached by them");
+        options.IsReadOnly.Should().BeTrue("the options are locked, as their first use by a serializer call locks them");
+    }
+
+    [Fact]
+    public async Task An_operation_of_a_type_derived_from_the_declared_one_is_written_as_its_own_type()
+    {
+        // The declared type's metadata writes only the declared type's members; the app-driven client writes the operation as
+        // its run-time type, so the typed client writes a derived instance that way too.
+        string? body = null;
+        var client = CreateClient(
+            req =>
+            {
+                body = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            });
+
+        await client.SendAsync(
+            HttpMethod.Delete,
+            "/templates/t-1",
+            new AnnotatedArchiveTemplateCommand { Id = "t-1", Note = "tidy" },
+            client.ResolveTypeInfo<ArchiveTemplateCommand>(),
+            new JsonResponseReader<KeyOnlyResourceEventResult>(),
+            "ArchiveTemplateCommand",
+            options: null);
+
+        using var document = JsonDocument.Parse(body!);
+        document.RootElement.GetProperty("note").GetString().Should().Be("tidy");
+        document.RootElement.GetProperty("id").GetString().Should().Be("t-1");
+    }
+
     private static BlueprintHttpClient CreateClient(Func<HttpRequestMessage, HttpResponseMessage> respond, string baseAddress = "https://localhost")
     {
         return new BlueprintHttpClient(new System.Net.Http.HttpClient(new FakeHttpHandler(respond)) { BaseAddress = new Uri(baseAddress) });

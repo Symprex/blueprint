@@ -222,7 +222,10 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 | `HttpResult` | ✅ | Runtime/Http/HttpResult.cs |
 | `IPropertyPopulator` (SetTenantMiddleware equiv) | ✅ | Runtime/Middleware/IPropertyPopulator.cs |
 | Handler discovery (OperationsHandlerScanner equiv) | ✅ | SourceGenerator/Generators/Pipelines/HandlerDiscovery.cs |
-| `ServiceApiInclude` (gateway API client decl) | ✅ | SourceGenerator/Generators/App/TypedHttpClientExtensionsGenerator.cs |
+| `[ServiceApiInclude]` (gateway API client decl) | ✅ | `[BlueprintClientInclude]`, completed by SourceGenerator/Generators/Clients/TypedClientGenerator.cs |
+| `UpdateJwt(jwt)` | ✅ | `WithCredential(new BearerTokenCredential(jwt))` (HttpClient/IUpstreamCredential.cs) |
+| `ModifyOptionsFor` | ✅ | `partial void OnConfigure(Op, ref CallOptions?)` per included operation |
+| `DefaultModifyRequest` | ✅ | `protected WithRequestModifier(Action<HttpRequestMessage>)` |
 | `PagedApiResource`/`OrderedPagedQuery` | ✅ | Runtime.Model/PagedApiResource.cs |
 | `ResourceEventDefinition` factory | ✅ | Runtime/Http/ResourceEventDefinition.cs |
 | `IApiAuthoriser` | ✅ | Runtime/Authorization/IApiAuthoriser.cs |
@@ -234,7 +237,18 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 
 **Resource expansion note:** Blueprint source-gen has **compile-time** resource expansion support that replaces S365's runtime `ResourceExpandMiddleware`. The `ResourceExpansionModule` discovers `Expandable<T>` properties at compile time and generates typed expansion calls in the `PostExecution` pipeline stage. S365's `IResourceExpander` implementations (e.g., `AzureAdGroupApiResourceExpander`) can be ported directly — the interface is identical. The `?expand=` and `?expand[]=` query parameter parsing, comma-separated values, and case-insensitive matching are all handled by `ResourceExpansionRuntime`.
 
-**Gateway migration note:** `ServiceApiInclude` is replaced by Blueprint's `TypedHttpClientExtensionsGenerator`, which automatically generates strongly-typed extension methods on `BlueprintHttpClient<TApp>` for every operation registered through `[BlueprintAppScan]`. Gateway projects inject `BlueprintHttpClient<TargetApp>` and call the generated methods directly — no separate interface/implementation classes needed. The S365 pattern of `IServiceApi` + `ServiceApi` class is simplified to just `BlueprintHttpClient<TargetApp>.OperationNameAsync(params)`. JWT propagation uses `CallOptions` or HttpClient message handler configuration.
+**Gateway migration note:** `[ServiceApiInclude]` and `ServiceApiSourceGenerator` are replaced by Blueprint's `[BlueprintClient]` and `[BlueprintClientInclude(typeof(Op))]`. The hand-written `partial` class keeps its shape; the generator completes it into `I{Class}` with one `Task<R> {Name}Async(Op operation, CallOptions? options = null, CancellationToken cancellationToken = default)` per include (`{Name}` is the type name minus one trailing `Command` or `Query`), exactly S365's interface shape, so call sites do not change. The S365 extension points map as follows:
+
+| S365 | Blueprint |
+|---|---|
+| `[ServiceApiInclude(typeof(Op))]` | `[BlueprintClientInclude(typeof(Op))]` |
+| `ServiceApiSourceGenerator` | `[BlueprintClient]` on the partial class (`TypedClientGenerator`) |
+| `UpdateJwt(jwt)` | `WithCredential(new BearerTokenCredential(jwt))`, which returns a new client and leaves the original unchanged |
+| `ModifyOptionsFor` | `partial void OnConfigure(Op operation, ref CallOptions? options)`, one per included operation |
+| `DefaultModifyRequest` | `protected WithRequestModifier(Action<HttpRequestMessage>)`, callable from public methods that are copied onto the interface. Request URIs are still relative when modifiers run |
+| Constructor-injected dependencies | A `private readonly` field with no initialiser becomes a constructor parameter after the transport |
+
+Construct a client as `new XApi(new BlueprintHttpClient(httpClient, jsonOptions), …)`. A dedicated `AddBlueprintClient` registration lands in a later release; until then register with direct construction or `AddHttpClient`. Request-shaping order is `OnConfigure`, the call's own `ModifyRequest`, each `WithRequestModifier` in the order added, then the credential last. See [Typed Clients](integration-packages.md#typed-clients) for the full behaviour and the BPCL diagnostics ([diagnostic reference](diagnostic-reference.md#typed-http-clients-bpcl)). The older `TypedHttpClientExtensionsGenerator`, which generates extension methods on `BlueprintHttpClient<TApp>`, remains for callers that want the app-bound client.
 
 **S365 custom source generator coexistence:** S365 has 3 custom generators in `Symprex.Signature365.SourceGenerators` that are **orthogonal** to Blueprint source-gen and **must coexist** during and after migration:
 
@@ -242,7 +256,7 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 |---|---|---|---|
 | `DtoSourceGenerator` | `[DtoMap(Type)]` | DTO mapping classes with `MapFrom(source)` | None — S365-specific |
 | `MetricsSourceGenerator` | `[AppCounter<T>]` | OpenTelemetry counter classes | None — S365-specific |
-| `ServiceApiSourceGenerator` | `[ServiceApiInclude(typeof(Op))]` | Service client interface + implementation | Partially: `TypedHttpClientExtensionsGenerator` |
+| `ServiceApiSourceGenerator` | `[ServiceApiInclude(typeof(Op))]` | Service client interface + implementation | `[BlueprintClient]` / `[BlueprintClientInclude(typeof(Op))]` (`TypedClientGenerator`) |
 
 Both toolchains emit `.g.cs` files with no name collisions. During migration, S365 generators keep running unchanged; Blueprint source-gen is additive. **Do not remove S365 generators.**
 
