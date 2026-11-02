@@ -832,11 +832,17 @@ public class HttpOperationResultExecutor
 
             if (validationFailedResult.Errors is { Count: > 0 } errors)
             {
+                // An exception made from results keys its dictionary by their member names, which for the recursive
+                // validator's are camelCased paths; those keys are named from the results' own paths instead.
+                var memberPaths = GetMemberPaths(validationFailedResult.ValidationResults);
+
                 foreach (var kvp in errors)
                 {
+                    var source = memberPaths is not null && memberPaths.TryGetValue(kvp.Key, out var memberPath) ? memberPath : kvp.Key;
+
                     foreach (var errorMessage in kvp.Value)
                     {
-                        AddValidationError(grouped, NameErrorKey(kvp.Key, keyPolicy!), errorMessage);
+                        AddValidationError(grouped, NameErrorKey(source, keyPolicy!), errorMessage);
                     }
                 }
             }
@@ -892,6 +898,22 @@ public class HttpOperationResultExecutor
         }
     }
 
+    private static Dictionary<string, string>? GetMemberPaths(List<ValidationResult> validationResults)
+    {
+        Dictionary<string, string>? memberPaths = null;
+
+        foreach (var validationResult in validationResults)
+        {
+            if (validationResult is Blueprint.Validation.MemberPathValidationResult nested)
+            {
+                memberPaths ??= new Dictionary<string, string>(StringComparer.Ordinal);
+                memberPaths.TryAdd(nested.MemberNames.First(), nested.MemberPath);
+            }
+        }
+
+        return memberPaths;
+    }
+
     private static void AddValidationError(Dictionary<string, List<string>> grouped, string key, string errorMessage)
     {
         if (!grouped.TryGetValue(key, out var list))
@@ -935,7 +957,8 @@ public class HttpOperationResultExecutor
             if (indexerDepth > 0)
             {
                 // An indexer's contents - a position or a dictionary key - are not member names. A quoted key may hold
-                // brackets of its own, which neither end the indexer nor open another.
+                // brackets of its own, which neither end the indexer nor open another. A key is quoted only by a quote
+                // that opens the indexer; an apostrophe within an unquoted key (O'Brien) is part of it.
                 named.Append(c);
 
                 if (quote != '\0')
@@ -949,7 +972,7 @@ public class HttpOperationResultExecutor
                         quote = '\0';
                     }
                 }
-                else if (c is '"' or '\'')
+                else if (c is '"' or '\'' && key[i - 1] == '[')
                 {
                     quote = c;
                 }

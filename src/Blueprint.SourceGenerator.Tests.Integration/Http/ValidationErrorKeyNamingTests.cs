@@ -4,6 +4,7 @@ using System.Text.Json;
 using Blueprint.Runtime.Exec;
 using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
+using Blueprint.Validation;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -81,10 +82,13 @@ public sealed class ValidationErrorKeyNamingTests
     [InlineData("grouped", "Items[\"a\\\"]B\"].Name", "items[\"a\\\"]B\"].name")]
     [InlineData("pre-built", "Items[\"a]B\"].Name", "items[\"a]B\"].name")]
     [InlineData("pre-built", "Items[\"a[B\"].Name", "items[\"a[B\"].name")]
-    public async Task A_bracket_inside_a_quoted_indexer_key_is_part_of_the_key(string path, string memberPath, string expected)
+    [InlineData("grouped", "Items[O'Brien].Name", "items[O'Brien].name")]
+    [InlineData("pre-built", "Items[O'Brien].Name", "items[O'Brien].name")]
+    public async Task An_indexer_key_is_kept_whatever_brackets_or_quotes_it_holds(string path, string memberPath, string expected)
     {
         // A dictionary key is kept as it is, so a bracket quoted inside it must neither end the indexer early (renaming
-        // the rest of the key) nor open another one (leaving the member after it unnamed).
+        // the rest of the key) nor open another one (leaving the member after it unnamed), and an apostrophe inside an
+        // unquoted key is not a quote.
         var result = path == "grouped"
             ? new ValidationFailedResult([new ValidationResult("Invalid", [memberPath])])
             : new ValidationFailedResult(new BlueprintValidationException(new Dictionary<string, string[]> { [memberPath] = ["Invalid"] }));
@@ -92,6 +96,23 @@ public sealed class ValidationErrorKeyNamingTests
         var errors = await WriteAsync(result, static json => json.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
 
         errors.Keys.Should().Equal(expected);
+    }
+
+    [Fact]
+    public async Task A_validation_exception_of_nested_results_is_named_from_the_members_own_names()
+    {
+        // The exception's error dictionary is keyed by the recursive validator's camelCased paths, which a policy used to
+        // name: x_address.x_street rather than the body's x_Address.x_Street.
+        var nested = RecursiveDataAnnotationValidator.ValidateChildObject(
+            "Address",
+            new NestedValidationAddress { PostCode = "AB1 2CD" },
+            new ValidationContext(new object()));
+
+        var errors = await WriteAsync(
+            new ValidationFailedResult(new BlueprintValidationException(nested)),
+            static json => json.DictionaryKeyPolicy = new PrefixNamingPolicy());
+
+        errors.Keys.Should().Equal("x_Address.x_Street");
     }
 
     [Fact]
