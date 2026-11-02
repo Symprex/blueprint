@@ -115,12 +115,27 @@ public sealed class MultiAppHost : IAsyncDisposable
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        // Every app is stopped even if an earlier one fails to, so no listener outlives the fixture.
+        List<Exception>? failures = null;
+
         for (var i = this._apps.Count - 1; i >= 0; i--)
         {
-            await this._apps[i].DisposeAsync();
+            try
+            {
+                await this._apps[i].DisposeAsync();
+            }
+            catch (Exception e)
+            {
+                (failures ??= []).Add(e);
+            }
         }
 
         this._apps.Clear();
+
+        if (failures is not null)
+        {
+            throw new AggregateException("One or more apps failed to stop cleanly.", failures);
+        }
     }
 
     /// <summary>

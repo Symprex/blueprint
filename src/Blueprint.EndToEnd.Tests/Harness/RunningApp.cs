@@ -79,7 +79,15 @@ public sealed class RunningApp : IAsyncDisposable
         }
 
         this._disposed = true;
-        await this.StopAsync();
-        this._host.Dispose();
+
+        try
+        {
+            await this.StopAsync();
+        }
+        finally
+        {
+            // A hosted service that throws on shutdown must not leave the service provider and listener alive.
+            this._host.Dispose();
+        }
     }
 }

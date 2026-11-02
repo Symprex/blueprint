@@ -71,4 +71,37 @@ public sealed class MultiAppHostTests(SampleSystemFixture system)
         var afterStop = () => client.GetAsync("api/templates");
         await afterStop.Should().ThrowAsync<HttpRequestException>();
     }
+
+    [Fact]
+    public async Task Disposing_the_host_stops_every_app_even_when_one_fails_to_stop()
+    {
+        var host = new MultiAppHost(new TestJwtIssuer());
+        var first = await host.StartAsync<Blueprint.SourceGenerator.Sample.Startup>("first");
+        var failing = await host.StartAsync<Blueprint.SourceGenerator.Sample.Startup>(
+            "throws-on-stop",
+            o => o.ConfigureServices = static services => services.AddHostedService<ThrowsOnStopService>());
+        using var client = first.CreateClient();
+
+        var dispose = async () => await host.DisposeAsync();
+
+        // The shutdown failure is still reported; what matters is that it did not strand the other app.
+        await dispose.Should().ThrowAsync<Exception>();
+        var afterDispose = () => client.GetAsync("api/templates");
+        await afterDispose.Should().ThrowAsync<HttpRequestException>();
+        var failingServices = () => failing.Services.GetService(typeof(IHostApplicationLifetime));
+        failingServices.Should().Throw<ObjectDisposedException>();
+    }
+
+    private sealed class ThrowsOnStopService : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Simulated shutdown failure.");
+        }
+    }
 }

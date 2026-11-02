@@ -39,7 +39,7 @@ public sealed class GatewayRoundTripTests(SampleSystemFixture system)
 
         var response = await caller.GetAsync($"gateway/templates/{id}");
 
-        response.IsSuccessStatusCode.Should().BeFalse();
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized, await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
