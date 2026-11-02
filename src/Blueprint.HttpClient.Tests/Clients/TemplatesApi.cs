@@ -35,7 +35,9 @@ namespace Blueprint.HttpClient.Tests.Clients;
 [BlueprintClientInclude(typeof(RegisterTemplateCommand))]
 public partial class TemplatesApi
 {
-    private readonly required string _region;
+    // The generated constructor sets it. The initialiser stops the pre-commit `dotnet format`, which runs without this
+    // project's generators, from "fixing" CS8618 by making the field required (CS9032).
+    private readonly string _region = null!;
 
     /// <summary>
     /// Gets the region the client was made for, which a readonly field turns into a constructor parameter.
