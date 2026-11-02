@@ -76,9 +76,23 @@ internal sealed class OperationInputSchemaSet
         foreach (var operation in primaryBySlot.Values.DistinctBy(static o => o.OperationName, StringComparer.OrdinalIgnoreCase))
         {
             var slot = FindFirstDeclaredSlot(operation, descriptorsByName.GetValueOrDefault(operation.OperationName), primaryBySlot);
-            var slotJson = paths?[slot.UrlFormat]?[slot.Method.ToLowerInvariant()]?.AsObject();
+            var operationId = operationIds.GetValueOrDefault(slot) ?? operation.OperationName;
 
-            entries.Add(CreateEntry(operation, operationIds.GetValueOrDefault(slot) ?? operation.OperationName, slotJson, components));
+            try
+            {
+                var slotJson = paths?[slot.UrlFormat]?[slot.Method.ToLowerInvariant()]?.AsObject();
+
+                entries.Add(CreateEntry(operation, operationId, slotJson, components));
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                // An entry a processor made unreadable, such as an object with one name twice, is that operation's alone:
+                // the others' schemas stay to be had.
+                var error = $"The operation {operation.OperationName} cannot be given an input schema, as its entry in the "
+                    + $"OpenAPI document could not be read: {exception.Message}";
+
+                entries.Add(new Entry(operation.OperationName, null, error));
+            }
         }
 
         return new OperationInputSchemaSet([.. entries.OrderBy(static e => e.OperationName, StringComparer.Ordinal)]);
@@ -204,7 +218,21 @@ internal sealed class OperationInputSchemaSet
         JsonNode? additionalProperties = null;
         JsonArray? conditionals = null;
 
-        if (operation.RequestBody is { } requestBody && FindRequestBodySchema(slotJson, components) is { } bodySchema)
+        // Two body properties of one name are written as an object with that name twice, which cannot be read as one, so
+        // they are found from the model, where both are still known by their own.
+        var duplicateBodyProperties = operation.RequestBody?.Properties
+            .GroupBy(static p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(static g => g.DistinctBy(static p => p.ClrPropertyName ?? p.Name, StringComparer.Ordinal).ToList())
+            .Where(static distinct => distinct.Count > 1) ?? [];
+
+        foreach (var duplicates in duplicateBodyProperties)
+        {
+            collisions.Add(
+                $"'{duplicates[0].Name}': the body property {duplicates[0].ClrPropertyName ?? duplicates[0].Name} and the "
+                + $"body property {duplicates[1].ClrPropertyName ?? duplicates[1].Name}");
+        }
+
+        if (collisions.Count == 0 && operation.RequestBody is { } requestBody && FindRequestBodySchema(slotJson, components) is { } bodySchema)
         {
             var clrNamesByBodyName = requestBody.Properties
                 .GroupBy(static p => p.Name, StringComparer.Ordinal)

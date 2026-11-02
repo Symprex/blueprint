@@ -129,6 +129,32 @@ public sealed class OperationInputSchemaTests
     }
 
     [Fact]
+    public void An_operation_two_of_whose_body_properties_take_one_name_fails_naming_both_and_no_other_operation_fails()
+    {
+        // The generator gives two body properties one name when its naming policy does (Label and LABEL), which this app
+        // cannot declare as its typed client would then take two parameters of one name. A processor gives the model
+        // that shape instead.
+        var provider = CreateProvider(configureOpenApiOperations: static o => o.Processors.Add(RenameCaptionToLabelInBody));
+
+        var act = () => provider.GetSchema(DuplicateBodyNameOperationName);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage($"*{DuplicateBodyNameOperationName}*'label'*body property Label*body property Caption*");
+        provider.GetSchema(NoteOperationName).Should().NotBeNull("one operation's collision is that operation's alone");
+    }
+
+    [Fact]
+    public void An_operation_whose_rendered_body_has_one_name_twice_fails_and_no_other_operation_fails()
+    {
+        var provider = CreateProvider(configureOpenApiSchemas: static o => o.Processors.Add(RenameCaptionToLabelInComponent));
+
+        var act = () => provider.GetSchema(DuplicateBodyNameOperationName);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{DuplicateBodyNameOperationName}*");
+        provider.GetSchema(NoteOperationName).Should().NotBeNull("one operation's broken document entry is that operation's alone");
+    }
+
+    [Fact]
     public void Listing_every_schema_fails_while_one_operation_collides()
     {
         var provider = CreateProvider();
@@ -200,6 +226,8 @@ public sealed class OperationInputSchemaTests
 
     private const string LegacySourcesOperationName = "LegacySourcesOperationInputSchema";
 
+    private const string DuplicateBodyNameOperationName = "DuplicateBodyNameOperationInputSchema";
+
     private static OperationInputSchema GetSchema(string operationName)
     {
         var schema = CreateProvider().GetSchema(operationName);
@@ -209,13 +237,44 @@ public sealed class OperationInputSchemaTests
         return schema!;
     }
 
-    private static IOperationInputSchemaProvider CreateProvider(Action<OpenApiInfoOptions>? configureOpenApi = null)
+    private static IOperationInputSchemaProvider CreateProvider(
+        Action<OpenApiInfoOptions>? configureOpenApi = null,
+        Action<OpenApiSchemaProcessorOptions>? configureOpenApiSchemas = null,
+        Action<OpenApiOperationProcessorOptions>? configureOpenApiOperations = null)
     {
         var services = BuildServices();
         var endpoints = new TestEndpointRouteBuilder(services);
-        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/", configureOpenApi);
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
+            "api/",
+            configureOpenApi,
+            configureOpenApiSchemas,
+            configureOpenApiOperations);
 
         return services.GetRequiredService<IOperationInputSchemaProvider>();
+    }
+
+    private static OpenApiOperationModel RenameCaptionToLabelInBody(OpenApiOperationModel operation, ApiOperationDescriptor descriptor)
+    {
+        if (operation.OperationName != DuplicateBodyNameOperationName || operation.RequestBody is not { } body)
+        {
+            return operation;
+        }
+
+        return operation with
+        {
+            RequestBody = body with { Properties = [.. body.Properties.Select(static p => p.Name == "caption" ? p with { Name = "label" } : p)] },
+        };
+    }
+
+    private static void RenameCaptionToLabelInComponent(OpenApiSchemaProcessorContext context)
+    {
+        if (context.Component.Properties.Any(static p => p.Name == "caption") && context.Component.Properties.Any(static p => p.Name == "label"))
+        {
+            context.Component = context.Component with
+            {
+                Properties = [.. context.Component.Properties.Select(static p => p.Name == "caption" ? p with { Name = "label" } : p)],
+            };
+        }
     }
 
     private static ServiceProvider BuildServices()
@@ -318,6 +377,22 @@ public partial class CollidingOperationInputSchemaCommand : ICommand<string>
     public static string Handle(CollidingOperationInputSchemaCommand command)
     {
         return "collided";
+    }
+}
+
+/// <summary>A command whose two body properties a processor writes under one name.</summary>
+[AllowAnonymous]
+[RootLink("/operation-input-schema/duplicate-body-name")]
+[HttpPost]
+public partial class DuplicateBodyNameOperationInputSchemaCommand : ICommand<string>
+{
+    public string? Label { get; set; }
+
+    public string? Caption { get; set; }
+
+    public static string Handle(DuplicateBodyNameOperationInputSchemaCommand command)
+    {
+        return "duplicated";
     }
 }
 
