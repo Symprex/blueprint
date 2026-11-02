@@ -49,6 +49,33 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
         File.Exists(this.OutputPath).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task When_a_spec_is_at_the_configured_path_in_the_project_then_it_is_not_published_with_the_app()
+    {
+        // The web SDK publishes every .json in an app's folder. A referenced app's Spec/openapi.json was published beside
+        // the referencing app's own, and the two at one relative path failed the publish (NETSDK1152).
+        var name = Guid.NewGuid().ToString("N");
+        var relativePath = Path.Combine("Spec", "test-" + name + ".json");
+        var spec = Path.Combine(GatewayDirectory, relativePath);
+        var otherJson = Path.Combine(GatewayDirectory, "Spec", "other-" + name + ".json");
+        Directory.CreateDirectory(Path.GetDirectoryName(spec)!);
+        File.WriteAllText(spec, "{}");
+        File.WriteAllText(otherJson, "{}");
+
+        try
+        {
+            var content = await RunDotnetAsync("msbuild", GatewayProject, "-getItem:Content", "-nologo", $"-p:Configuration={Configuration}", $"-p:BlueprintOpenApiPath={relativePath}");
+
+            content.Should().Contain(Path.GetFileName(otherJson), "any other .json beside it is still published");
+            content.Should().NotContain(Path.GetFileName(spec));
+        }
+        finally
+        {
+            File.Delete(spec);
+            File.Delete(otherJson);
+        }
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(this._directory))
@@ -57,10 +84,20 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
         }
     }
 
-    private static async Task BuildGatewayAsync(params string[] properties)
-    {
-        var project = Path.Combine(FindRepositoryRoot(), "src", "Blueprint.SourceGenerator.Sample.Gateway", "Blueprint.SourceGenerator.Sample.Gateway.csproj");
+    private static string GatewayDirectory => Path.Combine(FindRepositoryRoot(), "src", "Blueprint.SourceGenerator.Sample.Gateway");
 
+    private static string GatewayProject => Path.Combine(GatewayDirectory, "Blueprint.SourceGenerator.Sample.Gateway.csproj");
+
+    private static Task BuildGatewayAsync(params string[] properties)
+    {
+        return RunDotnetAsync(new[] { "build", GatewayProject, "-c", Configuration, "--no-restore", "--no-dependencies", "-nologo", "-v:q" }.Concat(properties).ToArray());
+    }
+
+    /// <summary>
+    /// Runs the .NET CLI, asserts that it succeeds and returns what it wrote to standard output.
+    /// </summary>
+    private static async Task<string> RunDotnetAsync(params string[] arguments)
+    {
         var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
         {
             RedirectStandardOutput = true,
@@ -68,7 +105,7 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
             UseShellExecute = false,
         };
 
-        foreach (var argument in new[] { "build", project, "-c", Configuration, "--no-restore", "--no-dependencies", "-nologo", "-v:q" }.Concat(properties))
+        foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
         }
@@ -90,7 +127,9 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
             throw;
         }
 
-        process.ExitCode.Should().Be(0, "the build should succeed:{0}{1}{0}{2}", Environment.NewLine, await output, await error);
+        process.ExitCode.Should().Be(0, "the command should succeed:{0}{1}{0}{2}", Environment.NewLine, await output, await error);
+
+        return await output;
     }
 
     private static string FindRepositoryRoot()

@@ -47,6 +47,8 @@ After the build, the target starts the built app in **document-only mode** (`Blu
 - The file is written only when the document has changed, so a build that changes nothing in the API leaves the file
   and its timestamp untouched. A file that differs only in its line endings counts as unchanged.
 - An app that maps no API, or whose document cannot be rendered, fails the build with the app's error.
+- The file at `BlueprintOpenApiPath` is not published with the app. The web SDK would otherwise publish it as content,
+  and an app that references another app would publish both specs at one path and fail (`NETSDK1152`).
 
 Everything else the app starts still starts, hosted services included. An app whose start-up needs what a build
 machine does not have, such as a database or a message broker, checks `BlueprintOpenApiDocumentMode.IsActive` and skips

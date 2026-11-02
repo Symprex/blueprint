@@ -21,6 +21,13 @@
     <BlueprintOpenApiTimeout Condition="'$(BlueprintOpenApiTimeout)' == ''">120000</BlueprintOpenApiTimeout>
   </PropertyGroup>
 
+  <!-- The spec is the repository's, not the app's: the web SDK would publish it as content, and an app that references
+       another app would then publish both at one relative path (NETSDK1152). Excluded whether or not this build writes
+       it, since a committed spec is there either way. -->
+  <ItemGroup>
+    <Content Remove="$(BlueprintOpenApiPath)" />
+  </ItemGroup>
+
   <!-- Apps only: a library has nothing to start, and a test project's entry point runs its tests. Both ignore the
        property, so it can be passed to a whole solution's build. -->
   <Target Name="BlueprintEmitOpenApi"
