@@ -115,6 +115,24 @@ public sealed class ValidationErrorKeyNamingTests
         errors.Keys.Should().Equal("x_Address.x_Street");
     }
 
+    [Fact]
+    public async Task A_data_annotations_validation_exception_of_a_nested_result_is_named_from_the_members_own_names()
+    {
+        // The pipeline turns a thrown DataAnnotations ValidationException into a result of its own, which used to keep only
+        // the camelCased member name: x_address.x_street rather than the body's x_Address.x_Street.
+        var nested = RecursiveDataAnnotationValidator.ValidateChildObject(
+            "Address",
+            new NestedValidationAddress { PostCode = "AB1 2CD" },
+            new ValidationContext(new object())).Single();
+
+        var result = Blueprint.Middleware.ValidationMiddlewareBuilder.ToValidationFailedResult(
+            new System.ComponentModel.DataAnnotations.ValidationException(nested, null, null));
+
+        var errors = await WriteAsync(result, static json => json.DictionaryKeyPolicy = new PrefixNamingPolicy());
+
+        errors.Keys.Should().Equal("x_Address.x_Street");
+    }
+
     [Theory]
     [MemberData(nameof(Paths))]
     public async Task Nested_members_whose_names_differ_only_in_case_keep_their_own_messages(string path)
