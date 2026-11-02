@@ -76,6 +76,37 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task When_the_app_exits_without_starting_its_host_then_the_build_fails_and_the_earlier_spec_is_not_accepted()
+    {
+        // Such an app exits with 0 and writes nothing, so its exit code alone would let a stale spec pass for a current one.
+        var appDirectory = Path.Combine(this._directory, "EarlyExitApp");
+        var appProject = Path.Combine(appDirectory, "EarlyExitApp.csproj");
+        var targets = Path.Combine(FindRepositoryRoot(), "src", "Blueprint.Runtime", "buildTransitive", "Blueprint.Runtime.targets");
+        Directory.CreateDirectory(appDirectory);
+        var appProjectXml = $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+              <Import Project="{targets}" />
+            </Project>
+            """;
+        File.WriteAllText(appProject, appProjectXml);
+        File.WriteAllText(Path.Combine(appDirectory, "Program.cs"), "return;");
+
+        const string Stale = "{\"stale\":true}";
+        Directory.CreateDirectory(Path.GetDirectoryName(this.OutputPath)!);
+        File.WriteAllText(this.OutputPath, Stale);
+
+        var (exitCode, output) = await StartDotnetAsync("build", appProject, "-nologo", "-p:BlueprintEmitOpenApi=true", $"-p:BlueprintOpenApiPath={this.OutputPath}");
+
+        exitCode.Should().NotBe(0, "the build should fail:{0}{1}", Environment.NewLine, output);
+        output.Should().Contain("exited without writing its OpenAPI document");
+        File.ReadAllText(this.OutputPath).Should().Be(Stale);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(this._directory))
@@ -97,6 +128,18 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
     /// Runs the .NET CLI, asserts that it succeeds and returns what it wrote to standard output.
     /// </summary>
     private static async Task<string> RunDotnetAsync(params string[] arguments)
+    {
+        var (exitCode, output) = await StartDotnetAsync(arguments);
+
+        exitCode.Should().Be(0, "the command should succeed:{0}{1}", Environment.NewLine, output);
+
+        return output;
+    }
+
+    /// <summary>
+    /// Runs the .NET CLI and returns its exit code and what it wrote, standard output first.
+    /// </summary>
+    private static async Task<(int ExitCode, string Output)> StartDotnetAsync(params string[] arguments)
     {
         var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
         {
@@ -127,9 +170,7 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
             throw;
         }
 
-        process.ExitCode.Should().Be(0, "the command should succeed:{0}{1}{0}{2}", Environment.NewLine, await output, await error);
-
-        return await output;
+        return (process.ExitCode, await output + Environment.NewLine + await error);
     }
 
     private static string FindRepositoryRoot()
