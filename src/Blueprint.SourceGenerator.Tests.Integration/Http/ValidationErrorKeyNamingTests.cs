@@ -74,6 +74,26 @@ public sealed class ValidationErrorKeyNamingTests
         errors.Keys.Should().BeEquivalentTo(_memberPaths);
     }
 
+    [Theory]
+    [InlineData("grouped", "Items[\"a]B\"].Name", "items[\"a]B\"].name")]
+    [InlineData("grouped", "Items[\"a[B\"].Name", "items[\"a[B\"].name")]
+    [InlineData("grouped", "Items['a]B'].Name", "items['a]B'].name")]
+    [InlineData("grouped", "Items[\"a\\\"]B\"].Name", "items[\"a\\\"]B\"].name")]
+    [InlineData("pre-built", "Items[\"a]B\"].Name", "items[\"a]B\"].name")]
+    [InlineData("pre-built", "Items[\"a[B\"].Name", "items[\"a[B\"].name")]
+    public async Task A_bracket_inside_a_quoted_indexer_key_is_part_of_the_key(string path, string memberPath, string expected)
+    {
+        // A dictionary key is kept as it is, so a bracket quoted inside it must neither end the indexer early (renaming
+        // the rest of the key) nor open another one (leaving the member after it unnamed).
+        var result = path == "grouped"
+            ? new ValidationFailedResult([new ValidationResult("Invalid", [memberPath])])
+            : new ValidationFailedResult(new BlueprintValidationException(new Dictionary<string, string[]> { [memberPath] = ["Invalid"] }));
+
+        var errors = await WriteAsync(result, static json => json.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
+
+        errors.Keys.Should().Equal(expected);
+    }
+
     [Fact]
     public async Task Keys_that_a_policy_makes_equal_are_written_as_one_with_both_messages()
     {

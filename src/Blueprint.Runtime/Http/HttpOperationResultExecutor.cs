@@ -846,7 +846,11 @@ public class HttpOperationResultExecutor
                 {
                     foreach (var entry in ExpandValidationErrorEntries(validationResult))
                     {
-                        var key = keyPolicy is null ? entry.MemberName : NameErrorKey(entry.MemberName, keyPolicy);
+                        // The recursive validator's member name is a camelCased path; a policy names the path of the
+                        // members' own names, as the body's properties are named from them.
+                        var key = keyPolicy is null
+                            ? entry.MemberName
+                            : NameErrorKey(validationResult is Blueprint.Validation.MemberPathValidationResult nested ? nested.MemberPath : entry.MemberName, keyPolicy);
                         AddValidationError(grouped, key, entry.ErrorMessage);
                     }
                 }
@@ -922,6 +926,7 @@ public class HttpOperationResultExecutor
         var named = new System.Text.StringBuilder(key.Length + 8);
         var segmentStart = 0;
         var indexerDepth = 0;
+        var quote = '\0';
 
         for (var i = 0; i < key.Length; i++)
         {
@@ -929,10 +934,26 @@ public class HttpOperationResultExecutor
 
             if (indexerDepth > 0)
             {
-                // An indexer's contents - a position or a dictionary key - are not member names.
+                // An indexer's contents - a position or a dictionary key - are not member names. A quoted key may hold
+                // brackets of its own, which neither end the indexer nor open another.
                 named.Append(c);
 
-                if (c == ']')
+                if (quote != '\0')
+                {
+                    if (c == '\\' && i + 1 < key.Length)
+                    {
+                        named.Append(key[++i]);
+                    }
+                    else if (c == quote)
+                    {
+                        quote = '\0';
+                    }
+                }
+                else if (c is '"' or '\'')
+                {
+                    quote = c;
+                }
+                else if (c == ']')
                 {
                     indexerDepth--;
                     segmentStart = i + 1;
