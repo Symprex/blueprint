@@ -23,9 +23,29 @@ internal static class RuntimeResponseReaders
     /// </summary>
     /// <typeparam name="T">The result type.</typeparam>
     /// <returns>The reader.</returns>
+    /// <exception cref="NotSupportedException">When <typeparamref name="T"/>, or a member of it as a union, is an abstract
+    /// resource event, which no response can be read as. A caller gets the reader before it sends, so nothing is sent.</exception>
     internal static BlueprintResponseReader<T> For<T>()
     {
-        return Cache<T>.Reader;
+        return Cache<T>.Reader ?? throw new NotSupportedException(Cache<T>.Refusal);
+    }
+
+    /// <summary>
+    /// Why no response can be read as <paramref name="type"/>, or <see langword="null"/> when one can: an abstract resource
+    /// event cannot be created, and as a union member it would otherwise leave the other member to read the response.
+    /// </summary>
+    private static string? FindRefusal(Type type)
+    {
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Results<,>))
+        {
+            var memberTypes = type.GetGenericArguments();
+
+            return FindRefusal(memberTypes[0]) ?? FindRefusal(memberTypes[1]);
+        }
+
+        return type.IsAbstract && typeof(ResourceEvent).IsAssignableFrom(type)
+            ? $"The resource event type '{type.FullName}' is abstract, so no response can be read as it."
+            : null;
     }
 
     private static BlueprintResponseReader<T> Create<T>()
@@ -293,6 +313,8 @@ internal static class RuntimeResponseReaders
 
     private static class Cache<T>
     {
-        internal static readonly BlueprintResponseReader<T> Reader = Create<T>();
+        internal static readonly string? Refusal = FindRefusal(typeof(T));
+
+        internal static readonly BlueprintResponseReader<T>? Reader = Refusal is null ? Create<T>() : null;
     }
 }
