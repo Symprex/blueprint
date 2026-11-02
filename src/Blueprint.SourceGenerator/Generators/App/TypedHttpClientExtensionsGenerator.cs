@@ -667,7 +667,8 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
     /// </summary>
     /// <remarks>
     /// A property named <c>Throw</c> or <c>Event</c> camel-cases to a keyword, which is not a legal parameter name
-    /// unescaped. The escaped name is the same identifier, so callers still pass it as <c>throw:</c>.
+    /// unescaped. A caller passing it as a named argument escapes it too (<c>@throw: true</c>); an unescaped
+    /// <c>throw:</c> does not compile.
     /// </remarks>
     private static string ToParameterIdentifier(string propertyName)
     {
