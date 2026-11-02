@@ -30,14 +30,19 @@
       <_BlueprintOpenApiFullPath>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildProjectDirectory)', '$(BlueprintOpenApiPath)'))))</_BlueprintOpenApiFullPath>
       <_BlueprintOpenApiDotnet>$(DOTNET_HOST_PATH)</_BlueprintOpenApiDotnet>
       <_BlueprintOpenApiDotnet Condition="'$(_BlueprintOpenApiDotnet)' == ''">dotnet</_BlueprintOpenApiDotnet>
+      <!-- Written by the app once the document is written or found unchanged. The exit code alone cannot say so: an app
+           that returns before starting its host exits with 0 and writes nothing, leaving any earlier spec in place. -->
+      <_BlueprintOpenApiCompletionPath>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'blueprint-openapi.completed'))))</_BlueprintOpenApiCompletionPath>
     </PropertyGroup>
+
+    <Delete Files="$(_BlueprintOpenApiCompletionPath)" />
 
     <!-- The app runs from the project directory, as `dotnet run` runs it. ASPNETCORE_URLS only matters for a server
          registered after AddBlueprintApi, which replaces the one that never listens: it then listens on a free
          loopback port until it stops. -->
     <Exec Command="&quot;$(_BlueprintOpenApiDotnet)&quot; exec &quot;$(TargetPath)&quot;"
           WorkingDirectory="$(MSBuildProjectDirectory)"
-          EnvironmentVariables="BLUEPRINT_OPENAPI_OUTPUT_PATH=$(_BlueprintOpenApiFullPath);DOTNET_ENVIRONMENT=$(BlueprintOpenApiEnvironment);ASPNETCORE_ENVIRONMENT=$(BlueprintOpenApiEnvironment);ASPNETCORE_URLS=http://127.0.0.1:0"
+          EnvironmentVariables="BLUEPRINT_OPENAPI_OUTPUT_PATH=$(_BlueprintOpenApiFullPath);BLUEPRINT_OPENAPI_COMPLETION_PATH=$(_BlueprintOpenApiCompletionPath);DOTNET_ENVIRONMENT=$(BlueprintOpenApiEnvironment);ASPNETCORE_ENVIRONMENT=$(BlueprintOpenApiEnvironment);ASPNETCORE_URLS=http://127.0.0.1:0"
           StandardOutputImportance="low"
           StandardErrorImportance="high"
           Timeout="$(BlueprintOpenApiTimeout)"
@@ -47,6 +52,11 @@
 
     <Error Condition="'$(_BlueprintOpenApiExitCode)' != '0'"
            Text="$(MSBuildProjectName) could not write its OpenAPI document to $(_BlueprintOpenApiFullPath): the app exited with code $(_BlueprintOpenApiExitCode). Its error output is above." />
+
+    <Error Condition="'$(_BlueprintOpenApiExitCode)' == '0' and !Exists('$(_BlueprintOpenApiCompletionPath)')"
+           Text="$(MSBuildProjectName) exited without writing its OpenAPI document to $(_BlueprintOpenApiFullPath). The app must build and run its host (host.Run or app.Run) and call AddBlueprintApi and MapBlueprintApi as it starts." />
+
+    <Delete Files="$(_BlueprintOpenApiCompletionPath)" />
 
     <Message Importance="high" Text="$(MSBuildProjectName) -> $(_BlueprintOpenApiFullPath)" />
   </Target>

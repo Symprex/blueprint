@@ -5,6 +5,7 @@ using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptor
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 
@@ -19,6 +20,8 @@ public sealed class OpenApiDocumentOnlyModeTests : IDisposable
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "blueprint-openapi-" + Guid.NewGuid().ToString("N"));
 
     private string OutputPath => Path.Combine(this._directory, "Spec", "openapi.json");
+
+    private string CompletionPath => Path.Combine(this._directory, "obj", "openapi.done");
 
     [Fact]
     public async Task When_run_in_document_only_mode_then_the_document_is_written_and_the_app_stops_itself()
@@ -89,6 +92,28 @@ public sealed class OpenApiDocumentOnlyModeTests : IDisposable
         (await run.Should().ThrowAsync<InvalidOperationException>())
             .Which.Message.Should().Contain("MapBlueprintApi").And.Contain(this.OutputPath);
         File.Exists(this.OutputPath).Should().BeFalse();
+        File.Exists(this.CompletionPath).Should().BeFalse("the build target fails when the app does not record that it wrote the document");
+    }
+
+    [Fact]
+    public async Task When_the_document_is_written_or_found_unchanged_then_completion_is_recorded_for_the_build_target()
+    {
+        // The target cannot tell from the exit code alone: an app that returns before starting its host exits with 0.
+        await this.RunAsync();
+        File.Exists(this.CompletionPath).Should().BeTrue();
+
+        File.Delete(this.CompletionPath);
+        await this.RunAsync();
+        File.Exists(this.CompletionPath).Should().BeTrue("an unchanged document is a successful emission too");
+    }
+
+    [Fact]
+    public async Task When_a_later_lifecycle_service_honours_its_start_token_then_the_app_still_starts_and_stops()
+    {
+        // Stopping the app from StartedAsync used to cancel the start token every later StartedAsync was handed.
+        await this.RunAsync(configureAfter: static services => services.AddHostedService<StartTokenHonouringService>());
+
+        File.Exists(this.OutputPath).Should().BeTrue();
     }
 
     public void Dispose()
@@ -102,12 +127,13 @@ public sealed class OpenApiDocumentOnlyModeTests : IDisposable
     /// <summary>
     /// Builds and runs an app in document-only mode, as the build target runs it, and returns the document the app mapped.
     /// </summary>
-    private async Task<string> RunAsync(bool mapApi = true, string? url = null)
+    private async Task<string> RunAsync(bool mapApi = true, string? url = null, Action<IServiceCollection>? configureAfter = null)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
             static blueprint => blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>());
-        BlueprintOpenApiDocumentMode.Enable(builder.Services, this.OutputPath);
+        BlueprintOpenApiDocumentMode.Enable(builder.Services, this.OutputPath, this.CompletionPath);
+        configureAfter?.Invoke(builder.Services);
 
         var app = builder.Build();
 
@@ -135,5 +161,44 @@ public sealed class OpenApiDocumentOnlyModeTests : IDisposable
         await run;
 
         return document;
+    }
+
+    /// <summary>
+    /// A lifecycle service registered after document-only mode that, as a well-behaved service does, gives up when its
+    /// start token is cancelled.
+    /// </summary>
+    private sealed class StartTokenHonouringService : IHostedLifecycleService
+    {
+        public Task StartingAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task StartedAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.CompletedTask;
+        }
+
+        public Task StoppingAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task StoppedAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

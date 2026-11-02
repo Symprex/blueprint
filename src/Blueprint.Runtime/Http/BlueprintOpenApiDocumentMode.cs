@@ -28,6 +28,13 @@ public static class BlueprintOpenApiDocumentMode
     public const string OutputPathVariable = "BLUEPRINT_OPENAPI_OUTPUT_PATH";
 
     /// <summary>
+    /// The environment variable the build target sets to the full path of a file the app writes once the document has been
+    /// written or found unchanged. The target fails without it, because an app that returns before starting its host
+    /// exits as successfully as one that wrote the document.
+    /// </summary>
+    internal const string CompletionPathVariable = "BLUEPRINT_OPENAPI_COMPLETION_PATH";
+
+    /// <summary>
     /// Gets a value indicating whether this process was started only to write the app's OpenAPI document, so that start-up
     /// work the document does not need, such as connecting to a database, can be skipped.
     /// </summary>
@@ -43,7 +50,7 @@ public static class BlueprintOpenApiDocumentMode
 
         if (!string.IsNullOrEmpty(outputPath))
         {
-            Enable(services, outputPath);
+            Enable(services, outputPath, Environment.GetEnvironmentVariable(CompletionPathVariable));
         }
     }
 
@@ -56,14 +63,19 @@ public static class BlueprintOpenApiDocumentMode
     /// </remarks>
     /// <param name="services">The app's services.</param>
     /// <param name="outputPath">The file to write the document to.</param>
-    internal static void Enable(IServiceCollection services, string outputPath)
+    /// <param name="completionPath">
+    /// The file to write once the document has been written or found unchanged, which the build target requires before it
+    /// accepts the run; <see langword="null" /> writes none.
+    /// </param>
+    internal static void Enable(IServiceCollection services, string outputPath, string? completionPath = null)
     {
         services.AddSingleton<IServer, DocumentOnlyServer>();
         services.AddSingleton<IHostedService>(sp => new DocumentWriter(
             sp.GetRequiredService<PreRenderedOpenApiDocumentHolder>(),
             sp.GetRequiredService<IHostApplicationLifetime>(),
             sp.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.OpenApi"),
-            Path.GetFullPath(outputPath)));
+            Path.GetFullPath(outputPath),
+            string.IsNullOrEmpty(completionPath) ? null : Path.GetFullPath(completionPath)));
     }
 
     /// <summary>
@@ -98,11 +110,17 @@ public static class BlueprintOpenApiDocumentMode
     /// <c>Configure</c> (where a <c>Startup</c> class maps the API), and then stops the app. A failure is thrown from
     /// start-up, so the app exits with an error and the build fails.
     /// </summary>
+    /// <remarks>
+    /// The app is stopped once it has started, not from <see cref="StartedAsync" />: stopping it there would cancel the
+    /// start token that every later lifecycle service's <c>StartedAsync</c> is handed, and fail a start-up that had
+    /// succeeded.
+    /// </remarks>
     private sealed class DocumentWriter(
         PreRenderedOpenApiDocumentHolder holder,
         IHostApplicationLifetime lifetime,
         ILogger? logger,
-        string fullPath) : IHostedLifecycleService
+        string fullPath,
+        string? completionPath) : IHostedLifecycleService
     {
         public Task StartedAsync(CancellationToken cancellationToken)
         {
@@ -119,7 +137,13 @@ public static class BlueprintOpenApiDocumentMode
                 logger?.LogInformation("Blueprint OpenAPI document at {OpenApiPath} is unchanged", fullPath);
             }
 
-            lifetime.StopApplication();
+            if (completionPath is not null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(completionPath)!);
+                File.WriteAllText(completionPath, fullPath);
+            }
+
+            lifetime.ApplicationStarted.Register(lifetime.StopApplication);
 
             return Task.CompletedTask;
         }

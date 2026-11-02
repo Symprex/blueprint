@@ -76,10 +76,21 @@ against the base branch. These steps are PowerShell, as on a `windows-latest` ru
    pull request changed the API without committing the regenerated spec:
 
    ```powershell
+   $spec = 'src/MyApi/Spec/openapi.json'
+
    dotnet build src/MyApi -c Release -p:BlueprintEmitOpenApi=true
-   git diff --exit-code -- src/MyApi/Spec/openapi.json
-   if ($LASTEXITCODE -ne 0) { throw 'Spec/openapi.json is out of date: build with -p:BlueprintEmitOpenApi=true and commit it.' }
+   if ($LASTEXITCODE -ne 0) { throw 'The build failed, so the spec was not regenerated.' }
+
+   git ls-files --error-unmatch -- $spec
+   if ($LASTEXITCODE -ne 0) { throw "$spec is not committed: build with -p:BlueprintEmitOpenApi=true and commit it." }
+
+   git diff --exit-code -- $spec
+   if ($LASTEXITCODE -ne 0) { throw "$spec is out of date: build with -p:BlueprintEmitOpenApi=true and commit it." }
    ```
+
+   Each step checks `$LASTEXITCODE` itself, because PowerShell does not stop when a native command fails: without the
+   first check a failed build leaves the committed spec as it was, and the diff passes. `git diff` does not see an
+   untracked file, so without the second a pull request that deletes the spec passes too.
 
    For an app that uses `[Expose<T>]`, this is how drift in an inner operation shows up: a new inner property becomes a
    spec diff in the pull request that adds it.
@@ -88,9 +99,15 @@ against the base branch. These steps are PowerShell, as on a `windows-latest` ru
    [oasdiff](https://github.com/oasdiff/oasdiff):
 
    ```powershell
-   git show "origin/main:src/MyApi/Spec/openapi.json" | Set-Content -Encoding utf8NoBOM base-openapi.json
-   oasdiff breaking base-openapi.json src/MyApi/Spec/openapi.json --fail-on ERR
+   git show "origin/main:$spec" | Set-Content -Encoding utf8NoBOM base-openapi.json
+   if ($LASTEXITCODE -ne 0) { throw "origin/main has no $spec to compare with." }
+
+   oasdiff breaking base-openapi.json $spec --fail-on ERR
+   if ($LASTEXITCODE -ne 0) { throw "$spec has breaking changes against origin/main." }
    ```
+
+   Run it after step 1, which proves that `$spec` is the committed, current document. An API that is new in the pull
+   request has no base spec, so skip this step for it.
 
    The checkout needs the base branch's history (`fetch-depth: 0` with `actions/checkout`). oasdiff also publishes a
    GitHub Action, `oasdiff/oasdiff-action/breaking`, that takes the same two files.
