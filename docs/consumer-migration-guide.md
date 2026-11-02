@@ -1690,7 +1690,7 @@ v1.0.2 it was a plain `Exception` with only `StatusCode` and `ResponseBody`, whi
 | `[ServiceApiInclude(typeof(Op))]` | `[BlueprintClient]` on the class, plus `[BlueprintClientInclude(typeof(Op))]` per operation |
 | `api.UpdateJwt(jwt)` | `api.WithCredential(new BearerTokenCredential(jwt))`, which returns a new client and leaves the original unchanged |
 | `private static CallOptions? ModifyOptionsFor(Op operation, CallOptions? options)` | `partial void OnConfigure(Op operation, ref CallOptions? options)`, one per included operation |
-| Direct use of `DefaultModifyRequest` | `protected WithRequestModifier(Action<HttpRequestMessage>)` |
+| Direct use of `DefaultModifyRequest` | `protected WithRequestModifier(Action<HttpRequestMessage>)` (`private` on a sealed client) |
 | The `BlueprintHttpClient` interface property | Removed; the transport is private to the generated client |
 | `new XApi(new BlueprintHttpClient<RuntimeScanBlueprintApp>(httpClient, jsonOptions))` | `new XApi(new BlueprintHttpClient(httpClient, jsonOptions))` |
 | `AddBlueprintClient<IX, X>((sp, c) => …, typeof(Op).Assembly)` (the trailing `contractsAssembly` was optional, and most S365 sites omitted it; it returned `void`) | `AddBlueprintClient<IX, X>((sp, c) => …)`, which returns `IHttpClientBuilder` |
