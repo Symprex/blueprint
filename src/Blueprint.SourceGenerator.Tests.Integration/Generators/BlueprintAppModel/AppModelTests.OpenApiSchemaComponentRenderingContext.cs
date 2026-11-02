@@ -85,6 +85,8 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "NestedLinkHolderApiResource",
             "NestedLinkInnerApiResource",
             "NestedLinkListedItemApiResource",
+            "NestedValidationAddress",
+            "NestedValidationItem",
             "NodaTimeEchoResponse",
             "OperationIdMixedLinkApiResource",
             "PagedApiResourceOfLegacyShapeTenant",

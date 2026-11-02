@@ -99,4 +99,6 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(List<Http.DeclaredCollectionBodyItem>))]
 [JsonSerializable(typeof(Http.LegacyShape.BodyFormatResult))]
 [JsonSerializable(typeof(ListApiResource<Http.GrantFolderApiResource>))]
+[JsonSerializable(typeof(Http.NestedValidationAddress))]
+[JsonSerializable(typeof(List<Http.NestedValidationItem>))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

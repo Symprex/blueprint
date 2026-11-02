@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -452,33 +453,7 @@ public class HttpOperationResultExecutor
 
         if (jsonTypeInfo is not null)
         {
-            // Serialize to thread-local buffer to enable Content-Length (avoids chunked encoding)
-            // and eliminate the internal buffer allocation within SerializeAsync.
-            var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
-            buffer.Clear();
-
-            var writer = _threadLocalWriter;
-            if (writer is null)
-            {
-                writer = new Utf8JsonWriter(buffer);
-                _threadLocalWriter = writer;
-            }
-            else
-            {
-                writer.Reset(buffer);
-            }
-
-            JsonSerializer.Serialize(writer, content, jsonTypeInfo);
-            writer.Flush();
-
-            httpContext.Response.ContentLength = buffer.WrittenCount;
-
-            // WriteAsync on response body completes synchronously for small payloads in Kestrel.
-            // Avoid async state machine allocation by checking IsCompletedSuccessfully.
-            var writeTask = WriteThreadBufferAsync(httpContext, buffer);
-            return writeTask.IsCompletedSuccessfully
-                ? Task.CompletedTask
-                : writeTask.AsTask();
+            return WriteJsonAsync(httpContext, content, jsonTypeInfo);
         }
         else
         {
@@ -487,6 +462,37 @@ public class HttpOperationResultExecutor
                 ?? CreateFallbackSerializerOptions(serializerOptions);
             return JsonSerializer.SerializeAsync(httpContext.Response.Body, content, contentType, options, httpContext.RequestAborted);
         }
+    }
+
+    private static Task WriteJsonAsync(HttpContext httpContext, object content, JsonTypeInfo jsonTypeInfo)
+    {
+        // Serialize to thread-local buffer to enable Content-Length (avoids chunked encoding)
+        // and eliminate the internal buffer allocation within SerializeAsync.
+        var buffer = _threadLocalBuffer ??= new System.Buffers.ArrayBufferWriter<byte>(512);
+        buffer.Clear();
+
+        var writer = _threadLocalWriter;
+        if (writer is null)
+        {
+            writer = new Utf8JsonWriter(buffer);
+            _threadLocalWriter = writer;
+        }
+        else
+        {
+            writer.Reset(buffer);
+        }
+
+        JsonSerializer.Serialize(writer, content, jsonTypeInfo);
+        writer.Flush();
+
+        httpContext.Response.ContentLength = buffer.WrittenCount;
+
+        // WriteAsync on response body completes synchronously for small payloads in Kestrel.
+        // Avoid async state machine allocation by checking IsCompletedSuccessfully.
+        var writeTask = WriteThreadBufferAsync(httpContext, buffer);
+        return writeTask.IsCompletedSuccessfully
+            ? Task.CompletedTask
+            : writeTask.AsTask();
     }
 
     // Pre-computed ChangeType enum strings matching JsonStringEnumConverter<ChangeType> output (PascalCase).
@@ -796,11 +802,21 @@ public class HttpOperationResultExecutor
         return false;
     }
 
+    /// <summary>
+    /// Writes a validation failure as a 422 <see cref="MvcValidationProblemDetails"/>, its <c>errors</c> keyed by member
+    /// path. With the app's serializer options naming dictionary keys or properties, each key is named with that policy -
+    /// the <see cref="JsonSerializerOptions.DictionaryKeyPolicy"/>, else the <see cref="JsonSerializerOptions.PropertyNamingPolicy"/>
+    /// - segment by segment (<see cref="NameErrorKey"/>), so a client places an error on the field it reads the body's
+    /// property by (Symprex/blueprint#91); without either, the key is the member path itself.
+    /// </summary>
     private static async Task WriteValidationFailureAsync(HttpContext httpContext, ApiOperationContext operationContext, ValidationFailedResult validationFailedResult, BlueprintHttpOptions httpOptions)
     {
+        var serializerOptions = operationContext.App.AppOwnedSerializerContext?.Options;
+        var keyPolicy = serializerOptions?.DictionaryKeyPolicy ?? serializerOptions?.PropertyNamingPolicy;
+
         IDictionary<string, string[]> validationErrors;
 
-        if (validationFailedResult.Errors is { Count: > 0 } preBuilt)
+        if (validationFailedResult.Errors is { Count: > 0 } preBuilt && keyPolicy is null)
         {
             // The concrete type is Dictionary<string, string[]> which implements both
             // IReadOnlyDictionary and IDictionary. Cast directly to avoid a copy.
@@ -811,21 +827,38 @@ public class HttpOperationResultExecutor
         {
             // Single-pass grouping using List<string> to avoid O(n²) array expansion.
             // Final conversion to string[] happens once per member after all entries are collected.
+            // Two members a policy names alike (Name and name) are grouped as one key.
             var grouped = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 
-            foreach (var validationResult in validationFailedResult.ValidationResults)
+            if (validationFailedResult.Errors is { Count: > 0 } errors)
             {
-                foreach (var entry in ExpandValidationErrorEntries(validationResult))
-                {
-                    if (!grouped.TryGetValue(entry.MemberName, out var list))
-                    {
-                        list = new List<string>(1);
-                        grouped[entry.MemberName] = list;
-                    }
+                // An exception made from results keys its dictionary by their member names, which for the recursive
+                // validator's are camelCased paths, so members whose names differ only in case share a key. Each message
+                // is named from the path of the result it came from instead.
+                var memberPaths = GetMemberPaths(validationFailedResult.ValidationResults);
 
-                    if (!list.Contains(entry.ErrorMessage))
+                foreach (var kvp in errors)
+                {
+                    var candidates = memberPaths?.GetValueOrDefault(kvp.Key);
+
+                    foreach (var errorMessage in kvp.Value)
                     {
-                        list.Add(entry.ErrorMessage);
+                        AddValidationError(grouped, NameErrorKey(TakeMemberPath(candidates, errorMessage) ?? kvp.Key, keyPolicy!), errorMessage);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var validationResult in validationFailedResult.ValidationResults)
+                {
+                    foreach (var entry in ExpandValidationErrorEntries(validationResult))
+                    {
+                        // The recursive validator's member name is a camelCased path; a policy names the path of the
+                        // members' own names, as the body's properties are named from them.
+                        var key = keyPolicy is null
+                            ? entry.MemberName
+                            : NameErrorKey(validationResult is Blueprint.Validation.MemberPathValidationResult nested ? nested.MemberPath : entry.MemberName, keyPolicy);
+                        AddValidationError(grouped, key, entry.ErrorMessage);
                     }
                 }
             }
@@ -850,7 +883,177 @@ public class HttpOperationResultExecutor
 
         httpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
-        await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
+
+        if (serializerOptions?.DictionaryKeyPolicy is null)
+        {
+            await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
+        }
+        else
+        {
+            // System.Text.Json applies a dictionary key policy to the whole of each key it writes, which would name the
+            // keys named above a second time.
+            var typeInfo = SerializerContextTypeInfoCache.GetVerbatimDictionaryKeyOptions(serializerOptions)
+                .GetTypeInfo(typeof(MvcValidationProblemDetails));
+
+            await WriteJsonAsync(httpContext, problemDetails, typeInfo).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Gets, for each member name the recursive validator's results carry, the message and member path of each of those
+    /// results in order: the message as <see cref="Blueprint.Validation.ValidationException"/> puts it in its dictionary.
+    /// </summary>
+    private static Dictionary<string, List<(string Message, string MemberPath)>>? GetMemberPaths(List<ValidationResult> validationResults)
+    {
+        Dictionary<string, List<(string Message, string MemberPath)>>? memberPaths = null;
+
+        foreach (var validationResult in validationResults)
+        {
+            if (validationResult is Blueprint.Validation.MemberPathValidationResult nested)
+            {
+                memberPaths ??= new Dictionary<string, List<(string Message, string MemberPath)>>(StringComparer.Ordinal);
+
+                var memberName = nested.MemberNames.First();
+
+                if (!memberPaths.TryGetValue(memberName, out var candidates))
+                {
+                    candidates = [];
+                    memberPaths[memberName] = candidates;
+                }
+
+                candidates.Add((nested.ErrorMessage ?? "Validation failed", nested.MemberPath));
+            }
+        }
+
+        return memberPaths;
+    }
+
+    /// <summary>
+    /// Takes the member path of the first of <paramref name="candidates"/> with <paramref name="errorMessage"/>, so a
+    /// repeated message goes to each of its members in turn, or returns <see langword="null"/> when none has it.
+    /// </summary>
+    private static string? TakeMemberPath(List<(string Message, string MemberPath)>? candidates, string errorMessage)
+    {
+        if (candidates is null)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            if (candidates[i].Message == errorMessage)
+            {
+                var memberPath = candidates[i].MemberPath;
+                candidates.RemoveAt(i);
+                return memberPath;
+            }
+        }
+
+        return null;
+    }
+
+    private static void AddValidationError(Dictionary<string, List<string>> grouped, string key, string errorMessage)
+    {
+        if (!grouped.TryGetValue(key, out var list))
+        {
+            list = new List<string>(1);
+            grouped[key] = list;
+        }
+
+        if (!list.Contains(errorMessage))
+        {
+            list.Add(errorMessage);
+        }
+    }
+
+    /// <summary>
+    /// Names a validation error key with <paramref name="policy"/>: each member name in the path, leaving the separators
+    /// and what an indexer holds as they are, so <c>Items[0].UnitPrice</c> is <c>items[0].unitPrice</c> under camelCase.
+    /// The form-level key is not a member and keeps its name, which clients read it by.
+    /// </summary>
+    private static string NameErrorKey(string key, JsonNamingPolicy policy)
+    {
+        if (key == Blueprint.Validation.ValidationFailures.FormLevelPropertyName)
+        {
+            return key;
+        }
+
+        if (key.AsSpan().IndexOfAny('.', '[') < 0)
+        {
+            return policy.ConvertName(key);
+        }
+
+        var named = new System.Text.StringBuilder(key.Length + 8);
+        var segmentStart = 0;
+        var indexerDepth = 0;
+        var quote = '\0';
+
+        for (var i = 0; i < key.Length; i++)
+        {
+            var c = key[i];
+
+            if (indexerDepth > 0)
+            {
+                // An indexer's contents - a position or a dictionary key - are not member names. A quoted key may hold
+                // brackets of its own, which neither end the indexer nor open another. A key is quoted only by a quote
+                // that opens the indexer; an apostrophe within an unquoted key (O'Brien) is part of it.
+                named.Append(c);
+
+                if (quote != '\0')
+                {
+                    if (c == '\\' && i + 1 < key.Length)
+                    {
+                        named.Append(key[++i]);
+                    }
+                    else if (c == quote)
+                    {
+                        quote = '\0';
+                    }
+                }
+                else if (c is '"' or '\'' && key[i - 1] == '[')
+                {
+                    quote = c;
+                }
+                else if (c == ']')
+                {
+                    indexerDepth--;
+                    segmentStart = i + 1;
+                }
+                else if (c == '[')
+                {
+                    indexerDepth++;
+                }
+
+                continue;
+            }
+
+            if (c is '.' or '[')
+            {
+                AppendNamedSegment(named, key, segmentStart, i, policy);
+                named.Append(c);
+                segmentStart = i + 1;
+
+                if (c == '[')
+                {
+                    indexerDepth++;
+                }
+            }
+        }
+
+        if (indexerDepth == 0)
+        {
+            AppendNamedSegment(named, key, segmentStart, key.Length, policy);
+        }
+
+        return named.ToString();
+
+        static void AppendNamedSegment(System.Text.StringBuilder named, string key, int start, int end, JsonNamingPolicy policy)
+        {
+            if (end > start)
+            {
+                named.Append(policy.ConvertName(key.Substring(start, end - start)));
+            }
+        }
     }
 
     private static IEnumerable<(string MemberName, string ErrorMessage)> ExpandValidationErrorEntries(ValidationResult validationResult)

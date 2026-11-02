@@ -57,6 +57,9 @@ internal static class SerializerContextTypeInfoCache
     // app's options alive.
     private static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> _fallbackOptions = new();
 
+    // Keyed weakly for the same reason as _fallbackOptions.
+    private static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> _verbatimDictionaryKeyOptions = new();
+
     // Shared singleton avoids allocating a new resolver each time the fallback cache is populated.
     [UnconditionalSuppressMessage(
         "Trimming",
@@ -117,6 +120,19 @@ internal static class SerializerContextTypeInfoCache
                     ? _sharedDefaultTypeInfoResolver
                     : JsonTypeInfoResolver.Combine(opts.TypeInfoResolver, _sharedDefaultTypeInfoResolver),
             });
+    }
+
+    /// <summary>
+    /// Gets a copy of <see cref="GetFallbackOptions" />'s options for <paramref name="serializerOptions" /> (made once per
+    /// options instance) without a <see cref="JsonSerializerOptions.DictionaryKeyPolicy" />, for a body whose dictionary
+    /// keys the writer has already named, so the policy is not applied to them a second time.
+    /// </summary>
+    /// <param name="serializerOptions">The app-owned context's options.</param>
+    /// <returns>The options.</returns>
+    public static JsonSerializerOptions GetVerbatimDictionaryKeyOptions(JsonSerializerOptions serializerOptions)
+    {
+        return _verbatimDictionaryKeyOptions.GetValue(serializerOptions, static opts =>
+            new JsonSerializerOptions(GetFallbackOptions(opts)) { DictionaryKeyPolicy = null });
     }
 
     private static JsonTypeInfo? Resolve(JsonSerializerContext context, Type type, JsonSerializerOptions? runtimeFallbackOptions)

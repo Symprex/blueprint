@@ -469,6 +469,18 @@ contain at least one non-empty item if `{1}` field is `{2}`.", legacy Blueprint'
 `null` item as well as an empty collection, and the message now says so. Before v1.0.3 it said "at least one item".
 `RequiredItemsIfNotAttribute` (new-only, no legacy equivalent) still says "at least one item".
 
+**Behaviour change for a 422's `errors` keys (v2.0.0, breaking).** Each key is named with the app's JSON naming policy:
+the `DictionaryKeyPolicy` of the options its serializer context is built with, or else their `PropertyNamingPolicy`.
+Every member name in a path is converted and the separators and indexers are kept, so under camelCase `Items[0].UnitPrice`
+is `items[0].unitPrice`; a client reads the key by the same name as the property it belongs to. Blueprint's default
+options (`BlueprintJsonOptions`) are camelCase, so an app that does not change the policy now answers
+`{"errors":{"name":[...]}}` where it answered `{"errors":{"Name":[...]}}`, as legacy Blueprint did. Two members the policy
+names alike are written as one key with both messages. The form-level key stays `form` whatever the policy, and with
+neither policy set (both `null`) every key is the member path exactly as before. The OpenAPI document does not change:
+it describes `errors` as a map. Coming from legacy Blueprint nothing changes for a camelCase app. Coming from v1.x, a
+client that read a PascalCase key (`errors["Name"]`) must read the camelCase one, or the app must set both policies to
+`null` through `blueprint.ConfigureJson(...)` — which also writes its bodies' properties as their CLR names.
+
 ### 8. Migrate result types
 
 Handler return types now use semantic result types instead of raw objects:
