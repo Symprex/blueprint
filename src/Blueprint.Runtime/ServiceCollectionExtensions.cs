@@ -94,6 +94,9 @@ public static class ServiceCollectionExtensions
         // Pre-rendered OpenAPI document holder — populated at endpoint mapping time
         services.TryAddSingleton<PreRenderedOpenApiDocumentHolder>();
 
+        // Per-operation input schemas (MCP tools, Code Mode) — given the app's operations at endpoint mapping time
+        services.TryAddSingleton<IOperationInputSchemaProvider, OperationInputSchemaProvider>();
+
         configure?.Invoke(builder);
 
         return services;

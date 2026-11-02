@@ -382,6 +382,35 @@ configureOpenApiOperations: operations =>
 
 ---
 
+## Per-operation input schemas
+
+`IOperationInputSchemaProvider` gives each operation the document writes one flattened JSON Schema (draft 2020-12) of its
+input, for a tool surface such as MCP or a search over the API. `AddBlueprintApi` registers it, and `MapBlueprintApi` gives
+it the app's operations, so resolve it after the API is mapped:
+
+```csharp
+var schemas = app.Services.GetRequiredService<IOperationInputSchemaProvider>();
+var schema = schemas.GetSchema("CreateTemplate"); // null when the app exposes no such operation
+```
+
+- **One object.** The route, query, header and body properties are the properties of one object, named as the request
+  names them (the route placeholder, the query or header name, the body's JSON name). `OperationInputSchema.Properties`
+  says where each is read from, so a caller holding an instance can make the request.
+- **The document's own schemas.** Each property's schema, constraints and description are the ones the OpenAPI document
+  gives it, operation and schema processors included, converted to JSON Schema: `nullable` becomes a `null` type, `example`
+  becomes `examples`, `x-` extensions are dropped, and every component referred to is copied under `$defs`.
+- **Only what the caller sends.** A `[FromAuthContext]` or runtime-set property is not in it, nor is a cookie.
+- **Names must not collide.** Two properties whose names differ only by case or not at all (a `[FromQuery("name")]`
+  property beside a body property `Name`, say) make the operation's schema fail with an `InvalidOperationException` that
+  names both; `GetSchemas()` fails while any operation does. Under legacy naming an inherited route, query or header
+  property that the document also writes in the body is one property, written once where it is bound from.
+- **`OperationId`** is the `operationId` the document gives the operation at the first URL it declares.
+
+The schemas are made the first time they are asked for, so an operation that collides fails only a caller that needs
+its schema, never the app's start-up or its document.
+
+---
+
 ## S365 Custom TypeScript Generator
 
 > **S365 does NOT use NSwag.** It uses custom Handlebars templates in each frontend app.

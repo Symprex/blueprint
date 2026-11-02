@@ -451,6 +451,7 @@ public sealed record OpenApiOperationRenderingContext(
                         parameterFormat)
                     {
                         Description = description,
+                        ClrPropertyName = entry.PropertyName,
                         MinLength = parameterConstraints.MinLength,
                         MaxLength = parameterConstraints.MaxLength,
                         Pattern = parameterConstraints.Pattern,
@@ -484,6 +485,7 @@ public sealed record OpenApiOperationRenderingContext(
                         parameterFormat)
                     {
                         Description = description,
+                        ClrPropertyName = entry.PropertyName,
                         MinLength = parameterConstraints.MinLength,
                         MaxLength = parameterConstraints.MaxLength,
                         Pattern = parameterConstraints.Pattern,
@@ -529,6 +531,7 @@ public sealed record OpenApiOperationRenderingContext(
                         parameterFormat)
                     {
                         Description = description,
+                        ClrPropertyName = entry.PropertyName,
                         MinLength = parameterConstraints.MinLength,
                         MaxLength = parameterConstraints.MaxLength,
                         Pattern = parameterConstraints.Pattern,
@@ -561,6 +564,7 @@ public sealed record OpenApiOperationRenderingContext(
                         parameterFormat)
                     {
                         Description = description,
+                        ClrPropertyName = entry.PropertyName,
                         MinLength = parameterConstraints.MinLength,
                         MaxLength = parameterConstraints.MaxLength,
                         Pattern = parameterConstraints.Pattern,
@@ -604,6 +608,7 @@ public sealed record OpenApiOperationRenderingContext(
                         effectiveFormat)
                     {
                         Description = bodyDescription,
+                        ClrPropertyName = entry.PropertyName,
                         IsRequired = isRequired,
                         MinLength = OpenApiValidationConstraints.GetDocumentedMinLength(
                             constraints.MinLength,
