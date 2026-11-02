@@ -18,9 +18,10 @@ namespace Blueprint.Runtime.Http;
 /// component referred to is copied under <c>$defs</c>.
 /// </para>
 /// <para>
-/// Under <see cref="OpenApiSchemaNaming.Legacy"/> an inherited route, query or header property of a non-GET operation is
-/// documented as a parameter and in the body as well (R153). It is one property, which the schema has once, where the
-/// operation binds it from; two different properties of one name are a collision.
+/// Under <see cref="OpenApiSchemaNaming.Legacy"/> an inherited route, query, header or cookie property of a non-GET
+/// operation is documented as a parameter and in the body as well (R153), the body copy under its body name. It is one
+/// property, which the schema has once, where the operation binds it from, and not at all for a cookie; the body's
+/// conditionals are made to name it as the schema does. Two different properties of one name are a collision.
 /// </para>
 /// </remarks>
 internal sealed class OperationInputSchemaSet
@@ -210,8 +211,25 @@ internal sealed class OperationInputSchemaSet
                 .ToDictionary(static g => g.Key, static g => g.First().ClrPropertyName, StringComparer.Ordinal);
             var bodyRequired = bodySchema["required"]?.AsArray().Select(static n => (string?)n).ToHashSet(StringComparer.Ordinal) ?? [];
 
+            // A property the operation binds from a parameter is written in the body as well under Legacy naming (R153), by
+            // its body name rather than the parameter's, and a cookie one too. That copy is not an input: the property is
+            // the parameter, or, for a cookie, none at all.
+            var parameterNamesByClrName = operation.Parameters
+                .Where(static p => p.ClrPropertyName is not null)
+                .GroupBy(static p => p.ClrPropertyName!, StringComparer.Ordinal)
+                .ToDictionary(static g => g.Key, static g => g.First().In == "cookie" ? null : g.First().Name, StringComparer.Ordinal);
+            var copiedBodyNames = new Dictionary<string, string?>(StringComparer.Ordinal);
+
             foreach (var (name, propertySchema) in bodySchema["properties"]?.AsObject() ?? [])
             {
+                if (clrNamesByBodyName.GetValueOrDefault(name) is { } clrName
+                    && parameterNamesByClrName.TryGetValue(clrName, out var parameterName))
+                {
+                    copiedBodyNames[name] = parameterName;
+
+                    continue;
+                }
+
                 Add(
                     name,
                     OperationInputLocation.Body,
@@ -221,7 +239,9 @@ internal sealed class OperationInputSchemaSet
             }
 
             additionalProperties = bodySchema["additionalProperties"]?.DeepClone();
-            conditionals = bodySchema["allOf"]?.DeepClone().AsArray();
+            conditionals = bodySchema["allOf"] is JsonArray bodyConditionals
+                ? new JsonArray([.. bodyConditionals.OfType<JsonObject>().Select(c => RetargetConditional(c, copiedBodyNames)).OfType<JsonNode>()])
+                : null;
         }
 
         if (collisions.Count > 0)
@@ -296,6 +316,64 @@ internal sealed class OperationInputSchemaSet
         }
 
         return schema;
+    }
+
+    /// <summary>
+    /// Copies a body conditional (an <c>if</c>/<c>then</c> pair) so it names the inputs the schema has: a body copy of a
+    /// parameter by the parameter's name. A conditional naming a cookie's copy, which the schema has no input for, is dropped.
+    /// </summary>
+    /// <param name="conditional">The body's conditional.</param>
+    /// <param name="copiedBodyNames">Each body copy's name, to the parameter's, or <see langword="null"/> for a cookie's.</param>
+    /// <returns>The copy, or <see langword="null"/> when it is dropped.</returns>
+    private static JsonObject? RetargetConditional(JsonObject conditional, Dictionary<string, string?> copiedBodyNames)
+    {
+        var copy = conditional.DeepClone().AsObject();
+
+        foreach (var clause in (string[])["if", "then"])
+        {
+            if (copy[clause] is not JsonObject clauseSchema)
+            {
+                continue;
+            }
+
+            if (clauseSchema["required"] is JsonArray required)
+            {
+                for (var i = 0; i < required.Count; i++)
+                {
+                    if ((string?)required[i] is { } name && copiedBodyNames.TryGetValue(name, out var input))
+                    {
+                        if (input is null)
+                        {
+                            return null;
+                        }
+
+                        required[i] = input;
+                    }
+                }
+            }
+
+            if (clauseSchema["properties"] is JsonObject properties)
+            {
+                var renamed = new JsonObject();
+
+                foreach (var (name, schema) in properties.ToList())
+                {
+                    var input = copiedBodyNames.TryGetValue(name, out var parameterName) ? parameterName : name;
+
+                    if (input is null)
+                    {
+                        return null;
+                    }
+
+                    properties.Remove(name);
+                    renamed[input] = schema;
+                }
+
+                clauseSchema["properties"] = renamed;
+            }
+        }
+
+        return copy;
     }
 
     /// <summary>Finds the schema of the slot's JSON request body, following its reference to a component.</summary>

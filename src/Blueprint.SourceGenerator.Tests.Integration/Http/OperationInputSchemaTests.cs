@@ -5,6 +5,7 @@ using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
+using Blueprint.Validation;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
@@ -150,6 +151,33 @@ public sealed class OperationInputSchemaTests
     }
 
     [Fact]
+    public void Legacy_body_copies_of_inherited_header_and_cookie_properties_are_not_body_inputs()
+    {
+        // Legacy writes an inherited header property in the body under its own name ("mode"), not the header's, and an
+        // inherited cookie property there too ("session"), though the operation binds neither from the body.
+        var schema = CreateProvider(static o => o.SchemaNaming = OpenApiSchemaNaming.Legacy).GetSchema(LegacySourcesOperationName);
+
+        schema.Should().NotBeNull();
+        schema!.Properties.Should().Equal(
+            new OperationInputProperty("X-Input-Schema-Mode", OperationInputLocation.Header),
+            new OperationInputProperty("note", OperationInputLocation.Body),
+            new OperationInputProperty("other", OperationInputLocation.Body));
+        PropertyNames(schema.Schema).Should().Equal("X-Input-Schema-Mode", "note", "other");
+    }
+
+    [Fact]
+    public void A_legacy_body_conditional_on_a_dropped_copy_follows_the_property_or_is_dropped_with_it()
+    {
+        var schema = CreateProvider(static o => o.SchemaNaming = OpenApiSchemaNaming.Legacy).GetSchema(LegacySourcesOperationName)!.Schema;
+
+        // "note" is required when the header says strict; "other" depended on the cookie, which the schema cannot carry.
+        var conditional = schema.GetProperty("allOf").EnumerateArray().Should().ContainSingle().Subject;
+        conditional.GetProperty("if").GetProperty("required").EnumerateArray().Select(static e => e.GetString()).Should().Equal("X-Input-Schema-Mode");
+        conditional.GetProperty("if").GetProperty("properties").EnumerateObject().Select(static p => p.Name).Should().Equal("X-Input-Schema-Mode");
+        conditional.GetProperty("then").GetProperty("required").EnumerateArray().Select(static e => e.GetString()).Should().Equal("note");
+    }
+
+    [Fact]
     public void An_operation_the_app_does_not_expose_has_no_schema()
     {
         CreateProvider().GetSchema("NoSuchOperation").Should().BeNull();
@@ -169,6 +197,8 @@ public sealed class OperationInputSchemaTests
     private const string CollidingOperationName = "CollidingOperationInputSchema";
 
     private const string InheritedOperationName = "InheritedOperationInputSchema";
+
+    private const string LegacySourcesOperationName = "LegacySourcesOperationInputSchema";
 
     private static OperationInputSchema GetSchema(string operationName)
     {
@@ -308,5 +338,36 @@ public partial class InheritedOperationInputSchemaCommand : OperationInputSchema
     public static string Handle(InheritedOperationInputSchemaCommand command)
     {
         return "inherited";
+    }
+}
+
+/// <summary>The base of <see cref="LegacySourcesOperationInputSchemaCommand" />, which declares a header and a cookie property.</summary>
+public abstract class OperationInputSchemaLegacySourcesBase
+{
+    [FromHeader("X-Input-Schema-Mode")]
+    public string? Mode { get; set; }
+
+    [FromCookie("inputSchemaSession")]
+    public string? Session { get; set; }
+}
+
+/// <summary>
+/// A command inheriting a header and a cookie property, which legacy naming also writes in the body, with body properties
+/// required on each.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/operation-input-schema/legacy-sources")]
+[HttpPost]
+public partial class LegacySourcesOperationInputSchemaCommand : OperationInputSchemaLegacySourcesBase, ICommand<string>
+{
+    [RequiredIf(nameof(Mode), "strict")]
+    public string? Note { get; set; }
+
+    [RequiredIf(nameof(Session), "admin")]
+    public string? Other { get; set; }
+
+    public static string Handle(LegacySourcesOperationInputSchemaCommand command)
+    {
+        return "sourced";
     }
 }
