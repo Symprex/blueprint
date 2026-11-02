@@ -205,7 +205,7 @@ Run it, and:
 | --- | --- |
 | `GET /api/greetings/Ada` | `200` with `{"name":"Ada","message":"Hello, Ada!","$object":"greeting","$links":{"self":{"href":".../api/greetings/Ada",...}},"$partial":false}` |
 | `POST /api/greetings` with `{"name":"Grace"}` | `200` with the new greeting and its `self` link |
-| `POST /api/greetings` with `{}` | `422` problem details: `"errors":{"Name":["The Name field is required."]}` |
+| `POST /api/greetings` with `{}` | `422` problem details: `"errors":{"name":["The Name field is required."]}`, keyed by the app's naming policy |
 | `GET /api/` | `200` root document listing every root link: `{"$object":"root","$links":{"CreateGreeting":...}}` |
 | `GET /api/.blueprint/openapi.json` | The OpenAPI 3.0 document for both operations |
 
