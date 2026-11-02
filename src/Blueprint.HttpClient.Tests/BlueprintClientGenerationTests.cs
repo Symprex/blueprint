@@ -404,6 +404,15 @@ public sealed class BlueprintClientGenerationTests : IClassFixture<SampleAppFixt
         bodies.Should().HaveCount(2).And.AllSatisfy(static body => body.Should().Contain("\"defaultSortOrder\":\"LASTMODIFIED\""));
     }
 
+    [Fact]
+    public void A_generated_serializer_context_has_metadata_for_the_types_its_declared_type_reaches()
+    {
+        // EnvelopeContextApi compiles with no BPCL007 because the generator counts what TemplateEnvelope reaches; this
+        // holds it to what System.Text.Json actually generated.
+        EnvelopeJsonContext.Default.GetTypeInfo(typeof(CreateTemplateCommand)).Should().NotBeNull();
+        EnvelopeJsonContext.Default.GetTypeInfo(typeof(TemplateApiResource)).Should().NotBeNull();
+    }
+
     private static TemplatesApi CreateApi(FakeHttpHandler handler)
     {
         var httpClient = new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri("https://localhost") };

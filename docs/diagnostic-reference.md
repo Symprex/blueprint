@@ -199,10 +199,10 @@ Reported by `BlueprintClientSourceGenerator` for a `[BlueprintClient]` class, at
 | BPCL001 | Error | Typed client class must be a partial, top-level, non-generic, non-abstract class |
 | BPCL002 | Error | Included type is not a concrete, non-generic operation |
 | BPCL003 | Error | Included operation has no typed `IReturn<T>` result |
-| BPCL004 | Error | Included operation has no typed request builder (not partial, no route, a member named `Http`, derived from a concrete operation, an invalid HTTP method, or compiled without builders), or is `[UnexposedOperation]` |
+| BPCL004 | Error | Included operation has no typed request builder (not partial, no route, named `Http` or with a member of that name, derived from a concrete operation, an invalid HTTP method, or compiled without builders), or is `[UnexposedOperation]` |
 | BPCL005 | Error | An operation is included twice, or two includes produce the same method name |
 | BPCL006 | Error | A public method of the client class is generic, so it cannot be copied into the interface |
-| BPCL007 | Warning | The client's serializer context has no `[JsonSerializable]` for a type an included operation needs |
+| BPCL007 | Warning | The client's serializer context neither declares `[JsonSerializable]` for a type an included operation needs nor reaches it from a type it does declare |
 | BPCL008 | Error | The included operation's result shape has no response reader |
 
 ## Auditing (BPA)

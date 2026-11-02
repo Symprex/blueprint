@@ -375,7 +375,8 @@ The partial class extends the client:
 `[BlueprintClient(SerializerContext = typeof(MyJsonContext))]` puts a hand-declared `JsonSerializerContext` first in a
 copy of the client's options' resolver chain. The derived options are cached per options and context pair. The
 options' converters still apply, and a type the context lacks falls back to the options' own metadata (`BPCL007`
-warns about each one). The context must be hand-declared, because the System.Text.Json generator cannot see generated
+warns about each one). A type the context reaches from a declared type, through a property, field, element or type
+argument, counts as covered, as System.Text.Json generates metadata for it too. The context must be hand-declared, because the System.Text.Json generator cannot see generated
 `[JsonSerializable]` attributes, and it must have the static `Default` instance a source-generated context has.
 
 The client class must be a partial, non-generic, non-abstract class declared directly in a namespace (`BPCL001`).

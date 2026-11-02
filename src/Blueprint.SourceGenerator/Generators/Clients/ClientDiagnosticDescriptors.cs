@@ -56,7 +56,7 @@ internal static class ClientDiagnosticDescriptors
         category: Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A typed client builds each request with the operation's generated Op.Http builders. An operation gets them when it is partial and has a route, unless it declares a member named Http or derives from a concrete operation. An [UnexposedOperation] is not sent over HTTP.");
+        description: "A typed client builds each request with the operation's generated Op.Http builders. An operation gets them when it is partial and has a route, unless it is named Http, declares a member named Http or derives from a concrete operation. An [UnexposedOperation] is not sent over HTTP.");
 
     /// <summary>
     /// An operation is included twice, or two includes produce the same method name.
@@ -88,11 +88,11 @@ internal static class ClientDiagnosticDescriptors
     public static readonly DiagnosticDescriptor SerializerContextMissingType = new(
         id: "BPCL007",
         title: "Serializer context is missing a type",
-        messageFormat: "The serializer context '{0}' has no [JsonSerializable] for '{1}', which '{2}' needs; its calls fall back to the options' own metadata for it",
+        messageFormat: "The serializer context '{0}' neither declares nor reaches '{1}', which '{2}' needs; its calls fall back to the options' own metadata for it",
         category: Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Add [JsonSerializable(typeof(...))] for the type to the context so that the client's calls use its source-generated metadata.");
+        description: "A context has metadata for each type it declares [JsonSerializable] for and each type those reach through their properties, fields, elements and type arguments. Add [JsonSerializable(typeof(...))] for the type to the context so that the client's calls use its source-generated metadata.");
 
     /// <summary>
     /// An included operation's result shape has no response reader.

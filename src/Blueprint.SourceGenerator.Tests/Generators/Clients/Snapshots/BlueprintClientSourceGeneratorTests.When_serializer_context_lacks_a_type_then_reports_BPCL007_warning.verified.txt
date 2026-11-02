@@ -16,7 +16,7 @@ public partial class WidgetApiResource : ApiResource
 }
 [BlueprintClient(SerializerContext = typeof(WidgetJsonContext))]
 [BlueprintClientInclude(typeof(CreateWidgetCommand))]
- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Warning:BPCL007] The serializer context 'TestNamespace.WidgetJsonContext' has no [JsonSerializable] for 'TestNamespace.CreateWidgetCommand', which 'TestNamespace.CreateWidgetCommand' needs; its calls fall back to the options' own metadata for it
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Warning:BPCL007] The serializer context 'TestNamespace.WidgetJsonContext' neither declares nor reaches 'TestNamespace.CreateWidgetCommand', which 'TestNamespace.CreateWidgetCommand' needs; its calls fall back to the options' own metadata for it
 public partial class WidgetsApi
 {
 }

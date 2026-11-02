@@ -196,6 +196,120 @@ public class BlueprintClientSourceGeneratorTests
     }
 
     [Fact]
+    public void When_a_readonly_fields_own_name_is_already_a_parameter_then_it_gets_one_still_unused()
+    {
+        // A field named "client" falls back to its own name, the transport's; "region" falls back to the name "_region"
+        // has just taken. Each fallback used to be taken as it was, duplicating a constructor parameter (CS0100).
+        var source = Usings + """
+            [BlueprintClient]
+            public partial class WidgetsApi
+            {
+                private readonly object client;
+
+                private readonly string _region;
+
+                private readonly string region;
+            }
+            """;
+
+        var result = Compile(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Output.Single().ToString().Should().Contain(
+            "public WidgetsApi(global::Blueprint.HttpClient.BlueprintHttpClient client, object client2, string region, string region2)");
+    }
+
+    [Fact]
+    public void When_a_public_method_returns_or_takes_by_reference_then_the_interface_keeps_the_ref_kinds()
+    {
+        // The interface member used to return by value, which the class's by-reference method cannot implement (CS8152).
+        var source = Usings + """
+            [BlueprintClient]
+            public partial class WidgetsApi
+            {
+                private int _count;
+
+                public ref int Count() => ref this._count;
+
+                public ref readonly int PeekCount() => ref this._count;
+
+                public int Add(ref readonly int amount) => this._count += amount;
+            }
+            """;
+
+        var result = Compile(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Output.Single().ToString().Should()
+            .Contain("ref int Count();")
+            .And.Contain("ref readonly int PeekCount();")
+            .And.Contain("int Add(ref readonly int amount);");
+    }
+
+    [Fact]
+    public void When_serializer_context_reaches_a_type_through_a_declared_types_property_then_reports_no_BPCL007()
+    {
+        // System.Text.Json generates metadata for every type a declared type reaches, so the context covers the result
+        // through the command's property. Only the declared roots used to count.
+        var source = Usings + """
+            [BlueprintClient(SerializerContext = typeof(WidgetJsonContext))]
+            [BlueprintClientInclude(typeof(SaveWidgetCommand))]
+            public partial class WidgetsApi
+            {
+            }
+
+            [RootLink("/widgets/save")]
+            [HttpPost]
+            public partial class SaveWidgetCommand : ICommand<WidgetApiResource>
+            {
+                public System.Collections.Generic.List<WidgetApiResource> Widgets { get; set; }
+
+                public static class Http
+                {
+                    public static string BuildUrl(SaveWidgetCommand operation) => "/widgets/save";
+                }
+            }
+
+            [System.Text.Json.Serialization.JsonSerializable(typeof(SaveWidgetCommand))]
+            public sealed class WidgetJsonContext : System.Text.Json.Serialization.JsonSerializerContext
+            {
+                private WidgetJsonContext()
+                    : base(null)
+                {
+                }
+
+                public static WidgetJsonContext Default { get; } = new WidgetJsonContext();
+
+                protected override System.Text.Json.JsonSerializerOptions GeneratedSerializerOptions => null;
+
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo GetTypeInfo(System.Type type) => null;
+            }
+            """;
+
+        Compile(source).Diagnostics.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_included_operation_is_itself_named_Http_then_BPCL004_says_so()
+    {
+        var source = Usings + """
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(Http))]
+            public partial class WidgetsApi
+            {
+            }
+
+            [RootLink("/widgets")]
+            public partial class Http : IQuery<WidgetApiResource>
+            {
+            }
+            """;
+
+        Compile(source).Diagnostics.Should().ContainSingle(static d => d.Id == "BPCL004")
+            .Which.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Should().Contain("is itself named Http");
+    }
+
+    [Fact]
     public async Task When_client_is_not_partial_then_reports_BPCL001()
     {
         var source = Usings + """

@@ -162,14 +162,21 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
                     break;
 
                 case IFieldSymbol { IsReadOnly: true, IsStatic: false, IsConst: false } field:
-                    // A field whose parameter name is empty or taken (the transport's "client", or another field's) keeps its
-                    // own name, which is unique among the class's members.
+                    // A field whose parameter name is empty or taken (the transport's "client", or another field's) falls back
+                    // to its own name, and when that is taken too, to its own name numbered from 2.
                     var parameterName = ClientSymbolHelpers.ToCamelCase(field.Name.TrimStart('_'));
 
-                    if (parameterName.Length == 0 || !parameterNames.Add(parameterName))
+                    if (parameterName.Length == 0 || parameterNames.Contains(parameterName))
                     {
                         parameterName = field.Name;
                     }
+
+                    for (var suffix = 2; parameterNames.Contains(parameterName); suffix++)
+                    {
+                        parameterName = field.Name + suffix;
+                    }
+
+                    parameterNames.Add(parameterName);
 
                     readonlyFields.Add(new ClientFieldModel(
                         field.Type.ToDisplayString(_fullyQualifiedWithNullable),
@@ -320,6 +327,11 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
         if (!operation.GetMembers("Http").IsEmpty)
         {
             return "declares its own member named Http";
+        }
+
+        if (operation.Name == "Http")
+        {
+            return "is itself named Http";
         }
 
         if (!HttpClientRequestBuilderModule.CanDeclareHttpClass(operation))
@@ -598,8 +610,8 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
     }
 
     /// <summary>
-    /// The serializer context named on the attribute, and the fully-qualified names of the types it declares
-    /// <c>[JsonSerializable]</c> for.
+    /// The serializer context named on the attribute, and the fully-qualified names of the types it has metadata for: those
+    /// it declares <c>[JsonSerializable]</c> for, and those they reach.
     /// </summary>
     private static (string? ContextFqn, HashSet<string> SerializableTypes) ReadSerializerContext(AttributeData clientAttribute)
     {
@@ -618,7 +630,7 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
                     && attribute.ConstructorArguments.Length > 0
                     && attribute.ConstructorArguments[0].Value is ITypeSymbol serializable)
                 {
-                    serializableTypes.Add(serializable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                    AddReachableTypes(serializable, serializableTypes);
                 }
             }
 
@@ -626,6 +638,65 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
         }
 
         return (null, serializableTypes);
+    }
+
+    /// <summary>
+    /// Adds <paramref name="type"/> and every type System.Text.Json reaches from it to <paramref name="names"/>, since a
+    /// context generates metadata for those too: array elements, type arguments, and the instance properties and fields of
+    /// a type outside the framework, its base types' included. It reaches at least as far as the context does, so a type
+    /// it leaves out is one the context cannot have.
+    /// </summary>
+    private static void AddReachableTypes(ITypeSymbol type, HashSet<string> names)
+    {
+        if (!names.Add(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))
+        {
+            return;
+        }
+
+        if (type is IArrayTypeSymbol array)
+        {
+            AddReachableTypes(array.ElementType, names);
+            return;
+        }
+
+        if (type is not INamedTypeSymbol named)
+        {
+            return;
+        }
+
+        foreach (var typeArgument in named.TypeArguments)
+        {
+            AddReachableTypes(typeArgument, names);
+        }
+
+        for (var current = named; current is not null && !IsFrameworkType(current); current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers())
+            {
+                switch (member)
+                {
+                    case IPropertySymbol { IsStatic: false, IsIndexer: false } property:
+                        AddReachableTypes(property.Type, names);
+                        break;
+
+                    case IFieldSymbol { IsStatic: false, IsImplicitlyDeclared: false } field:
+                        AddReachableTypes(field.Type, names);
+                        break;
+                }
+            }
+        }
+    }
+
+    private static bool IsFrameworkType(INamedTypeSymbol type)
+    {
+        var root = type.ContainingNamespace;
+
+        while (root?.ContainingNamespace is { IsGlobalNamespace: false } parent)
+        {
+            root = parent;
+        }
+
+        return root?.Name is "System" or "Microsoft";
     }
 
     /// <summary>
@@ -669,6 +740,7 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
                 RefKind.Ref => "ref ",
                 RefKind.Out => "out ",
                 RefKind.In => "in ",
+                RefKind.RefReadOnlyParameter => "ref readonly ",
                 _ => p.IsParams ? "params " : string.Empty,
             };
 
@@ -677,7 +749,10 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
             return $"{modifier}{p.Type.ToDisplayString(_fullyQualifiedWithNullable)} {ClientSymbolHelpers.EscapeIdentifier(p.Name)}{defaultValue}";
         });
 
-        var returnType = method.ReturnsVoid ? "void" : method.ReturnType.ToDisplayString(_fullyQualifiedWithNullable);
+        var returnType = method.ReturnsVoid
+            ? "void"
+            : (method.ReturnsByRefReadonly ? "ref readonly " : method.ReturnsByRef ? "ref " : string.Empty)
+                + method.ReturnType.ToDisplayString(_fullyQualifiedWithNullable);
 
         return $"{returnType} {ClientSymbolHelpers.EscapeIdentifier(method.Name)}({string.Join(", ", parameters)});";
     }
