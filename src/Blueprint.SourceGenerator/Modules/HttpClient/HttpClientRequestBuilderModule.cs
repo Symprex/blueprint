@@ -121,14 +121,17 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     }
 
     /// <summary>
-    /// Whether the operation can be given its nested <c>Http</c> class. Not when it already declares a member of that name,
-    /// and not when a base type is a concrete operation: that base gets an <c>Http</c> class of its own, which the derived
-    /// one would hide (CS0108), and declaring the derived one <c>new</c> fails instead (CS0109) whenever the base has no
-    /// route and so no class. Such an operation keeps the inline delegates, so its wire output is unchanged either way.
+    /// Whether the operation can be given its nested <c>Http</c> class. Not when it is itself named <c>Http</c> (CS0542), not
+    /// when it already declares a member of that name, and not when a base type is a concrete operation: that base gets an
+    /// <c>Http</c> class of its own, which the derived one would hide (CS0108), and declaring the derived one <c>new</c> fails
+    /// instead (CS0109) whenever the base has no route and so no class. Such an operation keeps the inline delegates, so its
+    /// wire output is unchanged either way.
     /// </summary>
-    private static bool CanDeclareHttpClass(INamedTypeSymbol operationSymbol)
+    /// <param name="operationSymbol">The operation type.</param>
+    /// <returns>Whether the module emits the operation's <c>Http</c> class when it has a route.</returns>
+    internal static bool CanDeclareHttpClass(INamedTypeSymbol operationSymbol)
     {
-        if (!operationSymbol.GetMembers("Http").IsEmpty)
+        if (operationSymbol.Name == "Http" || !operationSymbol.GetMembers("Http").IsEmpty)
         {
             return false;
         }

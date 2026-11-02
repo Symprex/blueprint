@@ -157,7 +157,8 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 model.ToString(),
                 model.ContainingNamespace.ToDisplayString(),
                 model.Name,
-                classNode.ToFullString()));
+                classNode.ToFullString(),
+                HttpClientRequestBuilderModule.CanDeclareHttpClass(model)));
     }
 
     private static Result<DescriptorPlan> Configure(
@@ -361,7 +362,10 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
     /// <param name="Namespace">The namespace that will contain the generated descriptor wrapper.</param>
     /// <param name="ClassName">The simple operation type name.</param>
     /// <param name="DeclarationText">The operation declaration text used to invalidate semantic edits within the operation file.</param>
-    private record OperationClassToGenerate(string FullClassName, string Namespace, string ClassName, string DeclarationText);
+    /// <param name="CanDeclareHttpClass">Whether the operation can be given its nested <c>Http</c> class. Carried only to invalidate
+    /// the cache: a member named <c>Http</c> in another partial declaration, or a change to a base type, leaves
+    /// <paramref name="DeclarationText"/> as it was.</param>
+    private record OperationClassToGenerate(string FullClassName, string Namespace, string ClassName, string DeclarationText, bool CanDeclareHttpClass);
 
     /// <summary>
     /// The names of the <see cref="ApiResourceSourceGenerator"/> stages, used in particular to test for the

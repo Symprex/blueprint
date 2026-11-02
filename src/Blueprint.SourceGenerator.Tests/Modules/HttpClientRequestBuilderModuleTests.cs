@@ -1,5 +1,6 @@
 using Blueprint.SourceGenerator.Generators.Descriptors;
 using FluentAssertions;
+using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Tests.Modules;
 
@@ -507,6 +508,69 @@ public class HttpClientRequestBuilderModuleTests
         var source = GetDescriptorSource(result, "GetSpecialWidgetQuery");
         source.Should().NotContain("class Http");
         source.Should().Contain("var typed = (global::TestNamespace.GetSpecialWidgetQuery)op;");
+    }
+
+    [Fact]
+    public void When_the_operation_is_itself_named_Http_then_no_nested_class_is_emitted()
+    {
+        // A nested class cannot share its enclosing type's name (CS0542).
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class Http : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(Http operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "Http");
+        source.Should().NotContain("static class Http");
+        source.Should().Contain("var typed = (global::TestNamespace.Http)op;");
+    }
+
+    [Fact]
+    public void When_another_partial_declaration_adds_a_member_named_Http_then_the_next_run_drops_the_nested_class()
+    {
+        // The added declaration has no base list, so the descriptor generator's syntax filter never sees it, and the
+        // operation's own declaration is unchanged: the nested class used to be replayed from the cache beside the new
+        // member (CS0102).
+        const string Operation =
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace;
+
+            [RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """;
+
+        var result = TestHelpers.CompileWithTrackedGeneratorsAfterEdit(
+            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+            [Operation, "namespace TestNamespace;\n"],
+            [Operation, "namespace TestNamespace;\n\npublic partial class GetWidgetQuery\n{\n    public static int Http => 1;\n}\n"],
+            ["GetWidgetQuery.cs", "GetWidgetQuery.Http.cs"]);
+
+        result.Initial.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        result.Updated.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        result.Updated.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator))
+            .Should().NotContain(static s => s.HintName.EndsWith("GetWidgetQuery_Members.g.cs", StringComparison.Ordinal));
     }
 
     private static GenerationResult CompileDescriptor(string source)
