@@ -70,28 +70,33 @@ internal sealed class OperationInputSchemaSet
             }
         }
 
-        var descriptorsByName = app.Operations.ToDictionary(static d => d.Name, StringComparer.OrdinalIgnoreCase);
+        // An operation processor may rename an operation, so it is known by its type, and by the name its descriptor gives it.
+        var descriptorsByTypeName = app.Operations
+            .GroupBy(static d => d.OperationType.FullName ?? d.OperationType.Name, StringComparer.Ordinal)
+            .ToDictionary(static g => g.Key, static g => g.First(), StringComparer.Ordinal);
         var entries = new List<Entry>();
 
-        foreach (var operation in primaryBySlot.Values.DistinctBy(static o => o.OperationName, StringComparer.OrdinalIgnoreCase))
+        foreach (var operation in primaryBySlot.Values.DistinctBy(static o => o.OperationTypeName, StringComparer.Ordinal))
         {
-            var slot = FindFirstDeclaredSlot(operation, descriptorsByName.GetValueOrDefault(operation.OperationName), primaryBySlot);
+            var descriptor = descriptorsByTypeName.GetValueOrDefault(operation.OperationTypeName);
+            var operationName = descriptor?.Name ?? operation.OperationName;
+            var slot = FindFirstDeclaredSlot(operation, descriptor, primaryBySlot);
             var operationId = operationIds.GetValueOrDefault(slot) ?? operation.OperationName;
 
             try
             {
                 var slotJson = paths?[slot.UrlFormat]?[slot.Method.ToLowerInvariant()]?.AsObject();
 
-                entries.Add(CreateEntry(operation, operationId, slotJson, components));
+                entries.Add(CreateEntry(operation, operationName, operationId, slotJson, components));
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
                 // An entry a processor made unreadable, such as an object with one name twice, is that operation's alone:
                 // the others' schemas stay to be had.
-                var error = $"The operation {operation.OperationName} cannot be given an input schema, as its entry in the "
+                var error = $"The operation {operationName} cannot be given an input schema, as its entry in the "
                     + $"OpenAPI document could not be read: {exception.Message}";
 
-                entries.Add(new Entry(operation.OperationName, null, error));
+                entries.Add(new Entry(operationName, null, error));
             }
         }
 
@@ -156,7 +161,12 @@ internal sealed class OperationInputSchemaSet
         return primaryBySlot.First(pair => ReferenceEquals(pair.Value, operation)).Key;
     }
 
-    private static Entry CreateEntry(OpenApiOperationModel operation, string operationId, JsonObject? slotJson, JsonObject? components)
+    private static Entry CreateEntry(
+        OpenApiOperationModel operation,
+        string operationName,
+        string operationId,
+        JsonObject? slotJson,
+        JsonObject? components)
     {
         var properties = new JsonObject();
         var required = new JsonArray();
@@ -274,10 +284,10 @@ internal sealed class OperationInputSchemaSet
 
         if (collisions.Count > 0)
         {
-            var error = $"The operation {operation.OperationName} cannot be given one input schema, as two of its properties take "
+            var error = $"The operation {operationName} cannot be given one input schema, as two of its properties take "
                 + $"one name ({string.Join("; ", collisions)}). Bind one of them by another name.";
 
-            return new Entry(operation.OperationName, null, error);
+            return new Entry(operationName, null, error);
         }
 
         var schema = new JsonObject
@@ -311,8 +321,8 @@ internal sealed class OperationInputSchemaSet
         using var parsed = JsonDocument.Parse(schema.ToJsonString());
 
         return new Entry(
-            operation.OperationName,
-            new OperationInputSchema(operation.OperationName, operationId, parsed.RootElement.Clone(), inputs.ToImmutable())
+            operationName,
+            new OperationInputSchema(operationName, operationId, parsed.RootElement.Clone(), inputs.ToImmutable())
             {
                 Summary = operation.Summary,
                 Description = operation.Description,
@@ -475,6 +485,20 @@ internal sealed class OperationInputSchemaSet
                 {
                     ConvertChild(child, referencedComponents);
                 }
+            }
+        }
+
+        // OpenAPI 3.0 requires a read-only property of a response only; JSON Schema's required would ask a request for it.
+        if (schema["required"] is JsonArray required && schema["properties"] is JsonObject declared)
+        {
+            foreach (var readOnly in required.Where(n => declared[(string?)n ?? string.Empty]?["readOnly"]?.GetValueKind() == JsonValueKind.True).ToList())
+            {
+                required.Remove(readOnly);
+            }
+
+            if (required.Count == 0)
+            {
+                schema.Remove("required");
             }
         }
 

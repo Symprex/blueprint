@@ -118,6 +118,33 @@ public sealed class OperationInputSchemaTests
     }
 
     [Fact]
+    public void An_operation_a_processor_renames_is_still_had_by_its_descriptor_name_with_its_first_declared_urls_id()
+    {
+        var provider = CreateProvider(configureOpenApiOperations: static o => o.Processors.Add(
+            static (operation, _) => operation.OperationName == "CheckOperationIdDomains" ? operation with { OperationName = "PublicCheckDomains" } : operation));
+
+        var schema = provider.GetSchema("CheckOperationIdDomains");
+
+        schema.Should().NotBeNull();
+        schema!.OperationName.Should().Be("CheckOperationIdDomains");
+
+        // Declared at "z-first" and then "a-second", which the renamed operation's ids are written for in that order.
+        schema.OperationId.Should().Be("PublicCheckDomains");
+    }
+
+    [Fact]
+    public void A_read_only_property_of_a_body_type_is_not_required_of_an_input()
+    {
+        // A non-nullable property is required in the document, as in a response; one with no setter is not sent in a request.
+        var schema = CreateProvider(static o => o.RequiredProperties = OpenApiRequiredProperties.NonNullable).GetSchema(NoteOperationName)!.Schema;
+        var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
+        var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
+
+        address.GetProperty("properties").GetProperty("total").GetProperty("readOnly").GetBoolean().Should().BeTrue();
+        address.GetProperty("required").EnumerateArray().Select(static e => e.GetString()).Should().Contain("postCode").And.NotContain("total");
+    }
+
+    [Fact]
     public void An_operation_two_of_whose_properties_take_one_name_fails_naming_both_sources()
     {
         var provider = CreateProvider();
@@ -325,6 +352,9 @@ public sealed class OperationInputSchemaAddress
     [Required]
     [StringLength(8)]
     public string? PostCode { get; set; }
+
+    /// <summary>Gets a value the server computes, which a request does not carry.</summary>
+    public int Total => this.PostCode?.Length ?? 0;
 }
 
 /// <summary>A command taking a property from every source the caller sends, and two it does not.</summary>
