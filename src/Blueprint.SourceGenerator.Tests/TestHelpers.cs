@@ -743,9 +743,11 @@ public static class TestHelpers
                 .And.NotBeOfType<ISymbol>(because)
                 .And.NotBeOfType<SyntaxNode>(because);
 
-            // Examine the object
+            // Examine the object. The checks above match the exact type only, so a concrete symbol or compilation passes
+            // them; its Roslyn internals are not walkable (SmallDictionary's enumerator throws once a generic attribute
+            // has been constructed), so stop there.
             var type = node.GetType();
-            if (type.IsEnum)
+            if (type.IsEnum || node is ISymbol or Compilation or SyntaxNode)
             {
                 return;
             }

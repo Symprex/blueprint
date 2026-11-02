@@ -48,6 +48,7 @@
               "Configuration": 100,
               "ExceptionTranslationPolicy": 1,
               "ExecutionPlan": 1,
+              "ExposedPropertyKey": 100,
               "InitialExtraction": 100
             }
           },

@@ -294,6 +294,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             }
         }
 
+        foreach (var property in OperationPropertyModelBuilder.GetProperties(operationType))
+        {
+            propertyNames.Add(property.Info.Name);
+        }
+
         foreach (var routeTemplate in routeTemplates)
         {
             foreach (Match match in PlaceholderRegex.Matches(routeTemplate.Template))
@@ -484,8 +489,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var isGetOnly = IsGetOnlyMethod(httpMethods);
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var member in operationType.GetAllMembers().OfType<IPropertySymbol>())
+        foreach (var property in OperationPropertyModelBuilder.GetProperties(operationType))
         {
+            var member = property.Member;
             if (member.IsStatic || member.IsReadOnly || member.SetMethod is null || member.DeclaredAccessibility != Accessibility.Public)
             {
                 continue;

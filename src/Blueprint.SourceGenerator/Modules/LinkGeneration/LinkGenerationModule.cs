@@ -437,7 +437,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                 foreach (var placeholder in placeholders.Cast<Match>())
                 {
                     var placeholderName = placeholder.Value.Trim('{', '}', '*');
-                    memberNames ??= new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
+                    memberNames ??= GetOperationMemberNames(operationType);
 
                     if (!memberNames.Contains(placeholderName))
                     {
@@ -723,7 +723,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     foreach (var placeholder in placeholders.Cast<Match>())
                     {
                         var placeholderName = placeholder.Value.Trim('{', '}', '*');
-                        memberNames ??= new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
+                        memberNames ??= GetOperationMemberNames(operationType);
 
                         if (!memberNames.Contains(placeholderName))
                         {
@@ -865,6 +865,20 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
         var position = operationType.GetAttributes().IndexOf(attribute);
 
         return position < 0 ? int.MaxValue : position;
+    }
+
+    /// <summary>
+    /// Gets the names of an operation's members, its contributed properties included (D25 spike, #75).
+    /// </summary>
+    private static HashSet<string> GetOperationMemberNames(INamedTypeSymbol operationType)
+    {
+        var names = new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
+        foreach (var property in OperationPropertyModelBuilder.GetProperties(operationType))
+        {
+            names.Add(property.Info.Name);
+        }
+
+        return names;
     }
 
     private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo? argumentLocationInfo, DescriptorContributorContext context)

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.ApiResources;
@@ -101,8 +102,37 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             .Select(static (m, _) => m!)
             .WithTrackingName(Stages.InitialExtraction);
 
-        var combinedProvider = classProvider.Combine(context.CompilationProvider)
-            .WithComparer(CombinedProviderComparer<Result<OperationClassToGenerate>>.Instance)
+        // D25 spike (#75): the property model of each exposed operation, rebuilt from every compilation and compared by
+        // value. The descriptor generator emits its contributed properties into the partial; every generator reads the
+        // same properties from OperationPropertyModelBuilder, so none needs to see that output.
+        var exposedPropertyModels = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                OperationPropertyModelBuilder.ExposeAttributeMetadataName,
+                predicate: static (node, _) => node is ClassDeclarationSyntax,
+                transform: static (ctx, _) => ((INamedTypeSymbol)ctx.TargetSymbol).ToFullMetadataName())
+            .Combine(context.CompilationProvider)
+            .Select(static (x, _) => x.Right.GetTypeByMetadataName(x.Left) is { } operationType
+                ? OperationPropertyModelBuilder.Build(operationType)
+                : null)
+            .Where(static model => model is { HasContributedProperties: true })
+            .Select(static (model, _) => model!)
+            .WithTrackingName(Stages.ExposedPropertyModel);
+
+        context.RegisterSourceOutput(
+            exposedPropertyModels,
+            static (spc, model) => spc.AddSource(
+                $"{model.OperationTypeName}_ExposedProperties.g.cs",
+                SourceText.From(OperationPropertyModelBuilder.RenderContributedProperties(model), Encoding.UTF8)));
+
+        // An exposed operation's descriptor depends on its inner operation, which may be in another file or assembly, so
+        // its property model is part of what decides whether the compilation step is unchanged.
+        var keyedClassProvider = classProvider
+            .Combine(exposedPropertyModels.Collect())
+            .Select(static (x, _) => (Class: x.Left, ExposedProperties: FindExposedPropertyModel(x.Left, x.Right)))
+            .WithTrackingName(Stages.ExposedPropertyKey);
+
+        var combinedProvider = keyedClassProvider.Combine(context.CompilationProvider)
+            .WithComparer(CombinedProviderComparer<(Result<OperationClassToGenerate> Class, OperationPropertyModel? ExposedProperties)>.Instance)
             .WithTrackingName(Stages.CombineWithCompilation);
 
         var configuredModels = combinedProvider
@@ -153,12 +183,31 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 classNode.ToFullString()));
     }
 
+    private static OperationPropertyModel? FindExposedPropertyModel(Result<OperationClassToGenerate> result, ImmutableArray<OperationPropertyModel> models)
+    {
+        if (result.Value is not { } operation)
+        {
+            return null;
+        }
+
+        foreach (var model in models)
+        {
+            if (model.OperationTypeName == operation.FullClassName)
+            {
+                return model;
+            }
+        }
+
+        return null;
+    }
+
     private static Result<DescriptorPlan> Configure(
-        (Result<OperationClassToGenerate> Result, Compilation Compilation) context,
+        ((Result<OperationClassToGenerate> Class, OperationPropertyModel? ExposedProperties) Model, Compilation Compilation) context,
         Result<BlueprintModuleExecutionPlan> executionPlanResult,
         Result<PipelineExceptionTranslatorPolicy> exceptionTranslatorPolicyResult)
     {
-        var (result, compilation) = context;
+        var result = context.Model.Class;
+        var compilation = context.Compilation;
 
         if (result.Value is null)
         {
@@ -280,6 +329,11 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
 
     private static bool HasRequiredMembers(INamedTypeSymbol type)
     {
+        if (OperationPropertyModelBuilder.GetProperties(type).Any(static p => p.Info is { Origin: OperationPropertyOrigin.Contributed, IsRequired: true }))
+        {
+            return true;
+        }
+
         for (var current = type; current is not null; current = current.BaseType)
         {
             foreach (var member in current.GetMembers())
@@ -351,5 +405,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         public const string ExceptionTranslationPolicy = nameof(ExceptionTranslationPolicy);
         public const string CombineWithCompilation = nameof(CombineWithCompilation);
         public const string Configuration = nameof(Configuration);
+        public const string ExposedPropertyModel = nameof(ExposedPropertyModel);
+        public const string ExposedPropertyKey = nameof(ExposedPropertyKey);
     }
 }

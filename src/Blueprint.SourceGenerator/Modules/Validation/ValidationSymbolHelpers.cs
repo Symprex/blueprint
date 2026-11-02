@@ -20,7 +20,10 @@ internal static class ValidationSymbolHelpers
     {
         return operationType.GetAllMembers()
             .OfType<IPropertySymbol>()
-            .Where(static property => property is { IsStatic: false, Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public });
+            .Where(static property => property is { IsStatic: false, Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public })
+            .Concat(Planning.OperationPropertyModelBuilder.GetProperties(operationType)
+                .Where(static property => property.Info.Origin == Planning.OperationPropertyOrigin.Contributed)
+                .Select(static property => property.Member));
     }
 
     /// <summary>

@@ -82,6 +82,10 @@ internal static class RoutePlaceholderSyntax
         }
 
         var members = operationType.GetAllMembers().ToList();
+        if (operationType is INamedTypeSymbol namedOperationType)
+        {
+            members.AddRange(Planning.OperationPropertyModelBuilder.GetProperties(namedOperationType).Select(static p => (ISymbol)p.Member));
+        }
 
         return Placeholder.Replace(
             template,
