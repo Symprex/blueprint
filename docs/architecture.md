@@ -34,6 +34,12 @@ This generator is separate from the descriptor/module pipeline, but it follows t
 - validates required structure
 - lets modules enrich the model
 - emits `*_Descriptor.g.cs` partials that provide `Configure()`
+- emits `*_Members.g.cs` partials, with nullable annotations enabled, for members a module declares on the operation
+  type itself (`DescriptorContributorContext.AddOperationMember`). `HttpClientRequestBuilderModule` uses it for the
+  nested `Op.Http` class: typed `BuildUrl` and, for a GET, `AppendQueryString` builders that the descriptor's
+  `CompiledHttpRequestFeatureData` delegates call, and that a caller holding the operation's static type calls directly.
+  An operation that declares its own member named `Http`, or derives from a concrete operation, keeps inline delegates
+  instead.
 
 Key files:
 

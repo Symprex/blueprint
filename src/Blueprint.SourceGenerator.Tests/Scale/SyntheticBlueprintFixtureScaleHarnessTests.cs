@@ -171,7 +171,7 @@ public class SyntheticBlueprintFixtureScaleHarnessTests
         editResult.Updated.Diagnostics.Should().BeEmpty();
         editResult.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator))
             .Should()
-            .Equal("Synthetic.Scale.SyntheticOperation050_Descriptor.g.cs");
+            .Equal("Synthetic.Scale.SyntheticOperation050_Descriptor.g.cs", "Synthetic.Scale.SyntheticOperation050_Members.g.cs");
         editResult.GetChangedGeneratedSourceHintNames(nameof(AppDataModelSourceGenerator))
             .Should()
             .BeEmpty();

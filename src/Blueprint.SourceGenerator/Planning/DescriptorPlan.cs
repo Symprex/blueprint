@@ -13,6 +13,7 @@ public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
     private readonly List<DiagnosticInfo> _diagnostics = [];
     private readonly List<object> _metadata = [];
     private readonly List<Action<ICodeWriter>> _renderSteps = [];
+    private readonly List<Action<ClassBuilder>> _operationMemberSteps = [];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DescriptorPlan"/> class.
@@ -119,6 +120,33 @@ public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
         }
     }
 
+    /// <summary>
+    /// Gets a value indicating whether any contributor added members to the operation's own generated partial.
+    /// </summary>
+    public bool HasOperationMembers => this._operationMemberSteps.Count != 0;
+
+    /// <summary>
+    /// Adds a step that declares members on the operation's own generated partial, beside its <c>Configure()</c>, for
+    /// code that callers reach through the operation type rather than its descriptor.
+    /// </summary>
+    /// <param name="memberStep">The step, given the builder of the operation's partial class.</param>
+    public void AddOperationMember(Action<ClassBuilder> memberStep)
+    {
+        this._operationMemberSteps.Add(memberStep);
+    }
+
+    /// <summary>
+    /// Renders the operation members contributors added onto <paramref name="operationClass"/>.
+    /// </summary>
+    /// <param name="operationClass">The builder of the operation's partial class.</param>
+    public void RenderOperationMembers(ClassBuilder operationClass)
+    {
+        foreach (var memberStep in this._operationMemberSteps)
+        {
+            memberStep(operationClass);
+        }
+    }
+
     /// <inheritdoc />
     public bool Equals(DescriptorPlan? other)
     {
@@ -135,7 +163,8 @@ public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
         // Cheap count checks before expensive SequenceEqual traversals
         if (this.Diagnostics.Count != other.Diagnostics.Count
             || this.Metadata.Count != other.Metadata.Count
-            || this._renderSteps.Count != other._renderSteps.Count)
+            || this._renderSteps.Count != other._renderSteps.Count
+            || this._operationMemberSteps.Count != other._operationMemberSteps.Count)
         {
             return false;
         }
@@ -168,6 +197,7 @@ public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
         }
 
         hash.Add(this._renderSteps.Count);
+        hash.Add(this._operationMemberSteps.Count);
         return hash.ToHashCode();
     }
 }

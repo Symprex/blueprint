@@ -272,7 +272,8 @@ Background tasks do **not** automatically restore tenant context. Services shoul
 | Abstraction | Class | Purpose |
 |---|---|---|
 | Typed HTTP client | `BlueprintHttpClient<TApp>` | Calls Blueprint APIs using operation types |
-| Legacy compatibility base | `BlueprintHttpClient` | Lets old S365-generated partial clients compile against the non-generic client shape |
+| Transport | `BlueprintHttpClient` | The concrete transport every call goes through (`new BlueprintHttpClient(httpClient, json)`): one send primitive and one response reader per result shape. Also the legacy compatibility base old S365-generated partial clients compile against |
+| Typed request builders | `Op.Http.BuildUrl` / `Op.Http.AppendQueryString` | Generated on each routed operation; build its URL and GET query string with no descriptor lookup |
 | DI registration | `AddBlueprintHttpClient<TApp>()` | Registers typed `HttpClient` |
 | Fault handling | `BlueprintApiException` | An `ApiException` carrying the failed call's problem (see below) |
 

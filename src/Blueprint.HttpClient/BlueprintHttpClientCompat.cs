@@ -2,20 +2,14 @@ using Blueprint.Model;
 
 namespace Blueprint.HttpClient;
 
-/// <summary>
-/// Compatibility surface for legacy generated clients that were compiled against the old non-generic
-/// <c>BlueprintHttpClient</c> type. New Blueprint code should continue to prefer
-/// <see cref="BlueprintHttpClient{TApp}"/>, while migration callers can hold a non-generic reference
-/// and still dispatch the same <c>CallAsync</c> overloads.
-/// </summary>
-public abstract class BlueprintHttpClient
+/// <content>
+/// The compatibility surface for legacy generated clients that were compiled against the old non-generic
+/// <c>BlueprintHttpClient</c> type: migration callers can hold a non-generic reference and still dispatch the same
+/// <c>CallAsync</c> overloads, which only a <see cref="BlueprintHttpClient{TApp}"/> can serve, since dispatching an
+/// operation instance needs its descriptor.
+/// </content>
+public partial class BlueprintHttpClient
 {
-    /// <summary>
-    /// Gets the inner HTTP client the calls are sent with, as legacy's client exposed it (Signature365
-    /// <c>Common.Core/Api/BlueprintHttpClient.cs:47-50</c>), so a caller can read or set its default headers.
-    /// </summary>
-    public abstract System.Net.Http.HttpClient HttpClient { get; }
-
     /// <summary>
     /// Adapts a typed <see cref="BlueprintHttpClient{TApp}"/> to the legacy non-generic surface
     /// so that callers holding a <see cref="BlueprintHttpClient"/> reference can dispatch operations
@@ -104,10 +98,13 @@ public abstract class BlueprintHttpClient
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task producing the deserialized response.</returns>
-    protected abstract Task<TResponse> CallAsyncCore<TResponse>(
+    protected virtual Task<TResponse> CallAsyncCore<TResponse>(
         IReturn<TResponse> operation,
         CallOptions? options,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        throw CreateNoDescriptorException();
+    }
 
     /// <summary>
     /// Implements the void send path for the compatibility surface. Subclasses route this
@@ -117,8 +114,21 @@ public abstract class BlueprintHttpClient
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the remote call succeeds.</returns>
-    protected abstract Task SendVoidAsyncCore(
+    protected virtual Task SendVoidAsyncCore(
         IOperation operation,
         CallOptions? options,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        throw CreateNoDescriptorException();
+    }
+
+    /// <summary>
+    /// The failure of a compatibility call on the bare transport, which sends an operation only through a typed call plan:
+    /// dispatching an operation instance needs the descriptor <see cref="BlueprintHttpClient{TApp}"/> finds it by.
+    /// </summary>
+    private static NotSupportedException CreateNoDescriptorException()
+    {
+        return new NotSupportedException(
+            "Sending an operation instance needs its descriptor. Call it through a BlueprintHttpClient<TApp> or a typed client.");
+    }
 }

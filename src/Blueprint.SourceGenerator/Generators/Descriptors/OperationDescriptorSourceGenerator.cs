@@ -125,6 +125,13 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 spc.AddSource(
                     $"{classToGenerate.Operation.Namespace}.{classToGenerate.Operation.TypeName}_Descriptor.g.cs",
                     SourceText.From(GenerateDescriptorClass(classToGenerate), Encoding.UTF8));
+
+                if (classToGenerate.HasOperationMembers)
+                {
+                    spc.AddSource(
+                        $"{classToGenerate.Operation.Namespace}.{classToGenerate.Operation.TypeName}_Members.g.cs",
+                        SourceText.From(GenerateOperationMembers(classToGenerate), Encoding.UTF8));
+                }
             });
     }
 
@@ -226,6 +233,22 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         baseParameters.Add("type", "typeof(" + plan.Operation.TypeName + ")");
         baseParameters.Add("name", "\"" + OperationNameHelpers.GetDescriptorName(plan.Operation.TypeName) + "\"");
         baseParameters.Add("where", "\"Source Generated\"");
+
+        return codeBuilder.Build();
+    }
+
+    /// <summary>
+    /// Renders the members contributors declare on the operation's own partial. They go in a file of their own so that
+    /// they can carry nullable annotations without enabling nullable analysis over the descriptor's generated code.
+    /// </summary>
+    private static string GenerateOperationMembers(DescriptorPlan plan)
+    {
+        var codeBuilder = CodeBuilder.Create(plan.Operation.Namespace).Nullable();
+
+        var operationClass = codeBuilder.AddClass(plan.Operation.TypeName)
+            .WithAccessModifier(Accessibility.Public);
+
+        plan.RenderOperationMembers(operationClass);
 
         return codeBuilder.Build();
     }

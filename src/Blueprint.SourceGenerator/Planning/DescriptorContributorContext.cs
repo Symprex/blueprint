@@ -125,6 +125,16 @@ public sealed class DescriptorContributorContext
     }
 
     /// <summary>
+    /// Adds a step that declares members on the operation's own generated partial rather than in its descriptor. The
+    /// members are written to a file of their own with nullable annotations enabled.
+    /// </summary>
+    /// <param name="memberStep">The step, given the builder of the operation's partial class.</param>
+    public void AddOperationMember(Action<ClassBuilder> memberStep)
+    {
+        this._plan.AddOperationMember(memberStep);
+    }
+
+    /// <summary>
     /// Gets a value indicating whether the descriptor plan currently contains diagnostics.
     /// </summary>
     /// <returns><c>true</c> if diagnostics exist; otherwise <c>false</c>.</returns>

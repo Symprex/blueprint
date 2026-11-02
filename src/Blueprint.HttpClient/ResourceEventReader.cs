@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Blueprint.Http;
+using Blueprint.Model;
 
 namespace Blueprint.HttpClient;
 
@@ -42,68 +43,88 @@ internal static class ResourceEventReader
     }
 
     /// <summary>
-    /// Reads the response body as <paramref name="eventType"/>.
-    /// </summary>
-    /// <param name="eventType">A type <see cref="CanRead"/> accepts.</param>
-    /// <param name="content">The response content.</param>
-    /// <param name="options">The options the event's data and dictionaries' nested values are read with.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The event.</returns>
-    internal static async Task<ResourceEvent> ReadAsync(
-        Type eventType,
-        HttpContent content,
-        JsonSerializerOptions options,
-        CancellationToken cancellationToken)
-    {
-        return await ReadOrNullAsync(eventType, content, options, cancellationToken).ConfigureAwait(false)
-            ?? throw new JsonException("Unexpected end when reading JSON.");
-    }
-
-    /// <summary>
-    /// Reads the response body as <paramref name="eventType"/>, or as <see langword="null"/> when it is a JSON <c>null</c>.
+    /// Reads the response body as a <typeparamref name="TEvent"/>, or as <see langword="null"/> when it is a JSON <c>null</c>.
     /// </summary>
     /// <remarks>
     /// Legacy's converter did not handle null (<c>Blueprint.Http/JsonConverterFactoryForResourceEventOfT.cs:39</c>,
     /// <c>:53-58</c>), so System.Text.Json did not call it for a <c>null</c> token, and legacy's read of one was
     /// <see langword="null"/>.
     /// </remarks>
-    /// <param name="eventType">A type <see cref="CanRead"/> accepts.</param>
+    /// <typeparam name="TEvent">The resource event type.</typeparam>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <param name="create">
+    /// Makes the event the body is read into, which must run no constructor that sets what the body may not carry: an
+    /// uninitialised instance, as legacy made, or one from a constructor that sets nothing.
+    /// </param>
     /// <param name="content">The response content.</param>
     /// <param name="options">The options the event's data and dictionaries' nested values are read with.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The event, or <see langword="null"/> for a JSON <c>null</c>.</returns>
-    internal static async Task<ResourceEvent?> ReadOrNullAsync(
-        Type eventType,
+    internal static async Task<TEvent?> ReadOrNullAsync<TEvent, TResource>(
+        Func<TEvent> create,
         HttpContent content,
         JsonSerializerOptions options,
         CancellationToken cancellationToken)
+        where TEvent : ResourceEvent<TResource>
+        where TResource : ApiResource
     {
         await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return document.RootElement.ValueKind == JsonValueKind.Null ? null : Read(eventType, document.RootElement, options);
+        return document.RootElement.ValueKind == JsonValueKind.Null ? null : Read<TEvent, TResource>(create, document.RootElement, options);
     }
 
     /// <summary>
-    /// Reads <paramref name="root"/> as <paramref name="eventType"/>.
+    /// Makes an uninitialised <typeparamref name="TEvent"/>, as legacy's converter did, for a resource event type known only
+    /// at run time.
     /// </summary>
-    /// <param name="eventType">A type <see cref="CanRead"/> accepts.</param>
+    /// <typeparam name="TEvent">The resource event type.</typeparam>
+    /// <returns>The instance.</returns>
+    internal static TEvent CreateUninitialised<TEvent>()
+    {
+        return (TEvent)RuntimeHelpers.GetUninitializedObject(typeof(TEvent));
+    }
+
+    /// <summary>
+    /// The resource type of a type <see cref="CanRead"/> accepts: the argument of the <see cref="ResourceEvent{TResource}"/>
+    /// it derives from.
+    /// </summary>
+    /// <param name="type">The resource event type.</param>
+    /// <returns>The resource type, or <see langword="null"/> when it derives from no <see cref="ResourceEvent{TResource}"/>.</returns>
+    internal static Type? FindResourceType(Type type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(ResourceEvent<>))
+            {
+                return current.GetGenericArguments()[0];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads <paramref name="root"/> as a <typeparamref name="TEvent"/>.
+    /// </summary>
+    /// <typeparam name="TEvent">The resource event type.</typeparam>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <param name="create">Makes the event the body is read into.</param>
     /// <param name="root">The event's JSON object.</param>
     /// <param name="options">The options the event's data and dictionaries' nested values are read with.</param>
     /// <returns>The event.</returns>
     /// <exception cref="JsonException">When <paramref name="root"/> is not an object.</exception>
-    internal static ResourceEvent Read(Type eventType, JsonElement root, JsonSerializerOptions options)
+    private static TEvent Read<TEvent, TResource>(Func<TEvent> create, JsonElement root, JsonSerializerOptions options)
+        where TEvent : ResourceEvent<TResource>
+        where TResource : ApiResource
     {
         if (root.ValueKind != JsonValueKind.Object)
         {
             throw new JsonException("Unexpected end when reading JSON.");
         }
 
-        var resourceType = FindResourceType(eventType)
-            ?? throw new ArgumentException($"{eventType} is not a resource event type with a resource type.", nameof(eventType));
-
-        var resourceEvent = (ResourceEvent)RuntimeHelpers.GetUninitializedObject(eventType);
-        resourceEvent.ResourceType = resourceType;
+        var resourceEvent = create();
+        resourceEvent.ResourceType = typeof(TResource);
 
         foreach (var property in root.EnumerateObject())
         {
@@ -127,7 +148,7 @@ internal static class ResourceEventReader
                     resourceEvent.Href = value.GetString();
                     break;
                 case "data":
-                    resourceEvent.Data = value.Deserialize(resourceType, options);
+                    resourceEvent.Data = value.Deserialize<TResource>(options);
                     break;
                 case "changedValues":
                     resourceEvent.ChangedValues = ReadDictionary(value, options);
@@ -144,24 +165,11 @@ internal static class ResourceEventReader
             }
         }
 
-        // Field initialisers never ran on the uninitialised instance.
+        // Field initialisers never ran on an uninitialised instance.
         resourceEvent.Metadata ??= new Dictionary<string, object>();
         resourceEvent.SecureData ??= new Dictionary<string, object>();
 
         return resourceEvent;
-    }
-
-    private static Type? FindResourceType(Type type)
-    {
-        for (var current = type; current is not null; current = current.BaseType)
-        {
-            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(ResourceEvent<>))
-            {
-                return current.GetGenericArguments()[0];
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

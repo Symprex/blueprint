@@ -31,8 +31,8 @@ public class HttpClientRequestBuilderModuleTests
 
         var source = GetDescriptorSource(result, "GetWidgetQuery");
         source.Should().Contain("CompiledHttpRequestFeatureData");
-        source.Should().Contain("typed.Id is null");
-        source.Should().Contain("EscapeDataString(typed.Id)");
+        source.Should().Contain("operation.Id is null");
+        source.Should().Contain("EscapeDataString(operation.Id)");
     }
 
     [Fact]
@@ -60,8 +60,8 @@ public class HttpClientRequestBuilderModuleTests
         source.Should().Contain("CompiledHttpRequestFeatureData");
 
         // Query string builder should handle non-route params using scalar separator pattern
-        source.Should().Contain("typed.Locale");
-        source.Should().Contain("typed.Page");
+        source.Should().Contain("operation.Locale");
+        source.Should().Contain("operation.Page");
         source.Should().Contain("sep = '&'");
     }
 
@@ -139,8 +139,8 @@ public class HttpClientRequestBuilderModuleTests
 
         var source = GetDescriptorSource(result, "GetTenantUserQuery");
         source.Should().Contain("CompiledHttpRequestFeatureData");
-        source.Should().Contain("typed.TenantId is null");
-        source.Should().Contain("typed.UserId is null");
+        source.Should().Contain("operation.TenantId is null");
+        source.Should().Contain("operation.UserId is null");
         source.Should().Contain("\"/tenants/\"");
         source.Should().Contain("\"/users/\"");
     }
@@ -168,8 +168,8 @@ public class HttpClientRequestBuilderModuleTests
         source.Should().Contain("CompiledHttpRequestFeatureData");
 
         // int is a non-nullable value type — no null check
-        source.Should().NotContain("typed.Id is null");
-        source.Should().Contain("EscapeDataString(typed.Id.ToString()!)");
+        source.Should().NotContain("operation.Id is null");
+        source.Should().Contain("EscapeDataString(operation.Id.ToString()!)");
     }
 
     [Fact]
@@ -192,10 +192,10 @@ public class HttpClientRequestBuilderModuleTests
         result.Diagnostics.Should().BeEmpty();
 
         var source = GetDescriptorSource(result, "GetItemByGuidQuery");
-        source.Should().Contain("EscapeDataString(typed.Id.ToString()!)");
+        source.Should().Contain("EscapeDataString(operation.Id.ToString()!)");
 
         // Guid is non-nullable value type — no null check
-        source.Should().NotContain("typed.Id is null");
+        source.Should().NotContain("operation.Id is null");
     }
 
     [Fact]
@@ -246,8 +246,8 @@ public class HttpClientRequestBuilderModuleTests
         result.Diagnostics.Should().BeEmpty();
 
         var source = GetDescriptorSource(result, "ListItemsQuery");
-        source.Should().Contain("typed.Filter");
-        source.Should().NotContain("typed.OldFilter");
+        source.Should().Contain("operation.Filter");
+        source.Should().NotContain("operation.OldFilter");
     }
 
     [Fact]
@@ -274,7 +274,7 @@ public class HttpClientRequestBuilderModuleTests
         source.Should().Contain("CompiledHttpRequestFeatureData");
 
         // Collection should use foreach to emit repeated keys
-        source.Should().Contain("foreach (var _item in typed.Ids)");
+        source.Should().Contain("foreach (var _item in operation.Ids)");
         source.Should().Contain("ids=");
     }
 
@@ -307,8 +307,8 @@ public class HttpClientRequestBuilderModuleTests
 
         // A DELETE's non-URL properties go in its body, as a POST's do.
         source.Should().Contain(", null)");
-        source.Should().NotContain("typed.Permanent");
-        source.Should().NotContain("typed.Reason");
+        source.Should().NotContain("operation.Permanent");
+        source.Should().NotContain("operation.Reason");
     }
 
     [Fact]
@@ -335,8 +335,8 @@ public class HttpClientRequestBuilderModuleTests
 
         var source = GetDescriptorSource(result, "GetFormattedWidgetQuery");
         source.Should().Contain("CompiledHttpRequestFeatureData");
-        source.Should().Contain("typed.Id is null");
-        source.Should().Contain("EscapeDataString(typed.Id)");
+        source.Should().Contain("operation.Id is null");
+        source.Should().Contain("EscapeDataString(operation.Id)");
     }
 
     [Fact]
@@ -361,8 +361,152 @@ public class HttpClientRequestBuilderModuleTests
         result.Diagnostics.Should().BeEmpty();
 
         var source = GetDescriptorSource(result, "GetFileQuery");
-        source.Should().Contain("typed.FolderPath");
-        source.Should().NotContain("EscapeDataString(typed.FolderPath");
+        source.Should().Contain("operation.FolderPath");
+        source.Should().NotContain("EscapeDataString(operation.FolderPath");
+    }
+
+    [Fact]
+    public void When_operation_has_a_route_then_emits_a_nested_Http_class_the_descriptor_delegates_call()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+                public string Locale { get; set; }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetWidgetQuery");
+        source.Should().Contain("public static class Http");
+        source.Should().Contain("public static string? BuildUrl(global::TestNamespace.GetWidgetQuery operation)");
+        source.Should().Contain("public static string AppendQueryString(global::TestNamespace.GetWidgetQuery operation, string url)");
+        source.Should().Contain(
+            "new global::Blueprint.Model.CompiledHttpRequestFeatureData("
+            + "static (op) => global::TestNamespace.GetWidgetQuery.Http.BuildUrl((global::TestNamespace.GetWidgetQuery)op), "
+            + "static (op, url) => global::TestNamespace.GetWidgetQuery.Http.AppendQueryString((global::TestNamespace.GetWidgetQuery)op, url))");
+    }
+
+    [Fact]
+    public void When_post_command_then_its_Http_class_has_no_query_string_builder()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.HttpPost]
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class UpdateWidgetCommand : ICommand<string>
+            {
+                public string Id { get; set; }
+                public string Name { get; set; }
+
+                public static Task<string> HandleAsync(UpdateWidgetCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "UpdateWidgetCommand");
+        source.Should().Contain("public static string? BuildUrl(global::TestNamespace.UpdateWidgetCommand operation)");
+        source.Should().NotContain("AppendQueryString(");
+    }
+
+    [Fact]
+    public void When_get_query_has_no_query_properties_then_its_query_string_builder_returns_the_url()
+    {
+        // A GET always gets AppendQueryString, so a typed client can call it for any GET; the descriptor keeps no delegate
+        // for one with nothing to append, as before.
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetWidgetQuery");
+        source.Should().Contain("public static string AppendQueryString(global::TestNamespace.GetWidgetQuery operation, string url)");
+        source.Should().Contain("return url;");
+        source.Should().Contain("GetWidgetQuery)op), null))");
+    }
+
+    [Fact]
+    public void When_operation_declares_a_member_named_Http_then_no_nested_class_is_emitted()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public string Http { get; set; }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetWidgetQuery");
+        source.Should().NotContain("class Http");
+        source.Should().Contain("static (op) => { var typed = (global::TestNamespace.GetWidgetQuery)op; if (typed.Id is null) return null;");
+    }
+
+    [Fact]
+    public void When_a_base_type_is_a_concrete_operation_then_the_derived_operation_gets_no_nested_class()
+    {
+        // The base's own generated Http would be hidden by the derived one's (CS0108), and a base with no route gets none
+        // to hide (CS0109), so the derived operation keeps the inline delegates instead.
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+
+            [global::Blueprint.Model.Attributes.RootLink("/special-widgets/{Id}")]
+            public partial class GetSpecialWidgetQuery : GetWidgetQuery
+            {
+                public static Task<string> HandleAsync(GetSpecialWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetSpecialWidgetQuery");
+        source.Should().NotContain("class Http");
+        source.Should().Contain("var typed = (global::TestNamespace.GetSpecialWidgetQuery)op;");
     }
 
     private static GenerationResult CompileDescriptor(string source)
@@ -372,13 +516,17 @@ public class HttpClientRequestBuilderModuleTests
             + "namespace TestNamespace;\n\n" + source);
     }
 
+    /// <summary>
+    /// Every file generated for the operation: the descriptor and, when it has one, the file carrying its Http class.
+    /// </summary>
     private static string GetDescriptorSource(GenerationResult result, string operationName)
     {
-        var source = result.Output
+        var sources = result.Output
+            .Where(t => Path.GetFileName(t.FilePath).StartsWith($"TestNamespace.{operationName}_", StringComparison.Ordinal))
             .Select(static t => t.ToString())
-            .FirstOrDefault(s => s.Contains($"{operationName}Descriptor") || s.Contains("CompiledHttpRequestFeatureData"));
+            .ToList();
 
-        source.Should().NotBeNull($"descriptor output for {operationName} should exist");
-        return source!;
+        sources.Should().NotBeEmpty($"descriptor output for {operationName} should exist");
+        return string.Join(Environment.NewLine, sources);
     }
 }
