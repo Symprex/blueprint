@@ -196,6 +196,8 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             configureMethod.MakeNewMethod();
         }
 
+        plan.RenderOperationMembers(wrapperClass);
+
         // Note that we have to hack around Blueprint.SourceGenerator.CodeWriter a little to get a base call without constructor arguments. We
         // pass in an empty dictionary (as it *immediately* uses that to configure the parameters), and THEN after we
         // populate the dictionary because it uses callbacks to grab those when creating the base call.

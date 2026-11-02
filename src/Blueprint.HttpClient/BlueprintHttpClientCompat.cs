@@ -2,20 +2,15 @@ using Blueprint.Model;
 
 namespace Blueprint.HttpClient;
 
-/// <summary>
+/// <content>
 /// Compatibility surface for legacy generated clients that were compiled against the old non-generic
 /// <c>BlueprintHttpClient</c> type. New Blueprint code should continue to prefer
 /// <see cref="BlueprintHttpClient{TApp}"/>, while migration callers can hold a non-generic reference
-/// and still dispatch the same <c>CallAsync</c> overloads.
-/// </summary>
-public abstract class BlueprintHttpClient
+/// and still dispatch the same <c>CallAsync</c> overloads. Only an app-driven client can: a transport made with no
+/// <see cref="BlueprintApp"/> has no descriptor to find an operation's URL and HTTP method in, so on one these fail.
+/// </content>
+public partial class BlueprintHttpClient
 {
-    /// <summary>
-    /// Gets the inner HTTP client the calls are sent with, as legacy's client exposed it (Signature365
-    /// <c>Common.Core/Api/BlueprintHttpClient.cs:47-50</c>), so a caller can read or set its default headers.
-    /// </summary>
-    public abstract System.Net.Http.HttpClient HttpClient { get; }
-
     /// <summary>
     /// Adapts a typed <see cref="BlueprintHttpClient{TApp}"/> to the legacy non-generic surface
     /// so that callers holding a <see cref="BlueprintHttpClient"/> reference can dispatch operations
@@ -39,6 +34,7 @@ public abstract class BlueprintHttpClient
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The deserialized response payload.</returns>
+    /// <exception cref="InvalidOperationException">This client was made with no <see cref="BlueprintApp"/>.</exception>
     public async Task<TResponse> CallAsync<TResponse>(
         IReturn<TResponse> operation,
         CallOptions? options,
@@ -57,6 +53,7 @@ public abstract class BlueprintHttpClient
     /// <param name="operation">The operation to send.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The deserialized response payload.</returns>
+    /// <exception cref="InvalidOperationException">This client was made with no <see cref="BlueprintApp"/>.</exception>
     public Task<TResponse> CallAsync<TResponse>(
         IReturn<TResponse> operation,
         CancellationToken cancellationToken = default)
@@ -73,6 +70,7 @@ public abstract class BlueprintHttpClient
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the remote call succeeds.</returns>
+    /// <exception cref="InvalidOperationException">This client was made with no <see cref="BlueprintApp"/>.</exception>
     public Task SendVoidAsync(
         IOperation operation,
         CallOptions? options,
@@ -88,6 +86,7 @@ public abstract class BlueprintHttpClient
     /// <param name="operation">The operation to send.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the remote call succeeds.</returns>
+    /// <exception cref="InvalidOperationException">This client was made with no <see cref="BlueprintApp"/>.</exception>
     public Task SendVoidAsync(
         IOperation operation,
         CancellationToken cancellationToken = default)
@@ -96,29 +95,43 @@ public abstract class BlueprintHttpClient
     }
 
     /// <summary>
-    /// Implements the typed call path for the compatibility surface. Subclasses route this
-    /// through the concrete <see cref="BlueprintHttpClient{TApp}"/> send pipeline.
+    /// Implements the typed call path for the compatibility surface. <see cref="BlueprintHttpClient{TApp}"/> routes this
+    /// through its app's descriptors; a client made with no app fails it.
     /// </summary>
     /// <typeparam name="TResponse">The expected response type.</typeparam>
     /// <param name="operation">The operation to send.</param>
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task producing the deserialized response.</returns>
-    protected abstract Task<TResponse> CallAsyncCore<TResponse>(
+    /// <returns>A task producing the deserialized response, faulted with an <see cref="InvalidOperationException"/> here.</returns>
+    protected virtual Task<TResponse> CallAsyncCore<TResponse>(
         IReturn<TResponse> operation,
         CallOptions? options,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        return Task.FromException<TResponse>(CreateNoAppException());
+    }
 
     /// <summary>
-    /// Implements the void send path for the compatibility surface. Subclasses route this
-    /// through the concrete <see cref="BlueprintHttpClient{TApp}"/> send pipeline.
+    /// Implements the void send path for the compatibility surface. <see cref="BlueprintHttpClient{TApp}"/> routes this
+    /// through its app's descriptors; a client made with no app fails it.
     /// </summary>
     /// <param name="operation">The operation to send.</param>
     /// <param name="options">Optional per-call request customization.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task that completes when the remote call succeeds.</returns>
-    protected abstract Task SendVoidAsyncCore(
+    /// <returns>A task that completes when the remote call succeeds, faulted with an <see cref="InvalidOperationException"/> here.</returns>
+    protected virtual Task SendVoidAsyncCore(
         IOperation operation,
         CallOptions? options,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        return Task.FromException(CreateNoAppException());
+    }
+
+    private static InvalidOperationException CreateNoAppException()
+    {
+        return new InvalidOperationException(
+            $"This {nameof(BlueprintHttpClient)} was made with no {nameof(BlueprintApp)}, so it has no operation descriptor to " +
+            $"find a URL and HTTP method in. Use a {nameof(BlueprintHttpClient)}<TApp>, or send with {nameof(SendAsync)} and " +
+            "the operation's own request builders.");
+    }
 }

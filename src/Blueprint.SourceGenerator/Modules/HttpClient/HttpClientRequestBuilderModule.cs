@@ -17,6 +17,12 @@ namespace Blueprint.SourceGenerator.Modules.HttpClient;
 /// </summary>
 public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
+    private const string HttpClassName = "Http";
+
+    // Generated files have no nullable annotation context, so a `string?` return would not compile (CS8669); the attribute
+    // gives a nullable-enabled caller the same "may be null" signal.
+    private const string MaybeNullReturnAttribute = "return: global::System.Diagnostics.CodeAnalysis.MaybeNull";
+
     // Route-owned (RoutePlaceholderSyntax, R97/R111): the bound name is whatever is before a `:` (alternate resource
     // property) or `(` (legacy format specifier) — either, or both, or neither. The old regex here only excluded `:`, so
     // a `{Name(format)}` placeholder's whole "Name(format)" was taken as the property name and never matched, leaving the
@@ -104,40 +110,89 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         var isQueryMethod = context.GetMetadata<OperationHttpMethodMetadataRegistration>()
             .Any(static m => m.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase));
 
+        // The builders are real static methods on a nested `Http` class of the operation's own partial, so a typed client can
+        // call them without a descriptor lookup or a cast. The descriptor's delegates are thin wrappers over them, so both
+        // build the same URL. An operation that already declares its own `Http` member keeps the inline delegates only.
+        var urlBuilderBody = BuildUrlBuilderBody(urlTemplate, placeholders, properties);
+
+        // A GET carries its non-URL properties as a query string rather than a body. The typed appender exists for every
+        // GET; the delegate stays null when no property is query-eligible, as the runtime reads that as "append nothing".
+        var queryStringBody = isQueryMethod
+            ? BuildQueryStringBody(placeholders, properties, queryBindingNames)
+            : null;
+
+        var emitHttpClass = operationSymbol.GetMembers(HttpClassName).IsEmpty;
+
+        if (emitHttpClass)
+        {
+            context.AddOperationMemberStep(operationClass =>
+            {
+                // A base operation's generated `Http` is not visible as a symbol, so hiding it is suppressed rather than detected.
+                var httpClass = operationClass.AddNestedClass(HttpClassName, Accessibility.Public)
+                    .MakeStaticClass()
+                    .DisableWarning("CS0108");
+
+                httpClass.AddMethod("BuildUrl")
+                    .MakePublicMethod()
+                    .MakeStaticMethod()
+                    .AddAttribute(MaybeNullReturnAttribute)
+                    .WithReturnType("string")
+                    .AddParameter(operationFqn, "operation")
+                    .WithBody(codeWriter => codeWriter.AppendLine(urlBuilderBody));
+
+                if (isQueryMethod)
+                {
+                    httpClass.AddMethod("AppendQueryString")
+                        .MakePublicMethod()
+                        .MakeStaticMethod()
+                        .WithReturnType("string")
+                        .AddParameter(operationFqn, "operation")
+                        .AddParameter("string", "url")
+                        .WithBody(codeWriter => codeWriter.AppendLine(queryStringBody ?? "return url;"));
+                }
+            });
+        }
+
         context.AddRenderStep(codeWriter =>
         {
-            RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlTemplate, placeholders, properties, isQueryMethod, queryBindingNames);
+            RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlBuilderBody, queryStringBody, emitHttpClass);
         });
     }
 
     private static void RenderCompiledHttpRequestFeatureData(
         ICodeWriter codeWriter,
         string operationFqn,
-        string urlTemplate,
-        HashSet<string> placeholders,
-        List<IPropertySymbol> properties,
-        bool isQueryMethod,
-        Dictionary<string, string> queryBindingNames)
+        string urlBuilderBody,
+        string? queryStringBody,
+        bool callHttpClass)
     {
-        // Build the URL builder lambda
-        var urlBuilderLambda = BuildUrlBuilderLambda(operationFqn, urlTemplate, placeholders, properties);
+        string buildUrl;
+        string appendQueryString;
 
-        // Build the query string builder lambda for a GET, which carries its non-URL properties
-        // as a query string rather than a body
-        var queryStringLambda = isQueryMethod
-            ? BuildQueryStringLambda(operationFqn, placeholders, properties, queryBindingNames)
-            : null;
+        if (callHttpClass)
+        {
+            buildUrl = $"static (op) => {operationFqn}.{HttpClassName}.BuildUrl(({operationFqn})op)";
+            appendQueryString = queryStringBody is not null
+                ? $"static (op, url) => {operationFqn}.{HttpClassName}.AppendQueryString(({operationFqn})op, url)"
+                : "null";
+        }
+        else
+        {
+            buildUrl = $"static (op) => {{ var operation = ({operationFqn})op; {urlBuilderBody} }}";
+            appendQueryString = queryStringBody is not null
+                ? $"static (op, url) => {{ var operation = ({operationFqn})op; {queryStringBody} }}"
+                : "null";
+        }
 
         codeWriter.AppendLine(
-            $"this.SetFeatureData(new global::Blueprint.Model.CompiledHttpRequestFeatureData("
-            + urlBuilderLambda
+            "this.SetFeatureData(new global::Blueprint.Model.CompiledHttpRequestFeatureData("
+            + buildUrl
             + ", "
-            + (queryStringLambda ?? "null")
+            + appendQueryString
             + "));");
     }
 
-    private static string BuildUrlBuilderLambda(
-        string operationFqn,
+    private static string BuildUrlBuilderBody(
         string urlTemplate,
         HashSet<string> placeholders,
         List<IPropertySymbol> properties)
@@ -243,11 +298,10 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             ? $"if ({string.Join(" || ", nullChecks)}) return null; "
             : string.Empty;
 
-        return $"static (op) => {{ var typed = ({operationFqn})op; {nullCheckExpr}return {urlExpr}; }}";
+        return $"var typed = operation; {nullCheckExpr}return {urlExpr};";
     }
 
-    private static string? BuildQueryStringLambda(
-        string operationFqn,
+    private static string? BuildQueryStringBody(
         HashSet<string> placeholders,
         List<IPropertySymbol> properties,
         Dictionary<string, string> queryBindingNames)
@@ -280,16 +334,15 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         var hasCollections = queryProperties.Any(p => IsEnumerableType(p.Type, out _));
 
         return hasCollections
-            ? BuildQueryStringLambdaWithList(operationFqn, queryProperties, queryBindingNames)
-            : BuildQueryStringLambdaScalarOnly(operationFqn, queryProperties, queryBindingNames);
+            ? BuildQueryStringBodyWithList(queryProperties, queryBindingNames)
+            : BuildQueryStringBodyScalarOnly(queryProperties, queryBindingNames);
     }
 
     /// <summary>
-    /// Generates a query string lambda for operations where ALL query parameters are scalar
+    /// Generates a query string builder body for operations where ALL query parameters are scalar
     /// (no collections). Uses a zero-allocation separator-tracking pattern instead of List.
     /// </summary>
-    private static string BuildQueryStringLambdaScalarOnly(
-        string operationFqn,
+    private static string BuildQueryStringBodyScalarOnly(
         List<IPropertySymbol> queryProperties,
         Dictionary<string, string> queryBindingNames)
     {
@@ -301,7 +354,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         //   return qs;
         var parts = new List<string>
         {
-            $"static (op, url) => {{ var typed = ({operationFqn})op;",
+            "var typed = operation;",
             "var sep = url.Contains('?') ? '&' : '?';",
             "var qs = url;",
         };
@@ -342,23 +395,22 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             }
         }
 
-        parts.Add("return qs == url ? url : qs; }");
+        parts.Add("return qs == url ? url : qs;");
 
         return string.Join(" ", parts);
     }
 
     /// <summary>
-    /// Generates a query string lambda for operations that have collection parameters.
+    /// Generates a query string builder body for operations that have collection parameters.
     /// Uses List&lt;string&gt; for repeated-key expansion (e.g. ?ids=1&amp;ids=2).
     /// </summary>
-    private static string BuildQueryStringLambdaWithList(
-        string operationFqn,
+    private static string BuildQueryStringBodyWithList(
         List<IPropertySymbol> queryProperties,
         Dictionary<string, string> queryBindingNames)
     {
         var parts = new List<string>
         {
-            $"static (op, url) => {{ var typed = ({operationFqn})op;",
+            "var typed = operation;",
             "var parts = new global::System.Collections.Generic.List<string>();",
         };
 
@@ -404,7 +456,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
         parts.Add("if (parts.Count == 0) return url;");
         parts.Add("var sep = url.Contains('?') ? \"&\" : \"?\";");
-        parts.Add("return url + sep + string.Join(\"&\", parts); }");
+        parts.Add("return url + sep + string.Join(\"&\", parts);");
 
         return string.Join(" ", parts);
     }

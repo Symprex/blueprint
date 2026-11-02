@@ -66,6 +66,106 @@ public class HttpClientRequestBuilderModuleTests
     }
 
     [Fact]
+    public void When_get_query_with_route_and_query_params_then_emits_typed_builders_the_delegates_wrap()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+                public int Page { get; set; }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetWidgetQuery");
+        source.Should().Contain("public static class Http");
+        source.Should().Contain("public static string BuildUrl(global::TestNamespace.GetWidgetQuery operation)");
+        source.Should().Contain("[return: global::System.Diagnostics.CodeAnalysis.MaybeNull]");
+        source.Should().Contain("public static string AppendQueryString(global::TestNamespace.GetWidgetQuery operation, string url)");
+        source.Should().NotContain("EditorBrowsable");
+
+        // The delegates hold no URL logic of their own: they cast and call the typed builders.
+        source.Should().Contain("static (op) => global::TestNamespace.GetWidgetQuery.Http.BuildUrl((global::TestNamespace.GetWidgetQuery)op)");
+        source.Should().Contain("static (op, url) => global::TestNamespace.GetWidgetQuery.Http.AppendQueryString((global::TestNamespace.GetWidgetQuery)op, url)");
+    }
+
+    [Fact]
+    public void When_post_command_then_typed_url_builder_but_no_typed_query_appender()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.HttpPost]
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class UpdateWidgetCommand : ICommand<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(UpdateWidgetCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var source = GetDescriptorSource(result, "UpdateWidgetCommand");
+        source.Should().Contain("BuildUrl(global::TestNamespace.UpdateWidgetCommand operation)");
+        source.Should().NotContain("AppendQueryString");
+    }
+
+    [Fact]
+    public void When_operation_has_no_route_then_no_typed_builders_emitted()
+    {
+        var result = CompileDescriptor(
+            """
+            public partial class InternalCommand : ICommand<string>
+            {
+                public string Data { get; set; }
+
+                public static Task<string> HandleAsync(InternalCommand operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        GetDescriptorSource(result, "InternalCommand").Should().NotContain("class Http");
+    }
+
+    [Fact]
+    public void When_operation_declares_its_own_Http_member_then_no_nested_class_and_delegates_are_inline()
+    {
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public string Http { get; set; }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetWidgetQuery");
+        source.Should().NotContain("class Http");
+        source.Should().Contain("static (op) => { var operation = (global::TestNamespace.GetWidgetQuery)op; var typed = operation; if (typed.Id is null) return null;");
+    }
+
+    [Fact]
     public void When_post_command_then_no_query_string_builder()
     {
         var result = CompileDescriptor(
