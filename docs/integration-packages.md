@@ -382,8 +382,8 @@ argument, counts as covered, as System.Text.Json generates metadata for it too. 
 The client class must be a partial, non-generic, non-abstract class declared directly in a namespace (`BPCL001`).
 
 An included operation must be concrete and non-generic, return an `IReturn<T>`, have a route, and be exposed. A
-result type with no reader, such as a `FileStreamResult` or a non-generic `OkResult`, is `BPCL008`. All the
-diagnostics are `BPCL001`–`BPCL008` in [diagnostic-reference.md](diagnostic-reference.md).
+result type with no reader, such as a `FileStreamResult`, a non-generic `OkResult` or an abstract resource event, is
+`BPCL008`. All the diagnostics are `BPCL001`–`BPCL008` in [diagnostic-reference.md](diagnostic-reference.md).
 
 ### S365 Gateway Migration
 

@@ -310,6 +310,44 @@ public class BlueprintClientSourceGeneratorTests
     }
 
     [Fact]
+    public void When_two_method_names_differ_only_in_their_first_letters_case_then_their_plans_stay_distinct()
+    {
+        // Lower-casing the method name's first letter used to name both plan fields _getWidgetAsyncPlan (CS0102).
+        var source = Usings + """
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(GetWidgetQuery))]
+            [BlueprintClientInclude(typeof(getWidgetQuery))]
+            public partial class WidgetsApi
+            {
+            }
+
+            [RootLink("/widgets/upper")]
+            public partial class GetWidgetQuery : IQuery<WidgetApiResource>
+            {
+                public static class Http
+                {
+                    public static string BuildUrl(GetWidgetQuery operation) => "/widgets/upper";
+
+                    public static string AppendQueryString(GetWidgetQuery operation, string url) => url;
+                }
+            }
+
+            [RootLink("/widgets/lower")]
+            public partial class getWidgetQuery : IQuery<WidgetApiResource>
+            {
+                public static class Http
+                {
+                    public static string BuildUrl(getWidgetQuery operation) => "/widgets/lower";
+
+                    public static string AppendQueryString(getWidgetQuery operation, string url) => url;
+                }
+            }
+            """;
+
+        Compile(source).Diagnostics.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task When_client_is_not_partial_then_reports_BPCL001()
     {
         var source = Usings + """
@@ -557,6 +595,54 @@ public class BlueprintClientSourceGeneratorTests
             """;
 
         await Compile(source).VerifySuccessWithDiagnosticsAsync(SnapshotsFolder, "BPCL007");
+    }
+
+    [Fact]
+    public void When_result_is_an_abstract_resource_event_alone_or_in_a_union_then_reports_BPCL008()
+    {
+        // BlueprintHttpClient<TApp> refuses either before sending; the typed client used to choose a JSON reader for it.
+        var source = Usings + """
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(SaveWidgetCommand))]
+            [BlueprintClientInclude(typeof(ArchiveWidgetCommand))]
+            public partial class WidgetsApi
+            {
+            }
+
+            public abstract class AuditedWidgetEvent : Blueprint.Http.ResourceEvent<WidgetApiResource>
+            {
+                protected AuditedWidgetEvent(Blueprint.Http.ResourceEventChangeType changeType, string eventId, WidgetApiResource data)
+                    : base(changeType, eventId, data)
+                {
+                }
+            }
+
+            [RootLink("/widgets/save")]
+            [HttpPost]
+            public partial class SaveWidgetCommand : ICommand<AuditedWidgetEvent>
+            {
+                public static class Http
+                {
+                    public static string BuildUrl(SaveWidgetCommand operation) => "/widgets/save";
+                }
+            }
+
+            [RootLink("/widgets/archive")]
+            [HttpPost]
+            public partial class ArchiveWidgetCommand : ICommand<Results<AuditedWidgetEvent, StatusCodeResult.Accepted>>
+            {
+                public static class Http
+                {
+                    public static string BuildUrl(ArchiveWidgetCommand operation) => "/widgets/archive";
+                }
+            }
+            """;
+
+        Compile(source).Diagnostics.Where(static d => d.Id == "BPCL008")
+            .Select(static d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture))
+            .Should().HaveCount(2)
+            .And.Contain(static m => m.Contains("SaveWidgetCommand"))
+            .And.Contain(static m => m.Contains("ArchiveWidgetCommand"));
     }
 
     [Fact]

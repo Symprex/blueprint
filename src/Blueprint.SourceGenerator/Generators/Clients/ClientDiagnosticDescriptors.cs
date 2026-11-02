@@ -104,5 +104,5 @@ internal static class ClientDiagnosticDescriptors
         category: Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A typed client reads a JSON type, a resource event (ResourceEvent<T>, ResourceCreated<T>, ResourceUpdated<T>, ResourceDeleted<T>), a ResourceEventResult<T>, a nested StatusCodeResult, a PlainTextResult, a string, a two-member Results<,> union, or a result the host writes with no body. Other operation results, such as a FileStreamResult or a non-generic OkResult, have none.");
+        description: "A typed client reads a JSON type, a resource event (ResourceEvent<T>, ResourceCreated<T>, ResourceUpdated<T>, ResourceDeleted<T>), a ResourceEventResult<T>, a nested StatusCodeResult, a PlainTextResult, a string, a two-member Results<,> union, or a result the host writes with no body. Other operation results, such as a FileStreamResult or a non-generic OkResult, have none, and neither has an abstract resource event.");
 }

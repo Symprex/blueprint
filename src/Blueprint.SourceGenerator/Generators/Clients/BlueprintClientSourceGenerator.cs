@@ -367,6 +367,12 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
             return first is null || second is null ? null : $"{ReadersType}.Union({first}, {second})";
         }
 
+        // BlueprintHttpClient<TApp> refuses an abstract resource event before it sends, as no response can be read as one.
+        if (resultType.IsAbstract && IsResourceEvent(resultType))
+        {
+            return null;
+        }
+
         if (IsNestedStatusCodeResult(resultType))
         {
             return HasInstanceField(resultType) ? $"{ReadersType}.StatusCode({fqn}.Instance)" : null;
@@ -420,6 +426,11 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
     private static string? CreateUnionMember(ITypeSymbol memberType, List<ITypeSymbol> jsonTypes)
     {
         var fqn = memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        if (memberType.IsAbstract && IsResourceEvent(memberType))
+        {
+            return null;
+        }
 
         if (GetResourceEventFamilyReader(memberType, member: true) is { } eventMember)
         {
@@ -874,7 +885,7 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
 
         foreach (var operation in client.Operations)
         {
-            sb.AppendLine($"{indent}    private static readonly global::Blueprint.HttpClient.BlueprintCallPlan<{operation.OperationFqn}, {operation.ResultFqn}> _{ToFieldName(operation.MethodName)}Plan = new(");
+            sb.AppendLine($"{indent}    private static readonly global::Blueprint.HttpClient.BlueprintCallPlan<{operation.OperationFqn}, {operation.ResultFqn}> _{ToFieldName(operation.MethodName)} = new(");
             sb.AppendLine($"{indent}        \"{operation.OperationName}\",");
             sb.AppendLine($"{indent}        {operation.HttpMethodExpression},");
             sb.AppendLine($"{indent}        {operation.OperationFqn}.Http.BuildUrl,");
@@ -973,16 +984,20 @@ public sealed class BlueprintClientSourceGenerator : IIncrementalGenerator, ITra
             sb.AppendLine();
             sb.AppendLine($"{indent}        this.OnConfigure(operation, ref options);");
             sb.AppendLine();
-            sb.AppendLine($"{indent}        return this._blueprintClient.SendAsync(_{ToFieldName(operation.MethodName)}Plan, operation, options, this._blueprintRequestModifier, this._blueprintCredential, cancellationToken);");
+            sb.AppendLine($"{indent}        return this._blueprintClient.SendAsync(_{ToFieldName(operation.MethodName)}, operation, options, this._blueprintRequestModifier, this._blueprintCredential, cancellationToken);");
             sb.AppendLine($"{indent}    }}");
         }
 
         sb.AppendLine($"{indent}}}");
     }
 
+    /// <summary>
+    /// The plan field's name, without its leading underscore: the method name behind a fixed prefix, so that method names
+    /// differing only in their first letter's case keep distinct fields.
+    /// </summary>
     private static string ToFieldName(string methodName)
     {
-        return char.ToLowerInvariant(methodName[0]) + methodName[1..];
+        return "plan" + methodName;
     }
 
     /// <summary>

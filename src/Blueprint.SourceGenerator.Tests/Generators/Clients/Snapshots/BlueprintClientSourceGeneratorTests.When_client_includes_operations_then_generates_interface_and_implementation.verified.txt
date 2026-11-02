@@ -67,7 +67,7 @@ namespace TestNamespace
 
     public partial class WidgetsApi : IWidgetsApi
     {
-        private static readonly global::Blueprint.HttpClient.BlueprintCallPlan<global::TestNamespace.GetWidgetQuery, global::TestNamespace.WidgetApiResource> _getWidgetAsyncPlan = new(
+        private static readonly global::Blueprint.HttpClient.BlueprintCallPlan<global::TestNamespace.GetWidgetQuery, global::TestNamespace.WidgetApiResource> _planGetWidgetAsync = new(
             "GetWidgetQuery",
             global::System.Net.Http.HttpMethod.Get,
             global::TestNamespace.GetWidgetQuery.Http.BuildUrl,
@@ -75,7 +75,7 @@ namespace TestNamespace
             global::Blueprint.HttpClient.BlueprintResponseReaders.Json<global::TestNamespace.WidgetApiResource>(),
             global::TestNamespace.WidgetJsonContext.Default);
 
-        private static readonly global::Blueprint.HttpClient.BlueprintCallPlan<global::TestNamespace.CreateWidgetCommand, global::Blueprint.Http.ResourceCreated<global::TestNamespace.WidgetApiResource>> _createWidgetAsyncPlan = new(
+        private static readonly global::Blueprint.HttpClient.BlueprintCallPlan<global::TestNamespace.CreateWidgetCommand, global::Blueprint.Http.ResourceCreated<global::TestNamespace.WidgetApiResource>> _planCreateWidgetAsync = new(
             "CreateWidgetCommand",
             global::System.Net.Http.HttpMethod.Post,
             global::TestNamespace.CreateWidgetCommand.Http.BuildUrl,
@@ -83,7 +83,7 @@ namespace TestNamespace
             global::Blueprint.HttpClient.BlueprintResponseReaders.ResourceCreated<global::TestNamespace.WidgetApiResource>(),
             global::TestNamespace.WidgetJsonContext.Default);
 
-        private static readonly global::Blueprint.HttpClient.BlueprintCallPlan<global::TestNamespace.FindWidgetQuery, global::Blueprint.Model.Results<global::Blueprint.Runtime.Exec.OkResult<global::TestNamespace.WidgetApiResource>, global::Blueprint.Runtime.Exec.NotFoundResult<global::TestNamespace.WidgetApiResource>>> _findWidgetAsyncPlan = new(
+        private static readonly global::Blueprint.HttpClient.BlueprintCallPlan<global::TestNamespace.FindWidgetQuery, global::Blueprint.Model.Results<global::Blueprint.Runtime.Exec.OkResult<global::TestNamespace.WidgetApiResource>, global::Blueprint.Runtime.Exec.NotFoundResult<global::TestNamespace.WidgetApiResource>>> _planFindWidgetAsync = new(
             "FindWidgetQuery",
             global::System.Net.Http.HttpMethod.Get,
             global::TestNamespace.FindWidgetQuery.Http.BuildUrl,
@@ -91,7 +91,7 @@ namespace TestNamespace
             global::Blueprint.HttpClient.BlueprintResponseReaders.Union(global::Blueprint.HttpClient.BlueprintResponseReaders.OkMember<global::TestNamespace.WidgetApiResource>(), global::Blueprint.HttpClient.BlueprintResponseReaders.NoneMember<global::Blueprint.Runtime.Exec.NotFoundResult<global::TestNamespace.WidgetApiResource>>()),
             global::TestNamespace.WidgetJsonContext.Default);
 
-        private static readonly global::Blueprint.HttpClient.BlueprintCallPlan<global::TestNamespace.ArchiveWidgetCommand, global::Blueprint.Runtime.Exec.StatusCodeResult.Accepted> _archiveWidgetAsyncPlan = new(
+        private static readonly global::Blueprint.HttpClient.BlueprintCallPlan<global::TestNamespace.ArchiveWidgetCommand, global::Blueprint.Runtime.Exec.StatusCodeResult.Accepted> _planArchiveWidgetAsync = new(
             "ArchiveWidgetCommand",
             global::System.Net.Http.HttpMethod.Post,
             global::TestNamespace.ArchiveWidgetCommand.Http.BuildUrl,
@@ -163,7 +163,7 @@ namespace TestNamespace
 
             this.OnConfigure(operation, ref options);
 
-            return this._blueprintClient.SendAsync(_getWidgetAsyncPlan, operation, options, this._blueprintRequestModifier, this._blueprintCredential, cancellationToken);
+            return this._blueprintClient.SendAsync(_planGetWidgetAsync, operation, options, this._blueprintRequestModifier, this._blueprintCredential, cancellationToken);
         }
 
         /// <summary>
@@ -180,7 +180,7 @@ namespace TestNamespace
 
             this.OnConfigure(operation, ref options);
 
-            return this._blueprintClient.SendAsync(_createWidgetAsyncPlan, operation, options, this._blueprintRequestModifier, this._blueprintCredential, cancellationToken);
+            return this._blueprintClient.SendAsync(_planCreateWidgetAsync, operation, options, this._blueprintRequestModifier, this._blueprintCredential, cancellationToken);
         }
 
         /// <summary>
@@ -197,7 +197,7 @@ namespace TestNamespace
 
             this.OnConfigure(operation, ref options);
 
-            return this._blueprintClient.SendAsync(_findWidgetAsyncPlan, operation, options, this._blueprintRequestModifier, this._blueprintCredential, cancellationToken);
+            return this._blueprintClient.SendAsync(_planFindWidgetAsync, operation, options, this._blueprintRequestModifier, this._blueprintCredential, cancellationToken);
         }
 
         /// <summary>
@@ -214,7 +214,7 @@ namespace TestNamespace
 
             this.OnConfigure(operation, ref options);
 
-            return this._blueprintClient.SendAsync(_archiveWidgetAsyncPlan, operation, options, this._blueprintRequestModifier, this._blueprintCredential, cancellationToken);
+            return this._blueprintClient.SendAsync(_planArchiveWidgetAsync, operation, options, this._blueprintRequestModifier, this._blueprintCredential, cancellationToken);
         }
     }
 }
