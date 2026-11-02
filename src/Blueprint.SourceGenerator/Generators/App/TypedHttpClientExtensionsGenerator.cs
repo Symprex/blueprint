@@ -1,4 +1,5 @@
 using System.Text;
+using Blueprint.SourceGenerator.Generators.Clients;
 using Blueprint.SourceGenerator.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -185,7 +186,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         var resourceEventResourceTypeFqn = GetResourceEventInnerType(operationType);
 
         // Get the HTTP method from explicit attributes or interface convention
-        var httpMethod = GetHttpMethod(operationType);
+        var httpMethod = ClientSymbolHelpers.GetHttpMethod(operationType);
         if (httpMethod is null)
         {
             return null;
@@ -342,55 +343,6 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         return null;
     }
 
-    private static string? GetHttpMethod(INamedTypeSymbol operationType)
-    {
-        // Check for explicit HTTP method attributes (same as OperationHttpMethodMetadataModule)
-        foreach (var attr in operationType.GetAttributes())
-        {
-            if (attr.AttributeClass is not { } attrClass
-                || !attrClass.IsInNamespace("Blueprint", "Model", "Attributes"))
-            {
-                continue;
-            }
-
-            switch (attrClass.Name)
-            {
-                case "HttpGetAttribute":
-                    return "GET";
-                case "HttpPostAttribute":
-                    return "POST";
-                case "HttpPutAttribute":
-                    return "PUT";
-                case "HttpPatchAttribute":
-                    return "PATCH";
-                case "HttpDeleteAttribute":
-                    return "DELETE";
-                case "HttpMethodAttribute"
-                    when attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is string method:
-                    return method.ToUpperInvariant();
-            }
-        }
-
-        // Fall back to interface convention
-        foreach (var iface in operationType.AllInterfaces)
-        {
-            if (iface.IsInNamespace("Blueprint", "Model"))
-            {
-                if (iface.Name == "IQuery")
-                {
-                    return "GET";
-                }
-
-                if (iface.Name == "ICommand")
-                {
-                    return "POST";
-                }
-            }
-        }
-
-        return null;
-    }
-
     private static string GenerateMethodName(string operationTypeName, string httpMethod)
     {
         // Remove common suffixes
@@ -468,7 +420,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
         foreach (var param in op.Parameters)
         {
-            propertyParameterNames.Add(ToCamelCase(param.Name));
+            propertyParameterNames.Add(ClientSymbolHelpers.ToCamelCase(param.Name));
         }
 
         var clientName = ReserveUniqueName("client", propertyParameterNames);
@@ -483,13 +435,13 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
         foreach (var param in positionalParams)
         {
-            var paramName = ToParameterIdentifier(param.Name);
+            var paramName = ClientSymbolHelpers.ToParameterIdentifier(param.Name);
             paramParts.Add($"{param.TypeFqn} {paramName}");
         }
 
         foreach (var param in optionalParams)
         {
-            var paramName = ToParameterIdentifier(param.Name);
+            var paramName = ClientSymbolHelpers.ToParameterIdentifier(param.Name);
             paramParts.Add($"{param.TypeFqn} {paramName} = default");
         }
 
@@ -532,14 +484,14 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
         foreach (var param in positionalParams)
         {
-            var paramName = ToParameterIdentifier(param.Name);
-            sb.AppendLine($"                {EscapeIdentifier(param.Name)} = {paramName},");
+            var paramName = ClientSymbolHelpers.ToParameterIdentifier(param.Name);
+            sb.AppendLine($"                {ClientSymbolHelpers.EscapeIdentifier(param.Name)} = {paramName},");
         }
 
         foreach (var param in optionalParams)
         {
-            var paramName = ToParameterIdentifier(param.Name);
-            sb.AppendLine($"                {EscapeIdentifier(param.Name)} = {paramName},");
+            var paramName = ClientSymbolHelpers.ToParameterIdentifier(param.Name);
+            sb.AppendLine($"                {ClientSymbolHelpers.EscapeIdentifier(param.Name)} = {paramName},");
         }
 
         sb.AppendLine("            };");
@@ -660,63 +612,6 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         }
 
         sb.AppendLine("        }");
-    }
-
-    /// <summary>
-    /// The parameter name a property is exposed as: its camel-cased name, escaped when that is a reserved keyword.
-    /// </summary>
-    /// <remarks>
-    /// A property named <c>Throw</c> or <c>Event</c> camel-cases to a keyword, which is not a legal parameter name
-    /// unescaped. A caller passing it as a named argument escapes it too (<c>@throw: true</c>); an unescaped
-    /// <c>throw:</c> does not compile.
-    /// </remarks>
-    private static string ToParameterIdentifier(string propertyName)
-    {
-        return EscapeIdentifier(ToCamelCase(propertyName));
-    }
-
-    /// <summary>
-    /// Returns <paramref name="name"/> prefixed with <c>@</c> when it is a reserved C# keyword. A symbol's name is
-    /// unescaped, so a property declared <c>@class</c> is named <c>class</c> and must be escaped again when emitted.
-    /// Contextual keywords (<c>value</c>, <c>async</c>, <c>var</c>) are legal identifiers here and are left alone.
-    /// </summary>
-    private static string EscapeIdentifier(string name)
-    {
-        return Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
-            ? "@" + name
-            : name;
-    }
-
-    private static string ToCamelCase(string name)
-    {
-        if (string.IsNullOrEmpty(name))
-        {
-            return name;
-        }
-
-        if (char.IsLower(name[0]))
-        {
-            return name;
-        }
-
-        // Handle acronyms (e.g. "ID" → "id", "URL" → "url")
-        if (name.Length > 1 && char.IsUpper(name[1]))
-        {
-            var i = 0;
-            while (i < name.Length && char.IsUpper(name[i]))
-            {
-                i++;
-            }
-
-            if (i == name.Length)
-            {
-                return name.ToLowerInvariant();
-            }
-
-            return name[..(i - 1)].ToLowerInvariant() + name[(i - 1)..];
-        }
-
-        return char.ToLowerInvariant(name[0]) + name[1..];
     }
 
     private static IEnumerable<INamedTypeSymbol> GetAllTypesFromAssembly(IAssemblySymbol assembly)

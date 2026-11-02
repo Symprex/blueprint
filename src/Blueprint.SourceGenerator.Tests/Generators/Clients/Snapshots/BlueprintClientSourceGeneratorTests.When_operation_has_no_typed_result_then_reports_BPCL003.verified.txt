@@ -1,0 +1,28 @@
+﻿File: Input0.cs
+using System.Threading;
+using System.Threading.Tasks;
+using Blueprint;
+using Blueprint.Http;
+using Blueprint.HttpClient;
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
+
+namespace TestNamespace;
+
+public partial class WidgetApiResource : ApiResource
+{
+    public string Id { get; set; }
+}
+[BlueprintClient]
+[BlueprintClientInclude(typeof(PingCommand))]
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPCL003] The operation 'TestNamespace.PingCommand' implements no IReturn<T>, so its client method has no result type
+public partial class WidgetsApi
+{
+}
+
+[RootLink("/ping")]
+[HttpPost]
+public partial class PingCommand : ICommand
+{
+}

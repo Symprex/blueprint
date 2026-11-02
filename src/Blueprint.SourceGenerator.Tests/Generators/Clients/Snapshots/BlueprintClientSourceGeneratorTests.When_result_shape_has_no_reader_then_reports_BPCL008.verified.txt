@@ -1,0 +1,35 @@
+﻿File: Input0.cs
+using System.Threading;
+using System.Threading.Tasks;
+using Blueprint;
+using Blueprint.Http;
+using Blueprint.HttpClient;
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
+
+namespace TestNamespace;
+
+public partial class WidgetApiResource : ApiResource
+{
+    public string Id { get; set; }
+}
+[BlueprintClient]
+[BlueprintClientInclude(typeof(DownloadWidgetQuery))]
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPCL008] The result 'Blueprint.Runtime.Exec.FileStreamResult' of 'TestNamespace.DownloadWidgetQuery' has no response reader, so a typed client cannot read it
+[BlueprintClientInclude(typeof(SaveWidgetCommand))]
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPCL008] The result 'Blueprint.Runtime.Exec.OkResult' of 'TestNamespace.SaveWidgetCommand' has no response reader, so a typed client cannot read it
+public partial class WidgetsApi
+{
+}
+
+[RootLink("/widgets/download")]
+public partial class DownloadWidgetQuery : IQuery<FileStreamResult>
+{
+}
+
+[RootLink("/widgets/save")]
+[HttpPost]
+public partial class SaveWidgetCommand : ICommand<OkResult>
+{
+}

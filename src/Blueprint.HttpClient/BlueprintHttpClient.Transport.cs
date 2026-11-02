@@ -1,5 +1,9 @@
+using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Blueprint.Http;
 using Blueprint.Validation;
 
@@ -27,6 +31,11 @@ public partial class BlueprintHttpClient
     /// The problem member naming the occurrence, which can name the remote end's own host.
     /// </summary>
     private const string InstanceMemberName = "instance";
+
+    /// <summary>
+    /// The options a serializer context is inserted into, by the options they were copied from and the context.
+    /// </summary>
+    private static readonly ConditionalWeakTable<JsonSerializerOptions, ConcurrentDictionary<IJsonTypeInfoResolver, JsonSerializerOptions>> _derivedOptions = new();
 
     private readonly System.Net.Http.HttpClient? _httpClient;
 
@@ -63,8 +72,91 @@ public partial class BlueprintHttpClient
     internal JsonSerializerOptions JsonOptions { get; }
 
     /// <summary>
+    /// Sends <paramref name="operation"/> as <paramref name="plan"/> says, the call a generated typed client makes: the URL
+    /// from the plan's builders, the operation as the JSON body of any method but GET, then the caller's
+    /// <see cref="CallOptions.ModifyRequest"/>, the client's request modifiers and its credential applied in that order, and
+    /// the response read with the plan's reader.
+    /// </summary>
+    /// <typeparam name="TOperation">The operation type.</typeparam>
+    /// <typeparam name="TResult">The result type.</typeparam>
+    /// <param name="plan">The operation's call plan.</param>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="options">The caller's call options.</param>
+    /// <param name="requestModifier">The typed client's request modifiers, or <see langword="null"/>.</param>
+    /// <param name="credential">The typed client's credential, or <see langword="null"/>.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result read.</returns>
+    /// <exception cref="InvalidOperationException">A route value of the operation is null.</exception>
+    /// <exception cref="BlueprintApiException">For a failure status, a timeout or an unreachable server.</exception>
+    /// <exception cref="ValidationException">For a 422 Unprocessable Entity.</exception>
+    public Task<TResult> SendAsync<TOperation, TResult>(
+        BlueprintCallPlan<TOperation, TResult> plan,
+        TOperation operation,
+        CallOptions? options,
+        Action<HttpRequestMessage>? requestModifier,
+        IUpstreamCredential? credential,
+        CancellationToken cancellationToken = default)
+        where TOperation : notnull
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var url = plan.BuildUrl(operation)
+            ?? throw new InvalidOperationException(
+                $"The URL builder of '{plan.OperationName}' returned null. A required route parameter is likely null.");
+
+        var jsonOptions = plan.SerializerContext is null ? this.JsonOptions : GetDerivedOptions(this.JsonOptions, plan.SerializerContext);
+        HttpContent? content;
+
+        if (plan.Method == HttpMethod.Get)
+        {
+            content = null;
+
+            if (plan.AppendQueryString is not null)
+            {
+                url = plan.AppendQueryString(operation, url);
+            }
+        }
+        else
+        {
+            // Written as the declared operation type, whose metadata the options resolve once and cache.
+            content = JsonContent.Create(operation, mediaType: null, jsonOptions);
+        }
+
+        return this.SendCoreAsync(plan.Method, url, content, plan.OperationName, plan.Reader, jsonOptions, options, requestModifier, credential, cancellationToken);
+    }
+
+    /// <summary>
+    /// A copy of <paramref name="options"/> with <paramref name="serializerContext"/> first in its resolver chain, made once
+    /// per options and context pair. The options' converters still apply, and a type the context lacks falls back to the
+    /// options' own resolvers, or to reflection metadata when the options had none.
+    /// </summary>
+    private static JsonSerializerOptions GetDerivedOptions(JsonSerializerOptions options, IJsonTypeInfoResolver serializerContext)
+    {
+        var byContext = _derivedOptions.GetValue(options, static _ => new ConcurrentDictionary<IJsonTypeInfoResolver, JsonSerializerOptions>());
+
+        return byContext.GetOrAdd(serializerContext, CreateDerivedOptions, options);
+    }
+
+    private static JsonSerializerOptions CreateDerivedOptions(IJsonTypeInfoResolver context, JsonSerializerOptions source)
+    {
+        var derived = new JsonSerializerOptions(source);
+
+        if (derived.TypeInfoResolverChain.Count == 0)
+        {
+            derived.TypeInfoResolverChain.Add(new DefaultJsonTypeInfoResolver());
+        }
+
+        derived.TypeInfoResolverChain.Insert(0, context);
+        derived.MakeReadOnly();
+
+        return derived;
+    }
+
+    /// <summary>
     /// The send primitive: builds the request, applies <paramref name="options"/>' <see cref="CallOptions.ModifyRequest"/>,
-    /// sends it, throws for a failure status, and reads a success with <paramref name="reader"/>.
+    /// then <paramref name="requestModifier"/>, then <paramref name="credential"/>, sends it, throws for a failure status,
+    /// and reads a success with <paramref name="reader"/>.
     /// </summary>
     /// <typeparam name="TResult">The result type.</typeparam>
     /// <param name="method">The HTTP method.</param>
@@ -72,7 +164,10 @@ public partial class BlueprintHttpClient
     /// <param name="content">The request body, or <see langword="null"/> for none.</param>
     /// <param name="operationName">The operation's type name, which a failure to understand the response names.</param>
     /// <param name="reader">The reader of a success response.</param>
+    /// <param name="jsonOptions">The options the response body is read with.</param>
     /// <param name="options">The caller's call options.</param>
+    /// <param name="requestModifier">The typed client's request modifiers, applied after <paramref name="options"/>.</param>
+    /// <param name="credential">The typed client's credential, applied last.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result read.</returns>
     /// <exception cref="BlueprintApiException">For a failure status, a timeout or an unreachable server.</exception>
@@ -83,7 +178,10 @@ public partial class BlueprintHttpClient
         HttpContent? content,
         string operationName,
         BlueprintResponseReader<TResult> reader,
+        JsonSerializerOptions jsonOptions,
         CallOptions? options,
+        Action<HttpRequestMessage>? requestModifier,
+        IUpstreamCredential? credential,
         CancellationToken cancellationToken)
     {
         // Strip the leading '/' so the URL is treated as relative to the HttpClient's BaseAddress.
@@ -96,6 +194,12 @@ public partial class BlueprintHttpClient
 
         using var request = new HttpRequestMessage(method, url) { Content = content };
         options?.ModifyRequest?.Invoke(request);
+        requestModifier?.Invoke(request);
+
+        if (credential is not null)
+        {
+            await credential.ApplyAsync(request, cancellationToken).ConfigureAwait(false);
+        }
 
         try
         {
@@ -103,7 +207,7 @@ public partial class BlueprintHttpClient
 
             await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
 
-            return await reader.ReadAsync(new BlueprintResponseContext(request, response, this.JsonOptions, operationName), cancellationToken).ConfigureAwait(false);
+            return await reader.ReadAsync(new BlueprintResponseContext(request, response, jsonOptions, operationName), cancellationToken).ConfigureAwait(false);
         }
         catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
         {

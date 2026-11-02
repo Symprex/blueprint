@@ -1,0 +1,35 @@
+﻿File: Input0.cs
+using System.Threading;
+using System.Threading.Tasks;
+using Blueprint;
+using Blueprint.Http;
+using Blueprint.HttpClient;
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
+
+namespace TestNamespace;
+
+public partial class WidgetApiResource : ApiResource
+{
+    public string Id { get; set; }
+}
+[BlueprintClient]
+[BlueprintClientInclude(typeof(WidgetQueryBase))]
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPCL002] 'TestNamespace.WidgetQueryBase' is not a concrete, non-generic operation, so a typed client cannot include it
+[BlueprintClientInclude(typeof(GenericWidgetQuery<>))]
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPCL002] 'TestNamespace.GenericWidgetQuery<>' is not a concrete, non-generic operation, so a typed client cannot include it
+[BlueprintClientInclude(typeof(WidgetApiResource))]
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [Error:BPCL002] 'TestNamespace.WidgetApiResource' is not a concrete, non-generic operation, so a typed client cannot include it
+public partial class WidgetsApi
+{
+}
+
+public abstract class WidgetQueryBase : IQuery<WidgetApiResource>
+{
+}
+
+[RootLink("/widgets/generic")]
+public partial class GenericWidgetQuery<T> : IQuery<WidgetApiResource>
+{
+}

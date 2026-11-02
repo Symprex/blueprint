@@ -211,6 +211,29 @@ A `[Link]` without a `Rel` is keyed — in the resource's `$links` and in `x-lin
 - **BPLG002** — Duplicate self link for the same resource type
 - **BP002** — SelfLink/RootLink applied to a non-partial class (prevents generated code emission)
 
+## Typed service clients
+
+To call another Blueprint service, declare a typed client in the contract assembly. Do not hand-write an HTTP
+wrapper:
+
+```csharp
+[BlueprintClient]
+[BlueprintClientInclude(typeof(GetTemplateQuery))]
+public partial class TemplatesApi;
+```
+
+- The generator emits `ITemplatesApi` and its implementation. There is one
+  `Task<R> NameAsync(Op operation, CallOptions? options = null, CancellationToken cancellationToken = default)` per
+  include, plus `WithCredential(IUpstreamCredential)`. Construct it with `new TemplatesApi(new BlueprintHttpClient(httpClient, json))`.
+- An included operation needs a route, an `IReturn<T>` result and its generated `Op.Http` builders.
+- Extend it on the partial:
+  - a public method is copied into the interface;
+  - a `readonly` field becomes a constructor parameter;
+  - `partial void OnConfigure(Op, ref CallOptions?)` adjusts one operation's call;
+  - `WithRequestModifier` returns a clone.
+- Problems are build errors `BPCL001`–`BPCL008`. `BPCL007`, a serializer-context gap, is a warning.
+- Details: the typed-client section of `docs/integration-packages.md`.
+
 ## Property binding contract
 
 Blueprint's `PropertyOwnershipModule` generates HTTP request binding code at compile time. Properties are bound from different HTTP sources based on attributes and conventions.

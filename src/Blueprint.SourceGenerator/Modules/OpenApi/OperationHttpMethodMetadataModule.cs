@@ -59,6 +59,28 @@ public sealed class OperationHttpMethodMetadataModule : IBlueprintSourceGenerato
         context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<OperationHttpMethodMetadataRegistration>()));
     }
 
+    /// <summary>
+    /// The HTTP method the descriptor's first registration will be, which is the one <c>BlueprintHttpClient&lt;TApp&gt;</c>
+    /// sends the operation with: the ordinally first of its explicit methods, or POST for a command and GET otherwise.
+    /// </summary>
+    /// <param name="operationType">The operation type.</param>
+    /// <returns>The method, or <see langword="null"/> when an explicit method is invalid, which this module reports.</returns>
+    internal static string? ResolveFirstHttpMethod(INamedTypeSymbol operationType)
+    {
+        var explicitMethods = GetExplicitHttpMethods(operationType)
+            .Select(static explicitMethod => NormalizeHttpMethod(explicitMethod.HttpMethod))
+            .ToArray();
+
+        if (explicitMethods.Length == 0)
+        {
+            return IsCommand(operationType) ? "POST" : "GET";
+        }
+
+        return explicitMethods.Any(static method => method is null)
+            ? null
+            : explicitMethods.OrderBy(static method => method, StringComparer.Ordinal).First();
+    }
+
     private static bool TryResolveHttpMethods(DescriptorContributorContext context, out string[] httpMethods)
     {
         var operationType = context.GetOperationTypeSymbol();

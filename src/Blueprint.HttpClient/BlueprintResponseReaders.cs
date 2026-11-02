@@ -8,18 +8,18 @@ using Blueprint.Runtime.Http;
 namespace Blueprint.HttpClient;
 
 /// <summary>
-/// The response readers, one per result shape the host writes, and the union members they are built from. A caller that
-/// knows its result type when it is compiled picks one here; <see cref="RuntimeResponseReaders"/> picks the same ones from a
-/// type at run time.
+/// The response readers, one per result shape the host writes, and the union members they are built from. A generated
+/// typed client picks one per operation when it is compiled; <see cref="BlueprintHttpClient{TApp}"/> picks the same ones
+/// from a type at run time.
 /// </summary>
-internal static class ResponseReaders
+public static class BlueprintResponseReaders
 {
     /// <summary>
     /// Reads a JSON body as <typeparamref name="T"/>, a type the host writes as a plain JSON body.
     /// </summary>
     /// <typeparam name="T">The result type.</typeparam>
     /// <returns>The reader.</returns>
-    internal static BlueprintResponseReader<T> Json<T>()
+    public static BlueprintResponseReader<T> Json<T>()
     {
         return new ValueResponseReader<T>(null, acceptsPlainText: false, isString: false, ReadJsonAsync<T>);
     }
@@ -28,7 +28,7 @@ internal static class ResponseReaders
     /// Reads a <c>text/*</c> body as its text, and any other as a JSON string.
     /// </summary>
     /// <returns>The reader.</returns>
-    internal static BlueprintResponseReader<string> String()
+    public static BlueprintResponseReader<string> String()
     {
         return new ValueResponseReader<string>(null, acceptsPlainText: false, isString: true, ReadJsonAsync<string>);
     }
@@ -37,7 +37,7 @@ internal static class ResponseReaders
     /// Reads a body with a media type as a <see cref="PlainTextResult"/> of its text.
     /// </summary>
     /// <returns>The reader.</returns>
-    internal static BlueprintResponseReader<PlainTextResult> PlainText()
+    public static BlueprintResponseReader<PlainTextResult> PlainText()
     {
         return new ValueResponseReader<PlainTextResult>(null, acceptsPlainText: true, isString: false, ReadJsonAsync<PlainTextResult>);
     }
@@ -77,7 +77,7 @@ internal static class ResponseReaders
     /// </summary>
     /// <typeparam name="T">The event's content type.</typeparam>
     /// <returns>The reader.</returns>
-    internal static BlueprintResponseReader<ResourceEventResult<T>> ResourceEventResult<T>()
+    public static BlueprintResponseReader<ResourceEventResult<T>> ResourceEventResult<T>()
         where T : notnull
     {
         return new ValueResponseReader<ResourceEventResult<T>>(null, acceptsPlainText: false, isString: false, ReadResourceEventResultAsync<T>);
@@ -89,7 +89,7 @@ internal static class ResponseReaders
     /// <typeparam name="T">The nested status result type.</typeparam>
     /// <param name="instance">The type's singleton.</param>
     /// <returns>The reader.</returns>
-    internal static BlueprintResponseReader<T> StatusCode<T>(T? instance)
+    public static BlueprintResponseReader<T> StatusCode<T>(T instance)
         where T : StatusCodeResult
     {
         return new StatusCodeResultResponseReader<T>(instance);
@@ -103,7 +103,7 @@ internal static class ResponseReaders
     /// <param name="first">The first member.</param>
     /// <param name="second">The second member.</param>
     /// <returns>The reader.</returns>
-    internal static BlueprintResponseReader<Results<T1, T2>> Union<T1, T2>(UnionMember<T1> first, UnionMember<T2> second)
+    public static BlueprintResponseReader<Results<T1, T2>> Union<T1, T2>(UnionMember<T1> first, UnionMember<T2> second)
         where T1 : notnull
         where T2 : notnull
     {
@@ -120,7 +120,7 @@ internal static class ResponseReaders
     /// <see cref="ResourceEvent{TResource}"/>, whose body's <c>resourceObject</c> names it; otherwise <see langword="null"/>.
     /// </param>
     /// <returns>The member.</returns>
-    internal static UnionMember<T> JsonMember<T>(string? eventResourceTypeName = null)
+    internal static UnionMember<T> JsonMember<T>(string? eventResourceTypeName)
     {
         return new UnionMember<T>(IsOk, ReadJsonOrNullAsync<T>, bodiless: null, isPlainText: false, eventResourceTypeName);
     }
@@ -174,7 +174,7 @@ internal static class ResponseReaders
     /// </summary>
     /// <typeparam name="T">The event's content type.</typeparam>
     /// <returns>The member.</returns>
-    internal static UnionMember<ResourceEventResult<T>> ResourceEventResultMember<T>()
+    public static UnionMember<ResourceEventResult<T>> ResourceEventResultMember<T>()
         where T : notnull
     {
         return new UnionMember<ResourceEventResult<T>>(
@@ -189,7 +189,7 @@ internal static class ResponseReaders
     /// A union member that is a <see cref="PlainTextResult"/>, which claims any body that is not JSON.
     /// </summary>
     /// <returns>The member.</returns>
-    internal static UnionMember<PlainTextResult> PlainTextMember()
+    public static UnionMember<PlainTextResult> PlainTextMember()
     {
         return new UnionMember<PlainTextResult>(static _ => false, ReadJsonOrNullAsync<PlainTextResult>, bodiless: null, isPlainText: true, eventResourceTypeName: null);
     }
@@ -204,6 +204,295 @@ internal static class ResponseReaders
     internal static UnionMember<T> BodilessMember<T>(Func<int, T?>? bodiless)
     {
         return new UnionMember<T>(static _ => false, ReadJsonOrNullAsync<T>, bodiless, isPlainText: false, eventResourceTypeName: null);
+    }
+
+    /// <summary>
+    /// Reads a <see cref="ResourceEvent{TResource}"/> as legacy read one.
+    /// </summary>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<ResourceEvent<TResource>> ResourceEvent<TResource>()
+        where TResource : ApiResource
+    {
+        return ResourceEvent<ResourceEvent<TResource>, TResource>(static () => new ResourceEvent<TResource>());
+    }
+
+    /// <summary>
+    /// Reads a <see cref="ResourceCreated{TResource}"/> as legacy read one.
+    /// </summary>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<ResourceCreated<TResource>> ResourceCreated<TResource>()
+        where TResource : ApiResource
+    {
+        return ResourceEvent<ResourceCreated<TResource>, TResource>(static () => new ResourceCreated<TResource>());
+    }
+
+    /// <summary>
+    /// Reads a <see cref="ResourceUpdated{TResource}"/> as legacy read one.
+    /// </summary>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<ResourceUpdated<TResource>> ResourceUpdated<TResource>()
+        where TResource : ApiResource
+    {
+        return ResourceEvent<ResourceUpdated<TResource>, TResource>(static () => new ResourceUpdated<TResource>());
+    }
+
+    /// <summary>
+    /// Reads a <see cref="ResourceDeleted{TResource}"/> as legacy read one.
+    /// </summary>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<ResourceDeleted<TResource>> ResourceDeleted<TResource>()
+        where TResource : ApiResource
+    {
+        return ResourceEvent<ResourceDeleted<TResource>, TResource>(static () => new ResourceDeleted<TResource>());
+    }
+
+    /// <summary>
+    /// Reads an <see cref="object"/> result: a body with a media type as a <see cref="PlainTextResult"/>, and one with none
+    /// as the <see cref="StatusCodeResult"/> singleton of its status.
+    /// </summary>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<object> BodilessObject()
+    {
+        return Bodiless<object>(BodilessResults.AnyStatusCode, acceptsPlainText: true);
+    }
+
+    /// <summary>
+    /// Reads an <see cref="OperationResult"/> result as <see cref="BodilessObject"/> reads an <see cref="object"/>.
+    /// </summary>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<OperationResult> BodilessOperationResult()
+    {
+        return Bodiless<OperationResult>(BodilessResults.AnyStatusCode, acceptsPlainText: true);
+    }
+
+    /// <summary>
+    /// Reads an <see cref="HttpResult"/> result: a body with a media type as a <see cref="PlainTextResult"/>, and one with
+    /// none as a status-only <see cref="HttpResult"/>.
+    /// </summary>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<HttpResult> BodilessHttpResult()
+    {
+        return Bodiless<HttpResult>(BodilessResults.StatusOnlyHttpResult, acceptsPlainText: true);
+    }
+
+    /// <summary>
+    /// Reads a base <see cref="StatusCodeResult"/> result as the nested singleton of a body-less response's status.
+    /// </summary>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<StatusCodeResult> BodilessStatusCodeResult()
+    {
+        return Bodiless<StatusCodeResult>(BodilessResults.AnyStatusCode, acceptsPlainText: false);
+    }
+
+    /// <summary>
+    /// Reads an <see cref="HttpNoContentResult"/>, which the host writes as an empty 204.
+    /// </summary>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<HttpNoContentResult> BodilessHttpNoContent()
+    {
+        return Bodiless<HttpNoContentResult>(BodilessResults.HttpNoContent, acceptsPlainText: false);
+    }
+
+    /// <summary>
+    /// Reads the <see cref="NoResultOperationResult"/>, which the host writes as an empty 200.
+    /// </summary>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<NoResultOperationResult> BodilessNoResult()
+    {
+        return Bodiless<NoResultOperationResult>(BodilessResults.NoResult, acceptsPlainText: false);
+    }
+
+    /// <summary>
+    /// Reads an <see cref="HttpAcceptedResult"/>, which the host writes as an empty 202.
+    /// </summary>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<HttpAcceptedResult> BodilessHttpAccepted()
+    {
+        return Bodiless<HttpAcceptedResult>(BodilessResults.HttpAccepted, acceptsPlainText: false);
+    }
+
+    /// <summary>
+    /// Reads a <see cref="KeyOnlyResourceEventResult"/>, whose change type the host writes as its status alone.
+    /// </summary>
+    /// <returns>The reader.</returns>
+    public static BlueprintResponseReader<KeyOnlyResourceEventResult> BodilessKeyOnlyResourceEvent()
+    {
+        return Bodiless<KeyOnlyResourceEventResult>(BodilessResults.KeyOnlyResourceEvent, acceptsPlainText: false);
+    }
+
+    /// <summary>
+    /// A union member the host writes as a plain JSON body of a 200: a type that is not an operation result.
+    /// </summary>
+    /// <typeparam name="T">The member type.</typeparam>
+    /// <returns>The member.</returns>
+    public static UnionMember<T> JsonMember<T>()
+    {
+        return JsonMember<T>(eventResourceTypeName: null);
+    }
+
+    /// <summary>
+    /// A union member that is a non-generic subclass of a <see cref="ResourceEvent{TResource}"/>, read as plain JSON at a
+    /// 200 and told apart from another event member by the <c>resourceObject</c> the body names.
+    /// </summary>
+    /// <typeparam name="T">The member type.</typeparam>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <returns>The member.</returns>
+    public static UnionMember<T> ResourceEventJsonMember<T, TResource>()
+        where T : ResourceEvent<TResource>
+        where TResource : ApiResource
+    {
+        return JsonMember<T>(ApiResource.GetTypeName(typeof(TResource)));
+    }
+
+    /// <summary>
+    /// A union member that is an <see cref="OkResult{T}"/>, written as its content with a 200.
+    /// </summary>
+    /// <typeparam name="T">The content type.</typeparam>
+    /// <returns>The member.</returns>
+    public static UnionMember<OkResult<T>> OkMember<T>()
+        where T : notnull
+    {
+        return ContentMember<OkResult<T>, T>((int)HttpStatusCode.OK, static content => new OkResult<T>(content));
+    }
+
+    /// <summary>
+    /// A union member that is a <see cref="CreatedResult{T}"/>, written as its content with a 201.
+    /// </summary>
+    /// <typeparam name="T">The content type.</typeparam>
+    /// <returns>The member.</returns>
+    public static UnionMember<CreatedResult<T>> CreatedMember<T>()
+        where T : notnull
+    {
+        return ContentMember<CreatedResult<T>, T>((int)HttpStatusCode.Created, static content => new CreatedResult<T>(content));
+    }
+
+    /// <summary>
+    /// A union member that is an <see cref="AcceptedResult{T}"/>, written as its content with a 202.
+    /// </summary>
+    /// <typeparam name="T">The content type.</typeparam>
+    /// <returns>The member.</returns>
+    public static UnionMember<AcceptedResult<T>> AcceptedMember<T>()
+        where T : notnull
+    {
+        return ContentMember<AcceptedResult<T>, T>((int)HttpStatusCode.Accepted, static content => new AcceptedResult<T>(content));
+    }
+
+    /// <summary>
+    /// A union member that is a <see cref="ResourceEvent{TResource}"/>.
+    /// </summary>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <returns>The member.</returns>
+    public static UnionMember<ResourceEvent<TResource>> ResourceEventMember<TResource>()
+        where TResource : ApiResource
+    {
+        return ResourceEventMember<ResourceEvent<TResource>, TResource>(static () => new ResourceEvent<TResource>());
+    }
+
+    /// <summary>
+    /// A union member that is a <see cref="ResourceCreated{TResource}"/>.
+    /// </summary>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <returns>The member.</returns>
+    public static UnionMember<ResourceCreated<TResource>> ResourceCreatedMember<TResource>()
+        where TResource : ApiResource
+    {
+        return ResourceEventMember<ResourceCreated<TResource>, TResource>(static () => new ResourceCreated<TResource>());
+    }
+
+    /// <summary>
+    /// A union member that is a <see cref="ResourceUpdated{TResource}"/>.
+    /// </summary>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <returns>The member.</returns>
+    public static UnionMember<ResourceUpdated<TResource>> ResourceUpdatedMember<TResource>()
+        where TResource : ApiResource
+    {
+        return ResourceEventMember<ResourceUpdated<TResource>, TResource>(static () => new ResourceUpdated<TResource>());
+    }
+
+    /// <summary>
+    /// A union member that is a <see cref="ResourceDeleted{TResource}"/>.
+    /// </summary>
+    /// <typeparam name="TResource">The event's resource type.</typeparam>
+    /// <returns>The member.</returns>
+    public static UnionMember<ResourceDeleted<TResource>> ResourceDeletedMember<TResource>()
+        where TResource : ApiResource
+    {
+        return ResourceEventMember<ResourceDeleted<TResource>, TResource>(static () => new ResourceDeleted<TResource>());
+    }
+
+    /// <summary>
+    /// A union member that is a nested <see cref="StatusCodeResult"/>, a body-less response of its own status.
+    /// </summary>
+    /// <typeparam name="T">The nested status result type.</typeparam>
+    /// <param name="instance">The type's singleton.</param>
+    /// <returns>The member.</returns>
+    public static UnionMember<T> StatusCodeMember<T>(T instance)
+        where T : StatusCodeResult
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+
+        return BodilessMember<T>(status => instance.StatusCode == status ? instance : null);
+    }
+
+    /// <summary>
+    /// A union member that is the base <see cref="StatusCodeResult"/>, a body-less response of any nested result's status.
+    /// </summary>
+    /// <returns>The member.</returns>
+    public static UnionMember<StatusCodeResult> AnyStatusCodeMember()
+    {
+        return BodilessMember<StatusCodeResult>(BodilessResults.AnyStatusCode);
+    }
+
+    /// <summary>
+    /// A union member that is an <see cref="HttpNoContentResult"/>, an empty 204.
+    /// </summary>
+    /// <returns>The member.</returns>
+    public static UnionMember<HttpNoContentResult> HttpNoContentMember()
+    {
+        return BodilessMember<HttpNoContentResult>(BodilessResults.HttpNoContent);
+    }
+
+    /// <summary>
+    /// A union member that is the <see cref="NoResultOperationResult"/>, an empty 200.
+    /// </summary>
+    /// <returns>The member.</returns>
+    public static UnionMember<NoResultOperationResult> NoResultMember()
+    {
+        return BodilessMember<NoResultOperationResult>(BodilessResults.NoResult);
+    }
+
+    /// <summary>
+    /// A union member that is an <see cref="HttpAcceptedResult"/>, an empty 202.
+    /// </summary>
+    /// <returns>The member.</returns>
+    public static UnionMember<HttpAcceptedResult> HttpAcceptedMember()
+    {
+        return BodilessMember<HttpAcceptedResult>(BodilessResults.HttpAccepted);
+    }
+
+    /// <summary>
+    /// A union member that is a <see cref="KeyOnlyResourceEventResult"/>, the status of its change type alone.
+    /// </summary>
+    /// <returns>The member.</returns>
+    public static UnionMember<KeyOnlyResourceEventResult> KeyOnlyResourceEventMember()
+    {
+        return BodilessMember<KeyOnlyResourceEventResult>(BodilessResults.KeyOnlyResourceEvent);
+    }
+
+    /// <summary>
+    /// A union member the host never writes back as a response the client reads, such as a <c>NotFoundResult&lt;T&gt;</c>,
+    /// whose status is a failure the transport raises.
+    /// </summary>
+    /// <typeparam name="T">The member type.</typeparam>
+    /// <returns>The member.</returns>
+    public static UnionMember<T> NoneMember<T>()
+    {
+        return BodilessMember<T>(null);
     }
 
     private static bool IsOk(int status)

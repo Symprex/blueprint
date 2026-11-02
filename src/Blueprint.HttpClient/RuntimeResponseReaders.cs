@@ -7,7 +7,7 @@ using Blueprint.Runtime.Http;
 namespace Blueprint.HttpClient;
 
 /// <summary>
-/// Chooses the <see cref="ResponseReaders"/> reader for a result type known only at run time, as
+/// Chooses the <see cref="BlueprintResponseReaders"/> reader for a result type known only at run time, as
 /// <see cref="BlueprintHttpClient{TApp}"/>'s callers name it, once per type: a nested <see cref="StatusCodeResult"/> is read
 /// as its singleton, a <see cref="Results{T1, T2}"/> as its members, and anything else as a value whose bodiless, plain-text
 /// and body reads follow from the type.
@@ -59,17 +59,17 @@ internal static class RuntimeResponseReaders
 
         if (type == typeof(string))
         {
-            return (BlueprintResponseReader<T>)(object)ResponseReaders.String();
+            return (BlueprintResponseReader<T>)(object)BlueprintResponseReaders.String();
         }
 
         if (CreateNoMediaTypeResult(type) is { } noMediaTypeResult)
         {
-            return ResponseReaders.Bodiless<T>(status => (T?)noMediaTypeResult(status), typeof(PlainTextResult).IsAssignableTo(type));
+            return BlueprintResponseReaders.Bodiless<T>(status => (T?)noMediaTypeResult(status), typeof(PlainTextResult).IsAssignableTo(type));
         }
 
         return type == typeof(PlainTextResult)
-            ? (BlueprintResponseReader<T>)(object)ResponseReaders.PlainText()
-            : ResponseReaders.Json<T>();
+            ? (BlueprintResponseReader<T>)(object)BlueprintResponseReaders.PlainText()
+            : BlueprintResponseReaders.Json<T>();
     }
 
     /// <summary>
@@ -89,7 +89,7 @@ internal static class RuntimeResponseReaders
 
         if (memberType == typeof(PlainTextResult))
         {
-            return ResponseReaders.PlainTextMember();
+            return BlueprintResponseReaders.PlainTextMember();
         }
 
         if (CreateBodilessResult(memberType) is { } bodiless)
@@ -227,68 +227,68 @@ internal static class RuntimeResponseReaders
     private static BlueprintResponseReader<T> CreateStatusCodeReader<T>()
         where T : StatusCodeResult
     {
-        return ResponseReaders.StatusCode((T?)FindStatusCodeResultInstance(typeof(T)));
+        return new StatusCodeResultResponseReader<T>((T?)FindStatusCodeResultInstance(typeof(T)));
     }
 
     private static BlueprintResponseReader<Results<T1, T2>> CreateUnionReader<T1, T2>(UnionMember<T1> first, UnionMember<T2> second)
         where T1 : notnull
         where T2 : notnull
     {
-        return ResponseReaders.Union(first, second);
+        return BlueprintResponseReaders.Union(first, second);
     }
 
     private static BlueprintResponseReader<TEvent> CreateResourceEventReader<TEvent, TResource>()
         where TEvent : ResourceEvent<TResource>
         where TResource : ApiResource
     {
-        return ResponseReaders.ResourceEvent<TEvent, TResource>(ResourceEventReader.CreateUninitialised<TEvent>);
+        return BlueprintResponseReaders.ResourceEvent<TEvent, TResource>(ResourceEventReader.CreateUninitialised<TEvent>);
     }
 
     private static BlueprintResponseReader<ResourceEventResult<T>> CreateResourceEventResultReader<T>()
         where T : notnull
     {
-        return ResponseReaders.ResourceEventResult<T>();
+        return BlueprintResponseReaders.ResourceEventResult<T>();
     }
 
     private static UnionMember<TEvent> CreateResourceEventMember<TEvent, TResource>()
         where TEvent : ResourceEvent<TResource>
         where TResource : ApiResource
     {
-        return ResponseReaders.ResourceEventMember<TEvent, TResource>(ResourceEventReader.CreateUninitialised<TEvent>);
+        return BlueprintResponseReaders.ResourceEventMember<TEvent, TResource>(ResourceEventReader.CreateUninitialised<TEvent>);
     }
 
     private static UnionMember<ResourceEventResult<T>> CreateResourceEventResultMember<T>()
         where T : notnull
     {
-        return ResponseReaders.ResourceEventResultMember<T>();
+        return BlueprintResponseReaders.ResourceEventResultMember<T>();
     }
 
     private static UnionMember<T> CreateBodilessMember<T>(Func<int, object?>? bodiless)
     {
-        return ResponseReaders.BodilessMember<T>(bodiless is null ? null : status => (T?)bodiless(status));
+        return BlueprintResponseReaders.BodilessMember<T>(bodiless is null ? null : status => (T?)bodiless(status));
     }
 
     private static UnionMember<T> CreateJsonMember<T>(string? eventResourceTypeName)
     {
-        return ResponseReaders.JsonMember<T>(eventResourceTypeName);
+        return BlueprintResponseReaders.JsonMember<T>(eventResourceTypeName);
     }
 
     private static UnionMember<OkResult<T>> CreateOkMember<T>()
         where T : notnull
     {
-        return ResponseReaders.ContentMember<OkResult<T>, T>(200, static content => new OkResult<T>(content));
+        return BlueprintResponseReaders.ContentMember<OkResult<T>, T>(200, static content => new OkResult<T>(content));
     }
 
     private static UnionMember<CreatedResult<T>> CreateCreatedMember<T>()
         where T : notnull
     {
-        return ResponseReaders.ContentMember<CreatedResult<T>, T>(201, static content => new CreatedResult<T>(content));
+        return BlueprintResponseReaders.ContentMember<CreatedResult<T>, T>(201, static content => new CreatedResult<T>(content));
     }
 
     private static UnionMember<AcceptedResult<T>> CreateAcceptedMember<T>()
         where T : notnull
     {
-        return ResponseReaders.ContentMember<AcceptedResult<T>, T>(202, static content => new AcceptedResult<T>(content));
+        return BlueprintResponseReaders.ContentMember<AcceptedResult<T>, T>(202, static content => new AcceptedResult<T>(content));
     }
 
     private static class Cache<T>

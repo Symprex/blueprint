@@ -13,6 +13,17 @@ namespace Blueprint.Http;
 /// </summary>
 public class ResourceEvent : OperationResult
 {
+    /// <summary>
+    /// Initializes a new instance of the class with nothing set, for <c>Blueprint.HttpClient</c> to read a response into, as
+    /// legacy's converter read one into an uninitialised instance: a response may carry no data, which every public
+    /// constructor requires.
+    /// </summary>
+    internal ResourceEvent()
+    {
+        this.EventId = null!;
+        this.ResourceObject = null!;
+        this.ResourceType = null!;
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceEvent"/> class with an inline resource body.
@@ -254,6 +265,15 @@ public class ResourceEvent<TResource> : ResourceEvent
     where TResource : ApiResource
 {
     /// <summary>
+    /// Initializes a new instance of the class with nothing set, for <c>Blueprint.HttpClient</c> to read a response into, as
+    /// legacy's converter read one into an uninitialised instance: a response may carry no data, which every public
+    /// constructor requires.
+    /// </summary>
+    internal ResourceEvent()
+    {
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ResourceEvent{TResource}"/> class with
     /// a self-query that loads the associated resource.
     /// </summary>
@@ -346,6 +366,15 @@ public class ResourceCreated<TResource> : ResourceEvent<TResource>
     where TResource : ApiResource
 {
     /// <summary>
+    /// Initializes a new instance of the class with nothing set, for <c>Blueprint.HttpClient</c> to read a response into, as
+    /// legacy's converter read one into an uninitialised instance: a response may carry no data, which every public
+    /// constructor requires.
+    /// </summary>
+    internal ResourceCreated()
+    {
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ResourceCreated{TResource}"/> class with
     /// the default event sub-id of <c>created</c>.
     /// </summary>
@@ -398,6 +427,15 @@ public class ResourceUpdated<TResource> : ResourceEvent<TResource>
     where TResource : ApiResource
 {
     /// <summary>
+    /// Initializes a new instance of the class with nothing set, for <c>Blueprint.HttpClient</c> to read a response into, as
+    /// legacy's converter read one into an uninitialised instance: a response may carry no data, which every public
+    /// constructor requires.
+    /// </summary>
+    internal ResourceUpdated()
+    {
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ResourceUpdated{TResource}"/> class with
     /// the default event sub-id of <c>updated</c>.
     /// </summary>
@@ -449,6 +487,15 @@ public class ResourceUpdated<TResource> : ResourceEvent<TResource>
 public class ResourceDeleted<TResource> : ResourceEvent<TResource>
     where TResource : ApiResource
 {
+    /// <summary>
+    /// Initializes a new instance of the class with nothing set, for <c>Blueprint.HttpClient</c> to read a response into, as
+    /// legacy's converter read one into an uninitialised instance: a response may carry no data, which every public
+    /// constructor requires.
+    /// </summary>
+    internal ResourceDeleted()
+    {
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceDeleted{TResource}"/> class with
     /// the default event sub-id of <c>deleted</c>.

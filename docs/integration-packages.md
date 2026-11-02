@@ -330,6 +330,60 @@ so a caller matches it by `Type`/`Title`/`HttpStatus` and a pipeline that lets i
 
 `StatusCode` and `ResponseBody` still carry the raw response.
 
+### Typed clients (`[BlueprintClient]`)
+
+A typed client is a compile-time generated service client over a contract assembly's operations. Declare a
+`partial class` beside the operations (operations from a referenced assembly can be included too) and name each
+operation it sends:
+
+```csharp
+[BlueprintClient]
+[BlueprintClientInclude(typeof(GetTemplateQuery))]
+[BlueprintClientInclude(typeof(CreateTemplateCommand))]
+public partial class TemplatesApi;
+```
+
+The generator emits `ITemplatesApi` and `TemplatesApi`'s implementation of it:
+
+- one `Task<R> NameAsync(Op operation, CallOptions? options = null, CancellationToken cancellationToken = default)` per
+  operation. `Name` is the operation type name less one trailing `Command` or `Query`; `R` is its declared
+  `IReturn<T>` result, as declared (`ResourceCreated<T>`, `StatusCodeResult.Accepted`, a `Results<,>` union);
+- `WithCredential(IUpstreamCredential)`, which returns a clone. The credential is applied to every request, last;
+  a later call replaces it. `BearerTokenCredential` sends `Authorization: Bearer {token}`;
+- a constructor `TemplatesApi(BlueprintHttpClient client, ...)`, with the transport made as
+  `new BlueprintHttpClient(httpClient, jsonOptions)`.
+
+Each call builds its request with the operation's generated `Op.Http` builders and reads its response with a reader
+chosen when it is compiled. No `BlueprintApp`, descriptor or runtime scan is involved, and a call runs no type test or
+reflection.
+
+The existing `AddBlueprintClient<ITemplatesApi, TemplatesApi>(...)` registration can construct a typed client: it passes
+the transport and resolves the readonly-field parameters with `ActivatorUtilities`. It still scans the contract
+assembly once when it registers (`RuntimeScanBlueprintApp`) for the `BlueprintHttpClient<TApp>` it builds, which the typed
+client never uses. A scan-free, reflection-free registration replaces it in #61. Until then, construct the client
+yourself to avoid the scan.
+
+The partial class extends the client:
+
+| Declared on the partial | Generated |
+|---|---|
+| A public non-generic instance method | Copied into `ITemplatesApi` |
+| An instance `readonly` field | A constructor parameter after `client`, carried by every clone |
+| `partial void OnConfigure(Op operation, ref CallOptions? options)` | Called before that operation is sent, so it can replace the options |
+| A call to `WithRequestModifier(Action<HttpRequestMessage>)` | A clone whose modifier runs on every request after the caller's `ModifyRequest` and earlier modifiers, before the credential. It is `protected`, or `private` on a sealed class |
+
+`[BlueprintClient(SerializerContext = typeof(MyJsonContext))]` puts a hand-declared `JsonSerializerContext` first in a
+copy of the client's options' resolver chain. The derived options are cached per options and context pair. The
+options' converters still apply, and a type the context lacks falls back to the options' own metadata (`BPCL007`
+warns about each one). The context must be hand-declared, because the System.Text.Json generator cannot see generated
+`[JsonSerializable]` attributes, and it must have the static `Default` instance a source-generated context has.
+
+The client class must be a partial, non-generic, non-abstract class declared directly in a namespace (`BPCL001`).
+
+An included operation must be concrete and non-generic, return an `IReturn<T>`, have a route, and be exposed. A
+result type with no reader, such as a `FileStreamResult` or a non-generic `OkResult`, is `BPCL008`. All the
+diagnostics are `BPCL001`–`BPCL008` in [diagnostic-reference.md](diagnostic-reference.md).
+
 ### S365 Gateway Migration
 
 S365 gateways wrap inter-service calls. With Blueprint.HttpClient:

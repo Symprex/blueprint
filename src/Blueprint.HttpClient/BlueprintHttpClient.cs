@@ -97,7 +97,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         var (method, url, content) = this.CreateRequest(operation);
 
-        return await this.SendCoreAsync(method, url, content, operation.GetType().Name, RuntimeResponseReaders.For<TResponse>(), options, cancellationToken)
+        return await this.SendCoreAsync(method, url, content, operation.GetType().Name, RuntimeResponseReaders.For<TResponse>(), this.JsonOptions, options, requestModifier: null, credential: null, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -134,7 +134,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         var (method, url, content) = this.CreateRequest(operation);
 
-        await this.SendCoreAsync(method, url, content, operation.GetType().Name, NoResultResponseReader.Instance, options, cancellationToken)
+        await this.SendCoreAsync(method, url, content, operation.GetType().Name, NoResultResponseReader.Instance, this.JsonOptions, options, requestModifier: null, credential: null, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -178,7 +178,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         var (method, url, content) = this.CreateRequest(operation);
 
-        return await this.SendCoreAsync(method, url, content, operation.GetType().Name, EventDataReader<TResource>.Instance, options, cancellationToken)
+        return await this.SendCoreAsync(method, url, content, operation.GetType().Name, EventDataReader<TResource>.Instance, this.JsonOptions, options, requestModifier: null, credential: null, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -229,7 +229,7 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
 
         var (method, url, content) = this.CreateRequest(operation);
 
-        return await this.SendCoreAsync(method, url, content, operation.GetType().Name, EventEnvelopeReader<TResource>.Instance, options, cancellationToken)
+        return await this.SendCoreAsync(method, url, content, operation.GetType().Name, EventEnvelopeReader<TResource>.Instance, this.JsonOptions, options, requestModifier: null, credential: null, cancellationToken)
             .ConfigureAwait(false);
     }
 

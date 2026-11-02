@@ -9,8 +9,12 @@ namespace Blueprint.HttpClient;
 /// as a JSON body and how that body is read, the result it is when the host writes it with no body, whether it is a
 /// <see cref="PlainTextResult"/>, and, for a resource event, the resource type name a body's <c>resourceObject</c> names.
 /// </summary>
+/// <remarks>
+/// Members are made by <see cref="BlueprintResponseReaders"/>, and a union reader is made of two by
+/// <see cref="BlueprintResponseReaders.Union{T1, T2}"/>.
+/// </remarks>
 /// <typeparam name="T">The member type.</typeparam>
-internal sealed class UnionMember<T>
+public sealed class UnionMember<T>
 {
     /// <summary>
     /// Initialises a new instance of the <see cref="UnionMember{T}"/> class.

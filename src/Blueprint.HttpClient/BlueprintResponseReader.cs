@@ -10,9 +10,19 @@ namespace Blueprint.HttpClient;
 /// shape is known when it is compiled reads its response with no type tests; <see cref="BlueprintHttpClient{TApp}"/>
 /// chooses among the same readers from the result type it is asked for.
 /// </summary>
+/// <remarks>
+/// Readers are made by <see cref="BlueprintResponseReaders"/>; only Blueprint defines them.
+/// </remarks>
 /// <typeparam name="TResult">The result type.</typeparam>
-internal abstract class BlueprintResponseReader<TResult>
+public abstract class BlueprintResponseReader<TResult>
 {
+    /// <summary>
+    /// Initialises a new instance of the <see cref="BlueprintResponseReader{TResult}"/> class.
+    /// </summary>
+    private protected BlueprintResponseReader()
+    {
+    }
+
     /// <summary>
     /// Reads the response, which the transport has already checked is a success.
     /// </summary>

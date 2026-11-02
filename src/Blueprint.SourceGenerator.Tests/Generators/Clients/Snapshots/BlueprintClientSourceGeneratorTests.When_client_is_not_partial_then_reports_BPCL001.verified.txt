@@ -1,0 +1,55 @@
+﻿File: Input0.cs
+using System.Threading;
+using System.Threading.Tasks;
+using Blueprint;
+using Blueprint.Http;
+using Blueprint.HttpClient;
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
+
+namespace TestNamespace;
+
+public partial class WidgetApiResource : ApiResource
+{
+    public string Id { get; set; }
+}
+[BlueprintClient]
+[BlueprintClientInclude(typeof(GetWidgetQuery))]
+public class WidgetsApi
+             ^^^^^^^^^^ [Error:BPCL001] The [BlueprintClient] class 'WidgetsApi' must be partial
+{
+}
+
+public partial class Outer
+{
+    [BlueprintClient]
+    public partial class NestedApi
+                         ^^^^^^^^^ [Error:BPCL001] The [BlueprintClient] class 'NestedApi' must not be nested in another type
+    {
+    }
+}
+
+[BlueprintClient]
+public partial class GenericApi<T>
+                     ^^^^^^^^^^ [Error:BPCL001] The [BlueprintClient] class 'GenericApi' must not be generic
+{
+}
+
+[BlueprintClient]
+public abstract partial class AbstractApi
+                              ^^^^^^^^^^^ [Error:BPCL001] The [BlueprintClient] class 'AbstractApi' must not be abstract
+{
+}
+
+[RootLink("/widgets/{Id}")]
+public partial class GetWidgetQuery : IQuery<WidgetApiResource>
+{
+    public string Id { get; set; }
+
+    public static class Http
+    {
+        public static string BuildUrl(GetWidgetQuery operation) => "/widgets";
+        public static string AppendQueryString(GetWidgetQuery operation, string url) => url;
+    }
+}
