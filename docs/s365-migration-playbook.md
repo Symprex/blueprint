@@ -248,7 +248,7 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 | `DefaultModifyRequest` | `protected WithRequestModifier(Action<HttpRequestMessage>)`, callable from public methods that are copied onto the interface. Request URIs are still relative when modifiers run |
 | Constructor-injected dependencies | A `private readonly` field with no initialiser becomes a constructor parameter after the transport |
 
-Construct a client as `new XApi(new BlueprintHttpClient(httpClient, jsonOptions), …)`. A dedicated `AddBlueprintClient` registration lands in a later release; until then register with direct construction or `AddHttpClient`. Request-shaping order is `OnConfigure`, the call's own `ModifyRequest`, each `WithRequestModifier` in the order added, then the credential last. See [Typed Clients](integration-packages.md#typed-clients) for the full behaviour and the BPCL diagnostics ([diagnostic reference](diagnostic-reference.md#typed-http-clients-bpcl)). The older `TypedHttpClientExtensionsGenerator`, which generates extension methods on `BlueprintHttpClient<TApp>`, remains for callers that want the app-bound client.
+Construct a client as `new XApi(new BlueprintHttpClient(httpClient, jsonOptions), …)`. Register it with `services.AddBlueprintClient<IXApi, XApi>((sp, client) => …)`, the call shape S365 uses today: it now returns the `IHttpClientBuilder`, takes no `contractsAssembly` argument and requires `XApi` to be a generated client (`IBlueprintClient<XApi>`). Request-shaping order is `OnConfigure`, the call's own `ModifyRequest`, each `WithRequestModifier` in the order added, then the credential last. See [Typed Clients](integration-packages.md#typed-clients) for the full behaviour and the BPCL diagnostics ([diagnostic reference](diagnostic-reference.md#typed-http-clients-bpcl)). The older `TypedHttpClientExtensionsGenerator`, which generates extension methods on `BlueprintHttpClient<TApp>`, now emits only for an app carrying `[BlueprintHttpClientExtensions]`. The full before/after list, including the wire changes, is in the [consumer migration guide](consumer-migration-guide.md#migrating-signature-365-service-clients-to-blueprint-clients).
 
 **S365 custom source generator coexistence:** S365 has 3 custom generators in `Symprex.Signature365.SourceGenerators` that are **orthogonal** to Blueprint source-gen and **must coexist** during and after migration:
 
@@ -1033,14 +1033,14 @@ Keep `BlueprintHttpClient` but feed it source-generated metadata instead of runt
 
 S365 gateways use typed API client interfaces to call downstream services. The migration
 replaces the old `ServiceApiInclude` attribute + code-generated typed client with the
-new `BlueprintHttpClient<TApp>` + source-generated extension methods.
+generated `[BlueprintClient]` typed client (a mockable `IXApi`/`XApi` pair).
 
 #### Current S365 Gateway Architecture
 
 Each gateway project:
 1. Defines its own operations (e.g., `VCardGatewayGenerateVCardQuery`)
 2. Injects a typed API client (e.g., `IVCardApi`) via constructor parameter injection
-3. Registers the client via `services.AddBlueprintClient<IVCardApi, VCardApi>(...)`
+3. Registers the client via `services.AddBlueprintClient<IVCardApi, VCardApi>(...)` (the same call after migration, where `VCardApi` is a generated `[BlueprintClient]`)
 4. Uses an `IOperationScannerConvention` to strip the gateway prefix from operation names
 
 **Typed Client Registration (S365):**
@@ -1890,7 +1890,7 @@ All patterns audited and verified across the S365 codebase:
 | Background tasks | 40+ usages | ✅ Identical | No change |
 | `TenantId` population | 100+ operations | ✅ Compile-time | Implement `ITenantResolver`, delete middleware |
 | `IPropertyPopulator` | 0 usages | N/A | Not used in S365 |
-| `CallAsync` (HTTP gateway) | ~20 files | ✅ Shims exist | Zero changes |
+| `CallAsync` (HTTP gateway) | ~20 files | ✅ Generated client | The compat shims were removed; the calls move to `[BlueprintClient]` generated clients (same `IXApi` method shapes) |
 | Custom middleware | 14+ builders | ⚠️ Remove | Replaced by source-gen modules |
 | Test `ApiFixture` | 42 test projects | ✅ All APIs match | Alias `ApiFixture` → `BlueprintTestFixture` |
 | Test `Authentication` | Every test file | ✅ All APIs match | No change (Set/As/MakeAnonymous identical) |
@@ -2082,7 +2082,7 @@ and serves as the template migration for all other services.
 <!-- REMOVE: old SourceGenerators analyzer if it scans for Blueprint patterns -->
 ```
 
-**File: `AnalyticsApi.cs`** — Already `partial`, replace `[ServiceApiInclude]` with `[BlueprintAppScan]`:
+**File: `AnalyticsApi.cs`** — Already `partial`, replace `[ServiceApiInclude]` with `[BlueprintClient]` and `[BlueprintClientInclude]`:
 
 ```csharp
 // BEFORE
@@ -2091,8 +2091,12 @@ and serves as the template migration for all other services.
 [ServiceApiInclude(typeof(FindSentEmailsQuery))]
 public partial class AnalyticsApi;
 
-// AFTER — move to API host project as BlueprintApp root
-// This file becomes unnecessary (or keep as marker interface)
+// AFTER — stays a generated client (IAnalyticsApi + AnalyticsApi)
+[UsedImplicitly]
+[BlueprintClient]
+[BlueprintClientInclude(typeof(GetSentEmailQuery))]
+[BlueprintClientInclude(typeof(FindSentEmailsQuery))]
+public partial class AnalyticsApi;
 ```
 
 **File: `Api/GetSentEmailQuery.cs`** — Add `partial`:

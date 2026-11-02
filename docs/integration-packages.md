@@ -271,7 +271,7 @@ Background tasks do **not** automatically restore tenant context. Services shoul
 
 | Abstraction | Class | Purpose |
 |---|---|---|
-| Typed HTTP client | `BlueprintHttpClient<TApp>` | Calls Blueprint APIs using operation types |
+| Typed HTTP client | `BlueprintHttpClient<TApp>` | Calls Blueprint APIs using operation types. Generated extension methods on it are emitted only for an app carrying `[BlueprintHttpClientExtensions]` |
 | Concrete transport | `BlueprintHttpClient` | The non-generic transport every Blueprint HTTP call goes through: sends a call with the HTTP method and URL its caller resolved, maps failures, and hands a success response to the reader its caller chose. `BlueprintHttpClient<TApp>` and generated typed clients both call it |
 | Generated typed client | `[BlueprintClient]` + `[BlueprintClientInclude]` | A hand-written `partial` class completed by the source generator into `I{Class}` plus its implementation (see [Typed Clients](#typed-clients)) |
 | Upstream credentials | `IUpstreamCredential`, `BearerTokenCredential` | Authenticates every request a typed client sends |
@@ -447,7 +447,7 @@ var transport = new BlueprintHttpClient(httpClient, jsonOptions);
 IRegionalOperationsApi api = new RegionalOperationsApi(transport, endpoints);
 ```
 
-A client is cheap, immutable and thread-safe, because `WithCredential` and `WithRequestModifier` make clones that share the transport and fields. There is no dedicated registration extension yet; an `AddBlueprintClient` is planned for a later release. Until then, register the class yourself, constructing it directly from a named or typed `HttpClient` (for example one added with `AddHttpClient`, so handlers such as retry still apply) and exposing it as its interface.
+A client is cheap, immutable and thread-safe, because `WithCredential` and `WithRequestModifier` make clones that share the transport and fields. Register it with `services.AddBlueprintClient<IItemsApi, ItemsApi>((sp, client) => client.BaseAddress = ...)`, which returns the named client's `IHttpClientBuilder` (so handlers such as retry still apply), makes the client transient, and resolves each readonly field the class declares from the container through the generated `Create` (a field declared nullable is left null where the container has none).
 
 #### Serializer context
 

@@ -28,7 +28,7 @@ namespace Blueprint.HttpClient;
 /// <see cref="System.Net.Http.HttpClient"/> is.
 /// </para>
 /// </remarks>
-public partial class BlueprintHttpClient
+public class BlueprintHttpClient
 {
     private const string UpstreamServerErrorDetail = "The remote server returned an internal error response";
 

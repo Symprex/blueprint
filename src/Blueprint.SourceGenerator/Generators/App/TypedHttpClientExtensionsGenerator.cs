@@ -10,7 +10,7 @@ namespace Blueprint.SourceGenerator.Generators.App;
 /// <summary>
 /// Incremental source generator that emits strongly-typed extension methods on
 /// <c>BlueprintHttpClient&lt;TApp&gt;</c> for every operation registered through
-/// a <c>[BlueprintAppScan]</c> app class. Each generated method constructs the
+/// a <c>[BlueprintAppScan]</c> app class that also carries <c>[BlueprintHttpClientExtensions]</c>. Each generated method constructs the
 /// operation, populates its properties from method parameters, and calls the
 /// underlying typed <c>SendAsync</c> — giving consumers IntelliSense-driven,
 /// compile-time-safe service-to-service calls with zero runtime overhead beyond
@@ -74,6 +74,14 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
             : appType.ContainingNamespace.ToDisplayString();
         var appClassName = appType.Name;
         var appFqn = appType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        // Extensions are opt-in: only an app that also carries [BlueprintHttpClientExtensions] gets them
+        if (!appType.GetAttributes().Any(static a =>
+                a.AttributeClass is { Name: "BlueprintHttpClientExtensionsAttribute" } attrClass
+                && attrClass.IsInNamespace("Blueprint", "HttpClient")))
+        {
+            return null;
+        }
 
         // Check if Blueprint.HttpClient assembly is referenced
         var httpClientType = context.SemanticModel.Compilation.GetTypeByMetadataName(

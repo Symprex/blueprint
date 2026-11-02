@@ -47,6 +47,8 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
 
     private const string WithRequestModifierMethodName = "WithRequestModifier";
 
+    private const string CreateMethodName = "Create";
+
     private const string ReadersNamespace = "global::Blueprint.HttpClient.Readers.";
 
     private const string ClientFieldName = "_client";
@@ -72,6 +74,7 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
         [PlanClassName] = "a nested type",
         [WithCredentialMethodName] = "a method",
         [WithRequestModifierMethodName] = "a method",
+        [CreateMethodName] = "a method",
     };
 
     /// <summary>
@@ -471,11 +474,19 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
             parameterName = "@" + parameterName;
         }
 
+        // A nullable value type is resolved as its underlying type, which is what a container registers it as.
+        var resolveType = field.Type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
+            ? nullable.TypeArguments[0]
+            : field.Type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+
         return new TypedClientFieldModel(
             field.Name,
             parameterName,
             field.Type.ToDisplayString(OperationClientShape.FullyQualifiedWithNullable),
-            field.Type is { IsReferenceType: true, NullableAnnotation: NullableAnnotation.NotAnnotated });
+            field.Type is { IsReferenceType: true, NullableAnnotation: NullableAnnotation.NotAnnotated },
+            resolveType.ToDisplayString(OperationClientShape.FullyQualifiedWithNullable),
+            field.Type.NullableAnnotation == NullableAnnotation.Annotated,
+            field.Type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T });
     }
 
     /// <summary>
@@ -895,7 +906,7 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
     private static void GenerateClass(StringBuilder sb, TypedClientModel client, string indent)
     {
         // No accessibility modifier: the hand-written half declares it, and a generated one could only conflict with it.
-        sb.AppendLine($"{indent}partial class {client.ClassName} : {client.InterfaceName}");
+        sb.AppendLine($"{indent}partial class {client.ClassName} : {client.InterfaceName}, global::Blueprint.HttpClient.IBlueprintClient<{client.ClassName}>");
         sb.AppendLine($"{indent}{{");
 
         GenerateState(sb, client, indent + "    ");
@@ -952,6 +963,24 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
                 : $"{indent}    this.{field.FieldName} = {field.ParameterName};");
         }
 
+        sb.AppendLine($"{indent}}}");
+        sb.AppendLine();
+
+        // The registration's way of making a client: each field is resolved from the container, one declared nullable as an
+        // optional service, so no reflection finds the constructor or its parameters.
+        sb.AppendLine($"{indent}/// <inheritdoc />");
+        sb.AppendLine($"{indent}public static {client.ClassName} {CreateMethodName}(global::System.IServiceProvider services, global::Blueprint.HttpClient.BlueprintHttpClient client)");
+        sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{indent}    global::System.ArgumentNullException.ThrowIfNull(services);");
+        sb.AppendLine();
+
+        var resolved = string.Concat(client.Fields.Select(static f => f.IsNullableValueType
+            ? $", ({f.ResolveTypeFqn}?)services.GetService(typeof({f.ResolveTypeFqn}))"
+            : f.IsOptional
+            ? $", global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<{f.ResolveTypeFqn}>(services)"
+            : $", global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{f.ResolveTypeFqn}>(services)"));
+
+        sb.AppendLine($"{indent}    return new {client.ClassName}(client{resolved});");
         sb.AppendLine($"{indent}}}");
         sb.AppendLine();
 

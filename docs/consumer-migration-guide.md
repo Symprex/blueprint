@@ -1030,7 +1030,7 @@ parameter. This is what legacy Blueprint did (`ApiOperationLink.cs:59-61` read t
 the resource spells it. A placeholder that matches no property even ignoring case is still reported. Where two
 properties differ only in case, the placeholder takes the one spelled exactly as it (legacy threw on the ambiguity).
 
-**Behaviour change (v1.0.3).** A client registered with `AddBlueprintClient<TInterface, TImplementation>` serialises and
+**Behaviour change (v1.0.3).** A client registered with `AddBlueprintClient<TInterface, TImplementation>` (since the next major release `TImplementation` must be a generated `[BlueprintClient]`; see [Migrating Signature 365 service clients](#migrating-signature-365-service-clients-to-blueprint-clients)) serialises and
 deserialises through the app's configured `BlueprintJsonOptions` (`services.AddOptions<BlueprintJsonOptions>()` or
 `ConfigureJson`), as legacy's did: its `BlueprintHttpClient` took `IOptions<BlueprintJsonOptions>` from DI
 (`Common.Core/Api/BlueprintHttpClientRegistration.cs:83`, `BlueprintHttpClient.cs:40-44` in Signature365). Before v1.0.3
@@ -1636,7 +1636,7 @@ calls at the correct stage.
 
 ### Service-to-service calls (BlueprintHttpClient)
 
-**Behaviour change for a 204 (v1.0.3).** `SendAsync<T>` (and `CallAsync<T>`) read a 204 No Content as legacy Blueprint's
+**Behaviour change for a 204 (v1.0.3).** `SendAsync<T>` (and the since-removed `CallAsync<T>`) read a 204 No Content as legacy Blueprint's
 client read it: as a result the host writes as an empty 204 (`HttpNoContentResult`, a deleted
 `KeyOnlyResourceEventResult`, `StatusCodeResult.NoContent`), as `StatusCodeResult.NoContent.Instance` when `T` can hold a
 `StatusCodeResult` (`object`, `OperationResult`), and otherwise by throwing `InvalidOperationException` ("Could not
@@ -1678,6 +1678,92 @@ v1.0.2 it was a plain `Exception` with only `StatusCode` and `ResponseBody`, whi
   a 5xx's detail becomes "The remote server returned an internal error response" (the original goes to the inner
   exception); a 404 with a body that is not JSON becomes `not_found`; any other body that is not JSON becomes
   `invalid_json`; an unreachable server becomes `service_unavailable` (500) and a timeout `service_timeout` (408).
+
+### Migrating Signature 365 service clients to Blueprint clients
+
+**Breaking change (next major release).** Signature 365's `ServiceApiSourceGenerator` clients move to Blueprint's `[BlueprintClient]`. The generated `IXApi` method signatures are unchanged, so call sites and NSubstitute mocks keep compiling; what changes is the declaration, the extension points and the registration. A consumer on the previous major release is unaffected until it upgrades, and the upgrade is made in one step.
+
+#### Source changes
+
+| Before (S365 / previous Blueprint) | After |
+|---|---|
+| `[ServiceApiInclude(typeof(Op))]` | `[BlueprintClient]` on the class, plus `[BlueprintClientInclude(typeof(Op))]` per operation |
+| `api.UpdateJwt(jwt)` | `api.WithCredential(new BearerTokenCredential(jwt))`, which returns a new client and leaves the original unchanged |
+| `private static CallOptions? ModifyOptionsFor(Op operation, CallOptions? options)` | `partial void OnConfigure(Op operation, ref CallOptions? options)`, one per included operation |
+| Direct use of `DefaultModifyRequest` | `protected WithRequestModifier(Action<HttpRequestMessage>)` |
+| The `BlueprintHttpClient` interface property | Removed; the transport is private to the generated client |
+| `new XApi(new BlueprintHttpClient<RuntimeScanBlueprintApp>(httpClient, jsonOptions))` | `new XApi(new BlueprintHttpClient(httpClient, jsonOptions))` |
+| `AddBlueprintClient<IX, X>((sp, c) => …, typeof(Op).Assembly)` (the trailing `contractsAssembly` was optional, and most S365 sites omitted it; it returned `void`) | `AddBlueprintClient<IX, X>((sp, c) => …)`, which returns `IHttpClientBuilder` |
+| `RuntimeScanBlueprintApp`, non-generic `CallAsync`/`SendVoidAsync`, `BlueprintHttpClient.From<TApp>` | Removed; use the generated client, or `BlueprintHttpClient<TApp>` with your own app |
+| A test reading `[ServiceApiInclude]` by reflection | No replacement: `[BlueprintClient]` and `[BlueprintClientInclude]` are `[Conditional("CODE_ANALYSIS")]` and absent from the compiled assembly |
+
+Before:
+
+```csharp
+[ServiceApiInclude(typeof(GetSentEmailQuery))]
+public partial class AnalyticsApi
+{
+    private static CallOptions? ModifyOptionsFor(GetSentEmailQuery operation, CallOptions? options) =>
+        options ?? new CallOptions { ModifyRequest = m => m.Headers.Add("X-Caller", "gateway") };
+}
+
+var scoped = api.UpdateJwt(jwt);
+services.AddBlueprintClient<IAnalyticsApi, AnalyticsApi>((sp, c) => c.BaseAddress = baseUri, typeof(GetSentEmailQuery).Assembly);
+```
+
+After:
+
+```csharp
+[BlueprintClient]
+[BlueprintClientInclude(typeof(GetSentEmailQuery))]
+public partial class AnalyticsApi
+{
+    partial void OnConfigure(GetSentEmailQuery operation, ref CallOptions? options) =>
+        options ??= new CallOptions { ModifyRequest = m => m.Headers.Add("X-Caller", "gateway") };
+}
+
+var scoped = api.WithCredential(new BearerTokenCredential(jwt));
+services.AddBlueprintClient<IAnalyticsApi, AnalyticsApi>((sp, c) => c.BaseAddress = baseUri);
+```
+
+Notes on each change:
+
+- **`WithRequestModifier` and relative URIs.** Request URIs are relative when modifiers run, so a modifier that moves a call to another host combines them: `message.RequestUri = new Uri(regionalBase, message.RequestUri!)`. Expose the method on the interface by writing a public method on the partial that calls it.
+- **`AddBlueprintClient<IX, X>`.** The call shape is the same. It now returns the named client's `IHttpClientBuilder`, so retry and other handlers chain on the result. It takes no trailing `contractsAssembly` argument. `X` must be a generated client (it implements `IBlueprintClient<X>`); anything else does not compile. It no longer sets an infinite timeout under `DEBUG`: set `c.Timeout` in the callback where you want one.
+- **Removed runtime scan.** `RuntimeScanBlueprintApp` and its helpers scanned assemblies for operations at run time. Each generated method now carries its own compile-time call plan, so nothing replaces the scan.
+
+#### Wire changes compared with the runtime scan
+
+| | `RuntimeScanBlueprintApp` | Generated client |
+|---|---|---|
+| GET query keys | The property's own name: `?TenantId=…&PageSize=10` | camelCase, or the binding name where one is declared: `?tenantId=…&pageSize=10` |
+| `bool?` query values | `true` / `false` | `True` / `False` |
+| GET properties that are not query-bound | With no ownership data the scan fell back to sending every public non-placeholder property in the query | Only query-bound properties are sent; header-, cookie- and system-bound properties on a GET stop appearing in the query |
+| URL template with two candidates | Tried the next template when the first had a null placeholder | Always the first template in declaration order; a null placeholder throws `InvalidOperationException` |
+
+- **Query keys.** Blueprint servers bind query strings case-insensitively, so a Blueprint service reads either form. A non-Blueprint server, a gateway matching on the exact key or a recorded fixture does not; update it.
+- **`bool?`.** `bool.TryParse` accepts both spellings. A server or fixture comparing the raw text must expect `True`/`False`.
+- **Non-query properties on GET.** The research found none in Signature 365: the only header-bound property is `IdempotencyKey`, on two POST operations, and it is sent in the body on both paths.
+- **URL templates.** In Signature 365 only `CheckTenantDomainsCommand` declares two. Supply the placeholder the first template needs.
+
+#### Typed extension methods are opt-in
+
+`TypedHttpClientExtensionsGenerator`, which emits extension methods on `BlueprintHttpClient<TApp>`, now emits only for an app carrying `[BlueprintHttpClientExtensions]`. Before, every `[BlueprintAppScan]` app received them. An app that calls those extension methods adds the attribute; an app that does not stops generating the unused code.
+
+```csharp
+using Blueprint.HttpClient;
+
+[BlueprintAppScan]
+[BlueprintHttpClientExtensions]
+public partial class MyApp : BlueprintApp;
+```
+
+#### Behaviour changes in both clients
+
+These apply to `BlueprintHttpClient<TApp>` and the generated clients alike, because they now share one transport.
+
+- **`Results<A, A>` with a non-JSON success body** returns member 1 of the union.
+- **Timeout and unreachable mapping** (`service_timeout` and `service_unavailable`) now also covers reading the body of a resource-event response, not only the send.
 
 ### Hangfire (background task scheduling)
 
