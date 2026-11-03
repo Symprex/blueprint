@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Http;
@@ -242,6 +243,21 @@ public sealed class OperationInputSchemaTests
         CreateProvider().GetSchema("NoSuchOperation").Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void A_nullable_read_only_reference_is_read_only_and_not_required_of_an_input(OpenApiSchemaNaming naming)
+    {
+        // Admitting null moves a reference into an anyOf branch; read-only says what the whole property is, so it stays beside.
+        var schema = CreateProvider(o => o.SchemaNaming = naming).GetSchema(NoteOperationName)!.Schema;
+        var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
+        var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
+
+        address.GetProperty("properties").GetProperty("previous").GetProperty("readOnly").GetBoolean().Should().BeTrue();
+        (address.TryGetProperty("required", out var required) ? required.EnumerateArray().Select(static e => e.GetString()) : [])
+            .Should().NotContain("previous");
+    }
+
     [Fact]
     public void The_provider_fails_until_the_api_is_mapped()
     {
@@ -361,6 +377,11 @@ public sealed class OperationInputSchemaAddress
 
     /// <summary>Gets a value the server computes, which a request does not carry.</summary>
     public int Total => this.PostCode?.Length ?? 0;
+
+    /// <summary>Gets or sets an address the server records, which a request does not carry either.</summary>
+    [JsonRequired]
+    [ReadOnly(true)]
+    public OperationInputSchemaAddress? Previous { get; set; }
 }
 
 /// <summary>A command taking a property from every source the caller sends, and two it does not.</summary>

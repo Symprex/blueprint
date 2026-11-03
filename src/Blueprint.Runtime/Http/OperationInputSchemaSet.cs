@@ -610,7 +610,11 @@ internal sealed class OperationInputSchemaSet
 
         var branch = new JsonObject();
 
-        foreach (var name in schema.Select(static p => p.Key).Where(static k => k is not ("description" or "deprecated" or "default" or "examples")).ToList())
+        // Annotations say what the whole property is, null or not, so they stay beside the anyOf, where required is checked
+        // against readOnly.
+        foreach (var name in schema.Select(static p => p.Key)
+            .Where(static k => k is not ("description" or "deprecated" or "default" or "examples" or "readOnly" or "writeOnly"))
+            .ToList())
         {
             var value = schema[name]?.DeepClone();
             schema.Remove(name);
