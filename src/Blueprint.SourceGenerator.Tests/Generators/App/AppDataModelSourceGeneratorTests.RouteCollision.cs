@@ -271,7 +271,7 @@ public class AppDataModelSourceGeneratorTests_RouteCollision
     public void When_operations_declare_an_empty_HTTP_method_then_no_route_collision_is_reported(string httpMethodArgument)
     {
         // This used to check an empty method as "" and a null one as the GET fallback, while the descriptor rejects
-        // both with BPOA002 and publishes no method at all.
+        // both with BPOA001 and publishes no method at all.
         var source = $$"""
                      [SelfLink(typeof(FooResource), "/items/{Id}")]
                      [HttpMethod({{httpMethodArgument}})]
