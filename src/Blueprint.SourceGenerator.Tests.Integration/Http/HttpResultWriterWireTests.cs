@@ -195,6 +195,23 @@ public sealed class HttpResultWriterWireTests
             .Should().Equal("UnhandledExceptionResult:pipeline-failed-twice", "UnhandledExceptionResult:The writer failed twice");
     }
 
+    [Theory]
+    [InlineData("throws")]
+    [InlineData("faulted")]
+    public async Task A_writer_that_declines_a_pipeline_failure_is_given_the_fault_of_blueprints_own_problem_write(string failure)
+    {
+        // The writer declines the pipeline's exception; Blueprint's write of its problem then faults before the response
+        // starts, and that fault is offered to the writer once.
+        await using var host = await ResultWriterHost.StartAsync<FaultingPipelineExecutor>(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
+
+        var response = await host.GetAsync($"sync-path-write-fault?failure={failure}&exception=declined&write-fault");
+
+        response.Status.Should().Be(400, response.Body);
+        response.Body.Should().Be("""{"error":{"code":"invalid_operation","message":"boom-during-write"}}""");
+        host.Services.GetRequiredService<IHttpResultWriter>().As<LegacyEnvelopeResultWriter>().Given
+            .Should().Equal("UnhandledExceptionResult:pipeline-failed-declined", "UnhandledExceptionResult:boom-during-write");
+    }
+
     [Fact]
     public async Task A_writer_writes_a_successful_result_in_a_format_of_its_own()
     {
@@ -378,9 +395,12 @@ public sealed class HttpResultWriterWireTests
         public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
             var query = context.GetHttpContext().Request.Query;
-            Exception exception = query["exception"] == "argument"
-                ? new ArgumentException("pipeline-failed-twice")
-                : new TimeoutException("pipeline-failed");
+            Exception exception = query["exception"].ToString() switch
+            {
+                "argument" => new ArgumentException("pipeline-failed-twice"),
+                "declined" => new KeyNotFoundException("pipeline-failed-declined"),
+                _ => new TimeoutException("pipeline-failed"),
+            };
 
             return query["failure"] == "throws"
                 ? throw exception
@@ -454,9 +474,10 @@ public sealed class HttpResultWriterWireTests
 
                 // As SyncPathWriteFaultWireTests: Blueprint's own write of this operation's result faults before the
                 // response starts, reaching the router's exception handling.
-                // A request whose pipeline fails (FaultingPipeline) writes through the real body.
+                // A request whose pipeline fails (FaultingPipeline) writes through the real body unless it asks for a
+                // write fault too.
                 if (httpContext.Request.Path.Value?.EndsWith("/sync-path-write-fault", StringComparison.Ordinal) == true
-                    && !httpContext.Request.Query.ContainsKey("failure"))
+                    && (!httpContext.Request.Query.ContainsKey("failure") || httpContext.Request.Query.ContainsKey("write-fault")))
                 {
                     httpContext.Response.Body = new FaultsOnFirstWriteStream(
                         httpContext.Response.Body,

@@ -30,8 +30,10 @@ namespace Blueprint.Runtime.Http;
 /// <see cref="HttpContext.RequestServices"/>.
 /// </para>
 /// <para>
-/// An exception the writer throws is handled as an exception Blueprint's own write threw: the writer is consulted again
-/// with it as an <see cref="UnhandledExceptionResult"/>, and an exception thrown from that call propagates to ASP.NET Core.
+/// Recovery from a failure is bounded to one more call. When the writer throws, or Blueprint's own write of an exception's
+/// problem faults after the writer declined that exception, the writer is consulted once more with that failure as an
+/// <see cref="UnhandledExceptionResult"/>, while the response has not started. Whatever fails while answering that call
+/// propagates to ASP.NET Core.
 /// </para>
 /// </remarks>
 public interface IHttpResultWriter

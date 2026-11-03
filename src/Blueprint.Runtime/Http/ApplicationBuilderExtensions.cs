@@ -602,7 +602,7 @@ public static class EndpointRouteBuilderExtensions
             {
                 return this._resultWriter is null
                     ? this.HandleUnexpectedExceptionAsync(httpContext, operation, ex)
-                    : this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, this._resultWriter, ex, writerFailed: false);
+                    : this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, this._resultWriter, ex, isRecovery: false);
             }
 
             // An app's result writer takes a path of its own, leaving the paths below exactly as they are without one.
@@ -810,7 +810,7 @@ public static class EndpointRouteBuilderExtensions
             }
             catch (Exception ex) when (!httpContext.Response.HasStarted)
             {
-                await this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, resultWriter, ex, writerFailed).ConfigureAwait(false);
+                await this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, resultWriter, ex, isRecovery: writerFailed).ConfigureAwait(false);
             }
         }
 
@@ -863,22 +863,24 @@ public static class EndpointRouteBuilderExtensions
         /// problem only when the writer declines.
         /// </summary>
         /// <remarks>
-        /// A writer that throws is given its own exception once, whichever result it failed on: the operation's, or an
-        /// exception from the pipeline or a write. An exception it throws for its own failure propagates to ASP.NET Core.
+        /// Recovery is bounded to one more offer. A failure while answering a first offer — the writer throwing, or
+        /// Blueprint's own problem write faulting after the writer declined — is offered to the writer once as a recovery;
+        /// whatever fails while answering a recovery propagates to ASP.NET Core. A writer that throws for the operation's
+        /// result is given its own exception as that recovery.
         /// </remarks>
         /// <param name="httpContext">The HTTP context.</param>
         /// <param name="apiContext">The operation's context.</param>
         /// <param name="operation">The operation's descriptor.</param>
         /// <param name="resultWriter">The app's writer.</param>
         /// <param name="ex">The exception.</param>
-        /// <param name="writerFailed">Whether <paramref name="ex"/> is one the writer threw.</param>
+        /// <param name="isRecovery">Whether this offer is the recovery from a failure, after which nothing more is offered.</param>
         private async Task HandleUnexpectedExceptionWithResultWriterAsync(
             HttpContext httpContext,
             ApiOperationContext apiContext,
             ApiOperationDescriptor operation,
             IHttpResultWriter resultWriter,
             Exception ex,
-            bool writerFailed)
+            bool isRecovery)
         {
             var activity = Activity.Current;
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
@@ -893,26 +895,21 @@ public static class EndpointRouteBuilderExtensions
             // could meet.
             httpContext.Response.ContentLength = null;
 
-            bool written;
-
             try
             {
-                written = await resultWriter.TryWriteAsync(httpContext, apiContext, new UnhandledExceptionResult(ex)).ConfigureAwait(false);
+                if (await resultWriter.TryWriteAsync(httpContext, apiContext, new UnhandledExceptionResult(ex)).ConfigureAwait(false))
+                {
+                    return;
+                }
+
+                await this.WriteUnexpectedExceptionProblemAsync(httpContext, ex, activity).ConfigureAwait(false);
             }
-            catch (Exception writerException) when (!writerFailed
+            catch (Exception failure) when (!isRecovery
                 && !httpContext.Response.HasStarted
-                && !(writerException is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested))
+                && !(failure is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested))
             {
-                await this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, resultWriter, writerException, writerFailed: true).ConfigureAwait(false);
-                return;
+                await this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, resultWriter, failure, isRecovery: true).ConfigureAwait(false);
             }
-
-            if (written)
-            {
-                return;
-            }
-
-            await this.WriteUnexpectedExceptionProblemAsync(httpContext, ex, activity).ConfigureAwait(false);
         }
 
         private Task WriteUnexpectedExceptionProblemAsync(HttpContext httpContext, Exception ex, Activity? activity)
