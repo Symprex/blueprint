@@ -1,20 +1,27 @@
-using System.Net;
-using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
 using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace Blueprint.SourceGenerator.Tests.Integration.Http;
 
 /// <summary>
-/// Proves the document-only mode the <c>BlueprintEmitOpenApi</c> build target starts an app in: the app starts as it
-/// always does, writes its OpenAPI document only when it has changed, binds no port and stops itself.
+/// Proves the document-only mode the <c>BlueprintEmitOpenApi</c> build target runs an app in: as soon as the app's host is
+/// built, the document the app would serve is written, only when it has changed, and the app goes no further, so none of
+/// its hosted services, middleware or start-up code after the host is built ever runs.
 /// </summary>
+/// <remarks>
+/// The build target's app exits the process once the document is written. Here the mode is handed a finish that throws
+/// <see cref="HostAbortedException" /> out of <c>Build()</c> instead, which stops the app at the same point.
+/// </remarks>
 public sealed class OpenApiDocumentOnlyModeTests : IDisposable
 {
+    private const string Title = "Document mode API";
+
     private static readonly DateTime LongAgo = new(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "blueprint-openapi-" + Guid.NewGuid().ToString("N"));
@@ -24,96 +31,125 @@ public sealed class OpenApiDocumentOnlyModeTests : IDisposable
     private string CompletionPath => Path.Combine(this._directory, "obj", "openapi.done");
 
     [Fact]
-    public async Task When_run_in_document_only_mode_then_the_document_is_written_and_the_app_stops_itself()
+    public void When_the_host_is_built_then_the_document_the_app_serves_is_written_before_anything_starts()
     {
-        var document = await this.RunAsync();
+        var hostedService = new StartRecordingService();
 
-        File.ReadAllText(this.OutputPath).Should().Be(document);
-        document.Should().Contain("\"openapi\"");
+        this.Build(configureAfter: services => services.AddSingleton<IHostedService>(hostedService));
+
+        var document = File.ReadAllText(this.OutputPath);
+        document.Should().Contain($"\"{Title}\"");
+        document.Should().Be(ServedDocument());
+        hostedService.Started.Should().BeFalse();
     }
 
     [Fact]
-    public async Task When_run_in_document_only_mode_then_no_port_is_bound()
+    public void When_a_startup_class_host_is_built_then_the_document_is_written_and_configure_never_runs()
     {
-        // Kestrel would fail to start on a port another listener holds; the document-only mode never listens at all.
-        using var occupant = new TcpListener(IPAddress.Loopback, 0);
-        occupant.Start();
-        var port = ((IPEndPoint)occupant.LocalEndpoint).Port;
+        // A Startup class's ConfigureServices, where AddBlueprintApi is called, runs inside Build(); its Configure, where
+        // the middleware is set up, runs only when the host starts.
+        var builder = new HostBuilder().ConfigureWebHost(web => web
+            .UseKestrel()
+            .UseStartup(_ => new DocumentModeStartup(this.OutputPath, this.CompletionPath)));
 
-        await this.RunAsync(url: $"http://127.0.0.1:{port}");
+        var build = () => builder.Build();
 
-        File.Exists(this.OutputPath).Should().BeTrue();
+        build.Should().Throw<HostAbortedException>();
+        File.ReadAllText(this.OutputPath).Should().Be(ServedDocument());
     }
 
     [Fact]
-    public async Task When_the_document_has_not_changed_then_the_file_is_left_untouched()
+    public void When_the_document_has_not_changed_then_the_file_is_left_untouched()
     {
-        await this.RunAsync();
+        this.Build();
         File.SetLastWriteTimeUtc(this.OutputPath, LongAgo);
 
-        await this.RunAsync();
+        this.Build();
 
         File.GetLastWriteTimeUtc(this.OutputPath).Should().Be(LongAgo);
     }
 
     [Fact]
-    public async Task When_the_file_differs_from_the_document_only_in_its_line_endings_then_it_is_left_untouched()
+    public void When_the_file_differs_from_the_document_only_in_its_line_endings_then_it_is_left_untouched()
     {
         // A spec committed with LF and checked out with CRLF (or the reverse) is the same document.
-        var document = await this.RunAsync();
+        this.Build();
+        var document = File.ReadAllText(this.OutputPath);
         var otherLineEndings = document.Contains("\r\n", StringComparison.Ordinal)
             ? document.Replace("\r\n", "\n", StringComparison.Ordinal)
             : document.Replace("\n", "\r\n", StringComparison.Ordinal);
         File.WriteAllText(this.OutputPath, otherLineEndings);
         File.SetLastWriteTimeUtc(this.OutputPath, LongAgo);
 
-        await this.RunAsync();
+        this.Build();
 
         File.GetLastWriteTimeUtc(this.OutputPath).Should().Be(LongAgo);
         File.ReadAllText(this.OutputPath).Should().Be(otherLineEndings);
     }
 
     [Fact]
-    public async Task When_the_file_is_stale_then_it_is_replaced_with_the_document()
+    public void When_the_file_is_stale_then_it_is_replaced_with_the_document()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(this.OutputPath)!);
         File.WriteAllText(this.OutputPath, "{}");
 
-        var document = await this.RunAsync();
+        this.Build();
 
-        File.ReadAllText(this.OutputPath).Should().Be(document);
+        File.ReadAllText(this.OutputPath).Should().Be(ServedDocument());
     }
 
     [Fact]
-    public async Task When_no_api_is_mapped_then_the_app_fails_to_start_and_writes_nothing()
+    public void When_the_document_is_written_or_found_unchanged_then_completion_is_recorded_for_the_build_target()
     {
-        var run = () => this.RunAsync(mapApi: false);
+        // The target cannot tell from the exit code alone: an app that returns before building its host exits with 0.
+        this.Build();
+        File.Exists(this.CompletionPath).Should().BeTrue();
 
-        (await run.Should().ThrowAsync<InvalidOperationException>())
-            .Which.Message.Should().Contain("MapBlueprintApi").And.Contain(this.OutputPath);
+        File.Delete(this.CompletionPath);
+        this.Build();
+        File.Exists(this.CompletionPath).Should().BeTrue("an unchanged document is a successful emission too");
+    }
+
+    [Fact]
+    public void When_no_base_path_is_declared_with_AddBlueprintApi_then_the_build_fails_and_writes_nothing()
+    {
+        // MapBlueprintApi is never reached, so a base path passed only to it cannot be known.
+        var build = this.CreateBuild(declare: static _ => { });
+
+        build.Should().Throw<InvalidOperationException>()
+            .Which.Message.Should().Contain("UseBasePath").And.Contain(this.OutputPath);
         File.Exists(this.OutputPath).Should().BeFalse();
         File.Exists(this.CompletionPath).Should().BeFalse("the build target fails when the app does not record that it wrote the document");
     }
 
     [Fact]
-    public async Task When_the_document_is_written_or_found_unchanged_then_completion_is_recorded_for_the_build_target()
+    public void When_another_host_is_built_in_the_same_process_then_it_is_left_alone()
     {
-        // The target cannot tell from the exit code alone: an app that returns before starting its host exits with 0.
-        await this.RunAsync();
-        File.Exists(this.CompletionPath).Should().BeTrue();
+        var build = this.CreateBuild();
 
-        File.Delete(this.CompletionPath);
-        await this.RunAsync();
-        File.Exists(this.CompletionPath).Should().BeTrue("an unchanged document is a successful emission too");
+        var other = () => WebApplication.CreateSlimBuilder().Build().DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+        other.Should().NotThrow();
+        File.Exists(this.OutputPath).Should().BeFalse();
+        build.Should().Throw<HostAbortedException>();
+        File.Exists(this.OutputPath).Should().BeTrue();
     }
 
     [Fact]
-    public async Task When_a_later_lifecycle_service_honours_its_start_token_then_the_app_still_starts_and_stops()
+    public async Task When_the_host_starts_without_having_been_seen_built_then_it_fails_to_start()
     {
-        // Stopping the app from StartedAsync used to cancel the start token every later StartedAsync was handed.
-        await this.RunAsync(configureAfter: static services => services.AddHostedService<StartTokenHonouringService>());
+        // A host whose builder does not announce that it was built, as the generic host's builders do, would otherwise
+        // run the app as usual until the build target's timeout ended it.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(DeclareApi);
+        BlueprintOpenApiDocumentMode.Enable<IntegrationTestBlueprintApp>(services, this.OutputPath, this.CompletionPath, Abort);
+        await using var provider = services.BuildServiceProvider();
 
-        File.Exists(this.OutputPath).Should().BeTrue();
+        var start = () => Task.WhenAll(provider.GetServices<IHostedService>().Select(static service => service.StartAsync(CancellationToken.None)));
+
+        (await start.Should().ThrowAsync<InvalidOperationException>())
+            .Which.Message.Should().Contain("BlueprintEmitOpenApi");
     }
 
     public void Dispose()
@@ -124,70 +160,71 @@ public sealed class OpenApiDocumentOnlyModeTests : IDisposable
         }
     }
 
-    /// <summary>
-    /// Builds and runs an app in document-only mode, as the build target runs it, and returns the document the app mapped.
-    /// </summary>
-    private async Task<string> RunAsync(bool mapApi = true, string? url = null, Action<IServiceCollection>? configureAfter = null)
+    private static void DeclareApi(BlueprintServiceBuilder blueprint)
     {
-        var builder = WebApplication.CreateSlimBuilder();
-        builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(
-            static blueprint => blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>());
-        BlueprintOpenApiDocumentMode.Enable(builder.Services, this.OutputPath, this.CompletionPath);
-        configureAfter?.Invoke(builder.Services);
-
-        var app = builder.Build();
-
-        if (url is not null)
-        {
-            app.Urls.Add(url);
-        }
-
-        if (mapApi)
-        {
-            app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
-        }
-
-        var document = mapApi ? app.Services.GetRequiredService<PreRenderedOpenApiDocumentHolder>().Document!.Json : string.Empty;
-
-        var run = app.RunAsync();
-        var finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(30)));
-
-        if (finished != run)
-        {
-            await app.StopAsync();
-            throw new TimeoutException("The app did not stop itself after writing the OpenAPI document.");
-        }
-
-        await run;
-
-        return document;
+        blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>();
+        blueprint.UseBasePath("api/");
+        blueprint.ConfigureOpenApi(static info => info.Title = Title);
     }
 
     /// <summary>
-    /// A lifecycle service registered after document-only mode that, as a well-behaved service does, gives up when its
-    /// start token is cancelled.
+    /// Stands in for the build target's exit, by throwing out of <c>Build()</c> as the process exit would leave it.
     /// </summary>
-    private sealed class StartTokenHonouringService : IHostedLifecycleService
+    private static void Abort(IHost host, Exception? failure)
     {
-        public Task StartingAsync(CancellationToken cancellationToken)
+        if (failure is not null)
         {
-            return Task.CompletedTask;
+            ExceptionDispatchInfo.Throw(failure);
         }
+
+        throw new HostAbortedException();
+    }
+
+    /// <summary>
+    /// Returns the document an app registered as these tests register it serves, from an app started as usual.
+    /// </summary>
+    private static string ServedDocument()
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(DeclareApi);
+        using var app = builder.Build();
+        app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+
+        return app.Services.GetRequiredService<PreRenderedOpenApiDocumentHolder>().Document!.Json;
+    }
+
+    /// <summary>
+    /// Builds an app in document-only mode, as the build target runs it, and expects it to stop at the build.
+    /// </summary>
+    private void Build(Action<IServiceCollection>? configureAfter = null)
+    {
+        this.CreateBuild(configureAfter: configureAfter).Should().Throw<HostAbortedException>();
+    }
+
+    /// <summary>
+    /// Registers an app in document-only mode and returns its build, so that a test decides how the build ends.
+    /// </summary>
+    private Action CreateBuild(Action<BlueprintServiceBuilder>? declare = null, Action<IServiceCollection>? configureAfter = null)
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(declare ?? DeclareApi);
+        BlueprintOpenApiDocumentMode.Enable<IntegrationTestBlueprintApp>(builder.Services, this.OutputPath, this.CompletionPath, Abort);
+        configureAfter?.Invoke(builder.Services);
+
+        return () => builder.Build();
+    }
+
+    /// <summary>
+    /// A hosted service that records whether it was started.
+    /// </summary>
+    private sealed class StartRecordingService : IHostedService
+    {
+        public bool Started { get; private set; }
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
-        }
+            this.Started = true;
 
-        public Task StartedAsync(CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            return Task.CompletedTask;
-        }
-
-        public Task StoppingAsync(CancellationToken cancellationToken)
-        {
             return Task.CompletedTask;
         }
 
@@ -195,10 +232,22 @@ public sealed class OpenApiDocumentOnlyModeTests : IDisposable
         {
             return Task.CompletedTask;
         }
+    }
 
-        public Task StoppedAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// A Startup class that registers the app in document-only mode and fails if its middleware is ever set up.
+    /// </summary>
+    private sealed class DocumentModeStartup(string outputPath, string completionPath)
+    {
+        public void ConfigureServices(IServiceCollection services)
         {
-            return Task.CompletedTask;
+            services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(DeclareApi);
+            BlueprintOpenApiDocumentMode.Enable<IntegrationTestBlueprintApp>(services, outputPath, completionPath, Abort);
+        }
+
+        public void Configure(IApplicationBuilder app)
+        {
+            throw new InvalidOperationException("Configure ran, so the host was started.");
         }
     }
 }

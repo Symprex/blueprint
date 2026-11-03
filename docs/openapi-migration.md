@@ -38,33 +38,47 @@ package directly or through another package has it. Only app projects act on the
 projects ignore it, so it can be passed to a whole solution's build, which writes each app's own `Spec/openapi.json`. A project that references `Blueprint.Runtime` as a project imports
 `src/Blueprint.Runtime/buildTransitive/Blueprint.Runtime.targets` itself, as the sample gateway does.
 
-After the build, the target starts the built app in **document-only mode** (`BlueprintOpenApiDocumentMode`):
+The document is written from what `AddBlueprintApi` declares, so declare where the API is mapped and how it is described
+there, and call `MapBlueprintApi` without arguments:
 
-- The app starts as it always does — `Program`, `Startup`, `ConfigureServices`, `MapBlueprintApi` — in the
-  `Development` environment, as `dotnet run` would start it. `BlueprintOpenApiEnvironment` names another.
-- It binds no port. `AddBlueprintApi` replaces the server with one that never listens.
-- Once the app has started, the document its `MapBlueprintApi` call mapped is written, and the app stops itself.
+```csharp
+services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
+{
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info => { info.Title = "My API"; info.Version = "1.0.0"; });
+    blueprint.ConfigureOpenApiOperations(operations => { /* processors */ });
+});
+
+// In Configure, or after builder.Build():
+endpoints.MapBlueprintApi<MyApp, MyAppExecutor>();
+```
+
+`ConfigureOpenApiSchemas` takes the schema processors. `MapBlueprintApi`'s own arguments still work for an app that
+does not write its document at build time, but once `AddBlueprintApi` declares any of these, passing them to
+`MapBlueprintApi` as well throws, so the document written at build time cannot differ from the one the app serves.
+
+After the build, the target runs the built app in **document-only mode**:
+
+- The app's `Main` runs, in the `Development` environment as `dotnet run` would run it (`BlueprintOpenApiEnvironment`
+  names another), only as far as building its host: `WebApplication.CreateBuilder(...).Build()`,
+  `Host.CreateDefaultBuilder(...).Build()`, or `Host.CreateApplicationBuilder(...).Build()`. That registers the app's
+  services, a `Startup` class's `ConfigureServices` included.
+- As soon as the host is built, the document is written and the process exits. Nothing after that runs: no hosted
+  service starts, no port is bound, `Startup.Configure` and the middleware are never set up, and no code between
+  building the host and running it is reached. An app needs no checks for whether it is only writing its document.
+  EF Core's design-time tools (`dotnet ef`) stop an app at the same point.
 - The file is written only when the document has changed, so a build that changes nothing in the API leaves the file
   and its timestamp untouched. A file that differs only in its line endings counts as unchanged.
-- An app that maps no API, or whose document cannot be rendered, fails the build with the app's error.
+- An app whose `AddBlueprintApi` declares no base path, or whose document cannot be rendered, fails the build with the
+  app's error. So does an app that exits without building its host.
 - The file at `BlueprintOpenApiPath` is not published with the app. The web SDK would otherwise publish it as content,
   and an app that references another app would publish both specs at one path and fail (`NETSDK1152`).
 
-Everything else the app starts still starts, hosted services included. An app whose start-up needs what a build
-machine does not have, such as a database or a message broker, checks `BlueprintOpenApiDocumentMode.IsActive` and skips
-it:
-
-```csharp
-if (!BlueprintOpenApiDocumentMode.IsActive)
-{
-    services.AddHostedService<OutboxDispatcher>();
-}
-```
-
-An app that never stops on its own — for example, one that never calls `AddBlueprintApi` — is ended after
-`BlueprintOpenApiTimeout` milliseconds (120000 by default), which fails the build. One host writes one document: the one
-its last `MapBlueprintApi` call mapped.
-
+What still runs before the host is built is the app's own registration code and its configuration sources. A
+configuration source that reaches a network service at start-up, such as Azure Key Vault, needs that service at build
+time too; most apps add one only outside `Development`. An app that never stops on its own (for example, one that never
+calls `AddBlueprintApi`) is ended after `BlueprintOpenApiTimeout` milliseconds (120000 by default), which fails the
+build.
 This replaces `host.OutputOpenApi()`, which wrote the same file only from a `DEBUG` build run by hand in the
 `Development` environment. `OutputOpenApi` still works and is obsolete; remove the call when the property is set. It
 will be removed in the next major version.

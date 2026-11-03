@@ -6,9 +6,9 @@
       <BlueprintOpenApiPath>Spec/openapi.json</BlueprintOpenApiPath>          (the default; relative to the project)
       <BlueprintOpenApiEnvironment>Development</BlueprintOpenApiEnvironment>  (the default)
 
-    After the build, the built app is started in Blueprint's document-only mode (BlueprintOpenApiDocumentMode): it
-    starts as it always does but binds no port, writes the document its MapBlueprintApi call mapped (only if it has
-    changed, so an unchanged API leaves the file and its timestamp alone) and stops. See docs/openapi-migration.md.
+    After the build, the built app is run in Blueprint's document-only mode: it runs only until its host is built, then
+    writes the document AddBlueprintApi declared (only if it has changed, so an unchanged API leaves the file and its
+    timestamp alone) and exits. No hosted service, middleware or later start-up code runs. See docs/openapi-migration.md.
 
     A package consumer gets this file from Blueprint.Runtime's buildTransitive folder. A project in this repository
     references Blueprint.Runtime as a project, which imports nothing, so it imports this file itself.
@@ -44,9 +44,9 @@
 
     <Delete Files="$(_BlueprintOpenApiCompletionPath)" />
 
-    <!-- The app runs from the project directory, as `dotnet run` runs it. ASPNETCORE_URLS only matters for a server
-         registered after AddBlueprintApi, which replaces the one that never listens: it then listens on a free
-         loopback port until it stops. -->
+    <!-- The app runs from the project directory, as `dotnet run` runs it. ASPNETCORE_URLS only matters for an app that
+         starts after all, such as one that never calls AddBlueprintApi: it then listens on a free loopback port, not
+         one in use, until the timeout ends it. -->
     <Exec Command="&quot;$(_BlueprintOpenApiDotnet)&quot; exec &quot;$(TargetPath)&quot;"
           WorkingDirectory="$(MSBuildProjectDirectory)"
           EnvironmentVariables="BLUEPRINT_OPENAPI_OUTPUT_PATH=$(_BlueprintOpenApiFullPath);BLUEPRINT_OPENAPI_COMPLETION_PATH=$(_BlueprintOpenApiCompletionPath);DOTNET_ENVIRONMENT=$(BlueprintOpenApiEnvironment);ASPNETCORE_ENVIRONMENT=$(BlueprintOpenApiEnvironment);ASPNETCORE_URLS=http://127.0.0.1:0"
@@ -61,7 +61,7 @@
            Text="$(MSBuildProjectName) could not write its OpenAPI document to $(_BlueprintOpenApiFullPath): the app exited with code $(_BlueprintOpenApiExitCode). Its error output is above." />
 
     <Error Condition="'$(_BlueprintOpenApiExitCode)' == '0' and !Exists('$(_BlueprintOpenApiCompletionPath)')"
-           Text="$(MSBuildProjectName) exited without writing its OpenAPI document to $(_BlueprintOpenApiFullPath). The app must build and run its host (host.Run or app.Run) and call AddBlueprintApi and MapBlueprintApi as it starts." />
+           Text="$(MSBuildProjectName) exited without writing its OpenAPI document to $(_BlueprintOpenApiFullPath). The app must build its host (WebApplication.CreateBuilder, Host.CreateDefaultBuilder or Host.CreateApplicationBuilder) with AddBlueprintApi among its services." />
 
     <Delete Files="$(_BlueprintOpenApiCompletionPath)" />
 

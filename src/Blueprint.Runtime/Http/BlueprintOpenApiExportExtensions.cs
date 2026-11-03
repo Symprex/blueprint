@@ -20,7 +20,7 @@ public static class BlueprintOpenApiExportExtensions
     /// This mirrors the legacy <c>OutputOpenApi</c> helper from Signature365 and is designed for local
     /// development workflows only. The method is compiled out entirely in Release builds. It is replaced by the
     /// <c>BlueprintEmitOpenApi</c> MSBuild property, which writes the document on every build, in any configuration,
-    /// without running the app by hand (see <see cref="BlueprintOpenApiDocumentMode" />).
+    /// without running the app by hand.
     /// </remarks>
     /// <param name="host">The configured host whose Blueprint app provides the OpenAPI document.</param>
     /// <param name="outputPath">
