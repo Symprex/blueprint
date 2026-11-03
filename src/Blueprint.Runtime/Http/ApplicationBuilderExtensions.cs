@@ -497,6 +497,7 @@ public static class EndpointRouteBuilderExtensions
         private readonly PathString _normalizedBasePath;
         private readonly TExec _executor;
         private readonly HttpOperationResultExecutor? _resultExecutor;
+        private readonly IHttpResultWriter? _resultWriter;
 
         // Cached base URI to avoid per-request string interpolation when scheme/host/path are stable. One immutable entry,
         // read once per request, so a request is always given the base URI made from the scheme, host and path base it was
@@ -519,6 +520,7 @@ public static class EndpointRouteBuilderExtensions
             // Cache singleton services that are resolved on every request
             this._executor = rootServiceProvider.GetRequiredService<TExec>();
             this._resultExecutor = rootServiceProvider.GetService<HttpOperationResultExecutor>();
+            this._resultWriter = rootServiceProvider.GetService<IHttpResultWriter>();
         }
 
         /// <summary>
@@ -598,7 +600,15 @@ public static class EndpointRouteBuilderExtensions
             }
             catch (Exception ex)
             {
-                return this.HandleUnexpectedExceptionAsync(httpContext, operation, ex);
+                return this._resultWriter is null
+                    ? this.HandleUnexpectedExceptionAsync(httpContext, operation, ex)
+                    : this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, this._resultWriter, ex);
+            }
+
+            // An app's result writer takes a path of its own, leaving the paths below exactly as they are without one.
+            if (this._resultWriter is not null)
+            {
+                return this.RouteOperationWithResultWriterAsync(httpContext, apiContext, executionTask, operation, this._resultWriter);
             }
 
             if (executionTask.IsCompletedSuccessfully)
@@ -756,6 +766,48 @@ public static class EndpointRouteBuilderExtensions
             }
         }
 
+        /// <summary>
+        /// Routes an operation whose app has registered an <see cref="IHttpResultWriter"/>: its result is offered to the
+        /// writer first and, when the writer declines, written as <see cref="RouteOperationSlowPathAsync"/> writes it.
+        /// </summary>
+        /// <remarks>
+        /// A path of its own, so an app with no writer keeps the synchronous fast path and its allocations exactly as they
+        /// were. A fault is answered as the slow path answers one, while the response has not started, but with
+        /// <see cref="HandleUnexpectedExceptionWithResultWriterAsync"/>, which gives the writer the exception first; once
+        /// the response has started, it propagates.
+        /// </remarks>
+        private async Task RouteOperationWithResultWriterAsync(
+            HttpContext httpContext,
+            ApiOperationContext apiContext,
+            ValueTask<OperationResult> executionTask,
+            ApiOperationDescriptor operation,
+            IHttpResultWriter resultWriter)
+        {
+            try
+            {
+                var result = await executionTask.ConfigureAwait(false);
+
+                if (await resultWriter.TryWriteAsync(httpContext, apiContext, result).ConfigureAwait(false))
+                {
+                    return;
+                }
+
+                var operationResultExecutor = this._resultExecutor ?? DefaultOperationResultExecutor;
+                if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions).ConfigureAwait(false) == false)
+                {
+                    await result.ExecuteAsync(apiContext).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (!httpContext.Response.HasStarted)
+            {
+                await this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, resultWriter, ex).ConfigureAwait(false);
+            }
+        }
+
         private async Task RouteOperationSlowPathAsync(
             HttpContext httpContext,
             ApiOperationContext apiContext,
@@ -794,17 +846,56 @@ public static class EndpointRouteBuilderExtensions
 
             if (!httpContext.Response.HasStarted)
             {
-                httpContext.Response.StatusCode = 500;
-                httpContext.Response.ContentType = this._httpOptions.NegotiateErrorContentType
-                    ? LegacyErrorContentTypeNegotiation.Negotiate(httpContext.Request.Headers.Accept)
-                    : "application/problem+json";
-
-                // As legacy's writer wrote an exception its result writing threw (Signature365 8b40ecc961,
-                // Blueprint.Http/OkResultOperationExecutor.cs:48-65, UnhandledExceptionOperationResultExecutor.cs:30-68).
-                var problem = HttpOperationResultExecutor.CreateLegacyExceptionProblem(ex, this._httpOptions.ExposeExceptionDetailsInErrorResponses, activity);
-
-                await HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, this._app, problem).ConfigureAwait(false);
+                await this.WriteUnexpectedExceptionProblemAsync(httpContext, ex, activity).ConfigureAwait(false);
             }
+        }
+
+        /// <summary>
+        /// Answers, as <see cref="HandleUnexpectedExceptionAsync"/> does, an exception that escaped the pipeline or the
+        /// writing of its result in an app that has registered an <see cref="IHttpResultWriter"/>: the writer is given it as
+        /// an <see cref="UnhandledExceptionResult"/> first, while the response has not started, and Blueprint writes its
+        /// problem only when the writer declines. An exception the writer throws here propagates to ASP.NET Core.
+        /// </summary>
+        private async Task HandleUnexpectedExceptionWithResultWriterAsync(
+            HttpContext httpContext,
+            ApiOperationContext apiContext,
+            ApiOperationDescriptor operation,
+            IHttpResultWriter resultWriter,
+            Exception ex)
+        {
+            var activity = Activity.Current;
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            this._logger.LogError(ex, "Unhandled exception escaped pipeline for operation {OperationName}", operation.Name);
+
+            if (httpContext.Response.HasStarted)
+            {
+                return;
+            }
+
+            // A write that failed may already have promised the length of the body it did not send, which no other body
+            // could meet.
+            httpContext.Response.ContentLength = null;
+
+            if (await resultWriter.TryWriteAsync(httpContext, apiContext, new UnhandledExceptionResult(ex)).ConfigureAwait(false))
+            {
+                return;
+            }
+
+            await this.WriteUnexpectedExceptionProblemAsync(httpContext, ex, activity).ConfigureAwait(false);
+        }
+
+        private Task WriteUnexpectedExceptionProblemAsync(HttpContext httpContext, Exception ex, Activity? activity)
+        {
+            httpContext.Response.StatusCode = 500;
+            httpContext.Response.ContentType = this._httpOptions.NegotiateErrorContentType
+                ? LegacyErrorContentTypeNegotiation.Negotiate(httpContext.Request.Headers.Accept)
+                : "application/problem+json";
+
+            // As legacy's writer wrote an exception its result writing threw (Signature365 8b40ecc961,
+            // Blueprint.Http/OkResultOperationExecutor.cs:48-65, UnhandledExceptionOperationResultExecutor.cs:30-68).
+            var problem = HttpOperationResultExecutor.CreateLegacyExceptionProblem(ex, this._httpOptions.ExposeExceptionDetailsInErrorResponses, activity);
+
+            return HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, this._app, problem);
         }
 
         /// <summary>A request's scheme, host and path base, and the base URI made from them.</summary>

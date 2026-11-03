@@ -812,6 +812,51 @@ public class HttpOperationResultExecutor
     private static async Task WriteValidationFailureAsync(HttpContext httpContext, ApiOperationContext operationContext, ValidationFailedResult validationFailedResult, BlueprintHttpOptions httpOptions)
     {
         var serializerOptions = operationContext.App.AppOwnedSerializerContext?.Options;
+
+        var problemDetails = new MvcValidationProblemDetails(CreateValidationErrors(serializerOptions, validationFailedResult))
+        {
+            Status = StatusCodes.Status422UnprocessableEntity,
+            Title = "One or more validation errors occurred.",
+            Type = "https://tools.ietf.org/html/rfc4918#section-11.2",
+        };
+
+        httpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
+        httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
+
+        if (serializerOptions?.DictionaryKeyPolicy is null)
+        {
+            await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
+        }
+        else
+        {
+            // System.Text.Json applies a dictionary key policy to the whole of each key it writes, which would name the
+            // keys named above a second time.
+            var typeInfo = SerializerContextTypeInfoCache.GetVerbatimDictionaryKeyOptions(serializerOptions)
+                .GetTypeInfo(typeof(MvcValidationProblemDetails));
+
+            await WriteJsonAsync(httpContext, problemDetails, typeInfo).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Gets the <c>errors</c> Blueprint writes in a 422 for <paramref name="result"/>: each message keyed by member path,
+    /// named with the app's serializer naming policy as <see cref="WriteValidationFailureAsync"/> names them, so an
+    /// <see cref="IHttpResultWriter"/> writing a validation failure in a shape of its own keys its errors as Blueprint does.
+    /// </summary>
+    /// <param name="operationContext">The operation's context, whose app's serializer options name the keys.</param>
+    /// <param name="result">The validation failure.</param>
+    /// <returns>The messages for each key, in the order Blueprint writes them.</returns>
+    public static IReadOnlyDictionary<string, string[]> GetValidationErrors(ApiOperationContext operationContext, ValidationFailedResult result)
+    {
+        ArgumentNullException.ThrowIfNull(operationContext);
+        ArgumentNullException.ThrowIfNull(result);
+
+        // Dictionary<string, string[]> on every path, including a result's own pre-built one.
+        return (IReadOnlyDictionary<string, string[]>)CreateValidationErrors(operationContext.App.AppOwnedSerializerContext?.Options, result);
+    }
+
+    private static IDictionary<string, string[]> CreateValidationErrors(JsonSerializerOptions? serializerOptions, ValidationFailedResult validationFailedResult)
+    {
         var keyPolicy = serializerOptions?.DictionaryKeyPolicy ?? serializerOptions?.PropertyNamingPolicy;
 
         IDictionary<string, string[]> validationErrors;
@@ -874,29 +919,7 @@ public class HttpOperationResultExecutor
             validationErrors = result;
         }
 
-        var problemDetails = new MvcValidationProblemDetails(validationErrors)
-        {
-            Status = StatusCodes.Status422UnprocessableEntity,
-            Title = "One or more validation errors occurred.",
-            Type = "https://tools.ietf.org/html/rfc4918#section-11.2",
-        };
-
-        httpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
-        httpContext.Response.ContentType = GetErrorContentType(httpContext, httpOptions);
-
-        if (serializerOptions?.DictionaryKeyPolicy is null)
-        {
-            await WriteJsonAsync(httpContext, operationContext, problemDetails).ConfigureAwait(false);
-        }
-        else
-        {
-            // System.Text.Json applies a dictionary key policy to the whole of each key it writes, which would name the
-            // keys named above a second time.
-            var typeInfo = SerializerContextTypeInfoCache.GetVerbatimDictionaryKeyOptions(serializerOptions)
-                .GetTypeInfo(typeof(MvcValidationProblemDetails));
-
-            await WriteJsonAsync(httpContext, problemDetails, typeInfo).ConfigureAwait(false);
-        }
+        return validationErrors;
     }
 
     /// <summary>
