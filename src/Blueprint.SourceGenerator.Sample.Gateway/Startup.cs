@@ -8,6 +8,26 @@ namespace Blueprint.SourceGenerator.Sample.Gateway;
 public class Startup
 {
     /// <summary>
+    /// The configuration key holding the upstream template service's API base address, such as
+    /// <c>http://localhost:5000/api/</c>. A deployment, or the end-to-end harness, points the gateway at
+    /// wherever the template service is listening by setting it.
+    /// </summary>
+    public const string TemplateServiceAddressKey = "Upstreams:TemplateService";
+
+    private const string DefaultTemplateServiceAddress = "http://localhost:5000/api/";
+
+    private readonly IConfiguration _configuration;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Startup"/> class with the app's configuration.
+    /// </summary>
+    /// <param name="configuration">Supplies <see cref="TemplateServiceAddressKey"/>.</param>
+    public Startup(IConfiguration configuration)
+    {
+        this._configuration = configuration;
+    }
+
+    /// <summary>
     /// Registers gateway services including the typed HTTP client for the upstream template service.
     /// </summary>
     /// <param name="services">The application service collection.</param>
@@ -17,8 +37,9 @@ public class Startup
 
         // Register the upstream service's BlueprintApp so the HTTP client can discover
         // operation descriptors, URLs, and HTTP methods at zero-reflection cost.
+        services.AddSingleton<SampleBlueprintApp>();
         services.AddBlueprintHttpClient<SampleBlueprintApp>(
-            new Uri("http://localhost:5000/api/"));
+            new Uri(this._configuration[TemplateServiceAddressKey] ?? DefaultTemplateServiceAddress));
 
         services.AddBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>(blueprint =>
         {
