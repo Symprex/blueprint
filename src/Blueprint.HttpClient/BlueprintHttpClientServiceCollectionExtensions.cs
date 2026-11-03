@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Blueprint.Http;
 using Blueprint.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +12,8 @@ namespace Blueprint.HttpClient;
 /// </summary>
 public static class BlueprintHttpClientServiceCollectionExtensions
 {
+    private static readonly object _freezeLock = new();
+
     /// <summary>
     /// Registers a <see cref="BlueprintHttpClient{TApp}"/> as a typed HTTP client using
     /// <see cref="IHttpClientFactory"/>. The caller provides a <paramref name="configureClient"/>
@@ -106,7 +109,9 @@ public static class BlueprintHttpClientServiceCollectionExtensions
     /// The client reads and writes with the <see cref="BlueprintJsonOptions.SerializerOptions"/> of the container's
     /// <see cref="IOptions{TOptions}"/>, one instance for every client, so the plan a client resolves from its JSON options is
     /// made once. Those options are made read-only when the first client is resolved, so configure them (through
-    /// <see cref="IOptions{TOptions}"/>) before then. It is transient: it holds nothing a call changes, and the <see cref="System.Net.Http.HttpClient"/> it is
+    /// <see cref="IOptions{TOptions}"/>) before then. Where reflection-based serialization is disabled and they have no
+    /// resolver, registration gives them an empty one before freezing them, so a client's <c>SerializerContext</c> supplies
+    /// the metadata. It is transient: it holds nothing a call changes, and the <see cref="System.Net.Http.HttpClient"/> it is
     /// given is the factory's for each resolve.
     /// </remarks>
     /// <typeparam name="TInterface">The service interface (e.g. <c>IPortalApi</c>).</typeparam>
@@ -157,12 +162,34 @@ public static class BlueprintHttpClientServiceCollectionExtensions
             // change are derived afresh by a client declaring a SerializerContext, for each resolve, so each would rebuild its plan.
             if (!jsonOptions.IsReadOnly)
             {
-                jsonOptions.MakeReadOnly(populateMissingResolver: true);
+                FreezeOptions(jsonOptions);
             }
 
             return TImplementation.Create(sp, new BlueprintHttpClient(httpClient, jsonOptions));
         });
 
         return builder;
+    }
+
+    private static void FreezeOptions(JsonSerializerOptions jsonOptions)
+    {
+        // Together, so that resolves racing to be first do not set a resolver on options another has already made read-only.
+        lock (_freezeLock)
+        {
+            if (jsonOptions.IsReadOnly)
+            {
+                return;
+            }
+
+            if (jsonOptions.TypeInfoResolver is null && !JsonSerializer.IsReflectionEnabledByDefault)
+            {
+                // Reflection is off and nothing supplies metadata, where a missing resolver cannot be filled in and freezing
+                // would throw before the client's own context is applied. An empty one holds the place: a type that no
+                // context covers then fails for want of metadata, rather than the whole client failing to resolve.
+                jsonOptions.TypeInfoResolver = JsonTypeInfoResolver.Combine();
+            }
+
+            jsonOptions.MakeReadOnly(populateMissingResolver: true);
+        }
     }
 }

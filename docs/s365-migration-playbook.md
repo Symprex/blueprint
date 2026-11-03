@@ -1071,40 +1071,53 @@ public class VCardGatewayGenerateVCardQueryHandler : BlueprintApiOperations
 
 #### Migrated Gateway Architecture
 
-**Step 1: Register `BlueprintHttpClient<TTargetApp>`:**
+**Step 1: Declare the client as a generated `[BlueprintClient]`, keeping `IVCardApi`:**
 ```csharp
-// New Blueprint registration
-services.AddBlueprintHttpClient<VCardBlueprintApp>(options =>
+// The generator completes this class and emits IVCardApi with one method per included operation.
+[BlueprintClient]
+[BlueprintClientInclude(typeof(GenerateVCardQuery))]
+public partial class VCardApi;
+```
+
+**Step 2: Register it with the same call as before:**
+```csharp
+services.AddBlueprintClient<IVCardApi, VCardApi>((s, c) =>
 {
-    options.BaseAddress = new Uri($"{internalServiceEndpoints.VCard}/api/");
-    options.Timeout = TimeSpan.FromSeconds(10);
-    options.ConfigureHttpClient = (sp, client) =>
-    {
-        HttpClientHelpers.AddAuthorizationHeaderIfPresent(sp, client);
-    };
+    HttpClientHelpers.AddAuthorizationHeaderIfPresent(s, c);
+    c.BaseAddress = new Uri($"{internalServiceEndpoints.VCard}/api/");
+    c.Timeout = TimeSpan.FromSeconds(10);
 });
 ```
 
-**Step 2: Use generated extension methods in handlers:**
+**Step 3: Handlers keep injecting `IVCardApi`:**
 ```csharp
 public async Task<HttpResult> HandleAsync(
     VCardGatewayGenerateVCardQuery operation,
-    BlueprintHttpClient<VCardBlueprintApp> vCardClient,  // new typed client
+    IVCardApi vCardApi,        // unchanged: still the mockable interface
     ILogger<...> logger)
 {
-    var result = await vCardClient.SendAsync<GeneratedUserTemplateApiResource>(
-        new GenerateVCardQuery { TenantId = tenantId, UserId = userId });
+    var result = await vCardApi.GenerateVCardAsync(new GenerateVCardQuery { ... });
     return new PlainTextResult(result.RenderedTemplate) { ContentType = "text/vcard" };
 }
 ```
 
-Or using the generated extension methods:
+**Alternative: an app-bound client.** Where the gateway wants no hand-declared client class, register
+`BlueprintHttpClient<VCardBlueprintApp>` instead and call the generated extension methods
+(`[BlueprintHttpClientExtensions]`). This replaces `IVCardApi` in every handler, so it is a larger change and not the
+default path:
 ```csharp
-var result = await vCardClient.GenerateVCardAsync(
-    new GenerateVCardQuery { TenantId = tenantId, UserId = userId });
+services.AddBlueprintHttpClient<VCardBlueprintApp>(options =>
+{
+    options.BaseAddress = new Uri($"{internalServiceEndpoints.VCard}/api/");
+    options.Timeout = TimeSpan.FromSeconds(10);
+    options.ConfigureHttpClient = (sp, client) => HttpClientHelpers.AddAuthorizationHeaderIfPresent(sp, client);
+});
+
+// In the handler:
+var result = await vCardClient.GenerateVCardAsync(new GenerateVCardQuery { TenantId = tenantId, UserId = userId });
 ```
 
-**Step 3: Operation scanner convention replacement:**
+**Step 4: Operation scanner convention replacement:**
 
 S365 gateways use `IOperationScannerConvention` to strip prefixes from operation names
 (e.g., `VCardGatewayGenerateVCardQuery` → `GeneratevCard` in the API surface: legacy's casing had already folded the
@@ -1129,14 +1142,16 @@ Renaming the gateway operations directly remains an alternative.
 
 #### Key Differences
 
-| Aspect | S365 (Legacy) | Blueprint Source-Gen |
-|--------|---------------|---------------------|
-| Client type | Interface + class (`IVCardApi` / `VCardApi`) | `BlueprintHttpClient<VCardBlueprintApp>` |
-| Method generation | Old Blueprint codegen → methods on class | Source generator → extension methods |
-| Metadata source | `ServiceApiInclude` + `ApiDataModel` | Generated `ApiOperationDescriptor` |
-| Auth propagation | `HttpClientHelpers.AddAuthorizationHeaderIfPresent` | Same (configuration callback) |
-| URL construction | Runtime from `ApiDataModel` | Source-generated `BuildUrl()` |
-| Error handling | `ApiException` | `ApiException` (same shape) |
+| Aspect | S365 (Legacy) | Blueprint Source-Gen (interface-preserving) | Alternative: app-bound client |
+|--------|---------------|---------------------|---------------------|
+| Client type | Interface + class (`IVCardApi` / `VCardApi`) | Same pair; `VCardApi` is a generated `[BlueprintClient]` | `BlueprintHttpClient<VCardBlueprintApp>` |
+| Registration | `AddBlueprintClient<IVCardApi, VCardApi>` | Same call | `AddBlueprintHttpClient<VCardBlueprintApp>` |
+| Handler dependency | `IVCardApi` | `IVCardApi` (unchanged) | `BlueprintHttpClient<VCardBlueprintApp>` |
+| Method generation | Old Blueprint codegen → methods on class | Source generator → methods on the client class | Source generator → extension methods |
+| Metadata source | `ServiceApiInclude` + `ApiDataModel` | Generated operation descriptors | Generated `ApiOperationDescriptor` |
+| Auth propagation | `HttpClientHelpers.AddAuthorizationHeaderIfPresent` | Same (configuration callback) | Same (configuration callback) |
+| URL construction | Runtime from `ApiDataModel` | Source-generated | Source-generated `BuildUrl()` |
+| Error handling | `ApiException` | `ApiException` (same shape) | `ApiException` (same shape) |
 
 ---
 
