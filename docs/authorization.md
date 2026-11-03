@@ -282,25 +282,42 @@ A caller with no user context at all, as in an app without an `IUserAuthorisatio
 
 **Expanders.** `IResourceKeyExpander.ExpandAsync(partialKey, context, ct)` returns the absolute keys a partial key stands for, an empty list for a key it handles that identifies nothing (which is then denied), or `null` when the key is not its to expand.
 
-**Checking access directly.** `IResourceAccessChecker.HasAccessAsync(context, principal, demand, scopePair, ct)` makes the decision the provider makes for each pair, without the authentication checks. A handler that must filter by what the caller may do asks it directly:
+**Keys within keys.** A key or grant an app is given, such as a stored role assignment's, can be held to the part of the hierarchy it belongs in (Symprex/blueprint#129):
+
+| Member | Answers | Example |
+|---|---|---|
+| `ResourceKey.IsWithin(ancestor)` | Is this key the ancestor or beneath it? | `/Tenants/ten_1/Users/usr_1` is within `/Tenants/ten_1`; `/Tenants/ten_12` is not |
+| `ResourceGrant.IsWithin(ancestor)` | Does the grant cover nothing outside the ancestor? | `/Tenants/ten_1/*` is within `/Tenants/ten_1`; `/Tenants/*` and `/*` are not |
+| `ResourceKey.TryGetTopLevelPrefix(out prefix)` | Which part of the hierarchy is the key, or a template held as one, in? | `/Tenants/{Id}/Users` gives `/Tenants/`; `/` gives `/`; a partial key gives none |
+| `ResourceGrant.Root` | The root grant, `/*` | |
+| `ResourceGrant.TryParse(value, out _)` | Is the value absolute, as a grant must be? | |
+
+Each stops at a segment boundary and compares ordinally, as `Covers` does. They replace Signature 365's `ResourceKeyHelpers`, with two differences: its `IsWithin` compared case-insensitively, and refused any `*` that was not a trailing `/*`, where Blueprint treats such a `*` as literal, so the grant covers only itself.
+
+**Checking access directly.** A handler that must filter by what the caller may do with *another* operation asks its context, which every handler has without injecting anything:
 
 ```csharp
-public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery query, IResourceAccessChecker checker, ApiOperationContext context)
+public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery query, ApiOperationContext context)
 {
-    var create = context.App.FindOperation(typeof(CreateFolderCommand))!;
-    var pair = create.GetFeatureData<OperationAuthorizationFeatureData>()!.ScopePairs[0];
-    var key = $"/Accounts/{context.UserAuthorisationContext!.AccountId}";
+    var tenant = new ResourceKey($"/Tenants/{context.UserAuthorisationContext!.AccountId}");
 
-    var canCreate = await checker.HasAccessAsync(
-        context,
-        context.UserPrincipal!,
-        new ResourceDemand(create, new ResourceKey(key)),
-        new ResolvedScopePair(pair.Noun, pair.Verb, pair.ResourceKeyTemplate, key),
-        context.OperationCancelled);
+    var canCreate = await context.CanExecuteAsync<CreateFolderCommand>(tenant);
 
     // ...
 }
 ```
+
+A handler deriving from `BlueprintApiOperations` asks `this.Context.CanExecuteAsync<T>(key)`. `CanExecuteAsync<T>(key)`, or `CanExecuteAsync(type, key)`, decides as `T`'s own execution would:
+- every registered provider is asked, all-of in registration order, in `Execute` mode for `T`'s descriptor;
+- each of `T`'s scope pairs is given `key` as its resolved key, whatever its template, and any pair may satisfy a provider;
+- the caller is `context.UserPrincipal`; with no authenticated principal it is refused as anonymous (`Authentication`) and no provider is asked;
+- with no provider registered it is refused, as the execution would be;
+- `context.SkipAuthorisation` does not apply, because the question is about the caller, not this context's execution;
+- the `IApiAuthoriser`s are not asked, because they judge an operation instance and there is none.
+
+It returns the `ExecutionAllowed`, so a denial's reason can be logged; never write it to the response. It throws `ArgumentException` when `T` is not an operation of the app, when `T` declares no scope pairs, or when the key is empty.
+
+`IResourceAccessChecker.HasAccessAsync(context, principal, demand, scopePair, ct)` remains for the narrower question: the decision `ResourceKeyAuthorizationProvider` makes for one pair, without the token's scopes or the authentication checks.
 
 ---
 

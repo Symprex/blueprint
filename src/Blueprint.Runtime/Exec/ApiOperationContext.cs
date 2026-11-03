@@ -13,6 +13,12 @@ namespace Blueprint.Runtime.Exec;
 /// </summary>
 public sealed class ApiOperationContext : IHttpOperationContext
 {
+    // What CanExecuteAsync answers a caller with no authenticated principal, as an execution refuses one
+    private static readonly ExecutionAllowed _anonymousCaller = ExecutionAllowed.No(
+        "The caller has no authenticated principal, so no resource authorization provider can judge it",
+        "Please log in",
+        ExecutionAllowedFailureType.Authentication);
+
     /// <summary>
     /// Initialises a new instance of the <see cref="ApiOperationContext" /> class, using
     /// <see cref="ApiOperationDescriptor.CreateInstance" /> to construct the operation
@@ -198,6 +204,128 @@ public sealed class ApiOperationContext : IHttpOperationContext
         };
 
         return nested;
+    }
+
+    /// <summary>
+    /// Decides whether this context's caller may execute <typeparamref name="TOperation"/> against
+    /// <paramref name="resourceKey"/>, as that operation's own execution would decide it: for a handler that must filter
+    /// what it returns, or what it offers, by what the caller may do with other operations (Symprex/blueprint#129).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every registered <see cref="IResourceAuthorizationProvider"/> is asked, all-of in registration order, in
+    /// <see cref="ResourceAuthorizationMode.Execute"/> mode for <typeparamref name="TOperation"/>'s descriptor, so the
+    /// same providers, grant sources, expanders and checker decide it as decide the execution. Each of the operation's
+    /// scope pairs is given <paramref name="resourceKey"/> as its resolved key, whatever its template, and any one pair
+    /// may satisfy a provider, as at execution.
+    /// </para>
+    /// <para>
+    /// The caller is <see cref="UserPrincipal"/>. With no authenticated principal it is refused as anonymous and no
+    /// provider is asked, as an execution refuses it; with no provider registered it is refused, as an execution with
+    /// scope pairs is. <see cref="SkipAuthorisation"/> does not apply: it is about this context's own execution, and the
+    /// question is about the caller.
+    /// </para>
+    /// <para>
+    /// Only the providers are asked, not the <see cref="IApiAuthoriser"/>s, which judge an operation instance this has
+    /// none of. The denial is returned, not logged: its reason may name claims and keys, so log it only where the
+    /// caller cannot see it.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TOperation">The operation asked about, which must declare scope pairs.</typeparam>
+    /// <param name="resourceKey">The key of the resource the operation would act on, absolute or partial.</param>
+    /// <param name="cancellationToken">Cancellation for the decision; <see cref="OperationCancelled"/> when not given.</param>
+    /// <returns><see cref="ExecutionAllowed.Yes"/>, or the first provider's denial.</returns>
+    /// <exception cref="ArgumentException">
+    /// <typeparamref name="TOperation"/> is not an operation of <see cref="App"/>, or declares no scope pairs, so there is
+    /// nothing for a key to be judged against; or <paramref name="resourceKey"/> is the empty key.
+    /// </exception>
+    public ValueTask<ExecutionAllowed> CanExecuteAsync<TOperation>(ResourceKey resourceKey, CancellationToken cancellationToken = default)
+    {
+        return this.CanExecuteAsync(typeof(TOperation), resourceKey, cancellationToken);
+    }
+
+    /// <summary>
+    /// Decides whether this context's caller may execute the operation of type <paramref name="operationType"/> against
+    /// <paramref name="resourceKey"/>, as <see cref="CanExecuteAsync{TOperation}(ResourceKey, CancellationToken)"/> does.
+    /// </summary>
+    /// <param name="operationType">The type of the operation asked about, which must declare scope pairs.</param>
+    /// <param name="resourceKey">The key of the resource the operation would act on, absolute or partial.</param>
+    /// <param name="cancellationToken">Cancellation for the decision; <see cref="OperationCancelled"/> when not given.</param>
+    /// <returns><see cref="ExecutionAllowed.Yes"/>, or the first provider's denial.</returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="operationType"/> is not an operation of <see cref="App"/>, or declares no scope pairs; or
+    /// <paramref name="resourceKey"/> is the empty key.
+    /// </exception>
+    public ValueTask<ExecutionAllowed> CanExecuteAsync(Type operationType, ResourceKey resourceKey, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operationType);
+
+        if (resourceKey.Value.Length == 0)
+        {
+            throw new ArgumentException("A resource key must be given; default(ResourceKey) is the empty key, which no grant can cover.", nameof(resourceKey));
+        }
+
+        if (!this.App.TryFindOperation(operationType, out var descriptor))
+        {
+            throw new ArgumentException($"{operationType.Name} is not an operation of {this.App.GetType().Name}.", nameof(operationType));
+        }
+
+        if (!descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var authorization) || authorization.ScopePairs.IsDefaultOrEmpty)
+        {
+            throw new ArgumentException(
+                $"{operationType.Name} declares no scope pairs ([Resource] or [FromResource]), so it cannot be judged against a resource key.",
+                nameof(operationType));
+        }
+
+        if (this.UserPrincipal is not { Identity.IsAuthenticated: true } principal)
+        {
+            return new ValueTask<ExecutionAllowed>(_anonymousCaller);
+        }
+
+        var providers = this.ServiceProvider.GetServices<IResourceAuthorizationProvider>().ToArray();
+
+        if (providers.Length == 0)
+        {
+            return new ValueTask<ExecutionAllowed>(ExecutionAllowed.No(
+                $"No IResourceAuthorizationProvider is registered to judge {operationType.Name}",
+                "You do not have permission to perform this operation",
+                ExecutionAllowedFailureType.Authorisation));
+        }
+
+        var scopePairs = new ResolvedScopePair[authorization.ScopePairs.Length];
+
+        for (var i = 0; i < scopePairs.Length; i++)
+        {
+            var pair = authorization.ScopePairs[i];
+            scopePairs[i] = new ResolvedScopePair(pair.Noun, pair.Verb, pair.ResourceKeyTemplate, resourceKey.Value);
+        }
+
+        return AskProvidersAsync(
+            this,
+            principal,
+            providers,
+            ResourceAuthorizationRequest.Execute(descriptor, scopePairs),
+            cancellationToken == default ? this.OperationCancelled : cancellationToken);
+
+        static async ValueTask<ExecutionAllowed> AskProvidersAsync(
+            ApiOperationContext context,
+            ClaimsPrincipal principal,
+            IResourceAuthorizationProvider[] providers,
+            ResourceAuthorizationRequest request,
+            CancellationToken cancellationToken)
+        {
+            foreach (var provider in providers)
+            {
+                var result = await provider.AuthorizeAsync(context, principal, request, cancellationToken).ConfigureAwait(false);
+
+                if (!result.IsAllowed)
+                {
+                    return result;
+                }
+            }
+
+            return ExecutionAllowed.Yes;
+        }
     }
 
     /// <summary>
