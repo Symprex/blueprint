@@ -43,6 +43,7 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
     /// The nested class <c>HttpClientRequestBuilderModule</c> emits an operation's request builders into.
     /// </summary>
     private const string HttpClassName = "Http";
+    private const string PlanResolveName = "TryResolveTypeInfo";
 
     private const string WithCredentialMethodName = "WithCredential";
 
@@ -794,11 +795,12 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
 
     /// <summary>
     /// The argument a reader is given as the metadata of a type it reads: resolved, when the plan is made, from the options of
-    /// the transport it is made for, so that no read looks it up.
+    /// the transport it is made for, so that no read looks it up; <see langword="null"/> for a type whose metadata cannot be
+    /// resolved, which the reader then reads with the options' own, failing as it always did for that call only.
     /// </summary>
     private static string TypeInfoArgument(ITypeSymbol type)
     {
-        return $"client.ResolveTypeInfo<{type.ToDisplayString(OperationClientShape.FullyQualifiedWithNullable)}>()";
+        return $"{PlanResolveName}<{type.ToDisplayString(OperationClientShape.FullyQualifiedWithNullable)}>(client)";
     }
 
     private static bool IsRuntimeExecType(INamedTypeSymbol type, string name)
@@ -1034,7 +1036,7 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
             // A GET sends no body, so has no metadata to write one with.
             if (!operation.AppendsQueryString)
             {
-                sb.AppendLine($"{indent}    internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{operation.OperationFqn}> {PlanRequestName(operation)};");
+                sb.AppendLine($"{indent}    internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{operation.OperationFqn}>? {PlanRequestName(operation)};");
             }
 
             sb.AppendLine($"{indent}    internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<{operation.ResultTypeFqn}> {PlanReaderName(operation)};");
@@ -1048,12 +1050,27 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
         {
             if (!operation.AppendsQueryString)
             {
-                sb.AppendLine($"{indent}        this.{PlanRequestName(operation)} = client.ResolveTypeInfo<{operation.OperationFqn}>();");
+                sb.AppendLine($"{indent}        this.{PlanRequestName(operation)} = {PlanResolveName}<{operation.OperationFqn}>(client);");
             }
 
             sb.AppendLine($"{indent}        this.{PlanReaderName(operation)} = {operation.ReaderExpression};");
         }
 
+        sb.AppendLine($"{indent}    }}");
+        sb.AppendLine();
+
+        // One type that cannot be configured must not stop a client being made: its call fails, as it always did, when the
+        // options' own metadata is asked for at the call.
+        sb.AppendLine($"{indent}    private static global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>? {PlanResolveName}<T>(global::Blueprint.HttpClient.BlueprintHttpClient client)");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        try");
+        sb.AppendLine($"{indent}        {{");
+        sb.AppendLine($"{indent}            return client.ResolveTypeInfo<T>();");
+        sb.AppendLine($"{indent}        }}");
+        sb.AppendLine($"{indent}        catch (global::System.Exception e) when (e is global::System.NotSupportedException or global::System.InvalidOperationException)");
+        sb.AppendLine($"{indent}        {{");
+        sb.AppendLine($"{indent}            return null;");
+        sb.AppendLine($"{indent}        }}");
         sb.AppendLine($"{indent}    }}");
         sb.AppendLine();
         sb.AppendLine($"{indent}    internal static {PlanClassName} For(global::Blueprint.HttpClient.BlueprintHttpClient client)");

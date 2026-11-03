@@ -161,14 +161,26 @@ namespace Contract
 
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<string[]> SearchItemsQueryReader;
 
-            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.RenameItemCommand> RenameItemCommandRequest;
+            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.RenameItemCommand>? RenameItemCommandRequest;
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<string> RenameItemCommandReader;
 
             private BlueprintClientPlan(global::Blueprint.HttpClient.BlueprintHttpClient client)
             {
-                this.SearchItemsQueryReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<string[]>(client.ResolveTypeInfo<string[]>());
-                this.RenameItemCommandRequest = client.ResolveTypeInfo<global::Contract.RenameItemCommand>();
-                this.RenameItemCommandReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<string>(client.ResolveTypeInfo<string>());
+                this.SearchItemsQueryReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<string[]>(TryResolveTypeInfo<string[]>(client));
+                this.RenameItemCommandRequest = TryResolveTypeInfo<global::Contract.RenameItemCommand>(client);
+                this.RenameItemCommandReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<string>(TryResolveTypeInfo<string>(client));
+            }
+
+            private static global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>? TryResolveTypeInfo<T>(global::Blueprint.HttpClient.BlueprintHttpClient client)
+            {
+                try
+                {
+                    return client.ResolveTypeInfo<T>();
+                }
+                catch (global::System.Exception e) when (e is global::System.NotSupportedException or global::System.InvalidOperationException)
+                {
+                    return null;
+                }
             }
 
             internal static BlueprintClientPlan For(global::Blueprint.HttpClient.BlueprintHttpClient client)

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using FluentAssertions;
 
 namespace Blueprint.HttpClient.Tests;
@@ -105,6 +106,51 @@ public sealed class BlueprintClientSerializerContextTests
 
         options.IsReadOnly.Should().BeFalse("the options the caller gave are copied, never locked or changed");
         options.TypeInfoResolverChain.Should().NotContain(PricingSerializerContext.Default);
+    }
+
+    [Fact]
+    public async Task Options_that_already_resolve_with_the_context_are_used_as_they_are()
+    {
+        // The context is the options' own resolver, so putting it in front of itself would throw.
+        string? body = null;
+        var options = CreateOptions();
+        options.TypeInfoResolver = PricingSerializerContext.Default;
+        var handler = new AsyncHandler(async request =>
+        {
+            body = await request.Content!.ReadAsStringAsync();
+            return Json("""{"totalValue":"dec:4","quotedFor":"Ada"}""");
+        });
+        var api = new PricingApi(new BlueprintHttpClient(new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri("https://localhost") }, options));
+
+        var quote = await api.QuotePriceAsync(new QuotePriceCommand { Amount = 2m });
+
+        body.Should().StartWith("""{"amountValue":"dec:2",""");
+        quote.Total.Should().Be(4m);
+    }
+
+    [Fact]
+    public void Options_that_hold_the_context_in_their_resolver_chain_are_used_as_they_are()
+    {
+        var options = CreateOptions();
+        options.TypeInfoResolverChain.Add(PricingSerializerContext.Default);
+        options.TypeInfoResolverChain.Add(new DefaultJsonTypeInfoResolver());
+
+        var client = new BlueprintHttpClient(new System.Net.Http.HttpClient(), options).WithSerializerContext(PricingSerializerContext.Default);
+
+        client.ResolveTypeInfo<QuotePriceCommand>().Type.Should().Be<QuotePriceCommand>();
+    }
+
+    [Fact]
+    public async Task A_client_with_a_result_that_cannot_be_configured_is_made_and_only_that_call_fails()
+    {
+        var handler = new AsyncHandler(request => Task.FromResult(Json(request.RequestUri!.AbsolutePath == "/faulty" ? """{"value":"x"}""" : "[]")));
+        var api = new FaultyResultApi(new BlueprintHttpClient(new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri("https://localhost") }, CreateOptions()));
+
+        var copies = await api.FindTemplateCopiesAsync(new FindTemplateCopiesQuery { Id = "t-1" });
+        var act = () => api.GetUnconfigurableAsync(new GetUnconfigurableQuery());
+
+        copies.Should().BeEmpty();
+        await act.Should().ThrowAsync<InvalidOperationException>("the options' own metadata is asked for at the call, which fails for this type only");
     }
 
     [Fact]
