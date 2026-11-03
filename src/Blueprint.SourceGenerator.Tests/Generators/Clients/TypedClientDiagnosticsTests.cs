@@ -273,6 +273,37 @@ public class TypedClientDiagnosticsTests
     }
 
     [Fact]
+    public void When_an_included_operation_uses_an_Http_alias_then_BPCL004_is_reported_at_the_include()
+    {
+        // A nested Http class would take over the name the alias gives the operation's own code.
+        var result = Compile(
+            """
+            using Blueprint.HttpClient;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Http = System.Net.Http.HttpMethod;
+
+            namespace Client;
+
+            [RootLink("/aliased")]
+            [HttpGet]
+            [AllowAnonymous]
+            public partial class AliasedQuery : IQuery<string>
+            {
+                public string Method => Http.Get.Method;
+            }
+
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(AliasedQuery))]
+            public partial class ItemsApi
+            {
+            }
+            """);
+
+        AssertReported(result, "BPCL004", "BlueprintClientInclude(typeof(AliasedQuery))");
+    }
+
+    [Fact]
     public void When_an_operation_is_included_twice_then_BPCL005_is_reported_at_the_second_include()
     {
         var result = Compile(
@@ -362,6 +393,62 @@ public class TypedClientDiagnosticsTests
         result.Diagnostics.Where(static d => d.Id == "BPCL008").Select(d => TextOf(d)).Should().BeEquivalentTo(
             "BlueprintClientInclude(typeof(BrewCommand))",
             "BlueprintClientInclude(typeof(BrewEitherCommand))");
+    }
+
+    [Fact]
+    public void When_a_result_is_an_abstract_resource_event_then_BPCL008_is_reported_unless_it_declares_itself_polymorphic()
+    {
+        // The reader of an event cannot make an abstract one; as the app-driven client does, one that declares
+        // [JsonPolymorphic] or [JsonDerivedType] itself is left to System.Text.Json, so it is read as JSON.
+        var result = Compile(
+            """
+            using System.Text.Json.Serialization;
+            using Blueprint.Http;
+            using Blueprint.HttpClient;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            namespace Client;
+
+            public partial class Doc : ApiResource
+            {
+            }
+
+            public abstract class PlainEvent : ResourceEvent<Doc>
+            {
+                protected PlainEvent() : base(ResourceEventChangeType.Created, "x", new Doc()) { }
+            }
+
+            [JsonPolymorphic]
+            public abstract class PolymorphicEvent : ResourceEvent<Doc>
+            {
+                protected PolymorphicEvent() : base(ResourceEventChangeType.Created, "x", new Doc()) { }
+            }
+
+            [RootLink("/plain")]
+            [HttpGet]
+            [AllowAnonymous]
+            public partial class PlainQuery : IQuery<PlainEvent>
+            {
+            }
+
+            [RootLink("/polymorphic")]
+            [HttpGet]
+            [AllowAnonymous]
+            public partial class PolymorphicQuery : IQuery<PolymorphicEvent>
+            {
+            }
+
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(PlainQuery))]
+            [BlueprintClientInclude(typeof(PolymorphicQuery))]
+            public partial class ItemsApi
+            {
+            }
+            """);
+
+        AssertReported(result, "BPCL008", "BlueprintClientInclude(typeof(PlainQuery))");
+        GeneratedHalf(result).Should().Contain("JsonResponseReader<global::Client.PolymorphicEvent>");
     }
 
     [Fact]

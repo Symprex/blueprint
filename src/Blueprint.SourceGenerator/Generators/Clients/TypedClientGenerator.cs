@@ -647,9 +647,9 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
                 return "it is nested in another type, and request builders are only generated for top-level operations";
             }
 
-            if (!HttpClientRequestBuilderModule.CanDeclareHttpClass(operationType))
+            if (!HttpClientRequestBuilderModule.CanDeclareHttpClass(operationType, compilation))
             {
-                return $"its name, or a member it declares or inherits, is '{HttpClassName}', which its request builders are generated into";
+                return $"its name, a member it declares or inherits, or a simple name its code binds to something else, is '{HttpClassName}', which its request builders are generated into";
             }
 
             if (HttpHostExposureHelper.GetAllRouteTemplates(operationType).Count == 0)
@@ -752,6 +752,14 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
             return $"new {ReadersNamespace}PlainTextResponseReader()";
         }
 
+        // As the app-driven client's reader choice has it: the event reader cannot make an abstract event, so one that does
+        // not declare itself polymorphic ([JsonPolymorphic] or [JsonDerivedType] on the type itself, neither being inherited)
+        // can never be read; one that does is System.Text.Json's to read, as JSON.
+        if (named.IsAbstract && !IsDeclaredPolymorphic(named) && OperationClientShape.FindResourceEventResourceType(named) is not null)
+        {
+            return null;
+        }
+
         if (named is { IsGenericType: true, IsAbstract: false } && OperationClientShape.FindResourceEventResourceType(named) is { } resourceType)
         {
             jsonTypes.Add(resourceType);
@@ -796,6 +804,12 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
     private static bool IsRuntimeExecType(INamedTypeSymbol type, string name)
     {
         return type.Name == name && type.ContainingType is null && type.IsInNamespace("Blueprint", "Runtime", "Exec");
+    }
+
+    private static bool IsDeclaredPolymorphic(INamedTypeSymbol type)
+    {
+        return type.GetAttributes().Any(static a => a.AttributeClass is { Name: "JsonPolymorphicAttribute" or "JsonDerivedTypeAttribute" } c
+                                                    && c.IsInNamespace("System", "Text", "Json", "Serialization"));
     }
 
     private static bool DerivesFromStatusCodeResult(INamedTypeSymbol type)
