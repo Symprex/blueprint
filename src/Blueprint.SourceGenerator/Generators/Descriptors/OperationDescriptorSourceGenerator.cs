@@ -151,7 +151,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 model.ContainingNamespace.ToDisplayString(),
                 model.Name,
                 classNode.ToFullString(),
-                HttpClientRequestBuilderModule.CanDeclareHttpClass(model)));
+                HttpClientRequestBuilderModule.CanDeclareHttpClass(model, ctx.SemanticModel.Compilation)));
     }
 
     private static Result<DescriptorPlan> Configure(
@@ -343,7 +343,8 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
     /// <param name="DeclarationText">The operation declaration text used to invalidate semantic edits within the operation file.</param>
     /// <param name="CanDeclareHttpClass">
     /// Whether the operation's partial can declare <see cref="HttpClientRequestBuilderModule"/>'s nested <c>Http</c> class,
-    /// which turns on every partial declaration and base type of the operation rather than this declaration alone. Without
+    /// which turns on every partial declaration and base type of the operation, and on what its own uses of <c>Http</c> bind
+    /// to (an alias another file declares, say), rather than on this declaration alone. Without
     /// it, an <c>Http</c> member added in another file left the class of a cached plan beside it (CS0102) until a clean build.
     /// </param>
     private record OperationClassToGenerate(string FullClassName, string Namespace, string ClassName, string DeclarationText, bool CanDeclareHttpClass);

@@ -48,7 +48,10 @@ public sealed class ResourceEventResponseReader<TEvent, TResource> : ResponseRea
     /// The metadata to read the event's data with, from the transport's options; or <see langword="null"/> to read it with
     /// the transport's options' own.
     /// </param>
-    /// <exception cref="ArgumentException"><typeparamref name="TEvent"/> is abstract, so no event of it can be made.</exception>
+    /// <exception cref="ArgumentException">
+    /// <typeparamref name="TEvent"/> is abstract, so no event of it can be made. An abstract event its own
+    /// <c>[JsonPolymorphic]</c> or <c>[JsonDerivedType]</c> makes polymorphic is read by <see cref="JsonResponseReader{T}"/> instead.
+    /// </exception>
     public ResourceEventResponseReader(JsonTypeInfo<TResource>? dataTypeInfo = null)
     {
         // Refused here rather than by every read, which could never make one.
