@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Blueprint.Http;
 using Blueprint.Model;
@@ -190,7 +192,7 @@ internal static class ResourceEventReader
     /// (see the class remarks); <c>SendResourceEventEnvelopeAsync</c> reads the envelope's with it too.
     /// </summary>
     /// <param name="value">The dictionary's JSON value.</param>
-    /// <param name="options">The options an object or array value is read with.</param>
+    /// <param name="options">The options that say whether an object or array value is a <see cref="JsonElement"/> or a <see cref="JsonNode"/>.</param>
     /// <returns>The dictionary, or <see langword="null"/> for a JSON <c>null</c>.</returns>
     /// <exception cref="JsonException">When <paramref name="value"/> is neither an object nor <c>null</c>.</exception>
     internal static Dictionary<string, object>? ReadDictionary(JsonElement value, JsonSerializerOptions options)
@@ -207,6 +209,8 @@ internal static class ResourceEventReader
 
         var dictionary = new Dictionary<string, object>();
 
+        // An object or array is what reading it as an object gives, without the options' metadata for object, which a
+        // source-generated context does not have unless the user names it: a JsonElement, or a JsonNode when the options say so.
         foreach (var entry in value.EnumerateObject())
         {
             dictionary[entry.Name] = entry.Value.ValueKind switch
@@ -216,7 +220,9 @@ internal static class ResourceEventReader
                 JsonValueKind.String => entry.Value.GetString()!,
                 JsonValueKind.True => true,
                 JsonValueKind.False => false,
-                JsonValueKind.Object or JsonValueKind.Array => entry.Value.Deserialize<object>(options)!,
+                JsonValueKind.Object or JsonValueKind.Array => options.UnknownTypeHandling == JsonUnknownTypeHandling.JsonNode
+                    ? JsonNode.Parse(entry.Value.GetRawText())!
+                    : entry.Value.Clone(),
                 _ => null!,
             };
         }
