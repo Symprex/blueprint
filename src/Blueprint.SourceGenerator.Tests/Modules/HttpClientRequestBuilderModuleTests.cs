@@ -351,6 +351,139 @@ public class HttpClientRequestBuilderModuleTests
         }
     }
 
+    [Theory]
+    [InlineData("using Http = System.Net.Http.HttpMethod;", "", "Http.Get.Method")]
+    [InlineData("", "namespace TestNamespace.Http { public static class Verbs { public const string Get = \"GET\"; } }", "Http.Verbs.Get")]
+    [InlineData("", "namespace TestNamespace { public static class Http { public const string Get = \"GET\"; } }", "Http.Get")]
+    public void When_the_operations_own_code_names_something_else_called_Http_then_no_nested_class_shadows_it(
+        string usingDirective,
+        string otherDeclarations,
+        string usage)
+    {
+        // A simple name Http inside the operation finds its nested class first, so the class used to shadow an alias, a
+        // namespace or a type of that name the operation's own code used (CS0117).
+        var result = TestHelpers.Compile<OperationDescriptorSourceGenerator>(
+            $$"""
+            {{usingDirective}}
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            {{otherDeclarations}}
+
+            namespace TestNamespace
+            {
+                [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+                public partial class GetWidgetQuery : IQuery<string>
+                {
+                    public string Id { get; set; }
+
+                    public static Task<string> HandleAsync(GetWidgetQuery operation)
+                    {
+                        return Task.FromResult({{usage}});
+                    }
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetWidgetQuery");
+        source.Should().NotContain("class Http");
+        source.Should().Contain("static (op) => { var operation = (global::TestNamespace.GetWidgetQuery)op; var typed = operation;");
+    }
+
+    [Fact]
+    public void When_another_file_gains_then_loses_an_alias_the_operation_names_then_a_reused_driver_follows_it()
+    {
+        // The operation's own file is the same in every revision: only what its Http binds to changes, from nothing (the
+        // class being generated) to the alias another file declares, and back.
+        var operationFile = ("GetWidgetQuery.cs", Preamble + """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult(nameof(Http));
+                }
+            }
+            """);
+        var aliasFile = ("Aliases.cs", "global using Http = System.Net.Http.HttpMethod;\n");
+
+        var runs = TestHelpers.CompileWithTrackedGeneratorsAcrossRevisions(
+            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+            [operationFile],
+            [operationFile, aliasFile],
+            [operationFile]);
+
+        runs.Should().AllSatisfy(static run => run.Diagnostics.Should().BeEmpty());
+        DescriptorSourceOf(runs[0], "GetWidgetQuery").Should().Contain("public static class Http");
+        DescriptorSourceOf(runs[1], "GetWidgetQuery").Should().NotContain("class Http");
+        DescriptorSourceOf(runs[2], "GetWidgetQuery").Should().Contain("public static class Http");
+    }
+
+    [Fact]
+    public void When_only_another_class_names_an_alias_called_Http_then_the_nested_class_is_still_emitted()
+    {
+        // The nested class is found first only by code inside the operation, so a class beside it keeps its alias.
+        var result = TestHelpers.Compile<OperationDescriptorSourceGenerator>(
+            """
+            using Http = System.Net.Http.HttpMethod;
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+                public partial class GetWidgetQuery : IQuery<string>
+                {
+                    public string Id { get; set; }
+
+                    public static Task<string> HandleAsync(GetWidgetQuery operation)
+                    {
+                        return Task.FromResult(WidgetVerbs.Get);
+                    }
+                }
+
+                public static class WidgetVerbs
+                {
+                    public static string Get => Http.Get.Method;
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        GetDescriptorSource(result, "GetWidgetQuery").Should().Contain("public static class Http");
+    }
+
+    [Fact]
+    public void When_the_operations_own_code_calls_its_generated_Http_class_then_the_nested_class_is_still_emitted()
+    {
+        // Before generation that Http names nothing, so it shadows nothing: it is the class being generated.
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public string SelfUrl()
+                {
+                    return Http.BuildUrl(this);
+                }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult(operation.SelfUrl());
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        GetDescriptorSource(result, "GetWidgetQuery").Should().Contain("public static class Http");
+    }
+
     [Fact]
     public void When_a_base_operation_in_a_referenced_assembly_has_its_generated_Http_class_then_the_derived_operation_still_declares_its_own()
     {

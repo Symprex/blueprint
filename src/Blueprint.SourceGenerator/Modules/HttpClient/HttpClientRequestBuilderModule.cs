@@ -4,6 +4,8 @@ using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.LinkGeneration;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Blueprint.SourceGenerator.Modules.HttpClient;
 
@@ -132,7 +134,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             ? BuildQueryStringBody(placeholders, properties, queryBindingNames, boundElsewhere)
             : null;
 
-        var emitHttpClass = CanDeclareHttpClass(operationSymbol);
+        var emitHttpClass = CanDeclareHttpClass(operationSymbol, context.GetSemanticModel);
 
         if (emitHttpClass)
         {
@@ -187,14 +189,42 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     /// recognised there by its shape; from the same compilation it is not visible at all.
     /// </para>
     /// <para>
-    /// The answer turns on every partial declaration and base type of the operation, so
+    /// Nor can it when the operation's own code uses the simple name <c>Http</c> for anything else: an alias, a type or a
+    /// namespace. Inside the operation, its nested types included, a simple name finds the operation's members first, so
+    /// the class would shadow it (CS0117). A name that binds to nothing yet is the class being generated, and a local,
+    /// parameter or method type parameter is nearer than any member, so neither counts.
+    /// </para>
+    /// <para>
+    /// Only the operation's own declarations are read. The class is public and inherited, so inside a type deriving from
+    /// the operation, in this assembly or another, a simple name <c>Http</c> finds it too, before a <c>using Http = …</c>
+    /// alias or a namespace of that name, and such code fails with CS0117. Qualify the name there (for example
+    /// <c>global::System.Net.Http.HttpMethod</c>), or alias it under another name. A derived operation declares its own class and is subject to the same limit.
+    /// </para>
+    /// <para>
+    /// The answer turns on every partial declaration and base type of the operation, and on what its names bind to, so
     /// <c>OperationDescriptorSourceGenerator</c> carries it in the incremental model it keys each descriptor on: a colliding
-    /// member added to or removed from another file then re-plans the descriptor instead of replaying a cached plan.
+    /// member or alias added to or removed from another file then re-plans the descriptor instead of replaying a cached plan.
     /// </para>
     /// </remarks>
     /// <param name="operation">The operation.</param>
+    /// <param name="compilation">The compilation the operation is declared in, which binds its uses of <c>Http</c>.</param>
     /// <returns><see langword="true"/> when the nested class can be declared.</returns>
-    internal static bool CanDeclareHttpClass(INamedTypeSymbol operation)
+    internal static bool CanDeclareHttpClass(INamedTypeSymbol operation, Compilation compilation)
+    {
+        return CanDeclareHttpClass(operation, tree => compilation.GetSemanticModel(tree));
+    }
+
+    /// <summary>
+    /// Whether the operation's generated partial can declare the nested <c>Http</c> builder class; see
+    /// <see cref="CanDeclareHttpClass(INamedTypeSymbol, Compilation)"/>.
+    /// </summary>
+    /// <param name="operation">The operation.</param>
+    /// <param name="semanticModelOf">
+    /// The semantic model of one of the operation's syntax trees, or <see langword="null"/> when there is none, in which case
+    /// any use of the simple name <c>Http</c> in that tree is taken to collide.
+    /// </param>
+    /// <returns><see langword="true"/> when the nested class can be declared.</returns>
+    internal static bool CanDeclareHttpClass(INamedTypeSymbol operation, Func<SyntaxTree, SemanticModel?> semanticModelOf)
     {
         if (operation.Name == HttpClassName || !operation.GetMembers(HttpClassName).IsEmpty)
         {
@@ -212,7 +242,73 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             }
         }
 
-        return true;
+        return !UsesAnotherHttp(operation, semanticModelOf);
+    }
+
+    private static bool UsesAnotherHttp(INamedTypeSymbol operation, Func<SyntaxTree, SemanticModel?> semanticModelOf)
+    {
+        // Only the operation's own declarations are read, never the rest of the compilation, and only a name spelt Http is
+        // bound, so the cost is one token scan of each declaration.
+        foreach (var reference in operation.DeclaringSyntaxReferences)
+        {
+            SemanticModel? semanticModel = null;
+            var boundModel = false;
+
+            foreach (var token in reference.GetSyntax().DescendantTokens())
+            {
+                if (!token.IsKind(SyntaxKind.IdentifierToken)
+                    || token.ValueText != HttpClassName
+                    || token.Parent is not IdentifierNameSyntax name
+                    || !IsLookedUpBySimpleName(name))
+                {
+                    continue;
+                }
+
+                if (!boundModel)
+                {
+                    semanticModel = semanticModelOf(reference.SyntaxTree);
+                    boundModel = true;
+                }
+
+                if (semanticModel is null)
+                {
+                    return true;
+                }
+
+                var symbolInfo = semanticModel.GetSymbolInfo(name);
+                if (WouldBeShadowed(symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault()))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsLookedUpBySimpleName(IdentifierNameSyntax name)
+    {
+        // Only a name looked up from the operation's scope can find the nested class: not a member named after a dot, an
+        // argument or initialiser name, or an alias-qualified name, which looks up aliases alone.
+        return name.Parent switch
+        {
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Expression == name,
+            QualifiedNameSyntax qualifiedName => qualifiedName.Left == name,
+            MemberBindingExpressionSyntax or NameColonSyntax or NameEqualsSyntax or AliasQualifiedNameSyntax => false,
+            AssignmentExpressionSyntax { Parent: InitializerExpressionSyntax } assignment => assignment.Left != name,
+            _ => true,
+        };
+    }
+
+    private static bool WouldBeShadowed(ISymbol? symbol)
+    {
+        return symbol switch
+        {
+            null => false,
+            ILocalSymbol or IParameterSymbol or IRangeVariableSymbol or ILabelSymbol => false,
+            ITypeParameterSymbol { DeclaringMethod: not null } => false,
+            _ => !IsGeneratedHttpClass(symbol),
+        };
     }
 
     private static bool IsVisibleToDerivedType(ISymbol member, INamedTypeSymbol derivedType)
