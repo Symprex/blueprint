@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Text;
 using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules;
+using Blueprint.SourceGenerator.Modules.HttpClient;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -623,8 +624,9 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
     /// <para>
     /// An operation of a referenced assembly carries them as metadata, so they are looked for. One of this compilation is
     /// given them by the descriptor generator in this same build, whose output no other generator can see, so they are
-    /// expected wherever that module emits them: on a partial, top-level operation with a URL that declares no member named
-    /// <c>Http</c> of its own (the module emits a GET's appender whatever its properties).
+    /// expected wherever that module emits them: on a partial, top-level operation with a URL that
+    /// <c>HttpClientRequestBuilderModule.CanDeclareHttpClass</c> allows, so not one named <c>Http</c> or declaring or
+    /// inheriting a visible member named <c>Http</c> (the module emits a GET's appender whatever its properties).
     /// </para>
     /// <para>
     /// A derived operation is checked for builders of its own, never a base operation's, which would build the base's URL.
@@ -645,9 +647,9 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
                 return "it is nested in another type, and request builders are only generated for top-level operations";
             }
 
-            if (!operationType.GetMembers(HttpClassName).IsEmpty)
+            if (!HttpClientRequestBuilderModule.CanDeclareHttpClass(operationType))
             {
-                return $"it declares a member named '{HttpClassName}', which its request builders are generated into";
+                return $"its name, or a member it declares or inherits, is '{HttpClassName}', which its request builders are generated into";
             }
 
             if (HttpHostExposureHelper.GetAllRouteTemplates(operationType).Count == 0)

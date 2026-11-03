@@ -223,7 +223,7 @@ Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attr
 | BPCL001 | Error | `[BlueprintClient]` class must be a partial, top-level, non-generic, non-static class (public or internal) |
 | BPCL002 | Error | `[BlueprintClientInclude]` type must be a concrete, non-generic class implementing `IOperation` |
 | BPCL003 | Error | Included operation declares no result (`IReturn<T>`) |
-| BPCL004 | Error | Included operation has no typed request builder: no URL, `[UnexposedOperation]`, a member of its own named `Http`, nested in another type, not partial, or from an assembly not built with Blueprint's source generator |
+| BPCL004 | Error | Included operation has no typed request builder: no URL, `[UnexposedOperation]`, named `Http` or declaring or inheriting a member named `Http`, nested in another type, not partial, or from an assembly not built with Blueprint's source generator |
 | BPCL005 | Error | Operation included more than once, or two includes produce the same method name |
 | BPCL006 | Error | Public method of the client class is generic, so cannot be repeated on the generated interface |
 | BPCL007 | Warning | The `[JsonSerializable]` types of the client's `SerializerContext` do not cover a type an included operation needs: its request (a GET sends none), and what its result is read as, which for a resource event or `ResourceEventResult<T>` is the `T` it carries, for a `Results<T1, T2>` each member's (an `OkResult<T>`, `CreatedResult<T>` or `AcceptedResult<T>` member by its `T`), and for any other result, an `OkResult<T>`, `CreatedResult<T>` or `AcceptedResult<T>` called alone included, the result itself. The call is still generated, and reads the uncovered type through the options' reflection metadata |

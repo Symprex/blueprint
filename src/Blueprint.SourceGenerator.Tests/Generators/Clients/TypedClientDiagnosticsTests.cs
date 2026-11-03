@@ -228,6 +228,51 @@ public class TypedClientDiagnosticsTests
     }
 
     [Fact]
+    public void When_an_included_operation_is_named_Http_or_inherits_a_member_named_Http_then_BPCL004_is_reported_at_the_include()
+    {
+        // The request builders are generated into a nested class named Http, which neither can take without changing what
+        // a name the operation can already see means.
+        var result = Compile(
+            """
+            using Blueprint.HttpClient;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            namespace Client;
+
+            public class Base
+            {
+                public string Http { get; set; } = "";
+            }
+
+            [RootLink("/inherits")]
+            [HttpGet]
+            [AllowAnonymous]
+            public partial class InheritsHttpQuery : Base, IQuery<string>
+            {
+            }
+
+            [RootLink("/named")]
+            [HttpGet]
+            [AllowAnonymous]
+            public partial class Http : IQuery<string>
+            {
+            }
+
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(InheritsHttpQuery))]
+            [BlueprintClientInclude(typeof(Http))]
+            public partial class ItemsApi
+            {
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Id == "BPCL004").Select(d => TextOf(d)).Should().BeEquivalentTo(
+            "BlueprintClientInclude(typeof(InheritsHttpQuery))",
+            "BlueprintClientInclude(typeof(Http))");
+    }
+
+    [Fact]
     public void When_an_operation_is_included_twice_then_BPCL005_is_reported_at_the_second_include()
     {
         var result = Compile(
