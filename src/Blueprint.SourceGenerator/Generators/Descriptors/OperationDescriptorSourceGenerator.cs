@@ -123,7 +123,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 }
 
                 spc.AddSource(
-                    $"{classToGenerate.Operation.Namespace}.{classToGenerate.Operation.TypeName}_Descriptor.g.cs",
+                    GeneratedNamespace.Qualify(classToGenerate.Operation.Namespace, $"{classToGenerate.Operation.TypeName}_Descriptor.g.cs"),
                     SourceText.From(GenerateDescriptorClass(classToGenerate), Encoding.UTF8));
             });
     }
@@ -173,7 +173,9 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
     {
         var descriptorClassName = plan.Operation.TypeName + "Descriptor";
 
-        var codeBuilder = CodeBuilder.Create(plan.Operation.Namespace);
+        var codeBuilder = plan.Operation.Namespace.Length == 0
+            ? CodeBuilder.CreateInGlobalNamespace()
+            : CodeBuilder.Create(plan.Operation.Namespace);
 
         var wrapperClass = codeBuilder.AddClass(plan.Operation.TypeName)
             .WithAccessModifier(Accessibility.Public);
