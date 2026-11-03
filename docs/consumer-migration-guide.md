@@ -1738,7 +1738,7 @@ Notes on each change:
 |---|---|---|
 | GET query keys | The property's own name: `?TenantId=…&PageSize=10` | camelCase, or the binding name where one is declared: `?tenantId=…&pageSize=10` |
 | `bool?` query values | `true` / `false` | `True` / `False` |
-| GET properties that are not query-bound | With no ownership data the scan fell back to sending every public non-placeholder property in the query | Properties that ownership assigns a non-query source (header, cookie, route, auth context or claim, body) are never sent in a GET's query, so header-, cookie- and system-bound values stop appearing in the URL. A property with no ownership entry at all can still fall back into the query when the GET has no query-owned properties |
+| GET properties that are not query-bound | With no ownership data the scan fell back to sending every public non-placeholder property in the query | Only what the server reads from the query is sent: the query-owned properties, or, when there are none, a route placeholder declared in only some of the operation's links that the chosen URL leaves out. Header-, cookie-, auth-context-, body- and route-bound values, and properties with no ownership entry (getter-only, computed, `CancellationToken`), are never sent in a GET's query |
 | URL template with two candidates | Tried the next template when the first had a null placeholder | Always the first template in declaration order; a null placeholder throws `InvalidOperationException` |
 
 - **Query keys.** Blueprint servers bind query strings case-insensitively, so a Blueprint service reads either form. A non-Blueprint server, a gateway matching on the exact key or a recorded fixture does not; update it.
