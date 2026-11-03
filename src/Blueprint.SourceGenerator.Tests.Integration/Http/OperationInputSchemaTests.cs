@@ -132,11 +132,17 @@ public sealed class OperationInputSchemaTests
         schema.OperationId.Should().Be("PublicCheckDomains");
     }
 
-    [Fact]
-    public void A_read_only_property_of_a_body_type_is_not_required_of_an_input()
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void A_read_only_property_of_a_body_type_is_not_required_of_an_input(OpenApiSchemaNaming naming)
     {
         // A non-nullable property is required in the document, as in a response; one with no setter is not sent in a request.
-        var schema = CreateProvider(static o => o.RequiredProperties = OpenApiRequiredProperties.NonNullable).GetSchema(NoteOperationName)!.Schema;
+        var schema = CreateProvider(o =>
+        {
+            o.RequiredProperties = OpenApiRequiredProperties.NonNullable;
+            o.SchemaNaming = naming;
+        }).GetSchema(NoteOperationName)!.Schema;
         var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
         var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
 

@@ -49,16 +49,34 @@ internal sealed class OperationInputSchemaSet
     /// <param name="app">The app, whose descriptors give the order each operation declares its URLs in.</param>
     /// <param name="document">The assembled document model.</param>
     /// <param name="documentJson">The JSON the document was rendered as.</param>
+    /// <param name="readOnlyProperties">
+    /// Every read-only property of a component, by the component's key and its name, which the document does not mark under
+    /// <see cref="OpenApiSchemaNaming.Legacy"/>.
+    /// </param>
     /// <returns>The schemas.</returns>
-    public static OperationInputSchemaSet Create(BlueprintApp app, OpenApiDocumentRenderingContext document, string documentJson)
+    public static OperationInputSchemaSet Create(
+        BlueprintApp app,
+        OpenApiDocumentRenderingContext document,
+        string documentJson,
+        IReadOnlyCollection<(string ComponentKey, string PropertyName)> readOnlyProperties)
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(documentJson);
+        ArgumentNullException.ThrowIfNull(readOnlyProperties);
 
         var root = JsonNode.Parse(documentJson)!.AsObject();
         var paths = root["paths"]?.AsObject();
         var components = root["components"]?["schemas"]?.AsObject();
+
+        // A request does not send a read-only property, so the schema must know one the document left unmarked.
+        foreach (var (componentKey, propertyName) in readOnlyProperties)
+        {
+            if (components?[componentKey]?["properties"]?[propertyName] is JsonObject property)
+            {
+                property["readOnly"] = true;
+            }
+        }
         var operationIds = LegacyOperationIds.Assign(document);
 
         // The operation a slot is written for is the first of those that share it, as the document writes it.
