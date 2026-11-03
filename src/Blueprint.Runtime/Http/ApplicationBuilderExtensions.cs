@@ -783,15 +783,17 @@ public static class EndpointRouteBuilderExtensions
             ApiOperationDescriptor operation,
             IHttpResultWriter resultWriter)
         {
-            var writerFailed = false;
+            // Whether a failure from here on is the writer's one recovery call (HandleUnexpectedExceptionWithResultWriterAsync):
+            // one the writer throws, or a fault in Blueprint's write of an exception the writer has declined.
+            var isRecovery = false;
 
             try
             {
                 var result = await executionTask.ConfigureAwait(false);
 
-                writerFailed = true;
+                isRecovery = true;
                 var written = await resultWriter.TryWriteAsync(httpContext, apiContext, result).ConfigureAwait(false);
-                writerFailed = false;
+                isRecovery = result is UnhandledExceptionResult;
 
                 if (written)
                 {
@@ -810,7 +812,7 @@ public static class EndpointRouteBuilderExtensions
             }
             catch (Exception ex) when (!httpContext.Response.HasStarted)
             {
-                await this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, resultWriter, ex, isRecovery: writerFailed).ConfigureAwait(false);
+                await this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, resultWriter, ex, isRecovery).ConfigureAwait(false);
             }
         }
 

@@ -213,6 +213,21 @@ public sealed class HttpResultWriterWireTests
     }
 
     [Fact]
+    public async Task A_writer_that_declines_an_exception_result_is_given_the_fault_of_its_problem_write_as_its_only_recovery()
+    {
+        // The operation's result is an exception the writer declines; Blueprint's write of its problem faults, and that
+        // fault is the writer's one recovery call, so its throw there escapes rather than earning a third call.
+        await using var host = await ResultWriterHost.StartAsync(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
+
+        var response = await host.GetAsync("exception-problems/not-found?write-fault=unsupported");
+
+        response.Status.Should().Be(500);
+        response.Body.Should().BeEmpty();
+        host.Services.GetRequiredService<IHttpResultWriter>().As<LegacyEnvelopeResultWriter>().Given
+            .Should().Equal("UnhandledExceptionResult:No such widget", "UnhandledExceptionResult:boom-during-write");
+    }
+
+    [Fact]
     public async Task A_writer_writes_a_successful_result_in_a_format_of_its_own()
     {
         await using var host = await ResultWriterHost.StartAsync(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
@@ -475,13 +490,16 @@ public sealed class HttpResultWriterWireTests
                 // As SyncPathWriteFaultWireTests: Blueprint's own write of this operation's result faults before the
                 // response starts, reaching the router's exception handling.
                 // A request whose pipeline fails (FaultingPipeline) writes through the real body unless it asks for a
-                // write fault too.
-                if (httpContext.Request.Path.Value?.EndsWith("/sync-path-write-fault", StringComparison.Ordinal) == true
-                    && (!httpContext.Request.Query.ContainsKey("failure") || httpContext.Request.Query.ContainsKey("write-fault")))
+                // write fault too, as any other request may.
+                var query = httpContext.Request.Query;
+
+                if ((httpContext.Request.Path.Value?.EndsWith("/sync-path-write-fault", StringComparison.Ordinal) == true && !query.ContainsKey("failure"))
+                    || query.ContainsKey("write-fault"))
                 {
                     httpContext.Response.Body = new FaultsOnFirstWriteStream(
                         httpContext.Response.Body,
-                        alreadyFaulted: httpContext.Request.QueryString.Value == "?at-once");
+                        alreadyFaulted: httpContext.Request.QueryString.Value == "?at-once",
+                        unsupported: query["write-fault"] == "unsupported");
                 }
 
                 return next(httpContext);
@@ -531,9 +549,11 @@ public sealed class HttpResultWriterWireTests
 
     /// <summary>
     /// A response body whose first write fails without forwarding a byte — after a yield, or, when
-    /// <paramref name="alreadyFaulted"/>, as a write that has already faulted — and whose later writes go through.
+    /// <paramref name="alreadyFaulted"/>, as a write that has already faulted — and whose later writes go through. The
+    /// failure after a yield is an <see cref="InvalidOperationException"/>, or, when <paramref name="unsupported"/>, a
+    /// <see cref="NotSupportedException"/>.
     /// </summary>
-    private sealed class FaultsOnFirstWriteStream(Stream inner, bool alreadyFaulted) : Stream
+    private sealed class FaultsOnFirstWriteStream(Stream inner, bool alreadyFaulted, bool unsupported) : Stream
     {
         private bool _hasFaulted;
 
@@ -562,12 +582,14 @@ public sealed class HttpResultWriterWireTests
 
             return alreadyFaulted
                 ? ValueTask.FromException(new InvalidOperationException("boom-at-once"))
-                : FaultAfterYieldAsync();
+                : FaultAfterYieldAsync(unsupported);
 
-            static async ValueTask FaultAfterYieldAsync()
+            static async ValueTask FaultAfterYieldAsync(bool unsupported)
             {
                 await Task.Yield();
-                throw new InvalidOperationException("boom-during-write");
+                throw unsupported
+                    ? new NotSupportedException("boom-during-write")
+                    : new InvalidOperationException("boom-during-write");
             }
         }
 
