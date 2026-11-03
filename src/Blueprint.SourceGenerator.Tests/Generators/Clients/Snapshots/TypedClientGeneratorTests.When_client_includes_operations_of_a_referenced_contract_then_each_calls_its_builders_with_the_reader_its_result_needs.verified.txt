@@ -513,27 +513,27 @@ namespace Client
 
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<global::Contract.ItemApiResource[]> SearchItemsQueryReader;
 
-            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.CreateItemCommand> CreateItemCommandRequest;
+            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.CreateItemCommand>? CreateItemCommandRequest;
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<global::Blueprint.Http.ResourceCreated<global::Contract.ItemApiResource>> CreateItemCommandReader;
 
-            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.DeleteItemCommand> DeleteItemCommandRequest;
+            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.DeleteItemCommand>? DeleteItemCommandRequest;
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult> DeleteItemCommandReader;
 
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<global::Blueprint.Model.Results<global::Blueprint.Runtime.Exec.OkResult<global::Contract.ItemApiResource>, global::Blueprint.Runtime.Exec.NotFoundResult<global::Contract.ItemApiResource>>> GetItemQueryReader;
 
-            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.UpdateItemCommand> UpdateItemCommandRequest;
+            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.UpdateItemCommand>? UpdateItemCommandRequest;
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<global::Blueprint.Runtime.Exec.ResourceEventResult<global::Contract.ItemApiResource>> UpdateItemCommandReader;
 
-            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.TouchItemCommand> TouchItemCommandRequest;
+            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.TouchItemCommand>? TouchItemCommandRequest;
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<global::Blueprint.Http.HttpResult> TouchItemCommandReader;
 
-            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.QueueItemsCommand> QueueItemsCommandRequest;
+            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.QueueItemsCommand>? QueueItemsCommandRequest;
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<global::Blueprint.Runtime.Exec.StatusCodeResult.Accepted> QueueItemsCommandReader;
 
-            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.ExportItemsCommand> ExportItemsCommandRequest;
+            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.ExportItemsCommand>? ExportItemsCommandRequest;
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>> ExportItemsCommandReader;
 
-            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.PurgeItemCommand> PurgeItemCommandRequest;
+            internal readonly global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<global::Contract.PurgeItemCommand>? PurgeItemCommandRequest;
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<string?> PurgeItemCommandReader;
 
             internal readonly global::Blueprint.HttpClient.Readers.ResponseReader<global::Blueprint.Runtime.Exec.PlainTextResult> PingQueryReader;
@@ -542,24 +542,36 @@ namespace Client
 
             private BlueprintClientPlan(global::Blueprint.HttpClient.BlueprintHttpClient client)
             {
-                this.SearchItemsQueryReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<global::Contract.ItemApiResource[]>(client.ResolveTypeInfo<global::Contract.ItemApiResource[]>());
-                this.CreateItemCommandRequest = client.ResolveTypeInfo<global::Contract.CreateItemCommand>();
-                this.CreateItemCommandReader = new global::Blueprint.HttpClient.Readers.ResourceEventResponseReader<global::Blueprint.Http.ResourceCreated<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(client.ResolveTypeInfo<global::Contract.ItemApiResource>());
-                this.DeleteItemCommandRequest = client.ResolveTypeInfo<global::Contract.DeleteItemCommand>();
-                this.DeleteItemCommandReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult>(client.ResolveTypeInfo<global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult>());
-                this.GetItemQueryReader = new global::Blueprint.HttpClient.Readers.UnionResponseReader<global::Blueprint.Runtime.Exec.OkResult<global::Contract.ItemApiResource>, global::Blueprint.Runtime.Exec.NotFoundResult<global::Contract.ItemApiResource>>(new global::Blueprint.HttpClient.Readers.ContentResultResponseReader<global::Blueprint.Runtime.Exec.OkResult<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(client.ResolveTypeInfo<global::Contract.ItemApiResource>()), new global::Blueprint.HttpClient.Readers.JsonResponseReader<global::Blueprint.Runtime.Exec.NotFoundResult<global::Contract.ItemApiResource>>(client.ResolveTypeInfo<global::Blueprint.Runtime.Exec.NotFoundResult<global::Contract.ItemApiResource>>()));
-                this.UpdateItemCommandRequest = client.ResolveTypeInfo<global::Contract.UpdateItemCommand>();
-                this.UpdateItemCommandReader = new global::Blueprint.HttpClient.Readers.ResourceEventResultResponseReader<global::Contract.ItemApiResource>(client.ResolveTypeInfo<global::Contract.ItemApiResource>());
-                this.TouchItemCommandRequest = client.ResolveTypeInfo<global::Contract.TouchItemCommand>();
+                this.SearchItemsQueryReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<global::Contract.ItemApiResource[]>(TryResolveTypeInfo<global::Contract.ItemApiResource[]>(client));
+                this.CreateItemCommandRequest = TryResolveTypeInfo<global::Contract.CreateItemCommand>(client);
+                this.CreateItemCommandReader = new global::Blueprint.HttpClient.Readers.ResourceEventResponseReader<global::Blueprint.Http.ResourceCreated<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(TryResolveTypeInfo<global::Contract.ItemApiResource>(client));
+                this.DeleteItemCommandRequest = TryResolveTypeInfo<global::Contract.DeleteItemCommand>(client);
+                this.DeleteItemCommandReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult>(TryResolveTypeInfo<global::Blueprint.Runtime.Exec.KeyOnlyResourceEventResult>(client));
+                this.GetItemQueryReader = new global::Blueprint.HttpClient.Readers.UnionResponseReader<global::Blueprint.Runtime.Exec.OkResult<global::Contract.ItemApiResource>, global::Blueprint.Runtime.Exec.NotFoundResult<global::Contract.ItemApiResource>>(new global::Blueprint.HttpClient.Readers.ContentResultResponseReader<global::Blueprint.Runtime.Exec.OkResult<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(TryResolveTypeInfo<global::Contract.ItemApiResource>(client)), new global::Blueprint.HttpClient.Readers.JsonResponseReader<global::Blueprint.Runtime.Exec.NotFoundResult<global::Contract.ItemApiResource>>(TryResolveTypeInfo<global::Blueprint.Runtime.Exec.NotFoundResult<global::Contract.ItemApiResource>>(client)));
+                this.UpdateItemCommandRequest = TryResolveTypeInfo<global::Contract.UpdateItemCommand>(client);
+                this.UpdateItemCommandReader = new global::Blueprint.HttpClient.Readers.ResourceEventResultResponseReader<global::Contract.ItemApiResource>(TryResolveTypeInfo<global::Contract.ItemApiResource>(client));
+                this.TouchItemCommandRequest = TryResolveTypeInfo<global::Contract.TouchItemCommand>(client);
                 this.TouchItemCommandReader = new global::Blueprint.HttpClient.Readers.BodilessResultResponseReader<global::Blueprint.Http.HttpResult>();
-                this.QueueItemsCommandRequest = client.ResolveTypeInfo<global::Contract.QueueItemsCommand>();
+                this.QueueItemsCommandRequest = TryResolveTypeInfo<global::Contract.QueueItemsCommand>(client);
                 this.QueueItemsCommandReader = new global::Blueprint.HttpClient.Readers.StatusCodeResultResponseReader<global::Blueprint.Runtime.Exec.StatusCodeResult.Accepted>(global::Blueprint.Runtime.Exec.StatusCodeResult.Accepted.Instance);
-                this.ExportItemsCommandRequest = client.ResolveTypeInfo<global::Contract.ExportItemsCommand>();
-                this.ExportItemsCommandReader = new global::Blueprint.HttpClient.Readers.ContentResultResponseReader<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(resultTypeInfo: client.ResolveTypeInfo<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>>());
-                this.PurgeItemCommandRequest = client.ResolveTypeInfo<global::Contract.PurgeItemCommand>();
-                this.PurgeItemCommandReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<string?>(client.ResolveTypeInfo<string?>());
+                this.ExportItemsCommandRequest = TryResolveTypeInfo<global::Contract.ExportItemsCommand>(client);
+                this.ExportItemsCommandReader = new global::Blueprint.HttpClient.Readers.ContentResultResponseReader<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(resultTypeInfo: TryResolveTypeInfo<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>>(client));
+                this.PurgeItemCommandRequest = TryResolveTypeInfo<global::Contract.PurgeItemCommand>(client);
+                this.PurgeItemCommandReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<string?>(TryResolveTypeInfo<string?>(client));
                 this.PingQueryReader = new global::Blueprint.HttpClient.Readers.PlainTextResponseReader();
-                this.ListItemsQueryReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<global::Blueprint.Model.PagedApiResource<global::Contract.ItemApiResource>>(client.ResolveTypeInfo<global::Blueprint.Model.PagedApiResource<global::Contract.ItemApiResource>>());
+                this.ListItemsQueryReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<global::Blueprint.Model.PagedApiResource<global::Contract.ItemApiResource>>(TryResolveTypeInfo<global::Blueprint.Model.PagedApiResource<global::Contract.ItemApiResource>>(client));
+            }
+
+            private static global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>? TryResolveTypeInfo<T>(global::Blueprint.HttpClient.BlueprintHttpClient client)
+            {
+                try
+                {
+                    return client.ResolveTypeInfo<T>();
+                }
+                catch (global::System.Exception e) when (e is global::System.NotSupportedException or global::System.InvalidOperationException)
+                {
+                    return null;
+                }
             }
 
             internal static BlueprintClientPlan For(global::Blueprint.HttpClient.BlueprintHttpClient client)

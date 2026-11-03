@@ -35,7 +35,7 @@ internal sealed class PricingSerializerContext : JsonSerializerContext, IJsonTyp
     /// <inheritdoc />
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
     {
-        return type == typeof(QuotePriceCommand) || type == typeof(PriceQuote) ? _resolver.GetTypeInfo(type, options) : null;
+        return type == typeof(QuotePriceCommand) || type == typeof(PriceQuote) || type == typeof(decimal) || type == typeof(string) ? _resolver.GetTypeInfo(type, options) : null;
     }
 
     private static void Rename(JsonTypeInfo typeInfo)

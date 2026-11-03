@@ -95,10 +95,9 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // Query — the URL builder already handles them as path parameters.
         var queryBindingNames = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        // The properties the host never reads from the query string: a header, cookie, auth-context or body property, or a
-        // route property with no query fallback. A route placeholder in only some links is not one of them, as the host
-        // reads it from the query string through a link without it.
-        var boundElsewhere = new HashSet<string>(StringComparer.Ordinal);
+        // The route placeholders in only some links, which the host also reads from the query string through a link without
+        // them (legacy's every-link rule): with nothing query-owned, the only properties a GET's query string carries.
+        var queryFallbackNames = new HashSet<string>(StringComparer.Ordinal);
         if (bindingEntries != null)
         {
             foreach (var entry in bindingEntries.Entries)
@@ -109,10 +108,9 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                     queryBindingNames[entry.PropertyName] = entry.BindingName ?? entry.PropertyName;
                 }
 
-                if (entry.Source != PropertyOwnershipModule.PropertyOwnershipSource.Query
-                    && entry.FallbackSource != PropertyOwnershipModule.PropertyOwnershipSource.Query)
+                if (entry.FallbackSource == PropertyOwnershipModule.PropertyOwnershipSource.Query)
                 {
-                    boundElsewhere.Add(entry.PropertyName);
+                    queryFallbackNames.Add(entry.PropertyName);
                 }
             }
         }
@@ -131,7 +129,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // A GET carries its non-URL properties as a query string rather than a body. The typed appender exists for every
         // GET; the delegate stays null when no property is query-eligible, as the runtime reads that as "append nothing".
         var queryStringBody = isQueryMethod
-            ? BuildQueryStringBody(placeholders, properties, queryBindingNames, boundElsewhere)
+            ? BuildQueryStringBody(placeholders, properties, queryBindingNames, queryFallbackNames)
             : null;
 
         var emitHttpClass = CanDeclareHttpClass(operationSymbol, context.GetSemanticModel);
@@ -475,11 +473,15 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         HashSet<string> placeholders,
         List<IPropertySymbol> properties,
         Dictionary<string, string> queryBindingNames,
-        HashSet<string> boundElsewhere)
+        HashSet<string> queryFallbackNames)
     {
-        // When ownership metadata names query properties, they are the query string. Otherwise (no HTTP exposure analysis,
-        // or nothing query-owned) fall back to the previous heuristic, non-placeholder properties on a GET, but never one
-        // the ownership analysis binds from elsewhere: that fallback used to put a header's token or a claim in the URL.
+        // The query string carries only what the host reads from one: the query-owned properties, or with none of those a
+        // route placeholder in only some links that the built URL leaves out. A property ownership gave no entry (getter-only,
+        // a system property such as a CancellationToken) is bound from nothing, so it is never sent; nor is anything of an
+        // operation with no ownership metadata, which for one with a link means one with no bindable property, or one whose
+        // ownership analysis reported an error (BPPO003, BPPO006, BPPO009). Those fail the build unless a consumer downgrades
+        // their severity, in which case the host still binds the valid query properties but the client sends none of them.
+        // The non-placeholder-property heuristic this replaced used to send them all.
         List<IPropertySymbol> queryProperties;
         if (queryBindingNames.Count > 0)
         {
@@ -490,7 +492,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         else
         {
             queryProperties = properties
-                .Where(p => !placeholders.Contains(p.Name) && !boundElsewhere.Contains(p.Name))
+                .Where(p => queryFallbackNames.Contains(p.Name) && !placeholders.Contains(p.Name))
                 .ToList();
         }
 
