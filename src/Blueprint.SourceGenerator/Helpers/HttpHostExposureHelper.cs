@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Modules;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Helpers;
@@ -10,8 +11,6 @@ namespace Blueprint.SourceGenerator.Helpers;
 /// </summary>
 internal static class HttpHostExposureHelper
 {
-    private const string HttpMethodAttributeMetadataName = "Blueprint.Model.Attributes.HttpMethodAttribute";
-
     /// <summary>
     /// Returns <c>true</c> when the operation symbol carries at least one link attribute
     /// that implies HTTP endpoint registration.
@@ -79,73 +78,17 @@ internal static class HttpHostExposureHelper
     }
 
     /// <summary>
-    /// Resolves the HTTP methods declared on an operation via explicit HTTP method attributes,
-    /// falling back to POST for commands and GET for queries. This is the shared resolution logic
-    /// used by both per-operation modules and cross-operation app-level diagnostics.
+    /// Resolves the HTTP methods an operation is exposed with, by the same rule its descriptor publishes:
+    /// <see cref="OperationHttpMethodResolver"/>.
     /// </summary>
     /// <param name="operationType">The operation type symbol to inspect.</param>
-    /// <returns>An array of normalised HTTP method strings (e.g. <c>["GET"]</c>, <c>["POST"]</c>).</returns>
+    /// <returns>
+    /// The distinct, upper-cased methods in ordinal order (e.g. <c>["GET"]</c>, <c>["POST"]</c>), or none when an HTTP method
+    /// attribute declares an empty method.
+    /// </returns>
     public static string[] ResolveHttpMethods(INamedTypeSymbol operationType)
     {
-        var explicitMethods = new List<string>();
-
-        foreach (var attribute in operationType.GetAttributes())
-        {
-            if (attribute.AttributeClass is not { } attrClass || !IsOrInheritsFromHttpMethodAttribute(attrClass))
-            {
-                continue;
-            }
-
-            var method = ResolveHttpMethodFromAttribute(attrClass, attribute);
-            if (method is not null)
-            {
-                explicitMethods.Add(method);
-            }
-        }
-
-        if (explicitMethods.Count > 0)
-        {
-            return explicitMethods.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        }
-
-        return IsCommand(operationType) ? ["POST"] : ["GET"];
-    }
-
-    private static string? ResolveHttpMethodFromAttribute(INamedTypeSymbol attrClass, AttributeData attribute)
-    {
-        var name = attrClass.Name;
-
-        return name switch
-        {
-            "HttpGetAttribute" => "GET",
-            "HttpPostAttribute" => "POST",
-            "HttpPutAttribute" => "PUT",
-            "HttpPatchAttribute" => "PATCH",
-            "HttpDeleteAttribute" => "DELETE",
-            _ => attribute.ConstructorArguments.Length > 0
-                ? (attribute.ConstructorArguments[0].Value as string)?.Trim().ToUpperInvariant()
-                : null,
-        };
-    }
-
-    private static bool IsOrInheritsFromHttpMethodAttribute(INamedTypeSymbol attributeClass)
-    {
-        for (var current = attributeClass; current is not null; current = current.BaseType)
-        {
-            if (string.Equals(current.ToFullMetadataName(), HttpMethodAttributeMetadataName, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool IsCommand(INamedTypeSymbol operationType)
-    {
-        return operationType.AllInterfaces.Any(static candidate =>
-            candidate.IsInNamespace("Blueprint", "Model")
-            && candidate.Name == "ICommand");
+        return OperationHttpMethodResolver.Resolve(operationType).Methods;
     }
 
     private static bool TryExtractRouteTemplate(AttributeData attribute, out string url)
