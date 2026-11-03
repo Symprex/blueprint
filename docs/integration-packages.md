@@ -623,7 +623,7 @@ response.StatusCode.Should().Be(HttpStatusCode.OK);
 | **Blueprint.Marten** | ✅ | ✅ UoW, outbox, events | ❌ Built-in | Tenant session isolation |
 | **Blueprint.Rebus** | ✅ | ✅ Activator, subscriptions | ❌ Built-in | Tenant from headers |
 | **Blueprint.Tasks.Hangfire** | ✅ | ✅ Schedule, recurring, retry | ❌ Built-in | Tenant context restore |
-| **Blueprint.HttpClient** | ✅ | ✅ Typed client, URL building | ❌ Built-in | Auth/tracing headers |
+| **Blueprint.HttpClient** | ✅ | ✅ Typed service clients, reflection-free registration, credentials, compile-time call plans | ❌ Built-in | Tenant/tracing headers (delegating handlers) |
 | **Blueprint.Testing** | ✅ | ✅ Full test infrastructure | ✅ `WithTenant()` | Audit/event assertions |
 
 ### Cross-Cutting: Multi-Tenancy

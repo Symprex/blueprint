@@ -381,6 +381,18 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 - `AddResourceEventAuditRepository<T>()` registers legacy's `IResourceEventAuditRepository` (scoped). The generated pipeline hands it every legacy `ResourceEvent` a command without `[DoNotAudit]` raises (a query's is passed on untouched, as legacy did), last of the post-execution steps (stamped, with its href, data expanded), beside any resource-event audit sink and best-effort (a repository that throws or cannot be constructed is logged at Error by the operation's pipeline logger; the operation still succeeds)
 - `ConfigureHttp` binds `BlueprintHttpOptions` for link generation base URI and error detail exposure
 
+## HTTP clients contract (Blueprint.HttpClient)
+
+Call another Blueprint service through a generated typed client, not a runtime-discovered one. Full detail: `docs/integration-packages.md` (Typed Clients) and `docs/consumer-migration-guide.md` (Migrating Signature 365 service clients to Blueprint clients).
+
+- **Declare it in the contract assembly:** a `partial`, top-level, non-generic class marked `[BlueprintClient]` with one `[BlueprintClientInclude(typeof(Op))]` per operation. The generator emits `I{Class}` and the implementation. An operation from a referenced assembly works if that assembly was built with Blueprint's generator.
+- **Exact generated signature:** `Task<R> {Name}Async(Op operation, CallOptions? options = null, CancellationToken cancellationToken = default)`, where `{Name}` is the operation name minus one trailing `Command`/`Query`, and `R` is the declared result as written.
+- **Credentials:** `client.WithCredential(new BearerTokenCredential(jwt))` returns a new client; the original is unchanged. Implement `IUpstreamCredential` for other schemes; it sees the request only.
+- **Extension points:** public methods are copied onto the interface; readonly fields become constructor parameters; `partial void OnConfigure(Op, ref CallOptions?)` per operation; `protected WithRequestModifier(...)`.
+- **Register:** `services.AddBlueprintClient<IX, X>((sp, client) => client.BaseAddress = ...)` returns `IHttpClientBuilder`, so chain retry and other handlers on it. `X` must be a generated client (`IBlueprintClient<X>`). There is no `contractsAssembly` argument and no `RuntimeScanBlueprintApp`; both are removed.
+- **Removed:** the non-generic `CallAsync`/`SendVoidAsync` and `From<TApp>`. The operation-typed extension methods on `BlueprintHttpClient<TApp>` are opt-in: they exist only for an app carrying `[BlueprintHttpClientExtensions]`.
+- **Diagnostics:** a bad client or include is a `BPCL001`-`BPCL009` build diagnostic (see `docs/diagnostic-reference.md`); fix the declaration rather than working around it at runtime.
+
 ## ASP.NET Core infrastructure (consumer responsibility)
 
 Blueprint intentionally delegates standard ASP.NET Core concerns to the consumer rather than wrapping them:
