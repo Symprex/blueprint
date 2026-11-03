@@ -105,7 +105,8 @@ public static class BlueprintHttpClientServiceCollectionExtensions
     /// <remarks>
     /// The client reads and writes with the <see cref="BlueprintJsonOptions.SerializerOptions"/> of the container's
     /// <see cref="IOptions{TOptions}"/>, one instance for every client, so the plan a client resolves from its JSON options is
-    /// made once. It is transient: it holds nothing a call changes, and the <see cref="System.Net.Http.HttpClient"/> it is
+    /// made once. Those options are made read-only when the first client is resolved, so configure them (through
+    /// <see cref="IOptions{TOptions}"/>) before then. It is transient: it holds nothing a call changes, and the <see cref="System.Net.Http.HttpClient"/> it is
     /// given is the factory's for each resolve.
     /// </remarks>
     /// <typeparam name="TInterface">The service interface (e.g. <c>IPortalApi</c>).</typeparam>
@@ -151,6 +152,13 @@ public static class BlueprintHttpClientServiceCollectionExtensions
             // IOptions gives the one instance each time, and the transport shares it, so what is cached by options (a typed
             // client's plan) is made once, not for each resolve.
             var jsonOptions = sp.GetRequiredService<IOptions<BlueprintJsonOptions>>().Value.SerializerOptions;
+
+            // Read-only before the client is made, as its first call would make them (ResolveTypeInfo): options still open to
+            // change are derived afresh by a client declaring a SerializerContext, for each resolve, so each would rebuild its plan.
+            if (!jsonOptions.IsReadOnly)
+            {
+                jsonOptions.MakeReadOnly(populateMissingResolver: true);
+            }
 
             return TImplementation.Create(sp, new BlueprintHttpClient(httpClient, jsonOptions));
         });

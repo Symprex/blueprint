@@ -13,6 +13,41 @@ namespace Blueprint.HttpClient.Tests;
 /// </summary>
 public sealed class BlueprintClientRegistrationTests
 {
+    [Fact]
+    public void A_client_declaring_a_serializer_context_shares_its_options_between_resolves()
+    {
+        var services = new ServiceCollection();
+        services.AddBlueprintClient<IPricingApi, PricingApi>(static (_, client) => client.BaseAddress = _baseAddress);
+
+        using var provider = services.BuildServiceProvider();
+
+        var first = TransportOf(provider.GetRequiredService<IPricingApi>());
+        var second = TransportOf(provider.GetRequiredService<IPricingApi>());
+
+        // The plan a client resolves is cached by its options, so a transient resolve that derived a copy each time would
+        // rebuild it each time.
+        second.JsonOptions.Should().BeSameAs(first.JsonOptions);
+    }
+
+    [Fact]
+    public async Task A_client_named_Create_is_made_by_the_registration()
+    {
+        var services = new ServiceCollection();
+        services.AddBlueprintClient<ICreate, Create>(static (_, client) => client.BaseAddress = _baseAddress)
+            .ConfigurePrimaryHttpMessageHandler(() => RespondingWith([], "[]"));
+
+        await using var provider = services.BuildServiceProvider();
+
+        (await provider.GetRequiredService<ICreate>().FindTemplateCopiesAsync(new FindTemplateCopiesQuery { Id = "t-1" })).Should().BeEmpty();
+    }
+
+    private static BlueprintHttpClient TransportOf(object client)
+    {
+        var field = client.GetType().GetField("_client", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        return (BlueprintHttpClient)field!.GetValue(client)!;
+    }
+
     private static readonly Uri _baseAddress = new("https://default.example.test/");
 
     [Fact]
@@ -239,3 +274,10 @@ internal partial class OptionalDependencyApi
     /// </summary>
     public int? Limit => this._limit;
 }
+
+/// <summary>
+/// A typed client named as the factory the registration makes clients with.
+/// </summary>
+[BlueprintClient]
+[BlueprintClientInclude(typeof(FindTemplateCopiesQuery))]
+internal partial class Create;

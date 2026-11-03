@@ -75,7 +75,6 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
         [PlanClassName] = "a nested type",
         [WithCredentialMethodName] = "a method",
         [WithRequestModifierMethodName] = "a method",
-        [CreateMethodName] = "a method",
     };
 
     /// <summary>
@@ -983,9 +982,10 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
         sb.AppendLine();
 
         // The registration's way of making a client: each field is resolved from the container, one declared nullable as an
-        // optional service, so no reflection finds the constructor or its parameters.
+        // optional service, so no reflection finds the constructor or its parameters. Explicit, so a class named Create is not
+        // refused (a method cannot be named as its enclosing class) and the class's own surface does not gain the member.
         sb.AppendLine($"{indent}/// <inheritdoc />");
-        sb.AppendLine($"{indent}public static {client.ClassName} {CreateMethodName}(global::System.IServiceProvider services, global::Blueprint.HttpClient.BlueprintHttpClient client)");
+        sb.AppendLine($"{indent}static {client.ClassName} global::Blueprint.HttpClient.IBlueprintClient<{client.ClassName}>.{CreateMethodName}(global::System.IServiceProvider services, global::Blueprint.HttpClient.BlueprintHttpClient client)");
         sb.AppendLine($"{indent}{{");
         sb.AppendLine($"{indent}    global::System.ArgumentNullException.ThrowIfNull(services);");
         sb.AppendLine();

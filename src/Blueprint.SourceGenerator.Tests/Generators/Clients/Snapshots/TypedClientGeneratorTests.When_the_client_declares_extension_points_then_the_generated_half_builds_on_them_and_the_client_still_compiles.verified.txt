@@ -69,7 +69,7 @@ namespace Client
         }
 
         /// <inheritdoc />
-        public static ItemsApi Create(global::System.IServiceProvider services, global::Blueprint.HttpClient.BlueprintHttpClient client)
+        static ItemsApi global::Blueprint.HttpClient.IBlueprintClient<ItemsApi>.Create(global::System.IServiceProvider services, global::Blueprint.HttpClient.BlueprintHttpClient client)
         {
             global::System.ArgumentNullException.ThrowIfNull(services);
 
