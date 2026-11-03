@@ -75,6 +75,13 @@ public partial class BlueprintHttpClient
     /// A request that cannot be sent, or answers late, fails as a <see cref="BlueprintApiException"/>, as does any response
     /// that is not a success; a 422 fails as a <see cref="ValidationException"/>. A reader only ever reads a success.
     /// </para>
+    /// <para>
+    /// An <see cref="System.Net.Http.HttpClient"/> that answers at the headers
+    /// (<see cref="HttpCompletionOption.ResponseHeadersRead"/>, or a handler that streams) leaves the body to the reader. A
+    /// connection that fails during that read fails as the same <c>service_unavailable</c> exception as one that fails while
+    /// sending, but <see cref="System.Net.Http.HttpClient.Timeout"/> does not cover the read, so a body that stalls is bounded
+    /// only by <paramref name="cancellationToken"/>; such a caller should pass one with a deadline.
+    /// </para>
     /// </remarks>
     /// <typeparam name="TOperation">The operation's type.</typeparam>
     /// <typeparam name="TResult">The type <paramref name="reader"/> reads a response as.</typeparam>
@@ -131,6 +138,12 @@ public partial class BlueprintHttpClient
         {
             throw CreateUnreachableException(e);
         }
+        catch (IOException e)
+        {
+            // A body the send did not buffer fails as the connection's own HttpIOException, which only a buffering send
+            // wraps in an HttpRequestException.
+            throw CreateUnreachableException(e);
+        }
     }
 
     /// <summary>
@@ -175,9 +188,12 @@ public partial class BlueprintHttpClient
     /// <remarks>
     /// InternalServerError, not BadGateway, for the same reverse-proxy reason as <see cref="CreateTimeoutException"/>.
     /// </remarks>
-    /// <param name="exception">The failure the handler raised.</param>
+    /// <param name="exception">
+    /// The failure the handler raised: an <see cref="HttpRequestException"/>, or the <see cref="IOException"/> a body read
+    /// raises when the send did not buffer the body.
+    /// </param>
     /// <returns>The exception to throw.</returns>
-    private static BlueprintApiException CreateUnreachableException(HttpRequestException exception)
+    private static BlueprintApiException CreateUnreachableException(Exception exception)
     {
         return new BlueprintApiException(
             new BlueprintApiException.ApiProblem(
