@@ -329,12 +329,11 @@ public partial class BlueprintHttpClient
         var derived = new JsonSerializerOptions(options);
         var hadResolver = derived.TypeInfoResolver is not null;
 
-        // Options that already resolve with the context, as their resolver or in their chain, have it ahead of the rest as far as
-        // they need it; it cannot be put in front of itself, which the chain refuses.
-        var alreadyResolves = ReferenceEquals(derived.TypeInfoResolver, context) || derived.TypeInfoResolverChain.Contains(context);
-
-        if (!alreadyResolves)
+        // A context that is the options' own resolver is already the only thing consulted, and cannot be put in front of itself.
+        // One in their chain is moved to the front of the copy's, so that it is consulted before a reflection resolver ahead of it.
+        if (!ReferenceEquals(derived.TypeInfoResolver, context))
         {
+            derived.TypeInfoResolverChain.Remove(context);
             derived.TypeInfoResolverChain.Insert(0, context);
         }
 

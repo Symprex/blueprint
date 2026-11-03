@@ -211,6 +211,9 @@ internal static class ResourceEventReader
 
         // An object or array is what reading it as an object gives, without the options' metadata for object, which a
         // source-generated context does not have unless the user names it: a JsonElement, or a JsonNode when the options say so.
+        // Options with a converter of their own for object read it through that, as they always did.
+        var convertsObject = options.Converters.Any(static converter => converter.CanConvert(typeof(object)));
+
         foreach (var entry in value.EnumerateObject())
         {
             dictionary[entry.Name] = entry.Value.ValueKind switch
@@ -220,6 +223,7 @@ internal static class ResourceEventReader
                 JsonValueKind.String => entry.Value.GetString()!,
                 JsonValueKind.True => true,
                 JsonValueKind.False => false,
+                JsonValueKind.Object or JsonValueKind.Array when convertsObject => entry.Value.Deserialize<object>(options)!,
                 JsonValueKind.Object or JsonValueKind.Array => options.UnknownTypeHandling == JsonUnknownTypeHandling.JsonNode
                     ? JsonNode.Parse(entry.Value.GetRawText(), new JsonNodeOptions { PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive })!
                     : entry.Value.Clone(),
