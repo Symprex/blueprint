@@ -72,9 +72,17 @@ internal sealed class OperationInputSchemaSet
         // A request does not send a read-only property, so the schema must know one the document left unmarked.
         foreach (var (componentKey, propertyName) in readOnlyProperties)
         {
-            if (components?[componentKey]?["properties"]?[propertyName] is JsonObject property)
+            try
             {
-                property["readOnly"] = true;
+                if (components?[componentKey]?["properties"]?[propertyName] is JsonObject property)
+                {
+                    property["readOnly"] = true;
+                }
+            }
+            catch (ArgumentException)
+            {
+                // A component a processor made unreadable, such as one with a name twice, fails only the operations that
+                // read it, when they do.
             }
         }
         var operationIds = LegacyOperationIds.Assign(document);
@@ -534,17 +542,26 @@ internal sealed class OperationInputSchemaSet
             }
         }
 
-        // OpenAPI 3.0 requires a read-only property of a response only; JSON Schema's required would ask a request for it.
-        if (schema["required"] is JsonArray required && schema["properties"] is JsonObject declared)
+        // OpenAPI 3.0 requires a read-only property of a response only; JSON Schema's required would ask a request for it,
+        // whether always or when a conditional's if holds.
+        if (schema["properties"] is JsonObject declared)
         {
-            foreach (var readOnly in required.Where(n => declared[(string?)n ?? string.Empty]?["readOnly"]?.GetValueKind() == JsonValueKind.True).ToList())
-            {
-                required.Remove(readOnly);
-            }
+            var readOnlyNames = declared
+                .Where(static p => p.Value?["readOnly"]?.GetValueKind() == JsonValueKind.True)
+                .Select(static p => p.Key)
+                .ToHashSet(StringComparer.Ordinal);
 
-            if (required.Count == 0)
+            if (readOnlyNames.Count > 0)
             {
-                schema.Remove("required");
+                RemoveRequired(schema, readOnlyNames);
+
+                foreach (var conditional in schema["allOf"] as JsonArray ?? [])
+                {
+                    if (conditional?["then"] is JsonObject then)
+                    {
+                        RemoveRequired(then, readOnlyNames);
+                    }
+                }
             }
         }
 
@@ -572,6 +589,24 @@ internal sealed class OperationInputSchemaSet
             {
                 AdmitNull(schema);
             }
+        }
+    }
+
+    private static void RemoveRequired(JsonObject schema, HashSet<string> names)
+    {
+        if (schema["required"] is not JsonArray required)
+        {
+            return;
+        }
+
+        foreach (var name in required.Where(n => names.Contains((string?)n ?? string.Empty)).ToList())
+        {
+            required.Remove(name);
+        }
+
+        if (required.Count == 0)
+        {
+            schema.Remove("required");
         }
     }
 

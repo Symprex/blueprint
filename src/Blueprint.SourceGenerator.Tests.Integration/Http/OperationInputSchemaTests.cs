@@ -189,6 +189,32 @@ public sealed class OperationInputSchemaTests
     }
 
     [Fact]
+    public void A_component_with_a_read_only_property_and_one_name_twice_fails_only_the_operations_that_use_it()
+    {
+        // The address has a read-only property, so the input schemas look at its properties before any one operation's.
+        var provider = CreateProvider(configureOpenApiSchemas: static o => o.Processors.Add(RenamePostCodeToTotalInAddress));
+
+        var act = () => provider.GetSchema(NoteOperationName);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{NoteOperationName}*");
+        provider.GetSchema(DuplicateBodyNameOperationName).Should().NotBeNull("an operation that does not use the address is not broken by it");
+    }
+
+    [Fact]
+    public void A_conditional_requirement_of_a_read_only_property_is_not_asked_of_an_input()
+    {
+        var schema = GetSchema(NoteOperationName).Schema;
+        var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
+        var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
+
+        address.GetProperty("properties").GetProperty("region").GetProperty("readOnly").GetBoolean().Should().BeTrue();
+        (address.TryGetProperty("allOf", out var conditionals) ? conditionals.EnumerateArray() : [])
+            .SelectMany(static c => c.TryGetProperty("then", out var then) && then.TryGetProperty("required", out var required) ? required.EnumerateArray() : [])
+            .Select(static e => e.GetString())
+            .Should().NotContain("region");
+    }
+
+    [Fact]
     public void Listing_every_schema_fails_while_one_operation_collides()
     {
         var provider = CreateProvider();
@@ -326,6 +352,17 @@ public sealed class OperationInputSchemaTests
         }
     }
 
+    private static void RenamePostCodeToTotalInAddress(OpenApiSchemaProcessorContext context)
+    {
+        if (context.Component.Properties.Any(static p => p.Name == "postCode") && context.Component.Properties.Any(static p => p.Name == "total"))
+        {
+            context.Component = context.Component with
+            {
+                Properties = [.. context.Component.Properties.Select(static p => p.Name == "postCode" ? p with { Name = "total" } : p)],
+            };
+        }
+    }
+
     private static ServiceProvider BuildServices()
     {
         var services = new ServiceCollection()
@@ -382,6 +419,11 @@ public sealed class OperationInputSchemaAddress
     [JsonRequired]
     [ReadOnly(true)]
     public OperationInputSchemaAddress? Previous { get; set; }
+
+    /// <summary>Gets or sets the region the server finds for a post code, which a request does not carry either.</summary>
+    [RequiredIf(nameof(PostCode), "SW1A 1AA")]
+    [ReadOnly(true)]
+    public string? Region { get; set; }
 }
 
 /// <summary>A command taking a property from every source the caller sends, and two it does not.</summary>
