@@ -602,7 +602,7 @@ public static class EndpointRouteBuilderExtensions
             {
                 return this._resultWriter is null
                     ? this.HandleUnexpectedExceptionAsync(httpContext, operation, ex)
-                    : this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, this._resultWriter, ex);
+                    : this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, this._resultWriter, ex, writerFailed: false);
             }
 
             // An app's result writer takes a path of its own, leaving the paths below exactly as they are without one.
@@ -783,11 +783,17 @@ public static class EndpointRouteBuilderExtensions
             ApiOperationDescriptor operation,
             IHttpResultWriter resultWriter)
         {
+            var writerFailed = false;
+
             try
             {
                 var result = await executionTask.ConfigureAwait(false);
 
-                if (await resultWriter.TryWriteAsync(httpContext, apiContext, result).ConfigureAwait(false))
+                writerFailed = true;
+                var written = await resultWriter.TryWriteAsync(httpContext, apiContext, result).ConfigureAwait(false);
+                writerFailed = false;
+
+                if (written)
                 {
                     return;
                 }
@@ -804,7 +810,7 @@ public static class EndpointRouteBuilderExtensions
             }
             catch (Exception ex) when (!httpContext.Response.HasStarted)
             {
-                await this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, resultWriter, ex).ConfigureAwait(false);
+                await this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, resultWriter, ex, writerFailed).ConfigureAwait(false);
             }
         }
 
@@ -854,14 +860,25 @@ public static class EndpointRouteBuilderExtensions
         /// Answers, as <see cref="HandleUnexpectedExceptionAsync"/> does, an exception that escaped the pipeline or the
         /// writing of its result in an app that has registered an <see cref="IHttpResultWriter"/>: the writer is given it as
         /// an <see cref="UnhandledExceptionResult"/> first, while the response has not started, and Blueprint writes its
-        /// problem only when the writer declines. An exception the writer throws here propagates to ASP.NET Core.
+        /// problem only when the writer declines.
         /// </summary>
+        /// <remarks>
+        /// A writer that throws is given its own exception once, whichever result it failed on: the operation's, or an
+        /// exception from the pipeline or a write. An exception it throws for its own failure propagates to ASP.NET Core.
+        /// </remarks>
+        /// <param name="httpContext">The HTTP context.</param>
+        /// <param name="apiContext">The operation's context.</param>
+        /// <param name="operation">The operation's descriptor.</param>
+        /// <param name="resultWriter">The app's writer.</param>
+        /// <param name="ex">The exception.</param>
+        /// <param name="writerFailed">Whether <paramref name="ex"/> is one the writer threw.</param>
         private async Task HandleUnexpectedExceptionWithResultWriterAsync(
             HttpContext httpContext,
             ApiOperationContext apiContext,
             ApiOperationDescriptor operation,
             IHttpResultWriter resultWriter,
-            Exception ex)
+            Exception ex,
+            bool writerFailed)
         {
             var activity = Activity.Current;
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
@@ -876,7 +893,21 @@ public static class EndpointRouteBuilderExtensions
             // could meet.
             httpContext.Response.ContentLength = null;
 
-            if (await resultWriter.TryWriteAsync(httpContext, apiContext, new UnhandledExceptionResult(ex)).ConfigureAwait(false))
+            bool written;
+
+            try
+            {
+                written = await resultWriter.TryWriteAsync(httpContext, apiContext, new UnhandledExceptionResult(ex)).ConfigureAwait(false);
+            }
+            catch (Exception writerException) when (!writerFailed
+                && !httpContext.Response.HasStarted
+                && !(writerException is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested))
+            {
+                await this.HandleUnexpectedExceptionWithResultWriterAsync(httpContext, apiContext, operation, resultWriter, writerException, writerFailed: true).ConfigureAwait(false);
+                return;
+            }
+
+            if (written)
             {
                 return;
             }

@@ -163,6 +163,38 @@ public sealed class HttpResultWriterWireTests
             .Should().Equal("OkResult`1", "UnhandledExceptionResult:The writer failed twice");
     }
 
+    [Theory]
+    [InlineData("throws")]
+    [InlineData("faulted")]
+    public async Task A_writer_that_throws_for_a_pipeline_failure_is_given_its_own_exception_once(string failure)
+    {
+        // A pipeline that throws, or returns a faulted task, gives the writer its first result as the exception. Its throw
+        // there is a writer failure like any other, so it is given that one recovery call too.
+        await using var host = await ResultWriterHost.StartAsync<FaultingPipelineExecutor>(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
+
+        var response = await host.GetAsync($"sync-path-write-fault?failure={failure}&exception=timeout");
+
+        response.Status.Should().Be(400, response.Body);
+        response.Body.Should().Be("""{"error":{"code":"invalid_operation","message":"The writer failed"}}""");
+        host.Services.GetRequiredService<IHttpResultWriter>().As<LegacyEnvelopeResultWriter>().Given
+            .Should().Equal("UnhandledExceptionResult:pipeline-failed", "UnhandledExceptionResult:The writer failed");
+    }
+
+    [Theory]
+    [InlineData("throws")]
+    [InlineData("faulted")]
+    public async Task A_writer_that_throws_again_for_a_pipeline_failure_lets_the_second_escape_to_aspnet_core(string failure)
+    {
+        await using var host = await ResultWriterHost.StartAsync<FaultingPipelineExecutor>(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
+
+        var response = await host.GetAsync($"sync-path-write-fault?failure={failure}&exception=argument");
+
+        response.Status.Should().Be(500);
+        response.Body.Should().BeEmpty();
+        host.Services.GetRequiredService<IHttpResultWriter>().As<LegacyEnvelopeResultWriter>().Given
+            .Should().Equal("UnhandledExceptionResult:pipeline-failed-twice", "UnhandledExceptionResult:The writer failed twice");
+    }
+
     [Fact]
     public async Task A_writer_writes_a_successful_result_in_a_format_of_its_own()
     {
@@ -253,6 +285,10 @@ public sealed class HttpResultWriterWireTests
                 OkResult { Content: E2EWidgetResponse { Name: "writer-throws" } } => throw new InvalidOperationException("The writer failed"),
                 OkResult { Content: E2EWidgetResponse { Name: "writer-throws-twice" } } => throw new NotSupportedException("The writer failed twice"),
                 UnhandledExceptionResult { Exception: NotSupportedException } => throw new NotSupportedException("The writer failed again"),
+
+                // The same, for an exception a pipeline failed with.
+                UnhandledExceptionResult { Exception: TimeoutException } => throw new InvalidOperationException("The writer failed"),
+                UnhandledExceptionResult { Exception: ArgumentException } => throw new NotSupportedException("The writer failed twice"),
                 OkResult { Content: E2EWidgetResponse widget } when httpContext.Request.Query["format"] == "csv" => WriteCsvAsync(httpContext, widget),
                 ValidationFailedResult failed => WriteEnvelopeAsync(
                     httpContext,
@@ -323,6 +359,35 @@ public sealed class HttpResultWriterWireTests
         }
     }
 
+    /// <summary>An executor whose one pipeline, for <see cref="GetSyncPathWriteFaultQuery"/>, is <see cref="FaultingPipeline"/>.</summary>
+    private sealed class FaultingPipelineExecutor : BlueprintAppExecutor
+    {
+        public FaultingPipelineExecutor(IntegrationTestBlueprintApp app)
+            : base(app)
+        {
+            this.Register(typeof(GetSyncPathWriteFaultQuery), new FaultingPipeline());
+        }
+    }
+
+    /// <summary>
+    /// A hand-rolled pipeline that fails as the request's <c>failure</c> says — by throwing, or by returning a task that
+    /// has already faulted — with the exception its <c>exception</c> names.
+    /// </summary>
+    private sealed class FaultingPipeline : IOperationExecutorPipeline
+    {
+        public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
+        {
+            var query = context.GetHttpContext().Request.Query;
+            Exception exception = query["exception"] == "argument"
+                ? new ArgumentException("pipeline-failed-twice")
+                : new TimeoutException("pipeline-failed");
+
+            return query["failure"] == "throws"
+                ? throw exception
+                : ValueTask.FromException<OperationResult>(exception);
+        }
+    }
+
     /// <summary>Records the type of every result it is given and declines each.</summary>
     private sealed class DecliningResultWriter : IHttpResultWriter
     {
@@ -357,14 +422,20 @@ public sealed class HttpResultWriterWireTests
 
         public IServiceProvider Services => this._app.Services;
 
-        public static async Task<ResultWriterHost> StartAsync(Action<BlueprintServiceBuilder> configure)
+        public static Task<ResultWriterHost> StartAsync(Action<BlueprintServiceBuilder> configure)
+        {
+            return StartAsync<IntegrationTestBlueprintAppExecutor>(configure);
+        }
+
+        public static async Task<ResultWriterHost> StartAsync<TExec>(Action<BlueprintServiceBuilder> configure)
+            where TExec : BlueprintAppExecutor
         {
             var builder = WebApplication.CreateSlimBuilder();
 
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Logging.ClearProviders();
             builder.Services.AddSingleton<IApiAuthoriser, AuthorisationDenialWireTests.OutcomeApiAuthoriser>();
-            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(blueprint =>
+            builder.Services.AddBlueprintApi<IntegrationTestBlueprintApp, TExec>(blueprint =>
             {
                 blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>();
                 configure(blueprint);
@@ -383,7 +454,9 @@ public sealed class HttpResultWriterWireTests
 
                 // As SyncPathWriteFaultWireTests: Blueprint's own write of this operation's result faults before the
                 // response starts, reaching the router's exception handling.
-                if (httpContext.Request.Path.Value?.EndsWith("/sync-path-write-fault", StringComparison.Ordinal) == true)
+                // A request whose pipeline fails (FaultingPipeline) writes through the real body.
+                if (httpContext.Request.Path.Value?.EndsWith("/sync-path-write-fault", StringComparison.Ordinal) == true
+                    && !httpContext.Request.Query.ContainsKey("failure"))
                 {
                     httpContext.Response.Body = new FaultsOnFirstWriteStream(
                         httpContext.Response.Body,
@@ -393,7 +466,7 @@ public sealed class HttpResultWriterWireTests
                 return next(httpContext);
             });
 
-            app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+            app.MapBlueprintApi<IntegrationTestBlueprintApp, TExec>("api/");
 
             await app.StartAsync();
 
