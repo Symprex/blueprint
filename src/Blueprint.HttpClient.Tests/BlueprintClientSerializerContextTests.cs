@@ -129,6 +129,28 @@ public sealed class BlueprintClientSerializerContextTests
     }
 
     [Fact]
+    public async Task A_context_behind_the_reflection_resolver_in_the_options_chain_is_moved_in_front_of_it()
+    {
+        // The reflection resolver is first, so it would name amount "amount" and ignore the context, which names it "amountValue".
+        string? body = null;
+        var options = CreateOptions();
+        options.TypeInfoResolverChain.Add(new DefaultJsonTypeInfoResolver());
+        options.TypeInfoResolverChain.Add(PricingSerializerContext.Default);
+        var handler = new AsyncHandler(async request =>
+        {
+            body = await request.Content!.ReadAsStringAsync();
+            return Json("""{"totalValue":"dec:4","quotedFor":"Ada"}""");
+        });
+        var api = new PricingApi(new BlueprintHttpClient(new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri("https://localhost") }, options));
+
+        var quote = await api.QuotePriceAsync(new QuotePriceCommand { Amount = 2m });
+
+        body.Should().StartWith("""{"amountValue":"dec:2",""");
+        quote.Total.Should().Be(4m);
+        options.TypeInfoResolverChain[1].Should().BeSameAs(PricingSerializerContext.Default, "the caller's own options are not reordered");
+    }
+
+    [Fact]
     public void Options_that_hold_the_context_in_their_resolver_chain_are_used_as_they_are()
     {
         var options = CreateOptions();

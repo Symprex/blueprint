@@ -66,6 +66,22 @@ public sealed class BlueprintHttpClientResourceEventContextOnlyTests
         (nested["A"] is not null).Should().Be(found, "the body names it \"a\"");
     }
 
+    [Fact]
+    public async Task A_custom_object_converter_on_the_options_reads_nested_dictionary_values()
+    {
+        var client = CreateClient(static options =>
+        {
+            options.TypeInfoResolver = new DefaultJsonTypeInfoResolver();
+            options.Converters.Add(new RawObjectConverter());
+        });
+
+        var result = await SendAsync(client, new ResourceEventResultResponseReader<TemplateApiResource>(client.ResolveTypeInfo<TemplateApiResource>()));
+
+        result.Metadata!["Nested"].Should().Be("custom:" + """{"a":1}""");
+        result.SecureData!["List"].Should().Be("custom:" + """["y"]""");
+        result.ChangedValues!["Nested"].Should().Be("custom:" + """{"c":true}""");
+    }
+
     private static void AssertNested(IReadOnlyDictionary<string, object>? dictionary, string nestedObject, string list)
     {
         dictionary!["Nested"].Should().BeOfType<JsonElement>().Which.GetRawText().Should().Be(nestedObject);
@@ -89,6 +105,24 @@ public sealed class BlueprintHttpClientResourceEventContextOnlyTests
     private static Task<TResult> SendAsync<TResult>(BlueprintHttpClient client, ResponseReader<TResult> reader)
     {
         return client.SendAsync(HttpMethod.Delete, "/templates/t-1", new ArchiveTemplateCommand { Id = "t-1" }, operationTypeInfo: null, reader, "ArchiveTemplateCommand", options: null);
+    }
+
+    /// <summary>
+    /// Reads an object as the text of its JSON, prefixed, so that a value it read can only have come from it.
+    /// </summary>
+    private sealed class RawObjectConverter : JsonConverter<object>
+    {
+        public override object Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            using var document = JsonDocument.ParseValue(ref reader);
+
+            return "custom:" + document.RootElement.GetRawText();
+        }
+
+        public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     /// <summary>
