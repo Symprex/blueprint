@@ -382,6 +382,15 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 - `AddResourceEventAuditRepository<T>()` registers legacy's `IResourceEventAuditRepository` (scoped). The generated pipeline hands it every legacy `ResourceEvent` a command without `[DoNotAudit]` raises (a query's is passed on untouched, as legacy did), last of the post-execution steps (stamped, with its href, data expanded), beside any resource-event audit sink and best-effort (a repository that throws or cannot be constructed is logged at Error by the operation's pipeline logger; the operation still succeeds)
 - `ConfigureHttp` binds `BlueprintHttpOptions` for link generation base URI and error detail exposure
 
+### MCP tools (`Blueprint.Mcp`)
+
+To serve an app's operations as MCP tools, reference `Blueprint.Mcp`, call `services.AddBlueprintMcp()`, and map
+`endpoints.MapBlueprintMcp<MyApp>("mcp")` **after** `MapBlueprintApi` for the same app (the tools are made from its input
+schemas). Each tool is named by its operation's OpenAPI `operationId`, and a call runs through the operation's own HTTP
+endpoint as the MCP request's caller, so authentication, authorisation and validation are those of HTTP. The result's
+text is the HTTP response body, `_meta.httpStatus` its status, and a 4xx or 5xx is a tool error. Detail and limits:
+`docs/integration-packages.md#blueprintmcp`.
+
 ## ASP.NET Core infrastructure (consumer responsibility)
 
 Blueprint intentionally delegates standard ASP.NET Core concerns to the consumer rather than wrapping them:
