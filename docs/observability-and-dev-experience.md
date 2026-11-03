@@ -121,6 +121,16 @@ after any other, when the operation has an activity, as legacy's did, and an aut
 An `ApiException`, whatever its status, is always written with its own title and detail, because `ApiException` is
 designed for developer-authored, client-facing error messages. Legacy wrote it so too.
 
+### App-written results (`IHttpResultWriter`)
+
+Everything above is what Blueprint writes when the app does not. An app that registers an `IHttpResultWriter`
+(`AddHttpResultWriter<T>()`) is offered every result first, successes included, and either writes the response itself or
+declines and leaves it to the table above, unchanged. The router consults it on a path of its own
+(`RouteOperationWithResultWriterAsync` in `ApplicationBuilderExtensions`), so an app without one keeps the synchronous
+fast path and its allocations as they were. An exception that escapes the pipeline or a write is offered to it as an
+`UnhandledExceptionResult` carrying the original exception, from `HandleUnexpectedExceptionWithResultWriterAsync`, while
+the response has not started. The consumer migration guide has a legacy-envelope example.
+
 ### OpenAPI alignment
 
 The OpenAPI document generation declares `ProblemDetails` response schemas for all error status codes (400, 401, 403, 415, 422, 500), so client code generators produce strongly-typed error handling.
