@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Blueprint.Http;
 using Blueprint.HttpClient.Readers;
@@ -47,17 +49,35 @@ public sealed class BlueprintHttpClientResourceEventContextOnlyTests
         AssertNested(result.ChangedValues!, """{"c":true}""", """[{"d":null}]""");
     }
 
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task A_nested_object_read_as_a_JsonNode_keeps_the_options_property_name_case_sensitivity(bool caseInsensitive, bool found)
+    {
+        var client = CreateClient(options =>
+        {
+            options.UnknownTypeHandling = JsonUnknownTypeHandling.JsonNode;
+            options.PropertyNameCaseInsensitive = caseInsensitive;
+        });
+
+        var result = await SendAsync(client, new ResourceEventResultResponseReader<TemplateApiResource>(client.ResolveTypeInfo<TemplateApiResource>()));
+
+        var nested = result.Metadata!["Nested"].Should().BeAssignableTo<JsonObject>().Subject;
+        (nested["A"] is not null).Should().Be(found, "the body names it \"a\"");
+    }
+
     private static void AssertNested(IReadOnlyDictionary<string, object>? dictionary, string nestedObject, string list)
     {
         dictionary!["Nested"].Should().BeOfType<JsonElement>().Which.GetRawText().Should().Be(nestedObject);
         dictionary["List"].Should().BeOfType<JsonElement>().Which.GetRawText().Should().Be(list);
     }
 
-    private static BlueprintHttpClient CreateClient()
+    private static BlueprintHttpClient CreateClient(Action<JsonSerializerOptions>? configure = null)
     {
         // No resolver for object, and none that falls back to reflection, as a source-generated context's options are.
         var options = BlueprintJsonOptions.CreateDefaultOptions();
         options.TypeInfoResolver = new NoObjectResolver();
+        configure?.Invoke(options);
         var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(Body, new MediaTypeHeaderValue("application/json")),

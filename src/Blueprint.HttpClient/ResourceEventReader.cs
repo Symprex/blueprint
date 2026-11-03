@@ -221,7 +221,7 @@ internal static class ResourceEventReader
                 JsonValueKind.True => true,
                 JsonValueKind.False => false,
                 JsonValueKind.Object or JsonValueKind.Array => options.UnknownTypeHandling == JsonUnknownTypeHandling.JsonNode
-                    ? JsonNode.Parse(entry.Value.GetRawText())!
+                    ? JsonNode.Parse(entry.Value.GetRawText(), new JsonNodeOptions { PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive })!
                     : entry.Value.Clone(),
                 _ => null!,
             };
