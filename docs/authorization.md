@@ -328,9 +328,14 @@ It returns the `ExecutionAllowed`, so a denial's reason can be logged; never wri
 | BPAU003 | Error | `[Resource]` or `[FromResource]` combined with `[AllowAnonymous]` |
 | BPAU004 | Error | Empty or whitespace noun or verb in `[Resource]` |
 | BPAU005 | Error | Both `[Resource]` and `[FromResource]` on the same operation |
-| BPAU006 | Warning | `[FromResource]` references a type with no `[Resource]` attributes |
+| BPAU006 | Error | `[FromResource]` references a type with no `[Resource]` attributes |
 | BPAU007 | Error | Unknown token in resource key template |
 | BPAU008 | Warning | `[Resource]` or `[FromResource]` on a background task that is not exposed over HTTP and not marked `[MustBeAuthenticated]`: it allows anonymous access, so the declaration is never enforced |
+| BPAU009 | Warning | The same noun and verb declared by more than one `[Resource]` on one operation |
+| BPAU010 | Warning | A `{Primary:Fallback}` fallback that nothing uses: not on the operation, nor on a linked resource type that lacks the primary |
+| BPAU011 | Error | A resource key template token that matches no readable public property of a resource type the operation links from, so a link from it could never be authorised |
+
+The authentication diagnostics, BPAU001 and BPAU002, are listed with the rest in [`diagnostic-reference.md`](diagnostic-reference.md).
 
 ---
 
