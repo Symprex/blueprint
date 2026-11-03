@@ -34,10 +34,13 @@ public interface IOperationInputSchemaProvider
     /// <summary>
     /// Gets the input schema of one operation.
     /// </summary>
-    /// <param name="operationName">The operation's name, as its descriptor gives it (ignoring case).</param>
+    /// <param name="operationName">
+    /// The operation's name, as its descriptor gives it. Case is ignored only when no operation has the name exactly.
+    /// </param>
     /// <returns>Its schema, or <see langword="null"/> when the app exposes no operation of that name.</returns>
     /// <exception cref="InvalidOperationException">
-    /// The API has not been mapped, or two of the operation's properties take the same name.
+    /// The API has not been mapped, two of the operation's properties take the same name, or the name matches two
+    /// operations' only ignoring case.
     /// </exception>
     OperationInputSchema? GetSchema(string operationName);
 }

@@ -30,12 +30,17 @@ internal sealed class OperationInputSchemaSet
     private const string DefinitionReferencePrefix = "#/$defs/";
 
     private readonly FrozenDictionary<string, Entry> _entriesByName;
+    private readonly FrozenDictionary<string, ImmutableArray<Entry>> _entriesByNameIgnoringCase;
     private readonly ImmutableArray<Entry> _entries;
 
     private OperationInputSchemaSet(ImmutableArray<Entry> entries)
     {
+        // Descriptor names are unique by ordinal comparison only, so two may differ by case alone.
         this._entries = entries;
-        this._entriesByName = entries.ToFrozenDictionary(static e => e.OperationName, StringComparer.OrdinalIgnoreCase);
+        this._entriesByName = entries.ToFrozenDictionary(static e => e.OperationName, StringComparer.Ordinal);
+        this._entriesByNameIgnoringCase = entries
+            .GroupBy(static e => e.OperationName, StringComparer.OrdinalIgnoreCase)
+            .ToFrozenDictionary(static g => g.Key, static g => g.ToImmutableArray(), StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -103,6 +108,15 @@ internal sealed class OperationInputSchemaSet
         return new OperationInputSchemaSet([.. entries.OrderBy(static e => e.OperationName, StringComparer.Ordinal)]);
     }
 
+    /// <summary>Makes a set of schemas already made, which is how operations no one app can compile are tested.</summary>
+    /// <param name="schemas">The schemas.</param>
+    /// <returns>The set.</returns>
+    internal static OperationInputSchemaSet FromSchemas(IEnumerable<OperationInputSchema> schemas)
+    {
+        return new OperationInputSchemaSet(
+            [.. schemas.Select(static s => new Entry(s.OperationName, s, null)).OrderBy(static e => e.OperationName, StringComparer.Ordinal)]);
+    }
+
     /// <summary>Gets every schema, failing when one could not be made.</summary>
     /// <returns>The schemas, ordered by operation name.</returns>
     public IReadOnlyList<OperationInputSchema> GetSchemas()
@@ -118,13 +132,27 @@ internal sealed class OperationInputSchemaSet
     }
 
     /// <summary>Gets one operation's schema, failing when it could not be made.</summary>
-    /// <param name="operationName">The operation's name, ignoring case.</param>
+    /// <param name="operationName">
+    /// The operation's name: exactly, or ignoring case when no operation has it exactly and only one has it ignoring case.
+    /// </param>
     /// <returns>The schema, or <see langword="null"/> when the document writes no operation of that name.</returns>
     public OperationInputSchema? GetSchema(string operationName)
     {
         if (!this._entriesByName.TryGetValue(operationName, out var entry))
         {
-            return null;
+            if (!this._entriesByNameIgnoringCase.TryGetValue(operationName, out var matches))
+            {
+                return null;
+            }
+
+            if (matches.Length > 1)
+            {
+                throw new InvalidOperationException(
+                    $"The name '{operationName}' matches the operations {string.Join(" and ", matches.Select(static e => e.OperationName))} "
+                    + "ignoring case; ask for one by its exact name.");
+            }
+
+            entry = matches[0];
         }
 
         return entry.Error is null ? entry.Schema : throw new InvalidOperationException(entry.Error);
