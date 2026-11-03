@@ -381,6 +381,7 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 - Scoped services (UoW, task scheduler) are registered scoped; singletons (audit, auth) as singletons
 - `AddResourceEventAuditRepository<T>()` registers legacy's `IResourceEventAuditRepository` (scoped). The generated pipeline hands it every legacy `ResourceEvent` a command without `[DoNotAudit]` raises (a query's is passed on untouched, as legacy did), last of the post-execution steps (stamped, with its href, data expanded), beside any resource-event audit sink and best-effort (a repository that throws or cannot be constructed is logged at Error by the operation's pipeline logger; the operation still succeeds)
 - `ConfigureHttp` binds `BlueprintHttpOptions` for link generation base URI and error detail exposure
+- `AddHttpResultWriter<T>()` registers the app's one `IHttpResultWriter` (singleton). It is offered every result an HTTP request ends with — `OkResult`, 422, 401, 403, not-found, binding failure, `UnhandledExceptionResult` (the original exception, including one that escaped the pipeline or a write) — before Blueprint writes anything; it returns `true` once it has written the whole response, or `false` to leave Blueprint's default write unchanged. Prefer it to subclassing `HttpOperationResultExecutor`, whose writes are not overridable. `HttpOperationResultExecutor.GetValidationErrors` gives a 422's `errors` keyed as Blueprint keys them
 
 ## ASP.NET Core infrastructure (consumer responsibility)
 

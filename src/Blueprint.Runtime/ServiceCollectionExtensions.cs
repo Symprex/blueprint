@@ -352,6 +352,20 @@ public sealed class BlueprintServiceBuilder
     }
 
     /// <summary>
+    /// Registers the app's <see cref="IHttpResultWriter"/>, consulted with every result an HTTP request ends with before
+    /// Blueprint writes it, so the app can write some results in a shape of its own and leave the rest to Blueprint. One
+    /// writer is consulted; registering another replaces it. With none registered, results are written as they always are.
+    /// </summary>
+    /// <typeparam name="T">The <see cref="IHttpResultWriter"/> implementation type, registered as a singleton.</typeparam>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddHttpResultWriter<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
+        where T : class, IHttpResultWriter
+    {
+        this.Services.AddSingleton<IHttpResultWriter, T>();
+        return this;
+    }
+
+    /// <summary>
     /// Registers a background task scheduler that holds enqueued tasks until pipeline flush.
     /// The scheduler is registered as scoped so each operation gets its own task queue.
     /// </summary>

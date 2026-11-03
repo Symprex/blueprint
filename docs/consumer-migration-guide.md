@@ -397,6 +397,79 @@ true` so the document agrees:
 services.Configure<BlueprintHttpOptions>(o => o.NegotiateErrorContentType = true);
 ```
 
+**Writing results in a shape of your own (2.1, opt-in).** A client written against a legacy app's own error envelope,
+or a legacy app that applied `?format=csv` or in-memory OData to a successful result after the handler, needs to write
+some results itself. Register an `IHttpResultWriter` with `AddHttpResultWriter<T>()`. It is given every result an
+operation's HTTP request ends with — `OkResult`, `ValidationFailedResult` (422), `UnauthenticatedResult` (401),
+`ForbiddenResult` (403), `NotFoundResult`, `BindingFailureResult` (400), `UnhandledExceptionResult` and the rest — before
+Blueprint writes anything:
+- return `true` once it has written the whole response, status and content type included;
+- return `false` to leave that result to Blueprint, which writes it exactly as it would with no writer.
+
+An exception that escapes the pipeline or Blueprint's own write reaches the writer as an `UnhandledExceptionResult` too,
+so `Exception` is the original exception on every path, and an app can map exception types to statuses itself. A 422's
+`errors`, keyed and named as Blueprint keys them, come from `HttpOperationResultExecutor.GetValidationErrors`. One writer
+is consulted; it composes its own decisions. A legacy-envelope writer:
+
+```csharp
+services.AddBlueprintApi<MyApp, MyAppExecutor>(b => b.AddHttpResultWriter<LegacyErrorEnvelopeWriter>());
+
+public sealed class LegacyErrorEnvelopeWriter : IHttpResultWriter
+{
+    public ValueTask<bool> TryWriteAsync(HttpContext httpContext, ApiOperationContext operationContext, OperationResult result)
+    {
+        return result switch
+        {
+            ValidationFailedResult failed => WriteAsync(httpContext, 422, "validation_failed", "One or more validation errors occurred.",
+                HttpOperationResultExecutor.GetValidationErrors(operationContext, failed)),
+            UnauthenticatedResult denied => WriteAsync(httpContext, 401, "security_failure", denied.Failure?.Message ?? "Your session has expired"),
+            ForbiddenResult denied => WriteAsync(httpContext, 403, "feature_not_available", denied.Failure?.Message ?? "Forbidden"),
+            UnhandledExceptionResult { Exception: InvalidOperationException e } => WriteAsync(httpContext, 400, "invalid_operation", e.Message),
+            _ => ValueTask.FromResult(false),
+        };
+    }
+
+    private static async ValueTask<bool> WriteAsync(HttpContext httpContext, int status, string code, string message,
+        IReadOnlyDictionary<string, string[]>? errors = null)
+    {
+        using var body = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(body))
+        {
+            writer.WriteStartObject();
+            writer.WriteStartObject("error");
+            writer.WriteString("code", code);
+            writer.WriteString("message", message);
+            writer.WriteEndObject();
+            if (errors is not null)
+            {
+                // Written key by key: the keys are already named, and a dictionary key policy would name them again.
+                writer.WriteStartObject("errors");
+                foreach (var (key, messages) in errors)
+                {
+                    writer.WriteStartArray(key);
+                    foreach (var m in messages)
+                    {
+                        writer.WriteStringValue(m);
+                    }
+                    writer.WriteEndArray();
+                }
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+        }
+
+        httpContext.Response.StatusCode = status;
+        httpContext.Response.ContentType = "application/json";
+        await httpContext.Response.Body.WriteAsync(body.ToArray(), httpContext.RequestAborted);
+        return true;
+    }
+}
+```
+
+The writer is a singleton; take request-scoped services from `httpContext.RequestServices`. With no writer registered
+nothing changes, the pre-serialised 401 and 403 fast paths included. `HttpResultWriterWireTests` is the worked example,
+CSV included.
+
 #### State-based link visibility
 
 Use `StateBasedLinkChecker<TOperation, TResource>` (which implements `ILinkVisibilityAuthoriser`) for state-based link hiding:
