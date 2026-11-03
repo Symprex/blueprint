@@ -582,6 +582,20 @@ public sealed class BlueprintHttpClientTransportTests
     }
 
     [Fact]
+    public async Task A_standalone_content_result_is_read_with_the_wrapper_metadata_it_was_given()
+    {
+        // The transport's own options are camelCase, so "html_source" can only be read by the snake_case metadata the reader
+        // was given for the wrapper, which a standalone read deserialises (it has no union to take it out of).
+        var client = CreateClient(static _ => Json(HttpStatusCode.OK, """{"content":{"id":"t-1","name":"N","html_source":"<p>snake</p>"}}"""));
+        var wrapperTypeInfo = (JsonTypeInfo<OkResult<TemplateApiResource>>)SnakeCaseOptions().GetTypeInfo(typeof(OkResult<TemplateApiResource>));
+        var reader = new ContentResultResponseReader<OkResult<TemplateApiResource>, TemplateApiResource>(resultTypeInfo: wrapperTypeInfo);
+
+        var result = await SendArchiveAsync(client, reader);
+
+        result.Content.HtmlSource.Should().Be("<p>snake</p>");
+    }
+
+    [Fact]
     public void The_content_result_reader_refuses_a_result_that_is_not_written_as_its_content()
     {
         var act = static () => new ContentResultResponseReader<NotFoundResult<TemplateApiResource>, TemplateApiResource>();

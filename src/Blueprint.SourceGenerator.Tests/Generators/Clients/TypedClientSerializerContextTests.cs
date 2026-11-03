@@ -60,6 +60,14 @@ public class TypedClientSerializerContextTests
                                     }
 
                                     [RootLink("/items/{Id}")]
+                                    [HttpGet]
+                                    [AllowAnonymous]
+                                    public partial class GetItemQuery : IQuery<Results<OkResult<ItemApiResource>, NotFoundResult<string>>>
+                                    {
+                                        public string Id { get; set; } = "";
+                                    }
+
+                                    [RootLink("/items/{Id}")]
                                     [HttpPut]
                                     [AllowAnonymous]
                                     public partial class UpdateItemCommand : ICommand<ResourceEventResult<ItemApiResource>>
@@ -125,13 +133,37 @@ public class TypedClientSerializerContextTests
     }
 
     [Fact]
-    public void When_the_result_is_a_content_result_or_a_resource_event_result_then_its_content_must_be_covered()
+    public void When_the_result_is_a_resource_event_result_then_its_content_must_be_covered()
     {
         var result = Compile(
-            Client("[JsonSerializable(typeof(ExportItemsCommand))] [JsonSerializable(typeof(UpdateItemCommand))]", "ExportItemsCommand", "UpdateItemCommand"));
+            Client("[JsonSerializable(typeof(UpdateItemCommand))]", "UpdateItemCommand"));
 
-        result.Diagnostics.Where(static d => d.Id == "BPCL007").Select(static d => d.GetMessage()).Should().HaveCount(2)
-            .And.OnlyContain(static m => m.Contains("does not cover ItemApiResource,"));
+        AssertWarned(result, "BlueprintClientInclude(typeof(UpdateItemCommand))").GetMessage().Should().Contain("does not cover ItemApiResource,");
+    }
+
+    [Fact]
+    public void When_the_result_is_a_content_result_alone_then_the_result_itself_must_be_covered_for_it_is_what_is_deserialised()
+    {
+        // Covering the content would not do: the standalone read deserialises the wrapper, resolved once from the context.
+        var uncovered = Compile(
+            Client("[JsonSerializable(typeof(ExportItemsCommand))] [JsonSerializable(typeof(ItemApiResource))]", "ExportItemsCommand"));
+        var covered = Compile(
+            Client("[JsonSerializable(typeof(ExportItemsCommand))] [JsonSerializable(typeof(AcceptedResult<ItemApiResource>))]", "ExportItemsCommand"));
+
+        AssertWarned(uncovered, "BlueprintClientInclude(typeof(ExportItemsCommand))").GetMessage().Should().Contain("does not cover AcceptedResult<ItemApiResource>,");
+        covered.Diagnostics.Where(static d => d.Id == "BPCL007").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_a_content_result_is_a_union_member_then_its_content_is_what_must_be_covered()
+    {
+        var uncovered = Compile(
+            Client("[JsonSerializable(typeof(GetItemQuery))]", "GetItemQuery"));
+        var covered = Compile(
+            Client("[JsonSerializable(typeof(ItemApiResource))] [JsonSerializable(typeof(NotFoundResult<string>))]", "GetItemQuery"));
+
+        AssertWarned(uncovered, "BlueprintClientInclude(typeof(GetItemQuery))").GetMessage().Should().Contain("does not cover ItemApiResource,");
+        covered.Diagnostics.Where(static d => d.Id == "BPCL007").Should().BeEmpty();
     }
 
     [Fact]
@@ -152,7 +184,7 @@ public class TypedClientSerializerContextTests
     {
         var result = Compile(
             Client(
-                "[JsonSerializable(typeof(CreateItemCommand))] [JsonSerializable(typeof(ExportItemsCommand))] [JsonSerializable(typeof(UpdateItemCommand))] [JsonSerializable(typeof(SearchItemsCommand))] [JsonSerializable(typeof(string[]))] [JsonSerializable(typeof(ItemApiResource))]",
+                "[JsonSerializable(typeof(CreateItemCommand))] [JsonSerializable(typeof(ExportItemsCommand))] [JsonSerializable(typeof(UpdateItemCommand))] [JsonSerializable(typeof(SearchItemsCommand))] [JsonSerializable(typeof(string[]))] [JsonSerializable(typeof(ItemApiResource))] [JsonSerializable(typeof(AcceptedResult<ItemApiResource>))]",
                 "FindItemsQuery",
                 "SearchItemsCommand",
                 "CreateItemCommand",
@@ -173,6 +205,7 @@ public class TypedClientSerializerContextTests
                  using System.Text.Json.Serialization;
                  using System.Text.Json.Serialization.Metadata;
                  using Blueprint.HttpClient;
+                 using Blueprint.Runtime.Exec;
                  using Contract;
 
                  namespace Client;

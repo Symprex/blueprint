@@ -547,7 +547,7 @@ namespace Client
                 this.QueueItemsCommandRequest = client.ResolveTypeInfo<global::Contract.QueueItemsCommand>();
                 this.QueueItemsCommandReader = new global::Blueprint.HttpClient.Readers.StatusCodeResultResponseReader<global::Blueprint.Runtime.Exec.StatusCodeResult.Accepted>(global::Blueprint.Runtime.Exec.StatusCodeResult.Accepted.Instance);
                 this.ExportItemsCommandRequest = client.ResolveTypeInfo<global::Contract.ExportItemsCommand>();
-                this.ExportItemsCommandReader = new global::Blueprint.HttpClient.Readers.ContentResultResponseReader<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(client.ResolveTypeInfo<global::Contract.ItemApiResource>());
+                this.ExportItemsCommandReader = new global::Blueprint.HttpClient.Readers.ContentResultResponseReader<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(resultTypeInfo: client.ResolveTypeInfo<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>>());
                 this.PurgeItemCommandRequest = client.ResolveTypeInfo<global::Contract.PurgeItemCommand>();
                 this.PurgeItemCommandReader = new global::Blueprint.HttpClient.Readers.JsonResponseReader<string?>(client.ResolveTypeInfo<string?>());
                 this.PingQueryReader = new global::Blueprint.HttpClient.Readers.PlainTextResponseReader();

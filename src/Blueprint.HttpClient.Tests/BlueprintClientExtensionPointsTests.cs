@@ -120,6 +120,20 @@ public sealed class BlueprintClientExtensionPointsTests
     }
 
     [Fact]
+    public async Task A_region_chosen_after_another_replaces_it_and_the_path_under_the_base_address_is_kept()
+    {
+        var (api, sent) = CreateApi(new Uri("https://default.example.test/api/"), new Uri("https://eu.example.test/api/"), new Uri("https://us.example.test/api/"));
+
+        // The first modifier makes the request's URI absolute, so the second must swap that URI's host, not resolve it
+        // against its own base, which an absolute URI ignores.
+        await api.ForRegion("eu").ForRegion("us").FindTemplateCopiesAsync(new FindTemplateCopiesQuery { Id = "t-1" });
+        await api.FindTemplateCopiesAsync(new FindTemplateCopiesQuery { Id = "t-1" });
+
+        sent.Select(static s => s.Host).Should().Equal("us.example.test", "default.example.test");
+        sent[0].PathAndQuery.Should().StartWith("/api/").And.Be(sent[1].PathAndQuery);
+    }
+
+    [Fact]
     public async Task A_clone_carries_the_readonly_fields_the_hand_written_methods_read()
     {
         var (api, sent) = CreateApi();
@@ -173,7 +187,7 @@ public sealed class BlueprintClientExtensionPointsTests
         api.Invoking(static a => a.WithCredential(null!)).Should().Throw<ArgumentNullException>().WithParameterName("credential");
     }
 
-    private static (RegionalOperationsApi Api, List<SentRequest> Sent) CreateApi()
+    private static (RegionalOperationsApi Api, List<SentRequest> Sent) CreateApi(Uri? baseAddress = null, Uri? eu = null, Uri? us = null)
     {
         var sent = new List<SentRequest>();
         var handler = new FakeHttpHandler(request =>
@@ -191,9 +205,10 @@ public sealed class BlueprintClientExtensionPointsTests
             };
         });
         var endpoints = new RegionEndpoints();
-        endpoints.Regions["eu"] = _euAddress;
+        endpoints.Regions["eu"] = eu ?? _euAddress;
+        endpoints.Regions["us"] = us ?? new Uri("https://us.example.test");
 
-        return (new RegionalOperationsApi(new BlueprintHttpClient(new System.Net.Http.HttpClient(handler) { BaseAddress = _baseAddress }), endpoints), sent);
+        return (new RegionalOperationsApi(new BlueprintHttpClient(new System.Net.Http.HttpClient(handler) { BaseAddress = baseAddress ?? _baseAddress }), endpoints), sent);
     }
 
     private sealed record SentRequest(string Host, string PathAndQuery, string[] Steps, string? Authorization, string? IdempotencyKey);

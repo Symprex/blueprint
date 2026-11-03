@@ -60,14 +60,31 @@ public sealed class BlueprintClientSerializerContextTests
     }
 
     [Fact]
-    public void Options_derived_from_a_context_are_reused_for_the_same_options_and_context()
+    public void Options_derived_from_a_context_are_reused_for_the_same_read_only_options_and_context()
     {
         var options = CreateOptions();
+        options.MakeReadOnly(populateMissingResolver: true);
         var first = new BlueprintHttpClient(new System.Net.Http.HttpClient(), options).WithSerializerContext(PricingSerializerContext.Default);
         var second = new BlueprintHttpClient(new System.Net.Http.HttpClient(), options).WithSerializerContext(PricingSerializerContext.Default);
 
         // A type's metadata is held by the options that resolved it, so the same instance means the same options.
         second.ResolveTypeInfo<QuotePriceCommand>().Should().BeSameAs(first.ResolveTypeInfo<QuotePriceCommand>());
+    }
+
+    [Fact]
+    public void Options_still_open_to_change_are_derived_afresh_so_that_a_change_between_two_calls_is_seen()
+    {
+        var options = CreateOptions();
+        var first = new BlueprintHttpClient(new System.Net.Http.HttpClient(), options).WithSerializerContext(PricingSerializerContext.Default);
+        var before = first.JsonOptions.Converters.OfType<SecondDecimalConverter>().Any();
+
+        options.Converters.Add(new SecondDecimalConverter());
+        var second = new BlueprintHttpClient(new System.Net.Http.HttpClient(), options).WithSerializerContext(PricingSerializerContext.Default);
+
+        before.Should().BeFalse();
+        second.JsonOptions.Should().NotBeSameAs(first.JsonOptions);
+        second.JsonOptions.Converters.OfType<SecondDecimalConverter>().Should().ContainSingle("the second client is derived from the options as they are now");
+        first.JsonOptions.Converters.OfType<SecondDecimalConverter>().Should().BeEmpty("the first client keeps the options it was made with");
     }
 
     [Fact]
@@ -136,6 +153,19 @@ public sealed class BlueprintClientSerializerContextTests
         public override void Write(Utf8JsonWriter writer, decimal value, JsonSerializerOptions options)
         {
             writer.WriteStringValue("dec:" + value.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    private sealed class SecondDecimalConverter : JsonConverter<decimal>
+    {
+        public override decimal Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            return reader.GetDecimal();
+        }
+
+        public override void Write(Utf8JsonWriter writer, decimal value, JsonSerializerOptions options)
+        {
+            writer.WriteNumberValue(value);
         }
     }
 

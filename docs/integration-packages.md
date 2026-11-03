@@ -404,7 +404,16 @@ internal partial class RegionalOperationsApi
     {
         var regionalBase = this._endpoints.Regions[region];
 
-        return this.WithRequestModifier(message => message.RequestUri = new Uri(regionalBase, message.RequestUri!));
+        return this.WithRequestModifier(message =>
+        {
+            var uri = message.RequestUri!;
+
+            // A request is relative to the base address until a modifier resolves it, so one an earlier ForRegion ran on is
+            // already absolute, and an absolute URI ignores the base it is resolved against: swap its host instead.
+            message.RequestUri = uri.IsAbsoluteUri
+                ? new UriBuilder(uri) { Scheme = regionalBase.Scheme, Host = regionalBase.Host, Port = regionalBase.Port }.Uri
+                : new Uri(regionalBase, uri);
+        });
     }
 
     // Per-operation hook: reads the operation, chains the caller's modifier.
@@ -425,7 +434,7 @@ internal partial class RegionalOperationsApi
 }
 ```
 
-**Request URIs are still relative when modifiers run.** The URL the operation builds is relative to the `HttpClient`'s base address (a leading `/` is stripped), and `HttpClient` only makes it absolute on send. A modifier that rewrites the host, as `ForRegion` does, must combine against a base itself (`new Uri(regionalBase, message.RequestUri!)`) rather than expect an absolute `RequestUri`.
+**Request URIs are relative when the first modifier runs, but not necessarily the next.** The URL the operation builds is relative to the `HttpClient`'s base address (a leading `/` is stripped), and `HttpClient` only makes it absolute on send. A modifier that rewrites the host, as `ForRegion` does, must combine a relative `RequestUri` against a base itself (`new Uri(regionalBase, message.RequestUri!)`); but a modifier that runs after another that did so is given an absolute one, which ignores the base it is combined with, so it must check `IsAbsoluteUri` and change the host of the URI it was given, as `ForRegion` does, or `ForRegion("eu").ForRegion("us")` would still send to the EU host.
 
 #### Request-shaping order
 
@@ -451,7 +460,7 @@ A client is cheap, immutable and thread-safe, because `WithCredential` and `With
 
 #### Serializer context
 
-`[BlueprintClient(SerializerContext = typeof(MyContext))]` optionally names a `JsonSerializerContext` for the client to read and write with. The generated constructor calls `client.WithSerializerContext(MyContext.Default)`, which derives read-only options with the context first in the resolver chain. The derived options are cached per options and context, so converters on the transport's options (NodaTime, for example) still apply. Each included operation's request and result type infos, and its reader, are resolved once per options instance into a plan that every client over those options shares, clones included: making a client is one lookup, and a call looks nothing up. A GET request type needs no context entry, as it has no body. A type reachable from one the context names (through its public properties and fields, collection and array elements, and generic arguments) is covered, as the System.Text.Json source generator gives the context metadata for it too; a request or result type the context does not cover is warning BPCL007. Without a context, the metadata comes from the JSON options' own resolver, resolved into the plan the same way; a transport given no options shares one read-only default instance, so its clients share one plan.
+`[BlueprintClient(SerializerContext = typeof(MyContext))]` optionally names a `JsonSerializerContext` for the client to read and write with. The generated constructor calls `client.WithSerializerContext(MyContext.Default)`, which derives read-only options with the context first in the resolver chain. The derived options are cached per read-only options and context (options still open to change are derived afresh for each client, so a change is never missed), so converters on the transport's options (NodaTime, for example) still apply. Each included operation's request and result type infos, and its reader, are resolved once per options instance into a plan that every client over those options shares, clones included: making a client is one lookup, and a call looks nothing up. A GET request type needs no context entry, as it has no body. A type reachable from one the context names (through its public properties and fields, collection and array elements, and generic arguments) is covered, as the System.Text.Json source generator gives the context metadata for it too; a request or result type the context does not cover is warning BPCL007. Without a context, the metadata comes from the JSON options' own resolver, resolved into the plan the same way; a transport given no options shares one read-only default instance, so its clients share one plan.
 
 #### Diagnostics
 

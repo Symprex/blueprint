@@ -690,11 +690,15 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
     /// </summary>
     /// <param name="resultType">The declared result.</param>
     /// <param name="jsonTypes">The types the readers chosen read as JSON, which a serializer context must cover.</param>
+    /// <param name="isUnionMember">
+    /// Whether the result is a member of a <c>Results&lt;T1, T2&gt;</c>, whose content a content result is read from, rather than
+    /// the whole declared result, which a content result is read as.
+    /// </param>
     /// <returns>
     /// The expression constructing the reader in the client's plan, each reader given the metadata of what it reads as JSON
     /// from the transport the plan is made for; or <see langword="null"/> when no reader can be constructed.
     /// </returns>
-    private static string? CreateReader(ITypeSymbol resultType, List<ITypeSymbol> jsonTypes)
+    private static string? CreateReader(ITypeSymbol resultType, List<ITypeSymbol> jsonTypes, bool isUnionMember = false)
     {
         if (resultType.TypeKind is TypeKind.Error or TypeKind.TypeParameter or TypeKind.Pointer or TypeKind.FunctionPointer or TypeKind.Dynamic)
         {
@@ -726,8 +730,8 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
 
         if (named is { Name: "Results", Arity: 2 } && named.IsInNamespace("Blueprint", "Model"))
         {
-            var first = CreateReader(named.TypeArguments[0], jsonTypes);
-            var second = CreateReader(named.TypeArguments[1], jsonTypes);
+            var first = CreateReader(named.TypeArguments[0], jsonTypes, isUnionMember: true);
+            var second = CreateReader(named.TypeArguments[1], jsonTypes, isUnionMember: true);
 
             return first is null || second is null
                 ? null
@@ -760,8 +764,18 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
 
         if (named.Arity == 1 && (IsRuntimeExecType(named, "OkResult") || IsRuntimeExecType(named, "CreatedResult") || IsRuntimeExecType(named, "AcceptedResult")))
         {
-            jsonTypes.Add(named.TypeArguments[0]);
-            return $"new {ReadersNamespace}ContentResultResponseReader<{resultFqn}, {named.TypeArguments[0].ToDisplayString(OperationClientShape.FullyQualifiedWithNullable)}>({TypeInfoArgument(named.TypeArguments[0])})";
+            var contentFqn = named.TypeArguments[0].ToDisplayString(OperationClientShape.FullyQualifiedWithNullable);
+
+            if (isUnionMember)
+            {
+                // A union's member is read from its content, which is the body.
+                jsonTypes.Add(named.TypeArguments[0]);
+                return $"new {ReadersNamespace}ContentResultResponseReader<{resultFqn}, {contentFqn}>({TypeInfoArgument(named.TypeArguments[0])})";
+            }
+
+            // Alone, the result itself is deserialised, so it is its metadata that is resolved and its type a context must cover.
+            jsonTypes.Add(resultType);
+            return $"new {ReadersNamespace}ContentResultResponseReader<{resultFqn}, {contentFqn}>(resultTypeInfo: {TypeInfoArgument(resultType)})";
         }
 
         jsonTypes.Add(resultType);
