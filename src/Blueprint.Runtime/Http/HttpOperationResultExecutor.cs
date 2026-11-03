@@ -171,8 +171,10 @@ public class HttpOperationResultExecutor
             }
         }
 
+        // A write that has already faulted is awaited, so its exception reaches the router rather than being taken for
+        // success.
         var writeTask = WriteJsonAsync(httpContext, operationContext, okResult.Content);
-        if (writeTask.IsCompleted)
+        if (writeTask.IsCompletedSuccessfully)
         {
             return _trueTask;
         }

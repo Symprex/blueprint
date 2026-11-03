@@ -112,6 +112,58 @@ public sealed class HttpResultWriterWireTests
     }
 
     [Fact]
+    public async Task A_writer_is_given_an_exception_from_a_write_that_had_already_faulted()
+    {
+        // The body stream returns an already-faulted write, without yielding: HandleOkResult used to take that write as
+        // complete, so the exception reached no one and the request ended as a 200 with no body.
+        await using var host = await ResultWriterHost.StartAsync(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
+
+        var response = await host.GetAsync("sync-path-write-fault?at-once");
+
+        response.Status.Should().Be(400, response.Body);
+        response.ContentType.Should().Be("application/json");
+        response.Body.Should().Be("""{"error":{"code":"invalid_operation","message":"boom-at-once"}}""");
+    }
+
+    [Fact]
+    public async Task Without_a_writer_a_write_that_had_already_faulted_is_answered_with_the_exception_body()
+    {
+        await using var host = await ResultWriterHost.StartAsync(static _ => { });
+
+        var response = await host.GetAsync("sync-path-write-fault?at-once");
+
+        response.Status.Should().Be(500, response.Body);
+        response.Body.Should().Be("""{"type":"unknown_error","title":"Something has gone wrong, please try again","status":500}""");
+    }
+
+    [Fact]
+    public async Task A_writer_that_throws_is_given_that_exception_once_and_may_write_it()
+    {
+        await using var host = await ResultWriterHost.StartAsync(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
+
+        var response = await host.GetAsync("e2e/maybe-items/writer-throws");
+
+        response.Status.Should().Be(400, response.Body);
+        response.Body.Should().Be("""{"error":{"code":"invalid_operation","message":"The writer failed"}}""");
+        host.Services.GetRequiredService<IHttpResultWriter>().As<LegacyEnvelopeResultWriter>().Given
+            .Should().Equal("OkResult`1", "UnhandledExceptionResult:The writer failed");
+    }
+
+    [Fact]
+    public async Task A_writer_that_throws_again_for_its_own_exception_lets_the_second_escape_to_aspnet_core()
+    {
+        await using var host = await ResultWriterHost.StartAsync(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
+
+        var response = await host.GetAsync("e2e/maybe-items/writer-throws-twice");
+
+        // ASP.NET Core's own answer to an exception that leaves the request delegate before the response starts.
+        response.Status.Should().Be(500);
+        response.Body.Should().BeEmpty();
+        host.Services.GetRequiredService<IHttpResultWriter>().As<LegacyEnvelopeResultWriter>().Given
+            .Should().Equal("OkResult`1", "UnhandledExceptionResult:The writer failed twice");
+    }
+
+    [Fact]
     public async Task A_writer_writes_a_successful_result_in_a_format_of_its_own()
     {
         await using var host = await ResultWriterHost.StartAsync(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
@@ -184,10 +236,23 @@ public sealed class HttpResultWriterWireTests
     /// </summary>
     private sealed class LegacyEnvelopeResultWriter : IHttpResultWriter
     {
+        private readonly ConcurrentQueue<string> _given = new();
+
+        /// <summary>Gets each result it was given: its type, and an exception's message.</summary>
+        public IReadOnlyCollection<string> Given => this._given;
+
         public ValueTask<bool> TryWriteAsync(HttpContext httpContext, ApiOperationContext operationContext, OperationResult result)
         {
+            this._given.Enqueue(result is UnhandledExceptionResult unhandled
+                ? $"{nameof(UnhandledExceptionResult)}:{unhandled.Exception.Message}"
+                : result.GetType().Name);
+
             return result switch
             {
+                // A writer that fails, and one that fails again when given its own failure.
+                OkResult { Content: E2EWidgetResponse { Name: "writer-throws" } } => throw new InvalidOperationException("The writer failed"),
+                OkResult { Content: E2EWidgetResponse { Name: "writer-throws-twice" } } => throw new NotSupportedException("The writer failed twice"),
+                UnhandledExceptionResult { Exception: NotSupportedException } => throw new NotSupportedException("The writer failed again"),
                 OkResult { Content: E2EWidgetResponse widget } when httpContext.Request.Query["format"] == "csv" => WriteCsvAsync(httpContext, widget),
                 ValidationFailedResult failed => WriteEnvelopeAsync(
                     httpContext,
@@ -320,7 +385,9 @@ public sealed class HttpResultWriterWireTests
                 // response starts, reaching the router's exception handling.
                 if (httpContext.Request.Path.Value?.EndsWith("/sync-path-write-fault", StringComparison.Ordinal) == true)
                 {
-                    httpContext.Response.Body = new FaultsOnFirstWriteStream(httpContext.Response.Body);
+                    httpContext.Response.Body = new FaultsOnFirstWriteStream(
+                        httpContext.Response.Body,
+                        alreadyFaulted: httpContext.Request.QueryString.Value == "?at-once");
                 }
 
                 return next(httpContext);
@@ -368,8 +435,11 @@ public sealed class HttpResultWriterWireTests
         }
     }
 
-    /// <summary>A response body whose first write yields, then throws without forwarding a byte; later writes go through.</summary>
-    private sealed class FaultsOnFirstWriteStream(Stream inner) : Stream
+    /// <summary>
+    /// A response body whose first write fails without forwarding a byte — after a yield, or, when
+    /// <paramref name="alreadyFaulted"/>, as a write that has already faulted — and whose later writes go through.
+    /// </summary>
+    private sealed class FaultsOnFirstWriteStream(Stream inner, bool alreadyFaulted) : Stream
     {
         private bool _hasFaulted;
 
@@ -387,16 +457,24 @@ public sealed class HttpResultWriterWireTests
             set => throw new NotSupportedException();
         }
 
-        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            if (!this._hasFaulted)
+            if (this._hasFaulted)
             {
-                this._hasFaulted = true;
+                return inner.WriteAsync(buffer, cancellationToken);
+            }
+
+            this._hasFaulted = true;
+
+            return alreadyFaulted
+                ? ValueTask.FromException(new InvalidOperationException("boom-at-once"))
+                : FaultAfterYieldAsync();
+
+            static async ValueTask FaultAfterYieldAsync()
+            {
                 await Task.Yield();
                 throw new InvalidOperationException("boom-during-write");
             }
-
-            await inner.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
         }
 
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
