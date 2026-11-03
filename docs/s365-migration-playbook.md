@@ -1106,11 +1106,11 @@ public async Task<HttpResult> HandleAsync(
 (`[BlueprintHttpClientExtensions]`). This replaces `IVCardApi` in every handler, so it is a larger change and not the
 default path:
 ```csharp
-services.AddBlueprintHttpClient<VCardBlueprintApp>(options =>
+services.AddBlueprintHttpClient<VCardBlueprintApp>((sp, client) =>
 {
-    options.BaseAddress = new Uri($"{internalServiceEndpoints.VCard}/api/");
-    options.Timeout = TimeSpan.FromSeconds(10);
-    options.ConfigureHttpClient = (sp, client) => HttpClientHelpers.AddAuthorizationHeaderIfPresent(sp, client);
+    HttpClientHelpers.AddAuthorizationHeaderIfPresent(sp, client);
+    client.BaseAddress = new Uri($"{internalServiceEndpoints.VCard}/api/");
+    client.Timeout = TimeSpan.FromSeconds(10);
 });
 
 // In the handler:
@@ -1147,10 +1147,10 @@ Renaming the gateway operations directly remains an alternative.
 | Client type | Interface + class (`IVCardApi` / `VCardApi`) | Same pair; `VCardApi` is a generated `[BlueprintClient]` | `BlueprintHttpClient<VCardBlueprintApp>` |
 | Registration | `AddBlueprintClient<IVCardApi, VCardApi>` | Same call | `AddBlueprintHttpClient<VCardBlueprintApp>` |
 | Handler dependency | `IVCardApi` | `IVCardApi` (unchanged) | `BlueprintHttpClient<VCardBlueprintApp>` |
-| Method generation | Old Blueprint codegen → methods on class | Source generator → methods on the client class | Source generator → extension methods |
-| Metadata source | `ServiceApiInclude` + `ApiDataModel` | Generated operation descriptors | Generated `ApiOperationDescriptor` |
+| Method generation | Old Blueprint codegen → methods on class | Source generator → methods on the client class, each calling its operation's builders with the reader its call plan selects | Source generator → extension methods |
+| Metadata source | `ServiceApiInclude` + `ApiDataModel` | None at run time: the generator emits each call from a compile-time call plan (HTTP method, URL, reader and request metadata), so no app or descriptor registration is needed | Generated `ApiOperationDescriptor` |
 | Auth propagation | `HttpClientHelpers.AddAuthorizationHeaderIfPresent` | Same (configuration callback) | Same (configuration callback) |
-| URL construction | Runtime from `ApiDataModel` | Source-generated | Source-generated `BuildUrl()` |
+| URL construction | Runtime from `ApiDataModel` | Typed per-operation builders the generator emits (`Op.Http.BuildUrl` / `AppendQueryString`) | Source-generated `BuildUrl()` |
 | Error handling | `ApiException` | `ApiException` (same shape) | `ApiException` (same shape) |
 
 ---
