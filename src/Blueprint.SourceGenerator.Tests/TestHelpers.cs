@@ -408,6 +408,48 @@ public static class TestHelpers
         return RunTrackedGenerators(generators, parseOptions, initialCompilation, updatedCompilation);
     }
 
+    /// <summary>
+    /// Reuses one tracked-generator driver across a sequence of revisions of the same project, between which files may be
+    /// added or removed, so a test can prove that an edit to one file is not answered from what the driver cached for an
+    /// operation declared in another — the case a clean build never exercises.
+    /// </summary>
+    /// <remarks>
+    /// A file whose path and text are unchanged keeps its syntax tree from the revision before, as an IDE keeps an unedited
+    /// document's, so the driver sees that file as cached; a stale plan keyed on one file's text shows only then.
+    /// <see cref="CompileWithTrackedGeneratorsAfterEdit" /> re-parses every file, as the compiler server does on each
+    /// build while reusing its driver, so every tree is new to the driver there.
+    /// </remarks>
+    /// <param name="generators">The tracked generators that run on every revision.</param>
+    /// <param name="revisions">Each revision's files, as path and source pairs, in the order the revisions are compiled.</param>
+    /// <returns>One run per revision, in the same order, each with the emitted compilation's errors in its diagnostics.</returns>
+    public static ImmutableArray<MultiGeneratorGenerationResult> CompileWithTrackedGeneratorsAcrossRevisions(
+        TrackedGeneratorDefinition[] generators,
+        params (string FilePath, string Source)[][] revisions)
+    {
+        ArgumentNullException.ThrowIfNull(generators);
+        ArgumentNullException.ThrowIfNull(revisions);
+
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var driver = CreateTrackedGeneratorDriver(generators, parseOptions);
+        var results = ImmutableArray.CreateBuilder<MultiGeneratorGenerationResult>(revisions.Length);
+        CSharpCompilation? compilation = null;
+
+        foreach (var files in revisions)
+        {
+            compilation = compilation is null
+                ? CreateCompilation(
+                    files.Select(static file => file.Source).ToArray(),
+                    files.Select(static file => file.FilePath).ToArray(),
+                    parseOptions)
+                : ReviseCompilation(compilation, files, parseOptions);
+
+            (driver, var result) = ExecuteTrackedGenerators(driver, compilation, generators);
+            results.Add(result);
+        }
+
+        return results.MoveToImmutable();
+    }
+
     // You call this method passing in C# sources, and the list of stages you expect
     // It runs the generator, asserts the outputs are ok,
     private static GenerationResult Compile<T>(
@@ -450,6 +492,22 @@ public static class TestHelpers
             syntaxTrees,
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    }
+
+    private static CSharpCompilation ReviseCompilation(
+        CSharpCompilation compilation,
+        (string FilePath, string Source)[] files,
+        CSharpParseOptions parseOptions)
+    {
+        // The same tree object, not an equal one: the driver tells a cached file from an edited one by identity.
+        var previousTrees = compilation.SyntaxTrees.ToDictionary(static tree => tree.FilePath, StringComparer.Ordinal);
+        var trees = files
+            .Select(file => previousTrees.TryGetValue(file.FilePath, out var tree) && tree.GetText().ToString() == file.Source
+                ? tree
+                : CSharpSyntaxTree.ParseText(file.Source, parseOptions, file.FilePath))
+            .ToArray();
+
+        return compilation.RemoveAllSyntaxTrees().AddSyntaxTrees(trees);
     }
 
     private static List<MetadataReference> CreateMetadataReferences()
