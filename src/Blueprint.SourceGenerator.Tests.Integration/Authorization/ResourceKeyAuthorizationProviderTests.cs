@@ -542,6 +542,47 @@ public sealed class ResourceKeyAuthorizationProviderTests
     }
 
     [Fact]
+    public async Task The_access_checker_can_be_registered_and_asked_without_enlisting_the_provider()
+    {
+        // Signature 365 runs the checker beside its own authoriser before Blueprint enforces, so it must not join the
+        // providers every operation has to satisfy.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(static b => b
+            .AddResourceAccessChecker()
+            .AddResourceGrantSource(new FixedGrantSource("/T/ten_1/*")));
+
+        await using var serviceProvider = services.BuildServiceProvider();
+        await using var scope = serviceProvider.CreateAsyncScope();
+
+        scope.ServiceProvider.GetServices<IResourceAuthorizationProvider>().Should().NotContain(static p => p is ResourceKeyAuthorizationProvider);
+
+        var principal = Authenticated();
+        var checker = scope.ServiceProvider.GetRequiredService<IResourceAccessChecker>();
+        var context = new ApiOperationContext(scope.ServiceProvider, App, ListFolders, CancellationToken.None) { UserPrincipal = principal };
+
+        var granted = await checker.HasAccessAsync(context, principal, new ResourceDemand(Rename, new ResourceKey("/T/ten_1/Folders/f1")), Pair("/T/ten_1/Folders/f1"), CancellationToken.None);
+        var refused = await checker.HasAccessAsync(context, principal, new ResourceDemand(Rename, new ResourceKey("/T/ten_2/Folders/f1")), Pair("/T/ten_2/Folders/f1"), CancellationToken.None);
+
+        granted.IsAllowed.Should().BeTrue("the grant /T/ten_1/* covers /T/ten_1/Folders/f1");
+        refused.IsAllowed.Should().BeFalse("no grant covers /T/ten_2/Folders/f1");
+    }
+
+    [Fact]
+    public void Registering_the_access_checker_alone_keeps_one_registered_first_and_adds_it_once()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IResourceAccessChecker, TestAccessChecker>();
+
+        services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(static b => b
+            .AddResourceAccessChecker()
+            .AddResourceAccessChecker());
+
+        services.Where(static d => d.ServiceType == typeof(IResourceAccessChecker)).Should().ContainSingle()
+            .Which.ImplementationType.Should().Be(typeof(TestAccessChecker));
+    }
+
+    [Fact]
     public void Expanders_and_grant_sources_are_registered_scoped_in_the_order_they_are_added()
     {
         var services = new ServiceCollection();

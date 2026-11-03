@@ -66,6 +66,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     private readonly LegacyScopeMapperFunc? _legacyScopeMapper;
     private readonly bool _allowWhenNoScopeClaims;
     private readonly bool _allowUnauthenticated;
+    private readonly StringComparison _scopeComparison;
 
     // Inverse mapping: required verb → list of parent verbs that also satisfy it.
     // e.g. "Create" → ["Manage"] means a "Manage" claim also satisfies a "Create" requirement.
@@ -194,6 +195,17 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// callers itself, as Signature 365's grant check does with a 401, so this one does not refuse first with a 403.
     /// Defaults to <see langword="false"/> (deny).
     /// </param>
+    /// <param name="scopeComparison">
+    /// How scope text is compared: the scope claim type, the ignored scopes, each claim against a required pair's noun,
+    /// separator and verb, and the verbs of <paramref name="verbInclusions"/>. <see cref="StringComparison.OrdinalIgnoreCase"/>,
+    /// the default, matches <c>template::read</c> to <c>Template::Read</c> and ignores <c>OpenID</c> as <c>openid</c>;
+    /// <see cref="StringComparison.Ordinal"/> does neither, as Signature 365's own scope check does not. Only these two are
+    /// accepted.
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="scopeComparison"/> is neither <see cref="StringComparison.Ordinal"/> nor
+    /// <see cref="StringComparison.OrdinalIgnoreCase"/>.
+    /// </exception>
     public ScopePairClaimAuthorizationProvider(
         string scopeClaimType,
         string separator,
@@ -201,15 +213,24 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
         IDictionary<string, string[]>? verbInclusions = null,
         LegacyScopeMapperFunc? legacyScopeMapper = null,
         bool allowWhenNoScopeClaims = false,
-        bool allowUnauthenticated = false)
+        bool allowUnauthenticated = false,
+        StringComparison scopeComparison = StringComparison.OrdinalIgnoreCase)
     {
+        if (scopeComparison is not (StringComparison.Ordinal or StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentOutOfRangeException(nameof(scopeComparison), scopeComparison, "Scopes are compared Ordinal or OrdinalIgnoreCase.");
+        }
+
+        var scopeComparer = StringComparer.FromComparison(scopeComparison);
+
+        this._scopeComparison = scopeComparison;
         this._allowUnauthenticated = allowUnauthenticated;
         this._scopeClaimType = scopeClaimType ?? throw new ArgumentNullException(nameof(scopeClaimType));
         this._separator = separator ?? throw new ArgumentNullException(nameof(separator));
         this._ignoredScopes = ignoredScopes is not null
-            ? ignoredScopes.ToFrozenSet(StringComparer.OrdinalIgnoreCase)
+            ? ignoredScopes.ToFrozenSet(scopeComparer)
             : FrozenSet<string>.Empty;
-        this._verbIncludedIn = BuildInverseVerbMap(verbInclusions);
+        this._verbIncludedIn = BuildInverseVerbMap(verbInclusions, scopeComparer);
         this._legacyScopeMapper = legacyScopeMapper;
         this._allowWhenNoScopeClaims = allowWhenNoScopeClaims;
     }
@@ -243,7 +264,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
         foreach (var claim in identity.Claims)
         {
-            if (!string.Equals(claim.Type, this._scopeClaimType, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(claim.Type, this._scopeClaimType, this._scopeComparison))
             {
                 continue;
             }
@@ -306,7 +327,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
         foreach (var claim in identity.Claims)
         {
-            if (string.Equals(claim.Type, this._scopeClaimType, StringComparison.OrdinalIgnoreCase)
+            if (string.Equals(claim.Type, this._scopeClaimType, this._scopeComparison)
                 && !this._ignoredScopes.Contains(claim.Value))
             {
                 held.Add(claim.Value);
@@ -343,7 +364,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     {
         foreach (var required in scopePairs)
         {
-            if (MatchesScopePair(scopeValue, required.Noun, this._separator, required.Verb))
+            if (MatchesScopePair(scopeValue, required.Noun, this._separator, required.Verb, this._scopeComparison))
             {
                 return true;
             }
@@ -352,7 +373,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
             {
                 foreach (var parentVerb in parentVerbs)
                 {
-                    if (MatchesScopePair(scopeValue, required.Noun, this._separator, parentVerb))
+                    if (MatchesScopePair(scopeValue, required.Noun, this._separator, parentVerb, this._scopeComparison))
                     {
                         return true;
                     }
@@ -365,14 +386,15 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
     /// <summary>
     /// Zero-allocation scope-pair comparison. Checks whether <paramref name="claimValue"/> equals
-    /// <c>{noun}{separator}{verb}</c> using ordinal-ignore-case span slicing, avoiding the
+    /// <c>{noun}{separator}{verb}</c> under <paramref name="comparison"/> using span slicing, avoiding the
     /// per-comparison string interpolation that would otherwise allocate on every request.
     /// </summary>
     private static bool MatchesScopePair(
         string claimValue,
         string noun,
         string separator,
-        string verb)
+        string verb,
+        StringComparison comparison)
     {
         var expectedLength = noun.Length + separator.Length + verb.Length;
 
@@ -383,9 +405,9 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
         var span = claimValue.AsSpan();
 
-        return span[..noun.Length].Equals(noun.AsSpan(), StringComparison.OrdinalIgnoreCase)
-            && span.Slice(noun.Length, separator.Length).Equals(separator.AsSpan(), StringComparison.OrdinalIgnoreCase)
-            && span[(noun.Length + separator.Length)..].Equals(verb.AsSpan(), StringComparison.OrdinalIgnoreCase);
+        return span[..noun.Length].Equals(noun.AsSpan(), comparison)
+            && span.Slice(noun.Length, separator.Length).Equals(separator.AsSpan(), comparison)
+            && span[(noun.Length + separator.Length)..].Equals(verb.AsSpan(), comparison);
     }
 
     /// <summary>
@@ -396,7 +418,8 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     /// required verb?"
     /// </summary>
     private static FrozenDictionary<string, string[]> BuildInverseVerbMap(
-        IDictionary<string, string[]>? verbInclusions)
+        IDictionary<string, string[]>? verbInclusions,
+        StringComparer verbComparer)
     {
         if (verbInclusions is null || verbInclusions.Count == 0)
         {
@@ -406,7 +429,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
         // Inclusion is transitive (Admin → Manage → Read means Admin includes Read), so each parent is mapped from every verb
         // it reaches, not only those it lists. Computed once here, so authorization stays a single lookup per verb; the
         // visited set ends a walk that meets a cycle.
-        var children = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        var children = new Dictionary<string, string[]>(verbComparer);
 
         foreach (var (parentVerb, childVerbs) in verbInclusions)
         {
@@ -414,11 +437,11 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
             children[parentVerb] = children.TryGetValue(parentVerb, out var existing) ? [.. existing, .. childVerbs] : childVerbs;
         }
 
-        var inverse = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var inverse = new Dictionary<string, HashSet<string>>(verbComparer);
 
         foreach (var parentVerb in children.Keys)
         {
-            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { parentVerb };
+            var visited = new HashSet<string>(verbComparer) { parentVerb };
             var pending = new Stack<string>(children[parentVerb]);
 
             while (pending.Count > 0)
@@ -432,7 +455,7 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
 
                 if (!inverse.TryGetValue(includedVerb, out var parents))
                 {
-                    parents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    parents = new HashSet<string>(verbComparer);
                     inverse[includedVerb] = parents;
                 }
 
@@ -451,6 +474,6 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
         return inverse.ToFrozenDictionary(
             static kvp => kvp.Key,
             static kvp => kvp.Value.ToArray(),
-            StringComparer.OrdinalIgnoreCase);
+            verbComparer);
     }
 }

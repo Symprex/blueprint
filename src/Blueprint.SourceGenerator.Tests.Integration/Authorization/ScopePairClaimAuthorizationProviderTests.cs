@@ -724,6 +724,90 @@ public class ScopePairClaimAuthorizationProviderTests
         result.Should().BeTrue("A includes B, which includes C");
     }
 
+    // ─── Ordinal scope comparison ─────────────────────────────────────
+
+    [Fact]
+    public async Task An_ordinal_provider_refuses_a_scope_that_differs_from_the_pair_only_in_case()
+    {
+        // Signature 365's scope check is ordinal throughout, so signature::read never satisfied Signature::Read there.
+        var provider = CreateOrdinalProvider();
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, CreatePrincipal("signature::read"), Resolve(new ScopePair("Signature", "Read")), CancellationToken.None);
+
+        result.Should().BeFalse("an ordinal comparison does not match signature::read to Signature::Read");
+    }
+
+    [Fact]
+    public async Task An_ordinal_provider_counts_a_scope_that_differs_from_an_ignored_one_only_in_case_as_an_api_scope()
+    {
+        // OpenID is not the ignored openid under an ordinal comparison, so the token holds an API scope that matches nothing
+        // and the no-scope-claims rule, which would allow it, never applies.
+        var provider = CreateOrdinalProvider();
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, CreatePrincipal("OpenID"), Resolve(new ScopePair("Signature", "Read")), CancellationToken.None);
+
+        result.Should().BeFalse("OpenID is an API scope under an ordinal comparison, and it matches no pair");
+    }
+
+    [Fact]
+    public async Task An_ordinal_provider_reads_only_claims_whose_type_matches_exactly()
+    {
+        var provider = CreateOrdinalProvider(allowWhenNoScopeClaims: false);
+        var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("Scope", "Signature::Read")], "TestAuth"));
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, principal, Resolve(new ScopePair("Signature", "Read")), CancellationToken.None);
+
+        result.Should().BeFalse("a Scope claim is not a scope claim under an ordinal comparison, so the caller holds none");
+    }
+
+    [Fact]
+    public async Task An_ordinal_provider_refuses_a_parent_verb_that_differs_from_the_hierarchy_only_in_case()
+    {
+        var provider = CreateOrdinalProvider();
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, CreatePrincipal("Signature::manage"), Resolve(new ScopePair("Signature", "Read")), CancellationToken.None);
+
+        result.Should().BeFalse("manage is not the Manage verb that includes Read under an ordinal comparison");
+    }
+
+    [Theory]
+    [InlineData("Signature::Read")]
+    [InlineData("Signature::Manage")]
+    public async Task An_ordinal_provider_allows_an_exact_match_and_a_verb_that_includes_the_required_one(string held)
+    {
+        var provider = CreateOrdinalProvider();
+
+        var result = await provider.IsAuthorizedAsync(
+            null!, CreatePrincipal("openid", held), Resolve(new ScopePair("Signature", "Read")), CancellationToken.None);
+
+        result.Should().BeTrue($"{held} satisfies Signature::Read exactly or through the verb hierarchy");
+    }
+
+    [Theory]
+    [InlineData(StringComparison.CurrentCulture)]
+    [InlineData(StringComparison.InvariantCultureIgnoreCase)]
+    public void A_culture_sensitive_scope_comparison_is_refused(StringComparison comparison)
+    {
+        var create = () => new ScopePairClaimAuthorizationProvider("scope", "::", scopeComparison: comparison);
+
+        create.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("scopeComparison");
+    }
+
+    private static ScopePairClaimAuthorizationProvider CreateOrdinalProvider(bool allowWhenNoScopeClaims = true)
+    {
+        return new ScopePairClaimAuthorizationProvider(
+            "scope",
+            "::",
+            ignoredScopes: ["openid", "profile"],
+            verbInclusions: ScopePairClaimAuthorizationProvider.StandardCrudVerbHierarchy.ToDictionary(),
+            allowWhenNoScopeClaims: allowWhenNoScopeClaims,
+            scopeComparison: StringComparison.Ordinal);
+    }
+
     // ─── Decision shape ───────────────────────────────────────────────
 
     [Fact]

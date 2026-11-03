@@ -268,14 +268,31 @@ public sealed class BlueprintServiceBuilder
     /// allow as every one must. Calling this more than once registers it once.
     /// </para>
     /// <para>
-    /// The checker is scoped, because the expanders and grant sources behind it may be. It is only added when no
-    /// <see cref="Blueprint.Authorization.IResourceAccessChecker"/> is registered yet, so an app may register its own first.
+    /// The checker is registered as <see cref="AddResourceAccessChecker"/> registers it.
     /// </para>
     /// </remarks>
     /// <returns>This builder for chaining.</returns>
     public BlueprintServiceBuilder AddResourceKeyAuthorization()
     {
         this.Services.TryAddEnumerable(ServiceDescriptor.Singleton<Blueprint.Authorization.IResourceAuthorizationProvider, Blueprint.Authorization.ResourceKeyAuthorizationProvider>());
+
+        return this.AddResourceAccessChecker();
+    }
+
+    /// <summary>
+    /// Registers the default <see cref="Blueprint.Authorization.IResourceAccessChecker"/>, which matches a demand against the
+    /// grants of every <see cref="AddResourceGrantSource{T}">registered grant source</see>, without enlisting
+    /// <see cref="Blueprint.Authorization.ResourceKeyAuthorizationProvider"/> among the resource authorization providers.
+    /// Use it to ask the checker from an app's own code, or to run it beside an existing authoriser before it enforces;
+    /// <see cref="AddResourceKeyAuthorization"/> registers it too.
+    /// </summary>
+    /// <remarks>
+    /// The checker is scoped, because the expanders and grant sources behind it may be. It is only added when no
+    /// <see cref="Blueprint.Authorization.IResourceAccessChecker"/> is registered yet, so an app may register its own first.
+    /// </remarks>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder AddResourceAccessChecker()
+    {
         this.Services.TryAddScoped<Blueprint.Authorization.IResourceAccessChecker, Blueprint.Authorization.ResourceAccessChecker>();
 
         return this;
