@@ -232,6 +232,8 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 
 **Unauthenticated callers**: refused by default. Pass `allowUnauthenticated: true` when another provider registered beside this one refuses them itself, for example with a `401`, so this one does not answer first with a `403`.
 
+**Case**: scopes are compared case-insensitively by default, so `template::read` satisfies `Template::Read` and `OpenID` is ignored as `openid`. Pass `scopeComparison: StringComparison.Ordinal` to the full constructor to compare exactly, as Signature 365's own scope check does: the scope claim type, the ignored scopes, each claim's noun, separator and verb, and the verbs of `verbInclusions` are then all case-sensitive, so `signature::read` no longer satisfies `Signature::Read` and an `OpenID` scope counts as an API scope. `Signature::Manage` still satisfies `Signature::Read` through the verb hierarchy. Only `Ordinal` and `OrdinalIgnoreCase` are accepted; any other value throws `ArgumentOutOfRangeException`.
+
 **No-API-scope behavior**: When the user's only scopes are ignored scopes (e.g. `openid`, `Signature365.ReadWrite.All`), the `AllowWhenNoScopeClaims` virtual method is called. Override to `true` for full-access semantics (S365 pattern).
 
 ### `ResourceKeyAuthorizationProvider`
@@ -247,6 +249,8 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint => blueprint
 ```
 
 `AddResourceKeyAuthorization()` registers the provider, a singleton, once however often it is called, and the default `IResourceAccessChecker`, scoped, unless one is registered already. `AddResourceGrantSource<T>()` and `AddResourceKeyExpander<T>()` register scoped; `AddResourceGrantSource(instance)` registers a configured source as a singleton.
+
+`AddResourceAccessChecker()` registers that default `IResourceAccessChecker` alone, on the same terms, without enlisting the provider among those every operation must satisfy. Use it when only an app's own code asks the checker, or to run it beside an existing authoriser before Blueprint enforces, as Signature 365 does while it proves the two agree. `AddResourceKeyAuthorization()` calls it.
 
 **Keys and grants.** A `ResourceKey` is a key being asked about: absolute when it starts with `/`, otherwise partial. A `ResourceGrant` is a key held, and is always absolute:
 - an exact grant covers its own key alone;
