@@ -119,7 +119,9 @@ public static class BlueprintHttpClientServiceCollectionExtensions
     /// <returns>
     /// An <see cref="IHttpClientBuilder"/> for the named client (named for <typeparamref name="TImplementation"/>), for further
     /// configuration such as a primary handler or retry. Where <typeparamref name="TInterface"/> is already registered nothing
-    /// is added and the builder of the client already registered is returned.
+    /// is added and the builder for the named client <c>typeof(TImplementation).Name</c> is returned. That configures the
+    /// existing client only if its registration was made by this method for the same implementation; a manual registration,
+    /// or one against another implementation, leaves the returned builder configuring a client nothing uses.
     /// </returns>
     public static IHttpClientBuilder AddBlueprintClient<TInterface, TImplementation>(
         this IServiceCollection services,
