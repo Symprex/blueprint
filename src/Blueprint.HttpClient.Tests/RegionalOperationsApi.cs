@@ -35,7 +35,9 @@ internal partial class RegionalOperationsApi
     private readonly RegionEndpoints _endpoints;
 
     /// <summary>
-    /// Rewrites each request this client sends to the region's base address, keeping its path and query.
+    /// Rewrites each request this client sends to the region's base address, keeping its path and query. A request a preceding
+    /// modifier has already made absolute (an earlier region) has its host swapped, as an absolute URI ignores the base it is
+    /// resolved against.
     /// </summary>
     /// <param name="region">The region's name.</param>
     /// <returns>A client that sends to the region.</returns>
@@ -43,7 +45,14 @@ internal partial class RegionalOperationsApi
     {
         var regionalBase = this._endpoints.Regions[region];
 
-        return this.WithRequestModifier(message => message.RequestUri = new Uri(regionalBase, message.RequestUri!));
+        return this.WithRequestModifier(message =>
+        {
+            var uri = message.RequestUri!;
+
+            message.RequestUri = uri.IsAbsoluteUri
+                ? new UriBuilder(uri) { Scheme = regionalBase.Scheme, Host = regionalBase.Host, Port = regionalBase.Port }.Uri
+                : new Uri(regionalBase, uri);
+        });
     }
 
     /// <summary>

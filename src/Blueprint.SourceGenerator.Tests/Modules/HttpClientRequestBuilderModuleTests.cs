@@ -10,6 +10,9 @@ namespace Blueprint.SourceGenerator.Tests.Modules;
 /// </summary>
 public class HttpClientRequestBuilderModuleTests
 {
+    private const string Preamble = "using Blueprint.Model;\nusing Blueprint.Model.Attributes;\nusing System.Threading.Tasks;\n\n"
+        + "namespace TestNamespace;\n\n";
+
     [Fact]
     public void When_get_query_with_route_param_then_emits_url_builder_with_null_check()
     {
@@ -163,6 +166,320 @@ public class HttpClientRequestBuilderModuleTests
         var source = GetDescriptorSource(result, "GetWidgetQuery");
         source.Should().NotContain("class Http");
         source.Should().Contain("static (op) => { var operation = (global::TestNamespace.GetWidgetQuery)op; var typed = operation; if (typed.Id is null) return null;");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void When_another_partial_declaration_gains_or_loses_an_Http_member_then_a_reused_driver_follows_it(bool startsWithMember)
+    {
+        // The operation's own file is the same in every revision. Its descriptor used to be keyed on that file's text
+        // alone, so the driver answered the second revision from the plan it cached for the first: a nested class stayed
+        // beside a new member (CS0102), and a removed member did not bring the class back, until a clean build.
+        var operationFile = ("GetWidgetQuery.cs", Preamble + """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+        var httpMemberFile = ("GetWidgetQuery.Http.cs", Preamble + """
+            public partial class GetWidgetQuery
+            {
+                public string Http { get; set; }
+            }
+            """);
+
+        (string FilePath, string Source)[] withMember = [operationFile, httpMemberFile];
+        (string FilePath, string Source)[] withoutMember = [operationFile];
+
+        var runs = TestHelpers.CompileWithTrackedGeneratorsAcrossRevisions(
+            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+            startsWithMember ? withMember : withoutMember,
+            startsWithMember ? withoutMember : withMember,
+            startsWithMember ? withMember : withoutMember);
+
+        AssertNestedHttpClass(runs[0], declared: !startsWithMember);
+        AssertNestedHttpClass(runs[1], declared: startsWithMember);
+        AssertNestedHttpClass(runs[2], declared: !startsWithMember);
+
+        static void AssertNestedHttpClass(MultiGeneratorGenerationResult run, bool declared)
+        {
+            run.Diagnostics.Should().BeEmpty("the generated partial must never declare a second Http beside the user's");
+
+            var source = DescriptorSourceOf(run, "GetWidgetQuery");
+            if (declared)
+            {
+                source.Should().Contain("public static class Http")
+                    .And.Contain("static (op) => global::TestNamespace.GetWidgetQuery.Http.BuildUrl((global::TestNamespace.GetWidgetQuery)op)");
+            }
+            else
+            {
+                source.Should().NotContain("class Http")
+                    .And.Contain("static (op) => { var operation = (global::TestNamespace.GetWidgetQuery)op; var typed = operation;");
+            }
+        }
+    }
+
+    [Fact]
+    public void When_an_inherited_Http_property_is_a_route_placeholder_then_no_nested_class_hides_it()
+    {
+        // A nested Http class used to hide the inherited property, so the builder's own `typed.Http` named the class (CS0572).
+        var result = CompileDescriptor(
+            """
+            public abstract class WidgetRouteBase
+            {
+                public string Http { get; set; }
+            }
+
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Http}")]
+            public partial class GetWidgetByHttpQuery : WidgetRouteBase, IQuery<string>
+            {
+                public static Task<string> HandleAsync(GetWidgetByHttpQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetWidgetByHttpQuery");
+        source.Should().NotContain("class Http");
+        source.Should().Contain("static (op) => { var operation = (global::TestNamespace.GetWidgetByHttpQuery)op; var typed = operation; if (typed.Http is null) return null;");
+        source.Should().Contain("EscapeDataString(typed.Http)");
+    }
+
+    [Fact]
+    public void When_an_inherited_Http_property_is_a_query_parameter_then_no_nested_class_hides_it()
+    {
+        var result = CompileDescriptor(
+            """
+            public abstract class WidgetFilterBase
+            {
+                public string Http { get; set; }
+            }
+
+            [global::Blueprint.Model.Attributes.RootLink("/widgets")]
+            public partial class ListWidgetsByHttpQuery : WidgetFilterBase, IQuery<string>
+            {
+                public static Task<string> HandleAsync(ListWidgetsByHttpQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "ListWidgetsByHttpQuery");
+        source.Should().NotContain("class Http");
+        source.Should().Contain("static (op, url) => { var operation = (global::TestNamespace.ListWidgetsByHttpQuery)op; var typed = operation;");
+        source.Should().Contain("\"http=\" + global::System.Uri.EscapeDataString(typed.Http)");
+    }
+
+    [Fact]
+    public void When_the_operation_is_itself_named_Http_then_no_nested_class_and_delegates_are_inline()
+    {
+        // A nested type cannot share its enclosing type's name (CS0542).
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/http/{Id}")]
+            public partial class Http : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(Http operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "Http");
+        source.Should().NotContain("static class Http");
+        source.Should().Contain("static (op) => { var operation = (global::TestNamespace.Http)op; var typed = operation; if (typed.Id is null) return null;");
+    }
+
+    [Theory]
+    [InlineData("private string Http { get; set; }", true)]
+    [InlineData("protected string Http { get; set; }", false)]
+    [InlineData("internal string Http { get; set; }", false)]
+    [InlineData("public string Http() => \"\";", false)]
+    [InlineData("public class Http { }", false)]
+    public void When_a_base_type_declares_an_Http_member_then_the_nested_class_is_emitted_only_when_the_operation_cannot_see_it(
+        string baseMember,
+        bool emitsNestedClass)
+    {
+        var result = CompileDescriptor(
+            $$"""
+            public abstract class WidgetBase
+            {
+                {{baseMember}}
+            }
+
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetWidgetQuery : WidgetBase, IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "GetWidgetQuery");
+        if (emitsNestedClass)
+        {
+            source.Should().Contain("public static class Http");
+        }
+        else
+        {
+            source.Should().NotContain("public static class Http");
+            source.Should().Contain("static (op) => { var operation = (global::TestNamespace.GetWidgetQuery)op; var typed = operation;");
+        }
+    }
+
+    [Fact]
+    public void When_a_base_operation_in_a_referenced_assembly_has_its_generated_Http_class_then_the_derived_operation_still_declares_its_own()
+    {
+        // A base operation's generated Http is a symbol only once it is compiled into another assembly; from the same
+        // compilation it is invisible. Either way the derived operation declares its own, hiding the base's (CS0108 is
+        // suppressed for that), so it is not an inherited member that blocks the nested class.
+        var contract = TestHelpers.CreateReferenceFromSource(
+            """
+            using Blueprint.Model;
+
+            namespace Contract;
+
+            public class GetBaseWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; } = "";
+
+                public static ApiOperationDescriptor Configure() => null!;
+
+                public static class Http
+                {
+                    public static string BuildUrl(GetBaseWidgetQuery operation) => "/base-widgets/" + operation.Id;
+                }
+            }
+            """,
+            "HttpBuilderContract");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>(
+            Preamble + """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetDerivedWidgetQuery : global::Contract.GetBaseWidgetQuery
+            {
+                public static Task<string> HandleAsync(GetDerivedWidgetQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """,
+            additionalReferences: [contract]);
+
+        result.Diagnostics.Should().BeEmpty();
+        GetDescriptorSource(result, "GetDerivedWidgetQuery").Should().Contain("public static class Http")
+            .And.Contain("public static string BuildUrl(global::TestNamespace.GetDerivedWidgetQuery operation)");
+    }
+
+    [Theory]
+    [InlineData("[global::Blueprint.Model.Attributes.FromHeader(\"X-Token\")] public string Token { get; set; }", "Token")]
+    [InlineData("[global::Blueprint.Model.Attributes.FromCookie(\"session\")] public string Session { get; set; }", "Session")]
+    [InlineData("[global::Blueprint.Model.Attributes.FromAuthContext] public string UserId { get; set; }", "UserId")]
+    [InlineData("[global::Blueprint.Model.Attributes.FromAuthContext(ClaimType = \"sub\")] public string Subject { get; set; }", "Subject")]
+    [InlineData("[global::Blueprint.Model.Attributes.FromAuthContext] public string[] Roles { get; set; }", "Roles")]
+    public void When_a_get_has_no_query_owned_property_then_one_ownership_binds_elsewhere_stays_out_of_the_query_string(
+        string propertyDeclaration,
+        string propertyName)
+    {
+        // With nothing query-owned, the appender used to fall back to every non-placeholder property, so a header's token,
+        // a cookie or a claim-bound property was written into the URL.
+        var result = CompileDescriptor(
+            $$"""
+            [global::Blueprint.Model.Attributes.RootLink("/widgets")]
+            public partial class ListWidgetsQuery : IQuery<string>
+            {
+                {{propertyDeclaration}}
+
+                public static Task<string> HandleAsync(ListWidgetsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "ListWidgetsQuery");
+        source.Should().NotContain($"typed.{propertyName}");
+        source.Should().Contain("Http.BuildUrl((global::TestNamespace.ListWidgetsQuery)op), null));", "there is nothing to append");
+    }
+
+    [Fact]
+    public void When_a_get_has_no_query_owned_property_then_a_route_only_property_outside_the_built_url_stays_out_of_the_query_string()
+    {
+        // An explicit [FromRoute] property has no query fallback, so the host never reads it from the query string.
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets")]
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}", Rel = "widget-by-id")]
+            public partial class ListWidgetsQuery : IQuery<string>
+            {
+                [global::Blueprint.Model.Attributes.FromRoute]
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(ListWidgetsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "ListWidgetsQuery");
+        source.Should().Contain("return \"/widgets\";");
+        source.Should().NotContain("\"id=\"");
+    }
+
+    [Fact]
+    public void When_a_get_has_no_query_owned_property_then_a_placeholder_its_built_url_leaves_out_is_still_appended()
+    {
+        // A placeholder in only some links falls back to the query string on the host (legacy's every-link rule), so a
+        // client building the link without it must still send it there.
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/widgets")]
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}", Rel = "widget-by-id")]
+            public partial class ListWidgetsQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(ListWidgetsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "ListWidgetsQuery");
+        source.Should().Contain("return \"/widgets\";");
+        source.Should().Contain("qs = qs + sep + \"id=\" + global::System.Uri.EscapeDataString(typed.Id);");
     }
 
     [Fact]
@@ -539,9 +856,14 @@ public class HttpClientRequestBuilderModuleTests
 
     private static GenerationResult CompileDescriptor(string source)
     {
-        return TestHelpers.Compile<OperationDescriptorSourceGenerator>(
-            "using Blueprint.Model;\nusing Blueprint.Model.Attributes;\nusing System.Threading.Tasks;\n\n"
-            + "namespace TestNamespace;\n\n" + source);
+        return TestHelpers.Compile<OperationDescriptorSourceGenerator>(Preamble + source);
+    }
+
+    private static string DescriptorSourceOf(MultiGeneratorGenerationResult run, string operationName)
+    {
+        return run.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator))
+            .Single(source => source.HintName == $"TestNamespace.{operationName}_Descriptor.g.cs")
+            .SourceText;
     }
 
     private static string GetDescriptorSource(GenerationResult result, string operationName)

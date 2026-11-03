@@ -92,6 +92,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // URL placeholder properties are excluded even if the ownership module classified them as
         // Query — the URL builder already handles them as path parameters.
         var queryBindingNames = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // The properties the host never reads from the query string: a header, cookie, auth-context or body property, or a
+        // route property with no query fallback. A route placeholder in only some links is not one of them, as the host
+        // reads it from the query string through a link without it.
+        var boundElsewhere = new HashSet<string>(StringComparer.Ordinal);
         if (bindingEntries != null)
         {
             foreach (var entry in bindingEntries.Entries)
@@ -100,6 +105,12 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                     && !placeholders.Contains(entry.PropertyName))
                 {
                     queryBindingNames[entry.PropertyName] = entry.BindingName ?? entry.PropertyName;
+                }
+
+                if (entry.Source != PropertyOwnershipModule.PropertyOwnershipSource.Query
+                    && entry.FallbackSource != PropertyOwnershipModule.PropertyOwnershipSource.Query)
+                {
+                    boundElsewhere.Add(entry.PropertyName);
                 }
             }
         }
@@ -112,22 +123,22 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
         // The builders are real static methods on a nested `Http` class of the operation's own partial, so a typed client can
         // call them without a descriptor lookup or a cast. The descriptor's delegates are thin wrappers over them, so both
-        // build the same URL. An operation that already declares its own `Http` member keeps the inline delegates only.
+        // build the same URL. An operation that cannot take the class (CanDeclareHttpClass) keeps the inline delegates only.
         var urlBuilderBody = BuildUrlBuilderBody(urlTemplate, placeholders, properties);
 
         // A GET carries its non-URL properties as a query string rather than a body. The typed appender exists for every
         // GET; the delegate stays null when no property is query-eligible, as the runtime reads that as "append nothing".
         var queryStringBody = isQueryMethod
-            ? BuildQueryStringBody(placeholders, properties, queryBindingNames)
+            ? BuildQueryStringBody(placeholders, properties, queryBindingNames, boundElsewhere)
             : null;
 
-        var emitHttpClass = operationSymbol.GetMembers(HttpClassName).IsEmpty;
+        var emitHttpClass = CanDeclareHttpClass(operationSymbol);
 
         if (emitHttpClass)
         {
             context.AddOperationMemberStep(operationClass =>
             {
-                // A base operation's generated `Http` is not visible as a symbol, so hiding it is suppressed rather than detected.
+                // A base operation's own generated `Http` is the one inherited member this class hides on purpose.
                 var httpClass = operationClass.AddNestedClass(HttpClassName, Accessibility.Public)
                     .MakeStaticClass()
                     .DisableWarning("CS0108");
@@ -157,6 +168,69 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         {
             RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlBuilderBody, queryStringBody, emitHttpClass);
         });
+    }
+
+    /// <summary>
+    /// Whether the operation's generated partial can declare the nested <c>Http</c> builder class without changing the
+    /// meaning of a name the operation can already see. Where it cannot, the descriptor's delegates carry the builders
+    /// inline, as they did before the class existed, and the operation has no <c>Http</c> class.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It cannot when the operation is itself named <c>Http</c> (CS0542), when any of its partial declarations declares a
+    /// member of that name (CS0102), or when it inherits one it can see: the class would hide it, so an inherited
+    /// <c>Http</c> property the builders read as <c>typed.Http</c> would name the class instead (CS0572).
+    /// </para>
+    /// <para>
+    /// A base operation's own generated <c>Http</c> class does not count. The derived operation declares its own and hides
+    /// it, with CS0108 suppressed. That class is a symbol only once the base is compiled into another assembly, so it is
+    /// recognised there by its shape; from the same compilation it is not visible at all.
+    /// </para>
+    /// <para>
+    /// The answer turns on every partial declaration and base type of the operation, so
+    /// <c>OperationDescriptorSourceGenerator</c> carries it in the incremental model it keys each descriptor on: a colliding
+    /// member added to or removed from another file then re-plans the descriptor instead of replaying a cached plan.
+    /// </para>
+    /// </remarks>
+    /// <param name="operation">The operation.</param>
+    /// <returns><see langword="true"/> when the nested class can be declared.</returns>
+    internal static bool CanDeclareHttpClass(INamedTypeSymbol operation)
+    {
+        if (operation.Name == HttpClassName || !operation.GetMembers(HttpClassName).IsEmpty)
+        {
+            return false;
+        }
+
+        for (var baseType = operation.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            foreach (var member in baseType.GetMembers(HttpClassName))
+            {
+                if (IsVisibleToDerivedType(member, operation) && !IsGeneratedHttpClass(member))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsVisibleToDerivedType(ISymbol member, INamedTypeSymbol derivedType)
+    {
+        return member.DeclaredAccessibility switch
+        {
+            Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal => true,
+            Accessibility.Internal or Accessibility.ProtectedAndInternal => member.ContainingAssembly.GivesAccessTo(derivedType.ContainingAssembly),
+            _ => false,
+        };
+    }
+
+    private static bool IsGeneratedHttpClass(ISymbol member)
+    {
+        return member is INamedTypeSymbol { TypeKind: TypeKind.Class, IsStatic: true, ContainingType: { } operation } httpClass
+            && operation.ImplementsInterface("Blueprint.Model.IOperation")
+            && httpClass.GetMembers("BuildUrl").Any(buildUrl => buildUrl is IMethodSymbol { IsStatic: true, Parameters: [{ Type: var parameterType }] }
+                && SymbolEqualityComparer.Default.Equals(parameterType, operation));
     }
 
     private static void RenderCompiledHttpRequestFeatureData(
@@ -304,11 +378,12 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     private static string? BuildQueryStringBody(
         HashSet<string> placeholders,
         List<IPropertySymbol> properties,
-        Dictionary<string, string> queryBindingNames)
+        Dictionary<string, string> queryBindingNames,
+        HashSet<string> boundElsewhere)
     {
-        // When ownership metadata is available, use it as the source of truth for which
-        // properties are query params. When not available (e.g. no HTTP exposure analysis),
-        // fall back to the previous heuristic: non-placeholder properties on a GET.
+        // When ownership metadata names query properties, they are the query string. Otherwise (no HTTP exposure analysis,
+        // or nothing query-owned) fall back to the previous heuristic, non-placeholder properties on a GET, but never one
+        // the ownership analysis binds from elsewhere: that fallback used to put a header's token or a claim in the URL.
         List<IPropertySymbol> queryProperties;
         if (queryBindingNames.Count > 0)
         {
@@ -319,7 +394,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         else
         {
             queryProperties = properties
-                .Where(p => !placeholders.Contains(p.Name))
+                .Where(p => !placeholders.Contains(p.Name) && !boundElsewhere.Contains(p.Name))
                 .ToList();
         }
 

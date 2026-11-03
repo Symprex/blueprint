@@ -303,7 +303,7 @@ namespace Client
                 this.CreateItemCommandRequest = client.ResolveTypeInfo<global::Contract.CreateItemCommand>();
                 this.CreateItemCommandReader = new global::Blueprint.HttpClient.Readers.ResourceEventResponseReader<global::Blueprint.Http.ResourceCreated<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(client.ResolveTypeInfo<global::Contract.ItemApiResource>());
                 this.ExportItemsCommandRequest = client.ResolveTypeInfo<global::Contract.ExportItemsCommand>();
-                this.ExportItemsCommandReader = new global::Blueprint.HttpClient.Readers.ContentResultResponseReader<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(client.ResolveTypeInfo<global::Contract.ItemApiResource>());
+                this.ExportItemsCommandReader = new global::Blueprint.HttpClient.Readers.ContentResultResponseReader<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>, global::Contract.ItemApiResource>(resultTypeInfo: client.ResolveTypeInfo<global::Blueprint.Runtime.Exec.AcceptedResult<global::Contract.ItemApiResource>>());
                 this.UpdateItemCommandRequest = client.ResolveTypeInfo<global::Contract.UpdateItemCommand>();
                 this.UpdateItemCommandReader = new global::Blueprint.HttpClient.Readers.ResourceEventResultResponseReader<global::Contract.ItemApiResource>(client.ResolveTypeInfo<global::Contract.ItemApiResource>());
             }

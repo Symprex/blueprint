@@ -25,6 +25,7 @@ public sealed class ContentResultResponseReader<TResult, TContent> : ResponseRea
     private readonly Func<TContent, TResult> _create;
 
     private readonly JsonTypeInfo<TContent>? _contentTypeInfo;
+    private readonly JsonTypeInfo<TResult>? _resultTypeInfo;
 
     /// <summary>
     /// Initialises a new instance of the <see cref="ContentResultResponseReader{TResult, TContent}"/> class.
@@ -33,13 +34,18 @@ public sealed class ContentResultResponseReader<TResult, TContent> : ResponseRea
     /// The metadata to read the content of a union's member with, from the transport's options; or <see langword="null"/> to
     /// read it with the transport's options' own.
     /// </param>
+    /// <param name="resultTypeInfo">
+    /// The metadata to read the result itself with when it is the whole declared result, not a union's member, from the
+    /// transport's options; or <see langword="null"/> to read it with the transport's options' own.
+    /// </param>
     /// <exception cref="ArgumentException">
     /// <typeparamref name="TResult"/> is not <see cref="OkResult{T}"/>, <see cref="CreatedResult{T}"/> or
     /// <see cref="AcceptedResult{T}"/> of <typeparamref name="TContent"/>.
     /// </exception>
-    public ContentResultResponseReader(JsonTypeInfo<TContent>? contentTypeInfo = null)
+    public ContentResultResponseReader(JsonTypeInfo<TContent>? contentTypeInfo = null, JsonTypeInfo<TResult>? resultTypeInfo = null)
     {
         this._contentTypeInfo = contentTypeInfo;
+        this._resultTypeInfo = resultTypeInfo;
 
         if (typeof(TResult) == typeof(OkResult<TContent>))
         {
@@ -71,7 +77,9 @@ public sealed class ContentResultResponseReader<TResult, TContent> : ResponseRea
             throw context.CreateNotUnderstoodException();
         }
 
-        var value = await context.Response.Content.ReadFromJsonAsync<TResult>(context.JsonOptions, cancellationToken).ConfigureAwait(false);
+        var value = this._resultTypeInfo is null
+            ? await context.Response.Content.ReadFromJsonAsync<TResult>(context.JsonOptions, cancellationToken).ConfigureAwait(false)
+            : await context.Response.Content.ReadFromJsonAsync(this._resultTypeInfo, cancellationToken).ConfigureAwait(false);
 
         return value ?? throw await context.CreateResponseEmptyExceptionAsync(cancellationToken).ConfigureAwait(false);
     }

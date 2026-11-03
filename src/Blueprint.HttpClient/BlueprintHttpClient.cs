@@ -51,9 +51,10 @@ public class BlueprintHttpClient
     /// <summary>
     /// The options of every transport given none: Blueprint's defaults, one instance so that what is cached by options (the
     /// metadata resolved from them, the options derived from them for a context, a typed client's plan) is made once, and
-    /// locked so that no holder of it can change it under the others.
+    /// locked so that no holder of it can change it under the others. Made on first use, so that a process with System.Text.Json's
+    /// reflection turned off, whose transports are all given metadata of their own, never makes options that need it.
     /// </summary>
-    private static readonly JsonSerializerOptions _defaultJsonOptions = CreateDefaultJsonOptions();
+    private static readonly Lazy<JsonSerializerOptions> _defaultJsonOptions = new(CreateDefaultJsonOptions, LazyThreadSafetyMode.ExecutionAndPublication);
 
     private readonly System.Net.Http.HttpClient _httpClient;
     private readonly JsonSerializerOptions _jsonOptions;
@@ -69,7 +70,7 @@ public class BlueprintHttpClient
     public BlueprintHttpClient(System.Net.Http.HttpClient httpClient, JsonSerializerOptions? jsonOptions = null)
     {
         this._httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        this._jsonOptions = jsonOptions ?? _defaultJsonOptions;
+        this._jsonOptions = jsonOptions ?? _defaultJsonOptions.Value;
     }
 
     /// <summary>
@@ -92,6 +93,8 @@ public class BlueprintHttpClient
     /// The options are derived once for each pair of this client's options instance and the context, then reused, so making
     /// such a client for each resolve of a transient typed client over the same options copies nothing after the first: a
     /// transport given no options shares one default instance, and one given them from DI is given the same instance each time.
+    /// Options still open to change are derived afresh each time instead, as what was derived from them would otherwise be
+    /// returned after they changed; they are read-only once a serializer call or <see cref="ResolveTypeInfo{T}"/> has used them.
     /// </remarks>
     /// <param name="context">The context whose metadata is consulted before the options' own.</param>
     /// <returns>The new client; this client is unchanged.</returns>
@@ -307,6 +310,12 @@ public class BlueprintHttpClient
 
     private static JsonSerializerOptions GetDerivedOptions(JsonSerializerOptions options, JsonSerializerContext context)
     {
+        if (!options.IsReadOnly)
+        {
+            // Not cached, as the options can still change, and what is derived from them is a copy of how they are now.
+            return DeriveOptions(options, context);
+        }
+
         var derivations = _derivedOptions.GetOrCreateValue(options);
 
         return derivations.TryGetValue(context, out var derived)
