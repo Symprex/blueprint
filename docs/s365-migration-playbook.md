@@ -1984,8 +1984,9 @@ to support a smooth S365 migration.
 7. ✅ **Second sample project** — `Blueprint.SourceGenerator.Sample.Gateway` +
    `Blueprint.SourceGenerator.Sample.Gateway.Contract` with 3 operations
    (Create, Get, List templates). Wired to upstream via `BlueprintHttpClient<SampleBlueprintApp>`.
-   E2E tests in `Blueprint.HttpClient.Tests/GatewayEndToEndTests.cs` prove the full
-   gateway→upstream flow (6 tests covering list, get, create, validation, 404, round-trip).
+   E2E tests in `Blueprint.EndToEnd.Tests/GatewayRoundTripTests.cs` prove the full
+   gateway→upstream flow on real Kestrel with a test JWT issuer (list, get, create,
+   validation, 404, round-trip).
    **Done.**
 8. ✅ **OpenAPI shape comparison** — `docs/openapi-migration.md` with diff analysis,
    NSwag compatibility notes, and TypeScript generation verification. **Done.**
