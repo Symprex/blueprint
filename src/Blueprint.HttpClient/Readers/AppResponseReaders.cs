@@ -1,6 +1,7 @@
 using System.Net;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -51,7 +52,13 @@ internal static class AppResponseReaders
             return new PlainTextResponseReader();
         }
 
-        if (ResourceEventReader.CanRead(type))
+        // An abstract event type goes to the event reader too, though it reads none: the reader's constructor refuses it, and
+        // the reader is made before the command is sent, so a result no response could be read as fails before sending. One
+        // its own [JsonPolymorphic] or [JsonDerivedType] marks polymorphic is System.Text.Json's to read, as it always was,
+        // derived types a resolver adds included. A type only a resolver makes polymorphic is not looked for, so it is refused
+        // too: mark it [JsonPolymorphic], or ask for a concrete type.
+        if (ResourceEventReader.CanRead(type)
+            || (type.IsAbstract && !IsDeclaredPolymorphic(type) && ResourceEventReader.FindResourceType(type) is not null))
         {
             return Make(nameof(CreateResourceEventReader), type, ResourceEventReader.FindResourceType(type)!);
         }
@@ -72,12 +79,20 @@ internal static class AppResponseReaders
         return Make(nameof(CreateJsonReader), type);
     }
 
+    private static bool IsDeclaredPolymorphic(Type type)
+    {
+        // Read off the type itself, not its bases, as System.Text.Json reads them: neither attribute is inherited.
+        return type.IsDefined(typeof(JsonPolymorphicAttribute), inherit: false)
+            || type.IsDefined(typeof(JsonDerivedTypeAttribute), inherit: false);
+    }
+
     private static object Make(string factoryName, params Type[] typeArguments)
     {
+        // Unwrapped, so a reader's refusal of its type reaches the caller as itself, not as a TargetInvocationException.
         return typeof(AppResponseReaders)
             .GetMethod(factoryName, BindingFlags.NonPublic | BindingFlags.Static)!
             .MakeGenericMethod(typeArguments)
-            .Invoke(null, null)!;
+            .Invoke(null, BindingFlags.DoNotWrapExceptions, binder: null, parameters: null, culture: null)!;
     }
 
     private static StatusCodeResultResponseReader<T> CreateStatusCodeResultReader<T>()

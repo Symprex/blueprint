@@ -311,6 +311,11 @@ public class MyHandler
 5. For every other method (POST/PUT/PATCH/DELETE): operation serialized as JSON body, as legacy Blueprint's client sent it
 6. Response: 2xx → deserialize, 422 → `ValidationException`, other → `BlueprintApiException`
 
+Steps 3 and 4 are generated onto each routed operation as a public nested class, `Op.Http` (`BuildUrl`, and
+`AppendQueryString` for a GET), unless the operation already uses the name `Http`. A class deriving from an operation
+inherits `Http`, so inside it qualify an alias or namespace of that name (`global::System.Net.Http.HttpMethod`) or alias
+it under another name.
+
 For a `Results<T1, T2>` response type the client reads the member the host wrote, trying them in order: a
 `StatusCodeResult` (e.g. `StatusCodeResult.Accepted`) when the status is its own and there is no body, a
 `PlainTextResult` when the body is not JSON, and any other non-`OperationResult` type when it is JSON. `OkResult<T>`,
