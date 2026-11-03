@@ -150,7 +150,8 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 model.ToString(),
                 model.ContainingNamespace.ToDisplayString(),
                 model.Name,
-                classNode.ToFullString()));
+                classNode.ToFullString(),
+                HttpClientRequestBuilderModule.CanDeclareHttpClass(model)));
     }
 
     private static Result<DescriptorPlan> Configure(
@@ -340,7 +341,12 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
     /// <param name="Namespace">The namespace that will contain the generated descriptor wrapper.</param>
     /// <param name="ClassName">The simple operation type name.</param>
     /// <param name="DeclarationText">The operation declaration text used to invalidate semantic edits within the operation file.</param>
-    private record OperationClassToGenerate(string FullClassName, string Namespace, string ClassName, string DeclarationText);
+    /// <param name="CanDeclareHttpClass">
+    /// Whether the operation's partial can declare <see cref="HttpClientRequestBuilderModule"/>'s nested <c>Http</c> class,
+    /// which turns on every partial declaration and base type of the operation rather than this declaration alone. Without
+    /// it, an <c>Http</c> member added in another file left the class of a cached plan beside it (CS0102) until a clean build.
+    /// </param>
+    private record OperationClassToGenerate(string FullClassName, string Namespace, string ClassName, string DeclarationText, bool CanDeclareHttpClass);
 
     /// <summary>
     /// The names of the <see cref="ApiResourceSourceGenerator"/> stages, used in particular to test for the

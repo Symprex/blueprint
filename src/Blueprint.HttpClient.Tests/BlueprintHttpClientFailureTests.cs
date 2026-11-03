@@ -61,6 +61,43 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         exception.Detail.Should().Be(timeout.Message);
     }
 
+    [Theory]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventAsync))]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventEnvelopeAsync))]
+    public async Task When_a_resource_event_body_times_out_as_it_is_read_then_throws_service_timeout(string method)
+    {
+        // A stock HttpClient reads the body while sending, inside the send's catch. One that answers at the headers leaves the
+        // body to the reader, which the resource-event paths used to read outside that catch, so the timeout escaped raw.
+        var timeout = new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.", new TimeoutException());
+        var client = this.CreateClientWhoseBodyFailsWhenRead(timeout);
+
+        var act = () => SendResourceEventAsync(client, method);
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Title.Should().Be("Timed out waiting for service response");
+        exception.Type.Should().Be("service_timeout");
+        exception.HttpStatus.Should().Be(408);
+        exception.Detail.Should().Be(timeout.Message);
+    }
+
+    [Theory]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventAsync))]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventEnvelopeAsync))]
+    public async Task When_a_resource_event_body_cannot_be_read_from_the_server_then_throws_service_unavailable(string method)
+    {
+        var connectionError = new HttpRequestException($"Error while copying content to a stream ({InternalHost}:80)");
+        var client = this.CreateClientWhoseBodyFailsWhenRead(connectionError);
+
+        var act = () => SendResourceEventAsync(client, method);
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Title.Should().Be("The remote server did not respond");
+        exception.Type.Should().Be("service_unavailable");
+        exception.HttpStatus.Should().Be(500);
+        exception.Detail.Should().Be("The remote server did not respond");
+        exception.InnerException.Should().BeSameAs(connectionError);
+    }
+
     [Fact]
     public async Task When_a_not_found_response_is_not_json_then_throws_not_found_naming_the_path_but_not_the_host()
     {
@@ -352,6 +389,24 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         exception.ResponseBody.Should().Be("null");
     }
 
+    private static Task SendResourceEventAsync(BlueprintHttpClient<SampleBlueprintApp> client, string method)
+    {
+        return method switch
+        {
+            nameof(client.SendResourceEventAsync) => client.SendResourceEventAsync<TemplateApiResource>(new CreateTemplateCommand { Name = "t" }),
+            nameof(client.SendResourceEventEnvelopeAsync) => client.SendResourceEventEnvelopeAsync<TemplateApiResource>(new UpdateTemplateCommand { Id = "t-1", Name = "t" }),
+            _ => throw new ArgumentOutOfRangeException(nameof(method), method, "Not a resource-event send."),
+        };
+    }
+
+    private BlueprintHttpClient<SampleBlueprintApp> CreateClientWhoseBodyFailsWhenRead(Exception failure)
+    {
+        var handler = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new FailsWhenReadContent(failure) });
+        var httpClient = new HeadersReadHttpClient(handler) { BaseAddress = new Uri("https://localhost") };
+
+        return new BlueprintHttpClient<SampleBlueprintApp>(httpClient, this._fixture.App);
+    }
+
     private BlueprintHttpClient<SampleBlueprintApp> CreateClient(HttpStatusCode status, string body, string mediaType, string baseAddress = "https://localhost")
     {
         var handler = new FakeHttpHandler(_ => new HttpResponseMessage(status)
@@ -362,5 +417,53 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         var httpClient = new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri(baseAddress) };
 
         return new BlueprintHttpClient<SampleBlueprintApp>(httpClient, this._fixture.App);
+    }
+
+    /// <summary>
+    /// Answers every send once the response's headers are in, as <see cref="HttpCompletionOption.ResponseHeadersRead"/>
+    /// does, so the body is left for the reader instead of being buffered inside the send.
+    /// </summary>
+    private sealed class HeadersReadHttpClient : System.Net.Http.HttpClient
+    {
+        public HeadersReadHttpClient(HttpMessageHandler handler)
+            : base(handler)
+        {
+        }
+
+        public override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return this.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// A body that fails with the given exception when it is read, and only then. Buffering it, as a stock
+    /// <see cref="System.Net.Http.HttpClient"/> does while sending, fails differently, so a test cannot pass by the send's
+    /// own catch instead of the reader's.
+    /// </summary>
+    private sealed class FailsWhenReadContent : HttpContent
+    {
+        private readonly Exception _failure;
+
+        public FailsWhenReadContent(Exception failure)
+        {
+            this._failure = failure;
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            throw new InvalidOperationException("The body was buffered while sending, before any reader ran.");
+        }
+
+        protected override Task<Stream> CreateContentReadStreamAsync()
+        {
+            return Task.FromException<Stream>(this._failure);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 }
