@@ -561,6 +561,39 @@ public class HttpClientRequestBuilderModuleTests
         source.Should().Contain("Http.BuildUrl((global::TestNamespace.ListWidgetsQuery)op), null));", "there is nothing to append");
     }
 
+    [Theory]
+    [InlineData("/widgets", "public string Name { get; } = \"widget\";", "Name")]
+    [InlineData("/widgets", "public string Display => \"widget\";", "Display")]
+    [InlineData("/widgets", "public System.Threading.CancellationToken Cancellation { get; set; }", "Cancellation")]
+    [InlineData("/widgets/{Id}", "public string Id { get; set; }\n    public string Display => this.Id;", "Display")]
+    public void When_a_get_has_no_query_owned_property_then_one_the_host_never_binds_stays_out_of_the_query_string(
+        string url,
+        string propertyDeclarations,
+        string propertyName)
+    {
+        // A getter-only or system property has no ownership entry, so the host binds it from nothing; with nothing
+        // query-owned, the appender used to send it anyway.
+        var result = CompileDescriptor(
+            $$"""
+            [global::Blueprint.Model.Attributes.RootLink("{{url}}")]
+            public partial class ListWidgetsQuery : IQuery<string>
+            {
+                {{propertyDeclarations}}
+
+                public static Task<string> HandleAsync(ListWidgetsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var source = GetDescriptorSource(result, "ListWidgetsQuery");
+        source.Should().NotContain($"typed.{propertyName}");
+        source.Should().Contain("Http.BuildUrl((global::TestNamespace.ListWidgetsQuery)op), null));", "there is nothing to append");
+    }
+
     [Fact]
     public void When_a_get_has_no_query_owned_property_then_a_route_only_property_outside_the_built_url_stays_out_of_the_query_string()
     {
