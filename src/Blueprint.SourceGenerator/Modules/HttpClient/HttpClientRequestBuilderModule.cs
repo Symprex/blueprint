@@ -21,6 +21,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 {
     private const string HttpClassName = "Http";
 
+    private const string GeneratedCodeTool = "Blueprint.SourceGenerator";
+
+    // No version: the build's version would change the generated text, and every snapshot of it, with each release.
+    private const string GeneratedCodeMarkerAttribute = "global::System.CodeDom.Compiler.GeneratedCode(\"" + GeneratedCodeTool + "\", null)";
+
     // Generated files have no nullable annotation context, so a `string?` return would not compile (CS8669); the attribute
     // gives a nullable-enabled caller the same "may be null" signal.
     private const string MaybeNullReturnAttribute = "return: global::System.Diagnostics.CodeAnalysis.MaybeNull";
@@ -138,9 +143,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         {
             context.AddOperationMemberStep(operationClass =>
             {
-                // A base operation's own generated `Http` is the one inherited member this class hides on purpose.
+                // A base operation's own generated `Http` is the one inherited member this class hides on purpose. The marker is
+                // how a derived operation in another assembly tells this class from a hand-written one (IsGeneratedHttpClass).
                 var httpClass = operationClass.AddNestedClass(HttpClassName, Accessibility.Public)
                     .MakeStaticClass()
+                    .AddAttribute(GeneratedCodeMarkerAttribute)
                     .DisableWarning("CS0108");
 
                 httpClass.AddMethod("BuildUrl")
@@ -183,8 +190,9 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     /// </para>
     /// <para>
     /// A base operation's own generated <c>Http</c> class does not count. The derived operation declares its own and hides
-    /// it, with CS0108 suppressed. That class is a symbol only once the base is compiled into another assembly, so it is
-    /// recognised there by its shape; from the same compilation it is not visible at all.
+    /// it, with CS0108 suppressed. That class is a symbol only once the base is compiled into another assembly, where it is
+    /// recognised by the <c>[GeneratedCode("Blueprint.SourceGenerator", …)]</c> marker this module emits on it, never by its
+    /// shape; from the same compilation it is not visible at all, so an <c>Http</c> class declared in source is the user's.
     /// </para>
     /// <para>
     /// Nor can it when the operation's own code uses the simple name <c>Http</c> for anything else: an alias, a type or a
@@ -321,10 +329,14 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
     private static bool IsGeneratedHttpClass(ISymbol member)
     {
-        return member is INamedTypeSymbol { TypeKind: TypeKind.Class, IsStatic: true, ContainingType: { } operation } httpClass
+        // Positively identified, never by shape: this generator's class is never visible from the compilation it is
+        // generated into, so one declared in source is the user's, and one from metadata is Blueprint's only when it carries
+        // the marker the generator emits. A lookalike, with members of its own a derived Http would hide, is the user's.
+        return member is INamedTypeSymbol { TypeKind: TypeKind.Class, IsStatic: true, DeclaringSyntaxReferences.IsEmpty: true, ContainingType: { } operation } httpClass
             && operation.ImplementsInterface("Blueprint.Model.IOperation")
-            && httpClass.GetMembers("BuildUrl").Any(buildUrl => buildUrl is IMethodSymbol { IsStatic: true, Parameters: [{ Type: var parameterType }] }
-                && SymbolEqualityComparer.Default.Equals(parameterType, operation));
+            && httpClass.GetAttributes().Any(static attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "System.CodeDom.Compiler.GeneratedCodeAttribute"
+                && attribute.ConstructorArguments is [{ Value: GeneratedCodeTool }, ..]);
     }
 
     private static void RenderCompiledHttpRequestFeatureData(

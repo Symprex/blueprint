@@ -21,6 +21,7 @@ namespace TestNamespace
         }
 
 #pragma warning disable CS0108
+        [global::System.CodeDom.Compiler.GeneratedCode("Blueprint.SourceGenerator", null)]
         public static class Http
         {
             public static string AppendQueryString(global::TestNamespace.OperationA operation, string url)
