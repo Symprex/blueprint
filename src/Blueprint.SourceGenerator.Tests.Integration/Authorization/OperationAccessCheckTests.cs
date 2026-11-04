@@ -367,6 +367,80 @@ public sealed class OperationAccessCheckTests
         await check.Should().ThrowAsync<ArgumentNullException>();
     }
 
+    [Fact]
+    public async Task A_key_only_check_refuses_when_a_provider_reads_the_operation_and_asks_no_provider()
+    {
+        // Given only a key, such a provider would judge a default instance and could allow what the real one would not
+        var first = new RecordingProvider(ExecutionAllowed.Yes);
+        var reading = new OperationReadingProvider(typeof(PermissionedUnlinkedTemplateCommand));
+
+        var result = await CheckAsync<PermissionedUnlinkedTemplateCommand>(
+            new ResourceKey("/accounts/account-9/widgets/w1"),
+            services => services.AddSingleton<IResourceAuthorizationProvider>(first).AddSingleton<IResourceAuthorizationProvider>(reading),
+            User());
+
+        result.IsAllowed.Should().BeFalse();
+        result.FailureType.Should().Be(ExecutionAllowedFailureType.Authorisation);
+        result.Reason.Should().Contain(nameof(OperationReadingProvider)).And.Contain("CanExecuteAsync(IOperation)");
+        first.Requests.Should().BeEmpty();
+        reading.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_key_only_check_by_type_refuses_when_a_provider_reads_the_operation()
+    {
+        var result = await WithContextAsync(
+            services => services.AddSingleton<IResourceAuthorizationProvider>(new OperationReadingProvider(typeof(PermissionedUnlinkedTemplateCommand))),
+            User(),
+            null,
+            static context => context.CanExecuteAsync(typeof(PermissionedUnlinkedTemplateCommand), new ResourceKey("/accounts/account-9/widgets/w1")));
+
+        result.IsAllowed.Should().BeFalse();
+        result.Reason.Should().Contain("CanExecuteAsync(IOperation)");
+    }
+
+    [Fact]
+    public async Task A_provider_that_reads_only_other_operations_does_not_refuse_a_key_only_check()
+    {
+        var reading = new OperationReadingProvider(typeof(TwoPairAccessCheckCommand));
+
+        var result = await CheckAsync<PermissionedUnlinkedTemplateCommand>(
+            new ResourceKey("/accounts/account-9/widgets/w1"),
+            services => services.AddSingleton<IResourceAuthorizationProvider>(reading),
+            User());
+
+        result.IsAllowed.Should().BeTrue();
+        reading.Requests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task An_instance_check_asks_a_provider_that_reads_the_operation()
+    {
+        var reading = new OperationReadingProvider(typeof(PermissionedUnlinkedTemplateCommand));
+
+        var result = await CheckInstanceAsync(
+            new PermissionedUnlinkedTemplateCommand { Id = "w1" },
+            services => services.AddSingleton<IResourceAuthorizationProvider>(reading),
+            User());
+
+        result.IsAllowed.Should().BeTrue();
+        reading.Requests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Execution_asks_a_provider_that_reads_the_operation()
+    {
+        var reading = new OperationReadingProvider(typeof(PermissionedUnlinkedTemplateCommand));
+
+        var executed = await ExecuteAsync(
+            new PermissionedUnlinkedTemplateCommand { Id = "w1" },
+            services => services.AddSingleton<IResourceAuthorizationProvider>(reading),
+            User());
+
+        executed.Should().BeOfType<OkResult<string>>();
+        reading.Requests.Should().ContainSingle();
+    }
+
     private static void RealProviders(IServiceCollection services)
     {
         services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(static b => b
@@ -513,6 +587,31 @@ public sealed class OperationAccessCheckTests
             var operation = (PermissionedUnlinkedTemplateCommand)operationContext.Operation;
 
             return new ValueTask<ExecutionAllowed>(operation is not null ? ExecutionAllowed.Yes : ExecutionAllowed.No("none", "Denied", ExecutionAllowedFailureType.Authorisation));
+        }
+    }
+
+    /// <summary>
+    /// Declares that it reads the operation instance when judging <paramref name="readsFor"/>, and allows every request,
+    /// recording them.
+    /// </summary>
+    private sealed class OperationReadingProvider(Type readsFor) : IResourceAuthorizationProvider
+    {
+        public List<ResourceAuthorizationRequest> Requests { get; } = [];
+
+        public bool ReadsOperation(ApiOperationDescriptor operation)
+        {
+            return operation.OperationType == readsFor;
+        }
+
+        public ValueTask<ExecutionAllowed> AuthorizeAsync(
+            ApiOperationContext operationContext,
+            ClaimsPrincipal principal,
+            ResourceAuthorizationRequest request,
+            CancellationToken cancellationToken)
+        {
+            this.Requests.Add(request);
+
+            return new ValueTask<ExecutionAllowed>(ExecutionAllowed.Yes);
         }
     }
 

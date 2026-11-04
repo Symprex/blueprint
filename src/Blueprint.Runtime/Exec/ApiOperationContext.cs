@@ -224,6 +224,10 @@ public sealed class ApiOperationContext : IHttpOperationContext
     /// one and whose <see cref="Operation"/> is a default instance of it, made by its descriptor: the check has no instance,
     /// so a provider that reads the operation's properties reads their defaults. It shares this context's caller,
     /// <see cref="UserAuthorisationContext"/>, <see cref="HttpContext"/>, <see cref="BaseUri"/> and <see cref="Data"/>.
+    /// A provider that declares it reads the instance, through
+    /// <see cref="IResourceAuthorizationProvider.ReadsOperation(ApiOperationDescriptor)"/>, is not handed one: the check
+    /// is refused as <see cref="ExecutionAllowedFailureType.Authorisation"/>, no provider is asked, and the caller must
+    /// ask <see cref="CanExecuteAsync(IOperation, CancellationToken)"/> with the instance.
     /// </para>
     /// <para>
     /// The caller is <see cref="UserPrincipal"/>. With no authenticated principal it is refused as anonymous and no
@@ -281,6 +285,18 @@ public sealed class ApiOperationContext : IHttpOperationContext
         if (this.GetProviders() is not { } providers)
         {
             return new ValueTask<ExecutionAllowed>(NoProvider(operationType));
+        }
+
+        // A provider that reads the operation would judge a default instance here, so the check refuses rather than guess
+        foreach (var provider in providers)
+        {
+            if (provider.ReadsOperation(descriptor))
+            {
+                return new ValueTask<ExecutionAllowed>(ExecutionAllowed.No(
+                    $"{provider.GetType().Name} reads the operation instance to judge {operationType.Name}, so it cannot be judged by a resource key alone; use CanExecuteAsync(IOperation) with the instance",
+                    "You do not have permission to perform this operation",
+                    ExecutionAllowedFailureType.Authorisation));
+            }
         }
 
         var scopePairs = new ResolvedScopePair[authorization.ScopePairs.Length];
