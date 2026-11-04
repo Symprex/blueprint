@@ -216,8 +216,14 @@ public sealed class ApiOperationContext : IHttpOperationContext
     /// Every registered <see cref="IResourceAuthorizationProvider"/> is asked, all-of in registration order, in
     /// <see cref="ResourceAuthorizationMode.Execute"/> mode for <typeparamref name="TOperation"/>'s descriptor, so the
     /// same providers, grant sources, expanders and checker decide it as decide the execution. Each of the operation's
-    /// scope pairs is given <paramref name="resourceKey"/> as its resolved key, whatever its template, and any one pair
-    /// may satisfy a provider, as at execution.
+    /// scope pairs with a template is given <paramref name="resourceKey"/> as its resolved key, whatever the template;
+    /// a pair with none is given no key, as at execution. Any one pair may satisfy a provider, as at execution.
+    /// </para>
+    /// <para>
+    /// The providers are given a nested context for <typeparamref name="TOperation"/>, whose <see cref="Parent"/> is this
+    /// one and whose <see cref="Operation"/> is a default instance of it, made by its descriptor: the check has no instance,
+    /// so a provider that reads the operation's properties reads their defaults. It shares this context's caller,
+    /// <see cref="UserAuthorisationContext"/>, <see cref="HttpContext"/>, <see cref="BaseUri"/> and <see cref="Data"/>.
     /// </para>
     /// <para>
     /// The caller is <see cref="UserPrincipal"/>. With no authenticated principal it is refused as anonymous and no
@@ -296,12 +302,24 @@ public sealed class ApiOperationContext : IHttpOperationContext
 
         for (var i = 0; i < scopePairs.Length; i++)
         {
+            // A pair with no template resolves to no key at execution, so it is given none here either
             var pair = authorization.ScopePairs[i];
-            scopePairs[i] = new ResolvedScopePair(pair.Noun, pair.Verb, pair.ResourceKeyTemplate, resourceKey.Value);
+            scopePairs[i] = new ResolvedScopePair(pair.Noun, pair.Verb, pair.ResourceKeyTemplate, pair.ResourceKeyTemplate is null ? null : resourceKey.Value);
         }
 
+        // The providers see a context for the operation asked about, as at its execution, not the asking one
+        var target = new ApiOperationContext(this.ServiceProvider, this.App, descriptor, this.OperationCancelled)
+        {
+            Parent = this,
+            UserPrincipal = this.UserPrincipal,
+            UserAuthorisationContext = this.UserAuthorisationContext,
+            HttpContext = this.HttpContext,
+            BaseUri = this.BaseUri,
+            _data = this.Data,
+        };
+
         return AskProvidersAsync(
-            this,
+            target,
             principal,
             providers,
             ResourceAuthorizationRequest.Execute(descriptor, scopePairs),

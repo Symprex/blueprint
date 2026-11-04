@@ -83,7 +83,8 @@ public readonly struct ResourceKey : IEquatable<ResourceKey>
             return false;
         }
 
-        var segments = this.Value.AsSpan().TrimStart('/');
+        // Exactly one leading '/': an empty first segment, as in //Tenants, is a segment of its own, not part of the slash
+        var segments = this.Value.AsSpan(1);
         var end = segments.IndexOf('/');
 
         prefix = segments.IsEmpty ? "/" : string.Concat("/", end < 0 ? segments : segments[..end], "/");

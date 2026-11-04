@@ -86,6 +86,7 @@ public class ResourceKeyTests
     [InlineData("/Partners", "/Partners/")]
     [InlineData("/", "/")]
     [InlineData("/*", "/*/")]
+    [InlineData("//Tenants/ten_1", "//")]
     public void TryGetTopLevelPrefix_gives_the_first_segment_between_slashes(string key, string expected)
     {
         new ResourceKey(key).TryGetTopLevelPrefix(out var prefix).Should().BeTrue();

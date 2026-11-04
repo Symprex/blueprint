@@ -41,6 +41,54 @@ public sealed class OperationAccessCheckTests
         checkedAccess.IsAllowed.Should().Be(executed is OkResult<string>, $"the execution returned {executed.GetType().Name}");
     }
 
+    [Theory]
+    [InlineData("widget::read", "/accounts/account-9/*;widget::read")]
+    [InlineData("widget::read", "/*;widget::read")]
+    [InlineData("widget::read", null)]
+    public async Task A_pair_with_no_template_is_given_no_key_as_at_execution(string scope, string? grant)
+    {
+        // Execution resolves a template-less pair to no key, which no grant covers; this check once gave it the key asked about
+        var user = User(scope, grant);
+
+        var executed = await ExecuteAsync(new PermissionedUnlinkedCommand(), RealProviders, user);
+        var checkedAccess = await CheckAsync<PermissionedUnlinkedCommand>(new ResourceKey("/accounts/account-9/widgets/w1"), RealProviders, user);
+
+        checkedAccess.IsAllowed.Should().Be(executed is OkResult<string>, $"the execution returned {executed.GetType().Name}");
+    }
+
+    [Fact]
+    public async Task Providers_are_given_a_nested_context_for_the_operation_asked_about()
+    {
+        var provider = new ContextRecordingProvider();
+        ApiOperationContext? asking = null;
+
+        await CheckAsync<PermissionedUnlinkedTemplateCommand>(
+            new ResourceKey("/accounts/account-9/widgets/w1"),
+            services => services.AddSingleton<IResourceAuthorizationProvider>(provider),
+            User(),
+            context => asking = context);
+
+        var seen = provider.Contexts.Should().ContainSingle().Subject;
+        seen.Descriptor.Should().BeSameAs(provider.Requests[0].Descriptor);
+        seen.Descriptor.OperationType.Should().Be(typeof(PermissionedUnlinkedTemplateCommand));
+        seen.Operation.Should().BeOfType<PermissionedUnlinkedTemplateCommand>();
+        seen.Parent.Should().BeSameAs(asking);
+        seen.UserPrincipal.Should().BeSameAs(asking!.UserPrincipal);
+        seen.Data.Should().BeSameAs(asking.Data);
+    }
+
+    [Fact]
+    public async Task A_provider_that_reads_the_operation_as_the_target_type_can_judge_it()
+    {
+        // As a provider may at execution, where the context's operation is the one being judged
+        var result = await CheckAsync<PermissionedUnlinkedTemplateCommand>(
+            new ResourceKey("/accounts/account-9/widgets/w1"),
+            services => services.AddSingleton<IResourceAuthorizationProvider>(new CastingProvider()),
+            User());
+
+        result.IsAllowed.Should().BeTrue();
+    }
+
     [Fact]
     public async Task Every_provider_is_asked_in_execute_mode_for_the_named_operation_with_every_pair_given_the_key()
     {
@@ -290,6 +338,41 @@ public sealed class OperationAccessCheckTests
             this.Principals.Add(principal);
 
             return new ValueTask<ExecutionAllowed>(decision);
+        }
+    }
+
+    /// <summary>Allows every request, recording the context and request it was given.</summary>
+    private sealed class ContextRecordingProvider : IResourceAuthorizationProvider
+    {
+        public List<ApiOperationContext> Contexts { get; } = [];
+
+        public List<ResourceAuthorizationRequest> Requests { get; } = [];
+
+        public ValueTask<ExecutionAllowed> AuthorizeAsync(
+            ApiOperationContext operationContext,
+            ClaimsPrincipal principal,
+            ResourceAuthorizationRequest request,
+            CancellationToken cancellationToken)
+        {
+            this.Contexts.Add(operationContext);
+            this.Requests.Add(request);
+
+            return new ValueTask<ExecutionAllowed>(ExecutionAllowed.Yes);
+        }
+    }
+
+    /// <summary>Casts the context's operation to the type it judges, as a provider written for execution may.</summary>
+    private sealed class CastingProvider : IResourceAuthorizationProvider
+    {
+        public ValueTask<ExecutionAllowed> AuthorizeAsync(
+            ApiOperationContext operationContext,
+            ClaimsPrincipal principal,
+            ResourceAuthorizationRequest request,
+            CancellationToken cancellationToken)
+        {
+            var operation = (PermissionedUnlinkedTemplateCommand)operationContext.Operation;
+
+            return new ValueTask<ExecutionAllowed>(operation is not null ? ExecutionAllowed.Yes : ExecutionAllowed.No("none", "Denied", ExecutionAllowedFailureType.Authorisation));
         }
     }
 

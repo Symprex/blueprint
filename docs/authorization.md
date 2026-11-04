@@ -309,7 +309,8 @@ public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery quer
 
 A handler deriving from `BlueprintApiOperations` asks `this.Context.CanExecuteAsync<T>(key)`. `CanExecuteAsync<T>(key)`, or `CanExecuteAsync(type, key)`, decides as `T`'s own execution would:
 - every registered provider is asked, all-of in registration order, in `Execute` mode for `T`'s descriptor;
-- each of `T`'s scope pairs is given `key` as its resolved key, whatever its template, and any pair may satisfy a provider;
+- each of `T`'s scope pairs *with a template* is given `key` as its resolved key, whatever the template; a pair with none is given no key, as at execution, and `ResourceKeyAuthorizationProvider` refuses it. Any pair may satisfy a provider;
+- the providers are given a nested context for `T`, whose `Parent` is the asking context and whose `Operation` is a default instance of `T`, so a provider reading the operation's properties sees their defaults. It shares the asking context's caller, `UserAuthorisationContext`, `HttpContext`, `BaseUri` and `Data`;
 - the caller is `context.UserPrincipal`; with no authenticated principal it is refused as anonymous (`Authentication`) and no provider is asked;
 - with no provider registered it is refused, as the execution would be;
 - `context.SkipAuthorisation` does not apply, because the question is about the caller, not this context's execution;
