@@ -1,5 +1,7 @@
 using Blueprint.SourceGenerator.Generators.Descriptors;
 using FluentAssertions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Blueprint.SourceGenerator.Tests.Modules;
 
@@ -489,7 +491,49 @@ public class HttpClientRequestBuilderModuleTests
     {
         // A base operation's generated Http is a symbol only once it is compiled into another assembly; from the same
         // compilation it is invisible. Either way the derived operation declares its own, hiding the base's (CS0108 is
-        // suppressed for that), so it is not an inherited member that blocks the nested class.
+        // suppressed for that), so it is not an inherited member that blocks the nested class. The base here is the
+        // generator's own output, so the marker it is recognised by is the one the generator emits.
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(
+            """
+            using Blueprint.Model;
+
+            namespace Contract;
+
+            [global::Blueprint.Model.Attributes.RootLink("/base-widgets/{Id}")]
+            public partial class GetBaseWidgetQuery : IQuery<string>
+            {
+                public string Id { get; set; }
+            }
+            """,
+            "HttpBuilderContract");
+
+        // The reference really carries the generated class and its marker, read back from metadata as a consumer reads it.
+        var referencedHttp = CSharpCompilation.Create(
+                "HttpBuilderContractProbe",
+                references: AppDomain.CurrentDomain.GetAssemblies()
+                    .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
+                    .Select(static assembly => (MetadataReference)MetadataReference.CreateFromFile(assembly.Location))
+                    .Append(contract))
+            .GetTypeByMetadataName("Contract.GetBaseWidgetQuery+Http");
+        referencedHttp.Should().NotBeNull("the generator emits the base operation's nested Http class");
+        referencedHttp!.GetAttributes().Should().Contain(
+            static attribute => attribute.AttributeClass!.ToDisplayString() == "System.CodeDom.Compiler.GeneratedCodeAttribute"
+                && attribute.ConstructorArguments.Length > 0
+                && (attribute.ConstructorArguments[0].Value as string) == "Blueprint.SourceGenerator",
+            "the marker is how a derived operation tells the generated class from a hand-written one");
+
+        var run = CompileDerivedFrom(contract, "return Task.FromResult(\"ok\");");
+
+        run.Diagnostics.Should().BeEmpty();
+        DescriptorSourceOf(run, "GetDerivedWidgetQuery").Should().Contain("public static class Http")
+            .And.Contain("public static string BuildUrl(global::TestNamespace.GetDerivedWidgetQuery operation)");
+    }
+
+    [Fact]
+    public void When_a_base_operation_in_a_referenced_assembly_has_a_hand_written_Http_class_then_the_derived_operation_keeps_it()
+    {
+        // Shaped as the generator's class, but not marked as its output, so it is the user's: a derived Http would hide it,
+        // and the derived operation's Http.Custom() used to fail (CS0117).
         var contract = TestHelpers.CreateReferenceFromSource(
             """
             using Blueprint.Model;
@@ -505,27 +549,59 @@ public class HttpClientRequestBuilderModuleTests
                 public static class Http
                 {
                     public static string BuildUrl(GetBaseWidgetQuery operation) => "/base-widgets/" + operation.Id;
+
+                    public static string Custom() => "custom";
                 }
             }
             """,
             "HttpBuilderContract");
 
-        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>(
-            Preamble + """
-            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
-            public partial class GetDerivedWidgetQuery : global::Contract.GetBaseWidgetQuery
+        var run = CompileDerivedFrom(contract, "return Task.FromResult(Http.Custom());");
+
+        run.Diagnostics.Should().BeEmpty();
+        DescriptorSourceOf(run, "GetDerivedWidgetQuery").Should().NotContain("public static class Http")
+            .And.Contain("static (op) => { var operation = (global::TestNamespace.GetDerivedWidgetQuery)op; var typed = operation;");
+    }
+
+    [Fact]
+    public void When_a_base_operation_in_the_same_compilation_has_a_hand_written_Http_class_then_the_derived_operation_keeps_it()
+    {
+        // Blueprint's own class is never visible from the compilation it is generated into, so one declared in source is
+        // the user's, whatever its shape: the derived operation's Http.Custom() used to fail (CS0117).
+        var result = CompileDescriptor(
+            """
+            [global::Blueprint.Model.Attributes.RootLink("/base-widgets/{Id}")]
+            public partial class GetBaseWidgetQuery : IQuery<string>
             {
-                public static Task<string> HandleAsync(GetDerivedWidgetQuery operation)
+                public string Id { get; set; }
+
+                public static Task<string> HandleAsync(GetBaseWidgetQuery operation)
                 {
                     return Task.FromResult("ok");
                 }
+
+                public static class Http
+                {
+                    public static string BuildUrl(GetBaseWidgetQuery operation) => "/base-widgets/" + operation.Id;
+
+                    public static string Custom() => "custom";
+                }
             }
-            """,
-            additionalReferences: [contract]);
+
+            [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+            public partial class GetDerivedWidgetQuery : GetBaseWidgetQuery
+            {
+                public static Task<string> HandleAsync(GetDerivedWidgetQuery operation)
+                {
+                    return Task.FromResult(Http.Custom());
+                }
+            }
+            """);
 
         result.Diagnostics.Should().BeEmpty();
-        GetDescriptorSource(result, "GetDerivedWidgetQuery").Should().Contain("public static class Http")
-            .And.Contain("public static string BuildUrl(global::TestNamespace.GetDerivedWidgetQuery operation)");
+        result.Output.Single(static tree => tree.FilePath.EndsWith("TestNamespace.GetDerivedWidgetQuery_Descriptor.g.cs", StringComparison.Ordinal))
+            .ToString().Should().NotContain("public static class Http")
+            .And.Contain("static (op) => { var operation = (global::TestNamespace.GetDerivedWidgetQuery)op; var typed = operation;");
     }
 
     [Theory]
@@ -951,6 +1027,26 @@ public class HttpClientRequestBuilderModuleTests
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(Preamble + source);
+    }
+
+    private static MultiGeneratorGenerationResult CompileDerivedFrom(Microsoft.CodeAnalysis.MetadataReference contract, string handlerBody)
+    {
+        return TestHelpers.CompileWithTrackedGenerators(
+            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+            [
+                Preamble + $$"""
+                [global::Blueprint.Model.Attributes.RootLink("/widgets/{Id}")]
+                public partial class GetDerivedWidgetQuery : global::Contract.GetBaseWidgetQuery
+                {
+                    public static Task<string> HandleAsync(GetDerivedWidgetQuery operation)
+                    {
+                        {{handlerBody}}
+                    }
+                }
+                """,
+            ],
+            ["GetDerivedWidgetQuery.cs"],
+            [contract]);
     }
 
     private static string DescriptorSourceOf(MultiGeneratorGenerationResult run, string operationName)
