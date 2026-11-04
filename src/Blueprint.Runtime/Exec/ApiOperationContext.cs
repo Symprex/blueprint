@@ -339,9 +339,10 @@ public sealed class ApiOperationContext : IHttpOperationContext
     /// The instance is judged as given, and is not changed. Execution's population stage, which runs before it authorises
     /// (tenant resolution, <see cref="Middleware.IPropertyPopulator"/>s, <c>[FromAuthContext]</c> and HTTP binding), is not run, so set
     /// any property a template reads that execution would fill to the value execution would give it. One left unset
-    /// expands to an empty segment, which no grant on a real resource covers, so the check refuses. One set to another
-    /// value is trusted, though execution would overwrite a <c>[FromAuthContext]</c> property, so never build the instance
-    /// from untrusted input.
+    /// expands to an empty segment and the key is matched like any other, so it is not guaranteed to be refused: a grant on
+    /// an ancestor, such as <c>/accounts/account-9/*</c>, still covers <c>/accounts/account-9/widgets/</c>. One set to
+    /// another value is trusted, though execution would overwrite a <c>[FromAuthContext]</c> property, so never build the
+    /// instance from untrusted input.
     /// </para>
     /// </remarks>
     /// <param name="operation">The operation asked about, whose type must declare scope pairs.</param>

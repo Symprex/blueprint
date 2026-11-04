@@ -922,7 +922,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             var sp = scopePairs[0];
             resolvedScopeArg = sp.ResourceKeyTemplate is not null
                 ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames)
-                : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
+                : $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)";
         }
         else
         {
@@ -930,7 +930,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 ", ",
                 scopePairs.Select(sp => sp.ResourceKeyTemplate is not null
                     ? BuildResolvedScopePairExpression(sp, operationExpr, principalExpr, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames)
-                    : $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"));
+                    : $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"));
 
             resolvedScopeArg = $"[{resolvedElements}]";
         }
@@ -964,7 +964,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         var expandedExpr = ResourceKeyTemplateParser.GenerateExpansionExpression(
             sp.ResourceKeyTemplate!, tokens, operationExpr, principalExpr, "context", valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames, callerValueExpression);
 
-        return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expandedExpr})";
+        return $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expandedExpr})";
     }
 
     private static List<(string Noun, string Verb, string? ResourceKeyTemplate)> GetResourceAttributes(INamedTypeSymbol operationType)

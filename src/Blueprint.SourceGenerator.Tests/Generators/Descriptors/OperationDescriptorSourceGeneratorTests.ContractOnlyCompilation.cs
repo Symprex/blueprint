@@ -69,6 +69,33 @@ public class OperationDescriptorSourceGeneratorTestsContractOnlyCompilationTests
             .Should().Contain("OperationExecutionAuthorizationFeatureData", "a runtime consumer checks an instance through it");
     }
 
+    [Fact]
+    public void When_a_permissioned_operations_namespace_shadows_Blueprint_then_its_descriptor_compiles()
+    {
+        // Inside Acme.Blueprint an unqualified Blueprint.Model names Acme.Blueprint.Model, so the resolver must say global::
+        var compilation = CreateContractOnlyCompilation("""
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            namespace Acme.Blueprint;
+
+            [Resource("widget", "read", "/widgets/{Id}")]
+            [Resource("widget", "list")]
+            public partial class ShadowedPermissionedOperation : IQuery<string>
+            {
+                public string? Id { get; set; }
+            }
+            """);
+        var generator = new OperationDescriptorSourceGenerator();
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([generator.AsSourceGenerator()], parseOptions: parseOptions);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+
+        diagnostics.Should().BeEmpty();
+        outputCompilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+    }
+
     private static CSharpCompilation CreateContractOnlyCompilation(string source)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
