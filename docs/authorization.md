@@ -326,6 +326,10 @@ var canRename = await context.CanExecuteAsync(new RenameFolderCommand { FolderId
 
 `CanExecuteAsync(operation)` decides *exactly* as that instance's execution would. Each scope pair's template is expanded from the instance and the caller by the same generated expansion as the execution's check, with the same fallbacks, value types and nested paths, and `{Auth.X}` read from `UserAuthorisationContext` and then the principal's claims. The resolver lives in `Blueprint.Runtime.Model`, so a contract assembly that references only that package still compiles. A pair with no template is given no key. The providers are given a nested context whose `Operation` *is* the instance, so a provider that judges by the operation's properties sees the real ones. In every other way it behaves as `CanExecuteAsync<T>(key)`: the same providers, caller, refusals and exceptions, and it also throws `ArgumentNullException` for a null operation. Prefer it wherever a provider reads the operation. Given only a key, such a provider sees a default instance.
 
+The instance is judged **as given**. Execution fills some properties before it authorises: tenant resolution sets an unset `TenantId`, the registered `IPropertyPopulator`s run, a `[FromAuthContext]` property is set from the caller's claims, and an HTTP request is bound. The check does none of this, and it never changes the instance. Set any property that a scope pair's template reads, and that execution would fill, to the value execution would give it. For example, set `TenantId` to the caller's tenant.
+- **Left unset**, such a property expands to an empty segment, `/Tenants/` rather than `/Tenants/tenant-1`. No grant on a real tenant covers that, so the check refuses: it fails closed.
+- **Set to another value**, it is trusted. Execution would overwrite a `[FromAuthContext]` property from the claims, but the check judges whatever the instance holds. Never build the instance from untrusted input.
+
 A provider that judges by the operation's properties should say so, so that a key-only check fails closed instead of letting it judge a default instance:
 
 ```csharp
