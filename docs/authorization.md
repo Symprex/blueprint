@@ -82,6 +82,8 @@ if (descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var auth
 
 `OperationAccessFeatureData` is absent for an operation that declares no access attribute; use it, not `OperationAuthenticationFeatureData`, to tell `[MustBeAuthenticated]` from no declaration.
 
+To map scope pairs to operations under the app's verb hierarchy, use `ScopePairOperationIndex` rather than reading `ScopePairs` yourself: see [Verb hierarchy and the scope pair index](#verb-hierarchy-and-the-scope-pair-index).
+
 ---
 
 ## Resource Key Templates
@@ -235,6 +237,43 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 **Case**: scopes are compared case-insensitively by default, so `template::read` satisfies `Template::Read` and `OpenID` is ignored as `openid`. Pass `scopeComparison: StringComparison.Ordinal` to the full constructor to compare exactly, as Signature 365's own scope check does: the scope claim type, the ignored scopes, each claim's noun, separator and verb, and the verbs of `verbInclusions` are then all case-sensitive, so `signature::read` no longer satisfies `Signature::Read` and an `OpenID` scope counts as an API scope. `Signature::Manage` still satisfies `Signature::Read` through the verb hierarchy. Only `Ordinal` and `OrdinalIgnoreCase` are accepted; any other value throws `ArgumentOutOfRangeException`.
 
 **No-API-scope behavior**: When the user's only scopes are ignored scopes (e.g. `openid`, `Signature365.ReadWrite.All`), the `AllowWhenNoScopeClaims` virtual method is called. Override to `true` for full-access semantics (S365 pattern).
+
+### Verb hierarchy and the scope pair index
+
+The verb hierarchy is the app's policy, applied at runtime: the generated feature data stays what each operation declares. An app that needs the same policy outside the provider, for example to map a role's scope pairs to the operations it may run, builds one `VerbHierarchy` and gives it to both the provider and a `ScopePairOperationIndex`, so the two cannot disagree (Symprex/blueprint#129):
+
+```csharp
+var verbs = new VerbHierarchy(
+    new Dictionary<string, string[]>
+    {
+        ["Manage"] = ["Create", "Read", "Update", "Delete"],
+        ["Archive"] = [],                       // a verb the app knows that includes nothing
+    },
+    StringComparison.Ordinal);
+
+blueprint.AddResourceAuthorizationProvider(
+    new ScopePairClaimAuthorizationProvider(verbs, "scope", "::", ignoredScopes: ["openid", "profile"]));
+
+var index = new ScopePairOperationIndex(app, verbs, requireKnownVerbs: true, separator: "::");
+
+index.OperationsFor(new ScopePair("Template", "Manage"));  // every operation Template::Manage satisfies
+index.SatisfiedBy(descriptor);                              // every pair that satisfies the operation
+```
+
+| Member | Answers |
+|---|---|
+| `VerbHierarchy.Includes(verb)` | The verbs `verb` includes, transitively, not counting itself: `Manage` gives `Create`, `Read`, `Update`, `Delete` |
+| `VerbHierarchy.IncludedIn(verb)` | The verbs that include `verb`, transitively, not counting itself: `Read` gives `Manage` |
+| `VerbHierarchy.Contains(verb)` | Whether the hierarchy names `verb`, as a parent (with or without children) or a child |
+| `ScopePairOperationIndex.OperationsFor(pair)` | The operations a caller holding `pair` satisfies: those declaring its noun with its verb or a verb it includes. The pair's template is ignored |
+| `ScopePairOperationIndex.SatisfiedBy(descriptor)` | The pairs, without templates, any one of which satisfies the operation: each declared pair and the same noun with each verb that includes it |
+
+- **Comparison.** The hierarchy's `StringComparison` compares verbs and, in the index, nouns. The provider overload that takes a hierarchy uses it for all scope text, as `scopeComparison` does for the dictionary constructor, so it must be `Ordinal` or `OrdinalIgnoreCase`.
+- **Cycles** are tolerated: the closure stops at a verb already reached, and no verb includes itself.
+- **Index contents.** The index is built once, from `app.Operations` and their `OperationAuthorizationFeatureData`, and frozen. An operation that declares no scope pair is in no pair's operations. Resource key templates play no part.
+- **Unknown verbs.** By default a declared verb the hierarchy does not name is satisfied only by itself, as the provider treats it. With `requireKnownVerbs: true` the index throws `InvalidOperationException` at construction, listing each operation, noun and verb, so a typo in a `[Resource]` verb fails at startup or in a test rather than making an operation nobody's role reaches.
+- **Separator.** Pass the provider's separator as `separator`. The provider matches a scope on `{noun}{separator}{verb}`, so a noun or verb containing the separator is split wherever the scope splits: holding `Template::Admin` + `Read` satisfies a declared `Template` + `Admin::Read`. Given the separator, the index matches the same way. Without it, pairs match on noun and verb as given, which agrees with the provider only while no noun or verb contains the separator.
+- The dictionary constructor and `WithCrudVerbHierarchy` are unchanged; they build a `VerbHierarchy` internally.
 
 ### `ResourceKeyAuthorizationProvider`
 
@@ -496,5 +535,5 @@ These remain consumer-level concerns:
 | Template expansion | Inline string interpolation | One string allocation per template per request |
 | Scope matching | Span-based ordinal comparison | Zero allocation per comparison |
 | Ignored scope check | `FrozenSet<string>` lookup | O(1) per claim |
-| Verb hierarchy | `FrozenDictionary<string, string[]>` | O(1) lookup + array scan |
+| Verb hierarchy | `VerbHierarchy`, a `FrozenDictionary` of each verb's transitive parents | O(1) lookup + array scan |
 | Provider resolution | Resolved at startup via `PipelineServices` | Zero per-request cost |
