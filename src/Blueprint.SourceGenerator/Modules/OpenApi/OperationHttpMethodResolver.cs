@@ -9,8 +9,7 @@ namespace Blueprint.SourceGenerator.Modules;
 /// client sends as a constant, so the two always send the same method.
 /// </summary>
 /// <remarks>
-/// <c>HttpHostExposureHelper.ResolveHttpMethods</c> is an older approximation of the same rule that neither orders the
-/// methods nor rejects an empty one; app-level diagnostics still use it.
+/// App-level diagnostics reach it through <see cref="HttpHostExposureHelper.ResolveHttpMethods"/>.
 /// </remarks>
 internal static class OperationHttpMethodResolver
 {
