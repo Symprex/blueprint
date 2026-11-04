@@ -85,6 +85,26 @@ public sealed class ScopePairOperationIndexTests
     }
 
     [Fact]
+    public void Given_the_separator_a_pair_matches_as_its_scope_value_does_wherever_the_separator_splits_it()
+    {
+        // The provider accepts the scope "indexTemplate::Admin::Read" for the declared pair (indexTemplate, Admin::Read),
+        // so a pair joining to that value satisfies the operation however it is split.
+        var index = new ScopePairOperationIndex(_app, new VerbHierarchy(_inclusions, StringComparison.Ordinal), separator: "::");
+
+        OperationTypes(index.OperationsFor(new ScopePair("indexTemplate::Admin", "Read"))).Should().Equal(typeof(IndexSeparatorVerbCommand));
+        OperationTypes(index.OperationsFor(new ScopePair("indexTemplate", "Admin::Read"))).Should().Equal(typeof(IndexSeparatorVerbCommand));
+    }
+
+    [Fact]
+    public void Without_the_separator_a_pair_matches_on_its_noun_and_verb_as_given()
+    {
+        var index = CreateIndex(StringComparison.Ordinal);
+
+        index.OperationsFor(new ScopePair("indexTemplate::Admin", "Read")).Should().BeEmpty();
+        OperationTypes(index.OperationsFor(new ScopePair("indexTemplate", "Admin::Read"))).Should().Equal(typeof(IndexSeparatorVerbCommand));
+    }
+
+    [Fact]
     public void An_operation_is_satisfied_by_each_declared_pair_and_each_verb_that_includes_it_without_templates()
     {
         var index = CreateIndex(StringComparison.Ordinal);
@@ -156,7 +176,7 @@ public sealed class ScopePairOperationIndexTests
         };
 
         var hierarchy = new VerbHierarchy(inclusions, comparison);
-        var index = new ScopePairOperationIndex(_app, hierarchy);
+        var index = new ScopePairOperationIndex(_app, hierarchy, separator: "::");
 
         IResourceAuthorizationProvider[] providers =
         [
@@ -179,6 +199,22 @@ public sealed class ScopePairOperationIndexTests
             .Distinct()
             .ToList();
 
+        // Every noun and verb, plus each scope value that contains the separator split again at each of its separators,
+        // as a noun or verb containing the separator is a valid component the provider matches on the joined value.
+        var pairs = nouns.SelectMany(n => verbs.Select(v => (Noun: n, Verb: v))).ToList();
+
+        pairs.AddRange(pairs
+            .Select(static p => p.Noun + "::" + p.Verb)
+            .SelectMany(static value => Enumerable.Range(1, value.Length - 2)
+                .Where(i => value.AsSpan(i).StartsWith("::"))
+                .Select(i => (Noun: value[..i], Verb: value[(i + 2)..])))
+            .Where(static p => p.Noun.Length > 0 && p.Verb.Length > 0)
+            .ToList());
+
+        pairs = [.. pairs.Distinct()];
+
+        pairs.Should().Contain(("indexTemplate::Admin", "Read"));
+
         var mismatches = new List<string>();
         var allowedCount = 0;
 
@@ -190,27 +226,24 @@ public sealed class ScopePairOperationIndexTests
 
             var satisfiedBy = index.SatisfiedBy(operation);
 
-            foreach (var noun in nouns)
+            foreach (var (noun, verb) in pairs)
             {
-                foreach (var verb in verbs)
+                var pair = new ScopePair(noun, verb);
+                var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("scope", $"{noun}::{verb}")], "test"));
+
+                var inOperationsFor = index.OperationsFor(pair).Contains(operation);
+                var inSatisfiedBy = satisfiedBy.Any(s => string.Equals($"{s.Noun}::{s.Verb}", $"{noun}::{verb}", comparison));
+
+                foreach (var provider in providers)
                 {
-                    var pair = new ScopePair(noun, verb);
-                    var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("scope", $"{noun}::{verb}")], "test"));
+                    var allowed = (await provider.AuthorizeAsync(null!, principal, request, CancellationToken.None)).IsAllowed;
 
-                    var inOperationsFor = index.OperationsFor(pair).Contains(operation);
-                    var inSatisfiedBy = satisfiedBy.Any(s => string.Equals(s.Noun, noun, comparison) && string.Equals(s.Verb, verb, comparison));
-
-                    foreach (var provider in providers)
+                    if (allowed != inOperationsFor || allowed != inSatisfiedBy)
                     {
-                        var allowed = (await provider.AuthorizeAsync(null!, principal, request, CancellationToken.None)).IsAllowed;
-
-                        if (allowed != inOperationsFor || allowed != inSatisfiedBy)
-                        {
-                            mismatches.Add($"{operation.OperationType.Name} {noun}::{verb}: provider {allowed}, OperationsFor {inOperationsFor}, SatisfiedBy {inSatisfiedBy}");
-                        }
-
-                        allowedCount += allowed ? 1 : 0;
+                        mismatches.Add($"{operation.OperationType.Name} {noun}::{verb}: provider {allowed}, OperationsFor {inOperationsFor}, SatisfiedBy {inSatisfiedBy}");
                     }
+
+                    allowedCount += allowed ? 1 : 0;
                 }
             }
         }
@@ -270,6 +303,16 @@ public partial class IndexTwoPairCommand : ICommand<string>
 public partial class IndexInheritingCommand : ICommand<string>
 {
     public static string Handle(IndexInheritingCommand command)
+    {
+        return "executed";
+    }
+}
+
+/// <summary>Declares a verb containing the scope separator, which the provider matches on the joined scope value.</summary>
+[Resource("indexTemplate", "Admin::Read")]
+public partial class IndexSeparatorVerbCommand : ICommand<string>
+{
+    public static string Handle(IndexSeparatorVerbCommand command)
     {
         return "executed";
     }

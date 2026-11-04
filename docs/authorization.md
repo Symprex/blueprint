@@ -254,7 +254,7 @@ var verbs = new VerbHierarchy(
 blueprint.AddResourceAuthorizationProvider(
     new ScopePairClaimAuthorizationProvider(verbs, "scope", "::", ignoredScopes: ["openid", "profile"]));
 
-var index = new ScopePairOperationIndex(app, verbs, requireKnownVerbs: true);
+var index = new ScopePairOperationIndex(app, verbs, requireKnownVerbs: true, separator: "::");
 
 index.OperationsFor(new ScopePair("Template", "Manage"));  // every operation Template::Manage satisfies
 index.SatisfiedBy(descriptor);                              // every pair that satisfies the operation
@@ -272,6 +272,7 @@ index.SatisfiedBy(descriptor);                              // every pair that s
 - **Cycles** are tolerated: the closure stops at a verb already reached, and no verb includes itself.
 - **Index contents.** The index is built once, from `app.Operations` and their `OperationAuthorizationFeatureData`, and frozen. An operation that declares no scope pair is in no pair's operations. Resource key templates play no part.
 - **Unknown verbs.** By default a declared verb the hierarchy does not name is satisfied only by itself, as the provider treats it. With `requireKnownVerbs: true` the index throws `InvalidOperationException` at construction, listing each operation, noun and verb, so a typo in a `[Resource]` verb fails at startup or in a test rather than making an operation nobody's role reaches.
+- **Separator.** Pass the provider's separator as `separator`. The provider matches a scope on `{noun}{separator}{verb}`, so a noun or verb containing the separator is split wherever the scope splits: holding `Template::Admin` + `Read` satisfies a declared `Template` + `Admin::Read`. Given the separator, the index matches the same way. Without it, pairs match on noun and verb as given, which agrees with the provider only while no noun or verb contains the separator.
 - The dictionary constructor and `WithCrudVerbHierarchy` are unchanged; they build a `VerbHierarchy` internally.
 
 ### `ResourceKeyAuthorizationProvider`
