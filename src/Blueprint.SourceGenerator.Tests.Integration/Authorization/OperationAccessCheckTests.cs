@@ -3,6 +3,7 @@ using Blueprint.Authorization;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
+using Blueprint.Runtime.Middleware;
 using Blueprint.SourceGenerator.Tests.Integration.Generators.OperationDescriptors;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
@@ -331,6 +332,29 @@ public sealed class OperationAccessCheckTests
     }
 
     [Fact]
+    public async Task An_instance_is_judged_as_given_without_the_population_execution_runs()
+    {
+        // Execution's populator fills Id before it authorises; the check does not, so an unset Id is asked about as
+        // /accounts/account-9/widgets/, which a grant on w1 alone does not cover, and the instance is left as it was
+        var user = User("widget::read", "/accounts/account-9/widgets/w1;widget::read");
+
+        void Services(IServiceCollection services)
+        {
+            RealProviders(services);
+            services.AddSingleton<IPropertyPopulator>(new WidgetIdPopulator("w1"));
+        }
+
+        var executed = await ExecuteAsync(new PermissionedUnlinkedTemplateCommand(), Services, user);
+
+        var operation = new PermissionedUnlinkedTemplateCommand();
+        var checkedAccess = await CheckInstanceAsync(operation, Services, user);
+
+        executed.Should().BeOfType<OkResult<string>>("execution populates Id before it authorises");
+        checkedAccess.IsAllowed.Should().BeFalse();
+        operation.Id.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Providers_are_given_a_nested_context_whose_operation_is_the_instance()
     {
         var provider = new ContextRecordingProvider();
@@ -642,6 +666,20 @@ public sealed class OperationAccessCheckTests
             this.Requests.Add(request);
 
             return new ValueTask<ExecutionAllowed>(ExecutionAllowed.Yes);
+        }
+    }
+
+    /// <summary>Fills an unset widget <c>Id</c> during execution's population stage, as an app's populator might.</summary>
+    private sealed class WidgetIdPopulator(string id) : IPropertyPopulator
+    {
+        public Task PopulateAsync(ApiOperationContext context, CancellationToken cancellationToken)
+        {
+            if (context.Operation is PermissionedUnlinkedTemplateCommand { Id: null } operation)
+            {
+                operation.Id = id;
+            }
+
+            return Task.CompletedTask;
         }
     }
 
