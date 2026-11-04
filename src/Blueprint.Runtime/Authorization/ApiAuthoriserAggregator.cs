@@ -277,7 +277,11 @@ internal sealed class ApiAuthoriserAggregator : IApiAuthoriserAggregator
     /// <see cref="IUserAuthorisationContext"/> for the names the generator knows, falling back to the principal's claim of
     /// that name.
     /// </summary>
-    private static string? CallerValue(ApiOperationContext context, ClaimsPrincipal principal, string name)
+    /// <param name="context">The context whose user's authorisation context is read.</param>
+    /// <param name="principal">The caller, whose claims are read.</param>
+    /// <param name="name">The token's name after <c>Auth.</c>.</param>
+    /// <returns>The caller's value, or <see langword="null"/> when it has none.</returns>
+    internal static string? CallerValue(ApiOperationContext context, ClaimsPrincipal principal, string name)
     {
         var user = context.UserAuthorisationContext;
 

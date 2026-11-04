@@ -318,6 +318,31 @@ A handler deriving from `BlueprintApiOperations` asks `this.Context.CanExecuteAs
 
 It returns the `ExecutionAllowed`, so a denial's reason can be logged; never write it to the response. It throws `ArgumentException` when `T` is not an operation of the app, when `T` declares no scope pairs, or when the key is empty.
 
+When the instance is to hand, ask about it instead:
+
+```csharp
+var canRename = await context.CanExecuteAsync(new RenameFolderCommand { FolderId = folder.Id });
+```
+
+`CanExecuteAsync(operation)` decides *exactly* as that instance's execution would. Each scope pair's template is expanded from the instance and the caller by the same generated expansion as the execution's check, with the same fallbacks, value types and nested paths, and `{Auth.X}` read from `UserAuthorisationContext` and then the principal's claims. The resolver lives in `Blueprint.Runtime.Model`, so a contract assembly that references only that package still compiles. A pair with no template is given no key. The providers are given a nested context whose `Operation` *is* the instance, so a provider that judges by the operation's properties sees the real ones. In every other way it behaves as `CanExecuteAsync<T>(key)`: the same providers, caller, refusals and exceptions, and it also throws `ArgumentNullException` for a null operation. Prefer it wherever a provider reads the operation. Given only a key, such a provider sees a default instance.
+
+The instance is judged **as given**. Execution fills some properties before it authorises: tenant resolution sets an unset `TenantId`, the registered `IPropertyPopulator`s run, a `[FromAuthContext]` property is set from the caller's claims, and an HTTP request is bound. The check does none of this, and it never changes the instance. Set any property that a scope pair's template reads, and that execution would fill, to the value execution would give it. For example, set `TenantId` to the caller's tenant.
+- **Left unset**, such a property expands to an empty segment, and the key is matched like any other. It is *not* guaranteed to be refused. With `/accounts/{Auth.AccountId}/widgets/{Id}` and no `Id`, the key is `/accounts/account-9/widgets/`, which the ordinary grant `/accounts/account-9/*` still covers. So the answer is about a different key from the one execution would judge.
+- **Set to another value**, it is trusted. Execution would overwrite a `[FromAuthContext]` property from the claims, but the check judges whatever the instance holds. Never build the instance from untrusted input.
+
+A provider that judges by the operation's properties should say so, so that a key-only check fails closed instead of letting it judge a default instance:
+
+```csharp
+public sealed class TenantOwnershipProvider : IResourceAuthorizationProvider
+{
+    public bool ReadsOperation(ApiOperationDescriptor operation) => operation.OperationType.IsAssignableTo(typeof(ITenantOwned));
+
+    public ValueTask<ExecutionAllowed> AuthorizeAsync(...) { /* reads ((ITenantOwned)operationContext.Operation).TenantId */ }
+}
+```
+
+`ReadsOperation` is optional and defaults to `false`. When any registered provider returns `true` for `T`, `CanExecuteAsync<T>(key)` and `CanExecuteAsync(type, key)` refuse with an `Authorisation` denial that names the provider and points to `CanExecuteAsync(operation)`, and they ask no provider. Execution and `CanExecuteAsync(operation)` ignore it. Return `true` only for the operations whose properties the provider reads, so key-only checks of the others still work. Blueprint's own providers read only the scope pairs and keys, so they never declare it.
+
 `IResourceAccessChecker.HasAccessAsync(context, principal, demand, scopePair, ct)` remains for the narrower question: the decision `ResourceKeyAuthorizationProvider` makes for one pair, without the token's scopes or the authentication checks.
 
 ---
