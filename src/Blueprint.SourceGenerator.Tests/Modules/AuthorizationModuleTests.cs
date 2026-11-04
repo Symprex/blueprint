@@ -1312,10 +1312,10 @@ public class AuthorizationModuleTests
 
         // TenantResource lacks UserTenantId, so the fallback is used, and only the fallback: existence, not a null value,
         // decides it.
-        descriptorSource.Should().Contain("OperationLinkAuthorizationFeatureData");
-        descriptorSource.Should().Contain("is global::TestNamespace.TenantResource");
-        descriptorSource.Should().Contain(".TenantId?.ToString()");
-        descriptorSource.Should().NotContain(".UserTenantId?.ToString() ??");
+        var linkResolver = LinkResolverSource(descriptorSource);
+        linkResolver.Should().Contain("is global::TestNamespace.TenantResource");
+        linkResolver.Should().Contain(".TenantId?.ToString()");
+        linkResolver.Should().NotContain(".UserTenantId?.ToString() ??");
     }
 
     [Fact]
@@ -1329,8 +1329,23 @@ public class AuthorizationModuleTests
             .Select(static t => t.ToString())
             .Single(static s => s.Contains("DeleteTenantUserCommandDescriptor"));
 
-        descriptorSource.Should().Contain(".UserTenantId?.ToString() ?? \"\"");
-        descriptorSource.Should().NotContain(".TenantId?.ToString()");
+        var linkResolver = LinkResolverSource(descriptorSource);
+        linkResolver.Should().Contain(".UserTenantId?.ToString() ?? \"\"");
+        linkResolver.Should().NotContain(".TenantId?.ToString()");
+    }
+
+    /// <summary>
+    /// The link resolver's part of a descriptor's source, so an assertion about how a link resolves a key is not met, or
+    /// broken, by the execution resolver, which expands the same template against the operation.
+    /// </summary>
+    private static string LinkResolverSource(string descriptorSource)
+    {
+        var start = descriptorSource.IndexOf("OperationLinkAuthorizationFeatureData", StringComparison.Ordinal);
+        var end = descriptorSource.IndexOf("OperationListingAuthorizationFeatureData", start, StringComparison.Ordinal);
+
+        start.Should().BeGreaterThanOrEqualTo(0, "the descriptor resolves keys against a linked resource");
+
+        return descriptorSource[start..end];
     }
 
     [Theory]

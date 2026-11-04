@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Security.Claims;
 using Blueprint.Authorization;
 using Blueprint.Model;
@@ -271,31 +271,16 @@ public sealed class ApiOperationContext : IHttpOperationContext
             throw new ArgumentException("A resource key must be given; default(ResourceKey) is the empty key, which no grant can cover.", nameof(resourceKey));
         }
 
-        if (!this.App.TryFindOperation(operationType, out var descriptor))
-        {
-            throw new ArgumentException($"{operationType.Name} is not an operation of {this.App.GetType().Name}.", nameof(operationType));
-        }
-
-        if (!descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var authorization) || authorization.ScopePairs.IsDefaultOrEmpty)
-        {
-            throw new ArgumentException(
-                $"{operationType.Name} declares no scope pairs ([Resource] or [FromResource]), so it cannot be judged against a resource key.",
-                nameof(operationType));
-        }
+        var (descriptor, authorization) = this.FindJudgedOperation(operationType, nameof(operationType));
 
         if (this.UserPrincipal is not { Identity.IsAuthenticated: true } principal)
         {
             return new ValueTask<ExecutionAllowed>(_anonymousCaller);
         }
 
-        var providers = this.ServiceProvider.GetServices<IResourceAuthorizationProvider>().ToArray();
-
-        if (providers.Length == 0)
+        if (this.GetProviders() is not { } providers)
         {
-            return new ValueTask<ExecutionAllowed>(ExecutionAllowed.No(
-                $"No IResourceAuthorizationProvider is registered to judge {operationType.Name}",
-                "You do not have permission to perform this operation",
-                ExecutionAllowedFailureType.Authorisation));
+            return new ValueTask<ExecutionAllowed>(NoProvider(operationType));
         }
 
         var scopePairs = new ResolvedScopePair[authorization.ScopePairs.Length];
@@ -307,7 +292,132 @@ public sealed class ApiOperationContext : IHttpOperationContext
             scopePairs[i] = new ResolvedScopePair(pair.Noun, pair.Verb, pair.ResourceKeyTemplate, pair.ResourceKeyTemplate is null ? null : resourceKey.Value);
         }
 
-        // The providers see a context for the operation asked about, as at its execution, not the asking one
+        return AskProvidersAsync(
+            this.CreateTarget(descriptor, null),
+            principal,
+            providers,
+            ResourceAuthorizationRequest.Execute(descriptor, scopePairs),
+            cancellationToken == default ? this.OperationCancelled : cancellationToken);
+    }
+
+    /// <summary>
+    /// Decides whether this context's caller may execute <paramref name="operation"/>, exactly as its own execution would
+    /// decide it: each scope pair's template is expanded from this instance and the caller, as the generated check expands
+    /// it, and the providers are given a context whose <see cref="Operation"/> is this instance (Symprex/blueprint#129).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Use it in place of <see cref="CanExecuteAsync{TOperation}(ResourceKey, CancellationToken)"/> wherever the instance
+    /// is to hand, and always where a provider judges by the operation's properties: given only a key, such a provider reads
+    /// a default instance.
+    /// </para>
+    /// <para>
+    /// Every registered <see cref="IResourceAuthorizationProvider"/> is asked, all-of in registration order, in
+    /// <see cref="ResourceAuthorizationMode.Execute"/> mode for the operation's descriptor. The context they are given is
+    /// nested in this one, as <see cref="CreateNested"/> makes it, and shares this context's caller,
+    /// <see cref="UserAuthorisationContext"/>, <see cref="HttpContext"/>, <see cref="BaseUri"/> and <see cref="Data"/>.
+    /// The caller, refusals and the denial returned are as for
+    /// <see cref="CanExecuteAsync{TOperation}(ResourceKey, CancellationToken)"/>.
+    /// </para>
+    /// </remarks>
+    /// <param name="operation">The operation asked about, whose type must declare scope pairs.</param>
+    /// <param name="cancellationToken">Cancellation for the decision; <see cref="OperationCancelled"/> when not given.</param>
+    /// <returns><see cref="ExecutionAllowed.Yes"/>, or the first provider's denial.</returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="operation"/> is not an operation of <see cref="App"/>, or its type declares no scope pairs.
+    /// </exception>
+    public ValueTask<ExecutionAllowed> CanExecuteAsync(IOperation operation, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var operationType = operation.GetType();
+        var (descriptor, _) = this.FindJudgedOperation(operationType, nameof(operation));
+
+        if (!descriptor.TryGetFeatureData<OperationExecutionAuthorizationFeatureData>(out var execution))
+        {
+            throw new ArgumentException(
+                $"{operationType.Name} has no generated execution resolver, so its keys cannot be expanded from an instance. Rebuild it with this version of Blueprint's source generator.",
+                nameof(operation));
+        }
+
+        if (this.UserPrincipal is not { Identity.IsAuthenticated: true } principal)
+        {
+            return new ValueTask<ExecutionAllowed>(_anonymousCaller);
+        }
+
+        if (this.GetProviders() is not { } providers)
+        {
+            return new ValueTask<ExecutionAllowed>(NoProvider(operationType));
+        }
+
+        var target = this.CreateTarget(descriptor, operation);
+
+        return AskProvidersAsync(
+            target,
+            principal,
+            providers,
+            ResourceAuthorizationRequest.Execute(descriptor, execution.Resolve(operation, target)),
+            cancellationToken == default ? this.OperationCancelled : cancellationToken);
+    }
+
+    private static ExecutionAllowed NoProvider(Type operationType)
+    {
+        return ExecutionAllowed.No(
+            $"No IResourceAuthorizationProvider is registered to judge {operationType.Name}",
+            "You do not have permission to perform this operation",
+            ExecutionAllowedFailureType.Authorisation);
+    }
+
+    private static async ValueTask<ExecutionAllowed> AskProvidersAsync(
+        ApiOperationContext context,
+        ClaimsPrincipal principal,
+        IResourceAuthorizationProvider[] providers,
+        ResourceAuthorizationRequest request,
+        CancellationToken cancellationToken)
+    {
+        foreach (var provider in providers)
+        {
+            var result = await provider.AuthorizeAsync(context, principal, request, cancellationToken).ConfigureAwait(false);
+
+            if (!result.IsAllowed)
+            {
+                return result;
+            }
+        }
+
+        return ExecutionAllowed.Yes;
+    }
+
+    // The descriptor of an operation CanExecuteAsync is asked about, which must be the app's and declare scope pairs
+    private (ApiOperationDescriptor Descriptor, OperationAuthorizationFeatureData Authorization) FindJudgedOperation(Type operationType, string parameterName)
+    {
+        if (!this.App.TryFindOperation(operationType, out var descriptor))
+        {
+            throw new ArgumentException($"{operationType.Name} is not an operation of {this.App.GetType().Name}.", parameterName);
+        }
+
+        if (!descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var authorization) || authorization.ScopePairs.IsDefaultOrEmpty)
+        {
+            throw new ArgumentException(
+                $"{operationType.Name} declares no scope pairs ([Resource] or [FromResource]), so there is nothing to judge its caller by.",
+                parameterName);
+        }
+
+        return (descriptor, authorization);
+    }
+
+    // Every registered provider, or null when none is, which an execution with scope pairs refuses
+    private IResourceAuthorizationProvider[]? GetProviders()
+    {
+        var providers = this.ServiceProvider.GetServices<IResourceAuthorizationProvider>().ToArray();
+
+        return providers.Length == 0 ? null : providers;
+    }
+
+    // The providers see a context for the operation asked about, as at its execution, not the asking one. With no instance
+    // given, its operation is the default one its descriptor makes.
+    private ApiOperationContext CreateTarget(ApiOperationDescriptor descriptor, object? operation)
+    {
         var target = new ApiOperationContext(this.ServiceProvider, this.App, descriptor, this.OperationCancelled)
         {
             Parent = this,
@@ -318,32 +428,12 @@ public sealed class ApiOperationContext : IHttpOperationContext
             _data = this.Data,
         };
 
-        return AskProvidersAsync(
-            target,
-            principal,
-            providers,
-            ResourceAuthorizationRequest.Execute(descriptor, scopePairs),
-            cancellationToken == default ? this.OperationCancelled : cancellationToken);
-
-        static async ValueTask<ExecutionAllowed> AskProvidersAsync(
-            ApiOperationContext context,
-            ClaimsPrincipal principal,
-            IResourceAuthorizationProvider[] providers,
-            ResourceAuthorizationRequest request,
-            CancellationToken cancellationToken)
+        if (operation is not null)
         {
-            foreach (var provider in providers)
-            {
-                var result = await provider.AuthorizeAsync(context, principal, request, cancellationToken).ConfigureAwait(false);
-
-                if (!result.IsAllowed)
-                {
-                    return result;
-                }
-            }
-
-            return ExecutionAllowed.Yes;
+            target.Operation = operation;
         }
+
+        return target;
     }
 
     /// <summary>

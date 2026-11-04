@@ -43,6 +43,11 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     private const string MustBeAuthenticatedAttributeName = "MustBeAuthenticatedAttribute";
     private const string BackgroundTaskInterfaceName = "IBackgroundTask";
 
+    // The caller a key's {Auth.X} tokens read, in the pipeline's check and the descriptor's execution resolver alike. Over HTTP
+    // the context's principal is the request's user. In process it may be null, and the check refuses a caller with none: the
+    // trailing '?' makes the template's claim reads null-safe, so expanding the key never fails before then.
+    private const string ExecutionPrincipalExpression = "context.UserPrincipal?";
+
     /// <summary>
     /// Whether a property path exists on a linked resource type and, if it does, whether generated code can read it.
     /// </summary>
@@ -232,6 +237,18 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             ? $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"
             : $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {BuildListingPrefixExpression(sp.ResourceKeyTemplate)})"));
 
+        // A check of an instance expands the keys as the pipeline's check does, from the same analysis, whose diagnostics the
+        // pipeline contribution reports. A template that fails it gets no resolver, as it gets no check: the build fails.
+        var (hasTemplateErrors, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames) =
+            AnalyseTemplates(effectiveScopePairs, operationType, operationLocation, report: null);
+
+        var executionOperationExpr = $"(({operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})operation)";
+        var executionPairs = hasTemplateErrors
+            ? null
+            : string.Join(", ", effectiveScopePairs.Select(sp => sp.ResourceKeyTemplate is null
+                ? $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"
+                : BuildResolvedScopePairExpression(sp, executionOperationExpr, ExecutionPrincipalExpression, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames)));
+
         // A [FromResource] operation records where its pairs came from, and any template it overrode them with, so an
         // app can read what the attributes declared without reflecting over them.
         var inheritanceInitializer = fromResourceResult is { } inherited
@@ -259,6 +276,12 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
             writer.AppendLine(
                 $"this.SetFeatureData(new global::Blueprint.Model.OperationListingAuthorizationFeatureData(static callerValue => [{listingPairs}]));");
+
+            if (executionPairs is not null)
+            {
+                writer.AppendLine(
+                    $"this.SetFeatureData(new global::Blueprint.Authorization.OperationExecutionAuthorizationFeatureData(static (operation, context) => [{executionPairs}]));");
+            }
         });
     }
 
@@ -700,12 +723,43 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         }
 
         // Validate template property tokens exist on the operation type
+        var (hasTemplateValidationErrors, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames) =
+            AnalyseTemplates(effectiveScopePairs, operationType, operationLocation, context.AddDiagnostic);
+
+        // AuthenticationModule handles identity checks for all HTTP operations (default-on).
+        // AuthorizationModule only needs to add its authorization check after that.
+
+        // Add authorization check after authentication
+        context.RequireAsync();
+
+        context.AddRenderStep(
+            PipelineStage.Authorisation,
+            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, isHttpExposed, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames));
+    }
+
+    /// <summary>
+    /// Validates the property tokens of <paramref name="scopePairs"/>' templates against <paramref name="operationType"/>,
+    /// and gathers what expanding them needs: which first segments are value types, which tokens resolve only through their
+    /// fallback, and which fallbacks are dead. The pipeline's check and the descriptor's execution resolver expand from the
+    /// same answer, so a check of an instance resolves the keys its execution does.
+    /// </summary>
+    /// <param name="scopePairs">The operation's effective scope pairs.</param>
+    /// <param name="operationType">The operation whose properties the templates read.</param>
+    /// <param name="operationLocation">Where a diagnostic is reported.</param>
+    /// <param name="report">Reports each diagnostic; <see langword="null"/> where another contribution reports them.</param>
+    /// <returns>Whether a template cannot be expanded, and the sets its expansion is built from.</returns>
+    private static (bool HasErrors, HashSet<string> ValueTypePropertyNames, HashSet<string> FallbackOnlyTokenNames, HashSet<string> InvalidFallbackTokenNames) AnalyseTemplates(
+        List<(string Noun, string Verb, string? ResourceKeyTemplate)> scopePairs,
+        INamedTypeSymbol operationType,
+        Location? operationLocation,
+        Action<DiagnosticInfo>? report)
+    {
         var hasTemplateValidationErrors = false;
         var valueTypePropertyNames = new HashSet<string>();
         var fallbackOnlyTokenNames = new HashSet<string>();
         var invalidFallbackTokenNames = new HashSet<string>();
 
-        foreach (var (_, _, template) in effectiveScopePairs)
+        foreach (var (_, _, template) in scopePairs)
         {
             if (template is null)
             {
@@ -726,7 +780,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                             token.FallbackPropertyPath,
                             operationType,
                             operationLocation,
-                            context,
+                            report,
                             ref hasTemplateValidationErrors,
                             valueTypePropertyNames);
                     }
@@ -748,7 +802,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     }
                     else
                     {
-                        context.AddDiagnostic(
+                        report?.Invoke(
                             new DiagnosticInfo(
                                 AuthorizationDiagnosticDescriptors.ResourceKeyTemplatePropertyNotFound,
                                 operationLocation,
@@ -784,7 +838,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                             // primary resolves to the fallback
                             if (!IsFallbackUsedByALinkedResourceType(operationType, token))
                             {
-                                context.AddDiagnostic(
+                                report?.Invoke(
                                     new DiagnosticInfo(
                                         AuthorizationDiagnosticDescriptors.ResourceKeyTemplateFallbackPropertyNotFound,
                                         operationLocation,
@@ -806,7 +860,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                             token.FallbackPropertyPath,
                             operationType,
                             operationLocation,
-                            context,
+                            report,
                             ref hasTemplateValidationErrors,
                             valueTypePropertyNames);
                     }
@@ -814,15 +868,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             }
         }
 
-        // AuthenticationModule handles identity checks for all HTTP operations (default-on).
-        // AuthorizationModule only needs to add its authorization check after that.
-
-        // Add authorization check after authentication
-        context.RequireAsync();
-
-        context.AddRenderStep(
-            PipelineStage.Authorisation,
-            ctx => RenderAuthorizationCheck(ctx, effectiveScopePairs, hasTemplateValidationErrors, isHttpExposed, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames));
+        return (hasTemplateValidationErrors, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames);
     }
 
     private static bool IsBackgroundTask(INamedTypeSymbol operationType)
@@ -866,10 +912,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         HashSet<string> invalidFallbackTokenNames)
     {
         var operationExpr = context.GetOperationExpression();
-
-        // Over HTTP the context's principal is the request's user. In process it may be null, and the check refuses a caller
-        // with none: the trailing '?' makes the template's claim reads null-safe, so expanding the key never fails before then.
-        const string principalExpr = "context.UserPrincipal?";
+        const string principalExpr = ExecutionPrincipalExpression;
 
         string resolvedScopeArg;
 
@@ -1036,7 +1079,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         string propertyPath,
         INamedTypeSymbol operationType,
         Location? operationLocation,
-        PipelineContributorContext context,
+        Action<DiagnosticInfo>? report,
         ref bool hasTemplateValidationErrors,
         HashSet<string> valueTypePropertyNames)
     {
@@ -1049,7 +1092,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
 
         if (matchingProperty is null)
         {
-            context.AddDiagnostic(
+            report?.Invoke(
                 new DiagnosticInfo(
                     AuthorizationDiagnosticDescriptors.ResourceKeyTemplatePropertyNotFound,
                     operationLocation,

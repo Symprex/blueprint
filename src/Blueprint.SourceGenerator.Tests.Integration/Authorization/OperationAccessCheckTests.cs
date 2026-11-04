@@ -241,6 +241,132 @@ public sealed class OperationAccessCheckTests
         await check.Should().ThrowAsync<ArgumentException>();
     }
 
+    [Theory]
+    [InlineData("w1", "widget::read", "/accounts/account-9/widgets/w1;widget::read")]
+    [InlineData("w1", "widget::read", "/accounts/account-9/*;widget::read")]
+    [InlineData("w2", "widget::read", "/accounts/account-9/widgets/w1;widget::read")]
+    [InlineData("w1", "widget::read", "/accounts/account-1/*;widget::read")]
+    [InlineData("w1", "widget::write", "/accounts/account-9/*;widget::read")]
+    [InlineData("w1", "widget::read", null)]
+    [InlineData(null, "widget::read", "/accounts/account-9/widgets/;widget::read")]
+    public async Task An_instance_is_decided_as_its_own_execution_decides_it(string? id, string scope, string? grant)
+    {
+        var user = User(scope, grant);
+
+        var executed = await ExecuteAsync(new PermissionedUnlinkedTemplateCommand { Id = id }, RealProviders, user);
+        var checkedAccess = await CheckInstanceAsync(new PermissionedUnlinkedTemplateCommand { Id = id }, RealProviders, user);
+
+        checkedAccess.IsAllowed.Should().Be(executed is OkResult<string>, $"the execution returned {executed.GetType().Name}");
+    }
+
+    [Fact]
+    public async Task An_instances_keys_are_expanded_from_it_and_the_caller()
+    {
+        var provider = new RecordingProvider(ExecutionAllowed.Yes);
+
+        await CheckInstanceAsync(
+            new TwoPairAccessCheckCommand { Id = "w1" },
+            services => services.AddSingleton<IResourceAuthorizationProvider>(provider),
+            User());
+
+        var request = provider.Requests.Should().ContainSingle().Subject;
+        request.Mode.Should().Be(ResourceAuthorizationMode.Execute);
+        request.Resource.Should().BeNull();
+        request.Descriptor.OperationType.Should().Be(typeof(TwoPairAccessCheckCommand));
+        request.ScopePairs.Should().Equal(
+            new ResolvedScopePair("widget", "read", "/accounts/{Auth.AccountId}/widgets/{Id}", "/accounts/account-9/widgets/w1"),
+            new ResolvedScopePair("widget", "manage", "/accounts/{Auth.AccountId}", "/accounts/account-9"));
+    }
+
+    [Theory]
+    [InlineData("tenant-1", 7, "owner-1", "/accounts/tenant-1/widgets/7/owners/owner-1/eu")]
+    [InlineData(null, 7, "owner-1", "/accounts/account-9/widgets/7/owners/owner-1/eu")]
+    [InlineData("", 0, null, "/accounts//widgets/0/owners//eu")]
+    public async Task An_instances_keys_are_those_its_execution_resolves(string? tenantId, int number, string? owner, string expected)
+    {
+        // A fallback, a value type, a nested path and a claim the generator does not know, each expanded by the same code
+        static InstanceAccessCheckCommand Operation(string? tenantId, int number, string? owner) => new()
+        {
+            TenantId = tenantId,
+            Number = number,
+            Owner = owner is null ? null : new InstanceAccessCheckOwner { Name = owner },
+        };
+
+        var atExecution = new RecordingProvider(ExecutionAllowed.Yes);
+        var atCheck = new RecordingProvider(ExecutionAllowed.Yes);
+        var user = User(region: "eu");
+
+        await ExecuteAsync(Operation(tenantId, number, owner), services => services.AddSingleton<IResourceAuthorizationProvider>(atExecution), user);
+        await CheckInstanceAsync(Operation(tenantId, number, owner), services => services.AddSingleton<IResourceAuthorizationProvider>(atCheck), user);
+
+        var executed = atExecution.Requests.Should().ContainSingle().Subject.ScopePairs.Should().ContainSingle().Subject;
+        var checkedPair = atCheck.Requests.Should().ContainSingle().Subject.ScopePairs.Should().ContainSingle().Subject;
+
+        executed.ExpandedResourceKey.Should().Be(expected);
+        checkedPair.Should().Be(executed);
+    }
+
+    [Fact]
+    public async Task Providers_are_given_a_nested_context_whose_operation_is_the_instance()
+    {
+        var provider = new ContextRecordingProvider();
+        var operation = new PermissionedUnlinkedTemplateCommand { Id = "w1" };
+        ApiOperationContext? asking = null;
+
+        await CheckInstanceAsync(
+            operation,
+            services => services.AddSingleton<IResourceAuthorizationProvider>(provider),
+            User(),
+            context => asking = context);
+
+        var seen = provider.Contexts.Should().ContainSingle().Subject;
+        seen.Operation.Should().BeSameAs(operation);
+        seen.Descriptor.OperationType.Should().Be(typeof(PermissionedUnlinkedTemplateCommand));
+        seen.Parent.Should().BeSameAs(asking);
+        seen.UserPrincipal.Should().BeSameAs(asking!.UserPrincipal);
+        seen.Data.Should().BeSameAs(asking.Data);
+    }
+
+    [Fact]
+    public async Task An_instance_with_a_caller_with_no_authenticated_principal_is_refused_as_anonymous()
+    {
+        var provider = new RecordingProvider(ExecutionAllowed.Yes);
+
+        var result = await CheckInstanceAsync(
+            new PermissionedUnlinkedTemplateCommand { Id = "w1" },
+            services => services.AddSingleton<IResourceAuthorizationProvider>(provider),
+            null);
+
+        result.IsAllowed.Should().BeFalse();
+        result.FailureType.Should().Be(ExecutionAllowedFailureType.Authentication);
+        provider.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task An_instance_with_no_provider_registered_fails_closed()
+    {
+        var result = await CheckInstanceAsync(new PermissionedUnlinkedTemplateCommand { Id = "w1" }, static _ => { }, User());
+
+        result.IsAllowed.Should().BeFalse();
+        result.FailureType.Should().Be(ExecutionAllowedFailureType.Authorisation);
+    }
+
+    [Fact]
+    public async Task An_instance_that_declares_no_scope_pairs_is_refused_as_an_argument()
+    {
+        var check = () => CheckInstanceAsync(new UnpermissionedAccessCheckCommand(), static _ => { }, User());
+
+        await check.Should().ThrowAsync<ArgumentException>().WithMessage("*UnpermissionedAccessCheckCommand*scope pairs*");
+    }
+
+    [Fact]
+    public async Task A_null_instance_is_refused()
+    {
+        var check = () => CheckInstanceAsync(null!, static _ => { }, User());
+
+        await check.Should().ThrowAsync<ArgumentNullException>();
+    }
+
     private static void RealProviders(IServiceCollection services)
     {
         services.AddBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>(static b => b
@@ -249,9 +375,14 @@ public sealed class OperationAccessCheckTests
             .AddResourceGrantSource(new ScopePairClaimResourceGrantSource("grant", "::")));
     }
 
-    private static ClaimsPrincipal User(string? scope = "widget::read", string? grant = null)
+    private static ClaimsPrincipal User(string? scope = "widget::read", string? grant = null, string? region = null)
     {
         var claims = new List<Claim> { new("sub", "user-1"), new("AccountId", AccountId) };
+
+        if (region is not null)
+        {
+            claims.Add(new Claim("Region", region));
+        }
 
         if (scope is not null)
         {
@@ -273,6 +404,15 @@ public sealed class OperationAccessCheckTests
         Action<ApiOperationContext>? configure = null)
     {
         return WithContextAsync(configureServices, user, configure, context => context.CanExecuteAsync<TOperation>(key));
+    }
+
+    private static Task<ExecutionAllowed> CheckInstanceAsync(
+        IOperation operation,
+        Action<IServiceCollection> configureServices,
+        ClaimsPrincipal? user,
+        Action<ApiOperationContext>? configure = null)
+    {
+        return WithContextAsync(configureServices, user, configure, context => context.CanExecuteAsync(operation));
     }
 
     /// <summary>
@@ -403,6 +543,31 @@ public partial class TwoPairAccessCheckCommand : ICommand<string>
     {
         return "executed";
     }
+}
+
+/// <summary>
+/// A permissioned operation whose key has a fallback, a value type, a nested path and a claim the generator does not know,
+/// so a check of an instance must expand it as the execution does.
+/// </summary>
+[Resource("widget", "read", "/accounts/{TenantId:Auth.AccountId}/widgets/{Number}/owners/{Owner.Name}/{Auth.Region}")]
+public partial class InstanceAccessCheckCommand : ICommand<string>
+{
+    public string? TenantId { get; set; }
+
+    public int Number { get; set; }
+
+    public InstanceAccessCheckOwner? Owner { get; set; }
+
+    public static string Handle(InstanceAccessCheckCommand command)
+    {
+        return "executed";
+    }
+}
+
+/// <summary>The owner of an <see cref="InstanceAccessCheckCommand"/>'s widget.</summary>
+public sealed class InstanceAccessCheckOwner
+{
+    public string? Name { get; set; }
 }
 
 /// <summary>An operation that declares no scope pairs, so has nothing for a key to be judged against.</summary>
