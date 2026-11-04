@@ -322,6 +322,36 @@ public static class TestHelpers
     }
 
     /// <summary>
+    /// Compiles <paramref name="source" />, with <typeparamref name="T" /> run over it, into an in-memory assembly and returns a
+    /// reference to it, so a test can reference what the generator itself emitted into another assembly rather than a
+    /// hand-written imitation of it that could drift from the real output.
+    /// </summary>
+    /// <typeparam name="T">The generator whose output the referenced assembly carries.</typeparam>
+    /// <param name="source">The source of the referenced assembly.</param>
+    /// <param name="assemblyName">The referenced assembly's name.</param>
+    /// <returns>A metadata reference to the compiled assembly.</returns>
+    public static MetadataReference CreateGeneratedReferenceFromSource<T>(string source, string assemblyName)
+        where T : IIncrementalGenerator, new()
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            [CSharpSyntaxTree.ParseText(source, parseOptions)],
+            CreateMetadataReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        CSharpGeneratorDriver.Create([new T().AsSourceGenerator()], parseOptions: parseOptions)
+            .RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        generatorDiagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+
+        using var stream = new MemoryStream();
+        var emitResult = outputCompilation.Emit(stream);
+        emitResult.Success.Should().BeTrue(string.Join(Environment.NewLine, emitResult.Diagnostics));
+
+        return MetadataReference.CreateFromImage(stream.ToArray());
+    }
+
+    /// <summary>
     /// Creates a tracked generator definition that records the stage names a locality test is allowed to reason about.
     /// </summary>
     /// <typeparam name="T">The tracked incremental generator to instantiate.</typeparam>
