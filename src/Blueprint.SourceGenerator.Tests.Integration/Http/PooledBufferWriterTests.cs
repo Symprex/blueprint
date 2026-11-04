@@ -81,4 +81,64 @@ public sealed class PooledBufferWriterTests
 
         advance.Should().Throw<ArgumentOutOfRangeException>();
     }
+
+    [Fact]
+    public void When_the_body_stream_throws_before_its_write_starts_then_the_large_array_is_given_back()
+    {
+        var writer = new PooledBufferWriter();
+        writer.GetSpan(100_000).Fill(7);
+        writer.Advance(100_000);
+
+        var write = () => writer.WriteToAsync(new ThrowingStream(), CancellationToken.None, out _);
+
+        write.Should().Throw<IOException>();
+        writer.WrittenCount.Should().Be(0);
+        writer.GetMemory(1).Length.Should().BeLessThan(100_000);
+    }
+
+    private sealed class ThrowingStream : Stream
+    {
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            throw new IOException("The connection was reset.");
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new IOException("The connection was reset.");
+        }
+    }
 }

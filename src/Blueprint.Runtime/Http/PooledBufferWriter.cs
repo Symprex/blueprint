@@ -91,7 +91,19 @@ internal sealed class PooledBufferWriter : IBufferWriter<byte>
     /// <returns>The body stream's write.</returns>
     public ValueTask WriteToAsync(Stream body, CancellationToken cancellationToken, out bool detached)
     {
-        var writeTask = body.WriteAsync(this.WrittenMemory, cancellationToken);
+        ValueTask writeTask;
+
+        try
+        {
+            writeTask = body.WriteAsync(this.WrittenMemory, cancellationToken);
+        }
+        catch
+        {
+            // A stream that throws before returning a task holds no reference to the memory, so the array can go back
+            // now; otherwise the thread's writer would keep a large body's array until its next response.
+            this.Release();
+            throw;
+        }
 
         if (writeTask.IsCompleted)
         {
