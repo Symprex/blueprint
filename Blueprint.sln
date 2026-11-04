@@ -79,6 +79,7 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.SourceGenerator.CodeFixes.Tests", "src\Blueprint.SourceGenerator.CodeFixes.Tests\Blueprint.SourceGenerator.CodeFixes.Tests.csproj", "{CA4902B9-D849-4EF3-947C-309F8EA66204}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.EndToEnd.Tests", "src\Blueprint.EndToEnd.Tests\Blueprint.EndToEnd.Tests.csproj", "{FF4DC581-395D-4534-BF9B-38F86BFD4C96}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.HttpClient.ReflectionDisabledProbe", "src\Blueprint.HttpClient.ReflectionDisabledProbe\Blueprint.HttpClient.ReflectionDisabledProbe.csproj", "{0D82876B-644F-4BF6-9A9B-A7D8CD4AD442}"
 EndProject
 Global
