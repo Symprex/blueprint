@@ -87,7 +87,7 @@ At runtime, `BlueprintApp.GetOperationsForHost("custom-host")` returns operation
 - **Scope inheritance:** `[FromResource(typeof(X))]` inherits scope pairs from another operation's direct `[Resource]` declarations (not transitive). Cannot be combined with `[Resource]` on the same operation (BPAU005).
 - **Implicit authentication:** Operations with `[Resource]` or `[FromResource]` automatically require an authenticated identity; you do NOT also need `[MustBeAuthenticated]`.
 - **A provider is required for scope pairs:** once any operation uses `[Resource]` or `[FromResource]`, register an `IResourceAuthorizationProvider` (`blueprint.AddResourceAuthorizationProvider<T>()`, e.g. the built-in `ScopePairClaimAuthorizationProvider`). Without one, `MapBlueprintApi` throws at start-up naming the operations, and the generated check refuses each one with a plain `403`, logged at Error. That 403 is what an in-memory test host sees, so register one there too. Before Symprex/blueprint#41 a missing provider let every authenticated caller through. An app with neither attribute needs no provider. A provider returns an `ExecutionAllowed` decision (`401`/`403` by failure type, titled with its message, reason only logged), and every registered provider must allow.
-- **Instance-level grants:** `blueprint.AddResourceKeyAuthorization()` registers `ResourceKeyAuthorizationProvider`, which allows a scope pair only when the caller holds a `ResourceGrant` covering its resolved key (exact, or `/*` below a segment boundary). Supply the grants with `AddResourceGrantSource` (the built-in `ScopePairClaimResourceGrantSource` reads `{key};{Noun}::{Verb}` claims) and partial keys' expansion with `AddResourceKeyExpander<T>()`; a partial key no expander handles is denied. Handlers that filter by access ask `IResourceAccessChecker` directly. See `docs/authorization.md`.
+- **Instance-level grants:** `blueprint.AddResourceKeyAuthorization()` registers `ResourceKeyAuthorizationProvider`, which allows a scope pair only when the caller holds a `ResourceGrant` covering its resolved key (exact, or `/*` below a segment boundary). Supply the grants with `AddResourceGrantSource` (the built-in `ScopePairClaimResourceGrantSource` reads `{key};{Noun}::{Verb}` claims) and partial keys' expansion with `AddResourceKeyExpander<T>()`; a partial key no expander handles is denied. Handlers that filter by what the caller may do with another operation ask `context.CanExecuteAsync(operation)` when they have the instance, which expands its keys as its execution would, judging the instance as given (set what execution would populate, such as `TenantId`). They ask `context.CanExecuteAsync<TOperation>(resourceKey)` when they have only a key: that check refuses whenever a provider declares `ReadsOperation` for the operation, so use the instance overload there; `ResourceKey.IsWithin`, `ResourceGrant.IsWithin` and `ResourceKey.TryGetTopLevelPrefix` place keys and grants in the hierarchy. See `docs/authorization.md`.
 - **Reading declarations at runtime:** use the descriptor's generated `OperationAccessFeatureData` (declared mode) and `OperationAuthorizationFeatureData` (scope pairs, `InheritedFrom`, `InheritedTemplateOverride`) rather than reflecting over the attributes; see `docs/authorization.md`.
 - **Identity-only checks:** Use `[MustBeAuthenticated]` when the operation needs an authenticated caller but has no specific scope requirements.
 - **Anonymous access:** Use `[AllowAnonymous]` for public endpoints. Cannot be combined with `[Resource]` or `[MustBeAuthenticated]` (BPAU002/BPAU003).
@@ -310,6 +310,7 @@ Blueprint's `UnitOfWorkModule` generates a `SaveChangesAsync` call for every ope
 - **Optional DI:** If no `IUnitOfWork` is registered, the step is skipped gracefully.
 - **DI scope owns disposal:** The unit-of-work instance is disposed by the DI container scope, not by Blueprint. Register as scoped.
 - **Opt-out:** `[DoNotSaveChanges]` on any operation suppresses the generated save call.
+- **Begin before the handler:** On the same rule (including the nested skip), the pipeline calls `IUnitOfWork.BeginAsync(operation, descriptor, ct)` after authorisation and validation and before the handler and the Rebus scope. A refused or invalid request begins nothing. The default implementation does nothing; a unit of work over a relational session (NHibernate, an EF Core explicit transaction) opens its transaction here so writes issued before the save commit with it. Nothing calls a rollback: disposing the scope's session rolls back an uncommitted transaction.
 
 ### Implementation pattern
 
@@ -324,7 +325,7 @@ public sealed class EfCoreUnitOfWork(AppDbContext db) : IUnitOfWork
 }
 ```
 
-Pipeline order: Handler → UoW Save (900) → Audit (950) → Background Task Flush (1000). This ensures committed state is audited and tasks reference committed data.
+Pipeline order: Authorisation → Validation → UoW Begin → Rebus scope → Handler → UoW Save (900) → Audit (950) → Background Task Flush (1000). This ensures committed state is audited and tasks reference committed data.
 
 ## Result contract
 
@@ -380,6 +381,7 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 - Scoped services (UoW, task scheduler) are registered scoped; singletons (audit, auth) as singletons
 - `AddResourceEventAuditRepository<T>()` registers legacy's `IResourceEventAuditRepository` (scoped). The generated pipeline hands it every legacy `ResourceEvent` a command without `[DoNotAudit]` raises (a query's is passed on untouched, as legacy did), last of the post-execution steps (stamped, with its href, data expanded), beside any resource-event audit sink and best-effort (a repository that throws or cannot be constructed is logged at Error by the operation's pipeline logger; the operation still succeeds)
 - `ConfigureHttp` binds `BlueprintHttpOptions` for link generation base URI and error detail exposure
+- `AddHttpResultWriter<T>()` registers the app's one `IHttpResultWriter` (singleton). It is offered every result an HTTP request ends with — `OkResult`, 422, 401, 403, not-found, binding failure, `UnhandledExceptionResult` (the original exception, including one that escaped the pipeline or a write) — before Blueprint writes anything; it returns `true` once it has written the whole response, or `false` to leave Blueprint's default write unchanged. Prefer it to subclassing `HttpOperationResultExecutor`, whose writes are not overridable. `HttpOperationResultExecutor.GetValidationErrors` gives a 422's `errors` keyed as Blueprint keys them
 
 ## ASP.NET Core infrastructure (consumer responsibility)
 

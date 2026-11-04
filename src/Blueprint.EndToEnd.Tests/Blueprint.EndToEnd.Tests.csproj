@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentAssertions" Version="8.3.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="FluentAssertions" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The apps under test, each booted through its real Startup on its own Kestrel port. -->
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample\Blueprint.SourceGenerator.Sample.csproj" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Gateway\Blueprint.SourceGenerator.Sample.Gateway.csproj" />
+
+    <!-- Contracts and the client, for seeding the inner app and reading responses. -->
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Contract\Blueprint.SourceGenerator.Sample.Contract.csproj" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Gateway.Contract\Blueprint.SourceGenerator.Sample.Gateway.Contract.csproj" />
+    <ProjectReference Include="..\Blueprint.HttpClient\Blueprint.HttpClient.csproj" />
+  </ItemGroup>
+</Project>

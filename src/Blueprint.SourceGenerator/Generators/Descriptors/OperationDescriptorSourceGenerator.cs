@@ -101,7 +101,10 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             .Select(static (m, _) => m!)
             .WithTrackingName(Stages.InitialExtraction);
 
+        // The plan reads every partial declaration and base type, but the syntax provider re-runs Transform only for an
+        // edited file, so each run re-fingerprints them here, where the compilation is visible, before the plan is reused.
         var combinedProvider = classProvider.Combine(context.CompilationProvider)
+            .Select(static (x, ct) => (Model: WithDeclarationChecksums(x.Left, x.Right, ct), Compilation: x.Right))
             .WithComparer(CombinedProviderComparer<Result<OperationClassToGenerate>>.Instance)
             .WithTrackingName(Stages.CombineWithCompilation);
 
@@ -152,6 +155,36 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 model.Name,
                 classNode.ToFullString(),
                 HttpClientRequestBuilderModule.CanDeclareHttpClass(model, ctx.SemanticModel.Compilation)));
+    }
+
+    private static Result<OperationClassToGenerate> WithDeclarationChecksums(
+        Result<OperationClassToGenerate> result,
+        Compilation compilation,
+        CancellationToken cancellationToken)
+    {
+        if (result.Value is not { } operation)
+        {
+            return result;
+        }
+
+        var checksums = new List<string>();
+
+        // A metadata base type has no declarations, and nothing above it can be declared in this compilation.
+        for (var current = compilation.GetTypeByMetadataName(operation.FullClassName);
+             current is { DeclaringSyntaxReferences.Length: > 0 };
+             current = current.BaseType)
+        {
+            foreach (var reference in current.DeclaringSyntaxReferences)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // The checksum is cached on the file's text, which an unedited file keeps, so this costs nothing for it.
+                var checksum = reference.SyntaxTree.GetText(cancellationToken).GetChecksum();
+                checksums.Add(reference.SyntaxTree.FilePath + ":" + Convert.ToBase64String(checksum.ToArray()));
+            }
+        }
+
+        return result with { Value = operation with { DeclarationChecksums = EquatableList<string>.TakeOwnership(checksums) } };
     }
 
     private static Result<DescriptorPlan> Configure(
@@ -347,7 +380,16 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
     /// to (an alias another file declares, say), rather than on this declaration alone. Without
     /// it, an <c>Http</c> member added in another file left the class of a cached plan beside it (CS0102) until a clean build.
     /// </param>
-    private record OperationClassToGenerate(string FullClassName, string Namespace, string ClassName, string DeclarationText, bool CanDeclareHttpClass);
+    private record OperationClassToGenerate(string FullClassName, string Namespace, string ClassName, string DeclarationText, bool CanDeclareHttpClass)
+    {
+        /// <summary>
+        /// Gets the path and checksum of each file declaring the operation or one of its source-declared base types. The
+        /// plan reads properties and attributes from all of them, so an edit to any one of them — another partial
+        /// declaration, or a base type — re-plans the descriptor rather than replaying the plan cached for
+        /// <see cref="DeclarationText"/>, whose file the syntax provider does not revisit while it is unedited.
+        /// </summary>
+        public EquatableList<string> DeclarationChecksums { get; init; } = EquatableList<string>.Empty;
+    }
 
     /// <summary>
     /// The names of the <see cref="ApiResourceSourceGenerator"/> stages, used in particular to test for the

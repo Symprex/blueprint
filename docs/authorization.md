@@ -82,6 +82,8 @@ if (descriptor.TryGetFeatureData<OperationAuthorizationFeatureData>(out var auth
 
 `OperationAccessFeatureData` is absent for an operation that declares no access attribute; use it, not `OperationAuthenticationFeatureData`, to tell `[MustBeAuthenticated]` from no declaration.
 
+To map scope pairs to operations under the app's verb hierarchy, use `ScopePairOperationIndex` rather than reading `ScopePairs` yourself: see [Verb hierarchy and the scope pair index](#verb-hierarchy-and-the-scope-pair-index).
+
 ---
 
 ## Resource Key Templates
@@ -232,7 +234,46 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
 
 **Unauthenticated callers**: refused by default. Pass `allowUnauthenticated: true` when another provider registered beside this one refuses them itself, for example with a `401`, so this one does not answer first with a `403`.
 
+**Case**: scopes are compared case-insensitively by default, so `template::read` satisfies `Template::Read` and `OpenID` is ignored as `openid`. Pass `scopeComparison: StringComparison.Ordinal` to the full constructor to compare exactly, as Signature 365's own scope check does: the scope claim type, the ignored scopes, each claim's noun, separator and verb, and the verbs of `verbInclusions` are then all case-sensitive, so `signature::read` no longer satisfies `Signature::Read` and an `OpenID` scope counts as an API scope. `Signature::Manage` still satisfies `Signature::Read` through the verb hierarchy. Only `Ordinal` and `OrdinalIgnoreCase` are accepted; any other value throws `ArgumentOutOfRangeException`.
+
 **No-API-scope behavior**: When the user's only scopes are ignored scopes (e.g. `openid`, `Signature365.ReadWrite.All`), the `AllowWhenNoScopeClaims` virtual method is called. Override to `true` for full-access semantics (S365 pattern).
+
+### Verb hierarchy and the scope pair index
+
+The verb hierarchy is the app's policy, applied at runtime: the generated feature data stays what each operation declares. An app that needs the same policy outside the provider, for example to map a role's scope pairs to the operations it may run, builds one `VerbHierarchy` and gives it to both the provider and a `ScopePairOperationIndex`, so the two cannot disagree (Symprex/blueprint#129):
+
+```csharp
+var verbs = new VerbHierarchy(
+    new Dictionary<string, string[]>
+    {
+        ["Manage"] = ["Create", "Read", "Update", "Delete"],
+        ["Archive"] = [],                       // a verb the app knows that includes nothing
+    },
+    StringComparison.Ordinal);
+
+blueprint.AddResourceAuthorizationProvider(
+    new ScopePairClaimAuthorizationProvider(verbs, "scope", "::", ignoredScopes: ["openid", "profile"]));
+
+var index = new ScopePairOperationIndex(app, verbs, requireKnownVerbs: true, separator: "::");
+
+index.OperationsFor(new ScopePair("Template", "Manage"));  // every operation Template::Manage satisfies
+index.SatisfiedBy(descriptor);                              // every pair that satisfies the operation
+```
+
+| Member | Answers |
+|---|---|
+| `VerbHierarchy.Includes(verb)` | The verbs `verb` includes, transitively, not counting itself: `Manage` gives `Create`, `Read`, `Update`, `Delete` |
+| `VerbHierarchy.IncludedIn(verb)` | The verbs that include `verb`, transitively, not counting itself: `Read` gives `Manage` |
+| `VerbHierarchy.Contains(verb)` | Whether the hierarchy names `verb`, as a parent (with or without children) or a child |
+| `ScopePairOperationIndex.OperationsFor(pair)` | The operations a caller holding `pair` satisfies: those declaring its noun with its verb or a verb it includes. The pair's template is ignored |
+| `ScopePairOperationIndex.SatisfiedBy(descriptor)` | The pairs, without templates, any one of which satisfies the operation: each declared pair and the same noun with each verb that includes it |
+
+- **Comparison.** The hierarchy's `StringComparison` compares verbs and, in the index, nouns. The provider overload that takes a hierarchy uses it for all scope text, as `scopeComparison` does for the dictionary constructor, so it must be `Ordinal` or `OrdinalIgnoreCase`.
+- **Cycles** are tolerated: the closure stops at a verb already reached, and no verb includes itself.
+- **Index contents.** The index is built once, from `app.Operations` and their `OperationAuthorizationFeatureData`, and frozen. An operation that declares no scope pair is in no pair's operations. Resource key templates play no part.
+- **Unknown verbs.** By default a declared verb the hierarchy does not name is satisfied only by itself, as the provider treats it. With `requireKnownVerbs: true` the index throws `InvalidOperationException` at construction, listing each operation, noun and verb, so a typo in a `[Resource]` verb fails at startup or in a test rather than making an operation nobody's role reaches.
+- **Separator.** Pass the provider's separator as `separator`. The provider matches a scope on `{noun}{separator}{verb}`, so a noun or verb containing the separator is split wherever the scope splits: holding `Template::Admin` + `Read` satisfies a declared `Template` + `Admin::Read`. Given the separator, the index matches the same way. Without it, pairs match on noun and verb as given, which agrees with the provider only while no noun or verb contains the separator.
+- The dictionary constructor and `WithCrudVerbHierarchy` are unchanged; they build a `VerbHierarchy` internally.
 
 ### `ResourceKeyAuthorizationProvider`
 
@@ -247,6 +288,8 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint => blueprint
 ```
 
 `AddResourceKeyAuthorization()` registers the provider, a singleton, once however often it is called, and the default `IResourceAccessChecker`, scoped, unless one is registered already. `AddResourceGrantSource<T>()` and `AddResourceKeyExpander<T>()` register scoped; `AddResourceGrantSource(instance)` registers a configured source as a singleton.
+
+`AddResourceAccessChecker()` registers that default `IResourceAccessChecker` alone, on the same terms, without enlisting the provider among those every operation must satisfy. Use it when only an app's own code asks the checker, or to run it beside an existing authoriser before Blueprint enforces, as Signature 365 does while it proves the two agree. `AddResourceKeyAuthorization()` calls it.
 
 **Keys and grants.** A `ResourceKey` is a key being asked about: absolute when it starts with `/`, otherwise partial. A `ResourceGrant` is a key held, and is always absolute:
 - an exact grant covers its own key alone;
@@ -278,25 +321,68 @@ A caller with no user context at all, as in an app without an `IUserAuthorisatio
 
 **Expanders.** `IResourceKeyExpander.ExpandAsync(partialKey, context, ct)` returns the absolute keys a partial key stands for, an empty list for a key it handles that identifies nothing (which is then denied), or `null` when the key is not its to expand.
 
-**Checking access directly.** `IResourceAccessChecker.HasAccessAsync(context, principal, demand, scopePair, ct)` makes the decision the provider makes for each pair, without the authentication checks. A handler that must filter by what the caller may do asks it directly:
+**Keys within keys.** A key or grant an app is given, such as a stored role assignment's, can be held to the part of the hierarchy it belongs in (Symprex/blueprint#129):
+
+| Member | Answers | Example |
+|---|---|---|
+| `ResourceKey.IsWithin(ancestor)` | Is this key the ancestor or beneath it? | `/Tenants/ten_1/Users/usr_1` is within `/Tenants/ten_1`; `/Tenants/ten_12` is not |
+| `ResourceGrant.IsWithin(ancestor)` | Does the grant cover nothing outside the ancestor? | `/Tenants/ten_1/*` is within `/Tenants/ten_1`; `/Tenants/*` and `/*` are not |
+| `ResourceKey.TryGetTopLevelPrefix(out prefix)` | Which part of the hierarchy is the key, or a template held as one, in? | `/Tenants/{Id}/Users` gives `/Tenants/`; `/` gives `/`; a partial key gives none |
+| `ResourceGrant.Root` | The root grant, `/*` | |
+| `ResourceGrant.TryParse(value, out _)` | Is the value absolute, as a grant must be? | |
+
+Each stops at a segment boundary and compares ordinally, as `Covers` does. They replace Signature 365's `ResourceKeyHelpers`, with two differences: its `IsWithin` compared case-insensitively, and refused any `*` that was not a trailing `/*`, where Blueprint treats such a `*` as literal, so the grant covers only itself.
+
+**Checking access directly.** A handler that must filter by what the caller may do with *another* operation asks its context, which every handler has without injecting anything:
 
 ```csharp
-public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery query, IResourceAccessChecker checker, ApiOperationContext context)
+public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery query, ApiOperationContext context)
 {
-    var create = context.App.FindOperation(typeof(CreateFolderCommand))!;
-    var pair = create.GetFeatureData<OperationAuthorizationFeatureData>()!.ScopePairs[0];
-    var key = $"/Accounts/{context.UserAuthorisationContext!.AccountId}";
+    var tenant = new ResourceKey($"/Tenants/{context.UserAuthorisationContext!.AccountId}");
 
-    var canCreate = await checker.HasAccessAsync(
-        context,
-        context.UserPrincipal!,
-        new ResourceDemand(create, new ResourceKey(key)),
-        new ResolvedScopePair(pair.Noun, pair.Verb, pair.ResourceKeyTemplate, key),
-        context.OperationCancelled);
+    var canCreate = await context.CanExecuteAsync<CreateFolderCommand>(tenant);
 
     // ...
 }
 ```
+
+A handler deriving from `BlueprintApiOperations` asks `this.Context.CanExecuteAsync<T>(key)`. `CanExecuteAsync<T>(key)`, or `CanExecuteAsync(type, key)`, decides as `T`'s own execution would:
+- every registered provider is asked, all-of in registration order, in `Execute` mode for `T`'s descriptor;
+- each of `T`'s scope pairs *with a template* is given `key` as its resolved key, whatever the template; a pair with none is given no key, as at execution, and `ResourceKeyAuthorizationProvider` refuses it. Any pair may satisfy a provider;
+- the providers are given a nested context for `T`, whose `Parent` is the asking context and whose `Operation` is a default instance of `T`, so a provider reading the operation's properties sees their defaults. It shares the asking context's caller, `UserAuthorisationContext`, `HttpContext`, `BaseUri` and `Data`;
+- the caller is `context.UserPrincipal`; with no authenticated principal it is refused as anonymous (`Authentication`) and no provider is asked;
+- with no provider registered it is refused, as the execution would be;
+- `context.SkipAuthorisation` does not apply, because the question is about the caller, not this context's execution;
+- the `IApiAuthoriser`s are not asked, because they judge an operation instance and there is none.
+
+It returns the `ExecutionAllowed`, so a denial's reason can be logged; never write it to the response. It throws `ArgumentException` when `T` is not an operation of the app, when `T` declares no scope pairs, or when the key is empty.
+
+When the instance is to hand, ask about it instead:
+
+```csharp
+var canRename = await context.CanExecuteAsync(new RenameFolderCommand { FolderId = folder.Id });
+```
+
+`CanExecuteAsync(operation)` decides *exactly* as that instance's execution would. Each scope pair's template is expanded from the instance and the caller by the same generated expansion as the execution's check, with the same fallbacks, value types and nested paths, and `{Auth.X}` read from `UserAuthorisationContext` and then the principal's claims. The resolver lives in `Blueprint.Runtime.Model`, so a contract assembly that references only that package still compiles. A pair with no template is given no key. The providers are given a nested context whose `Operation` *is* the instance, so a provider that judges by the operation's properties sees the real ones. In every other way it behaves as `CanExecuteAsync<T>(key)`: the same providers, caller, refusals and exceptions, and it also throws `ArgumentNullException` for a null operation. Prefer it wherever a provider reads the operation. Given only a key, such a provider sees a default instance.
+
+The instance is judged **as given**. Execution fills some properties before it authorises: tenant resolution sets an unset `TenantId`, the registered `IPropertyPopulator`s run, a `[FromAuthContext]` property is set from the caller's claims, and an HTTP request is bound. The check does none of this, and it never changes the instance. Set any property that a scope pair's template reads, and that execution would fill, to the value execution would give it. For example, set `TenantId` to the caller's tenant.
+- **Left unset**, such a property expands to an empty segment, and the key is matched like any other. It is *not* guaranteed to be refused. With `/accounts/{Auth.AccountId}/widgets/{Id}` and no `Id`, the key is `/accounts/account-9/widgets/`, which the ordinary grant `/accounts/account-9/*` still covers. So the answer is about a different key from the one execution would judge.
+- **Set to another value**, it is trusted. Execution would overwrite a `[FromAuthContext]` property from the claims, but the check judges whatever the instance holds. Never build the instance from untrusted input.
+
+A provider that judges by the operation's properties should say so, so that a key-only check fails closed instead of letting it judge a default instance:
+
+```csharp
+public sealed class TenantOwnershipProvider : IResourceAuthorizationProvider
+{
+    public bool ReadsOperation(ApiOperationDescriptor operation) => operation.OperationType.IsAssignableTo(typeof(ITenantOwned));
+
+    public ValueTask<ExecutionAllowed> AuthorizeAsync(...) { /* reads ((ITenantOwned)operationContext.Operation).TenantId */ }
+}
+```
+
+`ReadsOperation` is optional and defaults to `false`. When any registered provider returns `true` for `T`, `CanExecuteAsync<T>(key)` and `CanExecuteAsync(type, key)` refuse with an `Authorisation` denial that names the provider and points to `CanExecuteAsync(operation)`, and they ask no provider. Execution and `CanExecuteAsync(operation)` ignore it. Return `true` only for the operations whose properties the provider reads, so key-only checks of the others still work. Blueprint's own providers read only the scope pairs and keys, so they never declare it.
+
+`IResourceAccessChecker.HasAccessAsync(context, principal, demand, scopePair, ct)` remains for the narrower question: the decision `ResourceKeyAuthorizationProvider` makes for one pair, without the token's scopes or the authentication checks.
 
 ---
 
@@ -307,9 +393,14 @@ public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery quer
 | BPAU003 | Error | `[Resource]` or `[FromResource]` combined with `[AllowAnonymous]` |
 | BPAU004 | Error | Empty or whitespace noun or verb in `[Resource]` |
 | BPAU005 | Error | Both `[Resource]` and `[FromResource]` on the same operation |
-| BPAU006 | Warning | `[FromResource]` references a type with no `[Resource]` attributes |
+| BPAU006 | Error | `[FromResource]` references a type with no `[Resource]` attributes |
 | BPAU007 | Error | Unknown token in resource key template |
 | BPAU008 | Warning | `[Resource]` or `[FromResource]` on a background task that is not exposed over HTTP and not marked `[MustBeAuthenticated]`: it allows anonymous access, so the declaration is never enforced |
+| BPAU009 | Warning | The same noun and verb declared by more than one `[Resource]` on one operation |
+| BPAU010 | Warning | A `{Primary:Fallback}` fallback that nothing uses: not on the operation, nor on a linked resource type that lacks the primary |
+| BPAU011 | Error | A resource key template token that matches no readable public property of a resource type the operation links from, so a link from it could never be authorised |
+
+The authentication diagnostics, BPAU001 and BPAU002, are listed with the rest in [`diagnostic-reference.md`](diagnostic-reference.md).
 
 ---
 
@@ -444,5 +535,5 @@ These remain consumer-level concerns:
 | Template expansion | Inline string interpolation | One string allocation per template per request |
 | Scope matching | Span-based ordinal comparison | Zero allocation per comparison |
 | Ignored scope check | `FrozenSet<string>` lookup | O(1) per claim |
-| Verb hierarchy | `FrozenDictionary<string, string[]>` | O(1) lookup + array scan |
+| Verb hierarchy | `VerbHierarchy`, a `FrozenDictionary` of each verb's transitive parents | O(1) lookup + array scan |
 | Provider resolution | Resolved at startup via `PipelineServices` | Zero per-request cost |

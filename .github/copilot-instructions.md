@@ -23,6 +23,9 @@
 - `dotnet test .\src\Blueprint.SourceGenerator.Tests.Integration\Blueprint.SourceGenerator.Tests.Integration.csproj`  
   Runs the integration tests for generated pipelines and sample-style consumption.
 
+- `dotnet test .\src\Blueprint.EndToEnd.Tests\Blueprint.EndToEnd.Tests.csproj`  
+  Runs the cross-service suite: the sample inner app and the sample gateway, each through its real `Startup` on real Kestrel at an ephemeral loopback port, trusting one in-process test JWT issuer. It is the default seam for behaviour that crosses the gateway-to-inner hop. New scenarios join the `SampleSystemCollection` fixture; a further app is started through `MultiAppHost.StartAsync<TStartup>` and pointed at its upstream by configuration.
+
 - Tests that need a real PostgreSQL are `[PostgresFact]` (`src\Blueprint.Marten.Tests\Postgres\`). They run only when `BLUEPRINT_TEST_POSTGRES` holds a connection string, each in a schema of its own that it drops, and are reported as skipped otherwise, which is what CI does: it provides no database. To run them locally, point the variable at a disposable database, for example `$env:BLUEPRINT_TEST_POSTGRES = "Host=localhost;Port=5432;Database=blueprint_source_gen_tests;Username=...;Password=..."`.
 
 - Single-test examples:
