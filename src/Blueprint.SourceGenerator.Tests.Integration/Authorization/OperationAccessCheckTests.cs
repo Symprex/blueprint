@@ -307,6 +307,30 @@ public sealed class OperationAccessCheckTests
     }
 
     [Fact]
+    public async Task An_instances_caller_values_come_from_the_user_context_before_the_claims_as_at_execution()
+    {
+        // The claim says account-9; the user's authorisation context, which execution reads first, says account-7
+        var atExecution = new RecordingProvider(ExecutionAllowed.Yes);
+        var atCheck = new RecordingProvider(ExecutionAllowed.Yes);
+        var userContext = new TestUserContext("user-1", "account-7");
+
+        await ExecuteAsync(
+            new TwoPairAccessCheckCommand { Id = "w1" },
+            services => services.AddSingleton<IResourceAuthorizationProvider>(atExecution),
+            User(),
+            context => context.UserAuthorisationContext = userContext);
+        await CheckInstanceAsync(
+            new TwoPairAccessCheckCommand { Id = "w1" },
+            services => services.AddSingleton<IResourceAuthorizationProvider>(atCheck),
+            User(),
+            context => context.UserAuthorisationContext = userContext);
+
+        var executed = atExecution.Requests.Should().ContainSingle().Subject.ScopePairs;
+        executed.Select(static pair => pair.ExpandedResourceKey).Should().Equal("/accounts/account-7/widgets/w1", "/accounts/account-7");
+        atCheck.Requests.Should().ContainSingle().Which.ScopePairs.Should().Equal(executed);
+    }
+
+    [Fact]
     public async Task Providers_are_given_a_nested_context_whose_operation_is_the_instance()
     {
         var provider = new ContextRecordingProvider();
@@ -516,7 +540,11 @@ public sealed class OperationAccessCheckTests
         return await check(context);
     }
 
-    private static async Task<OperationResult> ExecuteAsync(IOperation operation, Action<IServiceCollection> configureServices, ClaimsPrincipal user)
+    private static async Task<OperationResult> ExecuteAsync(
+        IOperation operation,
+        Action<IServiceCollection> configureServices,
+        ClaimsPrincipal user,
+        Action<ApiOperationContext>? configure = null)
     {
         var app = new IntegrationTestBlueprintApp();
         var services = new ServiceCollection().AddLogging();
@@ -531,6 +559,8 @@ public sealed class OperationAccessCheckTests
             Operation = operation,
             UserPrincipal = user,
         };
+
+        configure?.Invoke(context);
 
         return await executor.ExecuteAsync(context);
     }
@@ -612,6 +642,28 @@ public sealed class OperationAccessCheckTests
             this.Requests.Add(request);
 
             return new ValueTask<ExecutionAllowed>(ExecutionAllowed.Yes);
+        }
+    }
+
+    /// <summary>A user's authorisation context, whose values a key's well-known <c>{Auth.X}</c> tokens read first.</summary>
+    private sealed class TestUserContext(string id, string accountId) : IUserAuthorisationContext
+    {
+        public bool IsActive => true;
+
+        public bool IsAnonymous => false;
+
+        public string Id => id;
+
+        public string? IdentityId => id;
+
+        public string AccountId => accountId;
+
+        public string? Email => null;
+
+        public string? Name => null;
+
+        public void PopulateMetadata(Action<string, object> add)
+        {
         }
     }
 

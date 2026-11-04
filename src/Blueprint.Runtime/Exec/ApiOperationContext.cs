@@ -372,7 +372,7 @@ public sealed class ApiOperationContext : IHttpOperationContext
             target,
             principal,
             providers,
-            ResourceAuthorizationRequest.Execute(descriptor, execution.Resolve(operation, target)),
+            ResourceAuthorizationRequest.Execute(descriptor, execution.Resolve(operation, name => ApiAuthoriserAggregator.CallerValue(target, principal, name))),
             cancellationToken == default ? this.OperationCancelled : cancellationToken);
     }
 

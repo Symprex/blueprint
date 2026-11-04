@@ -238,7 +238,8 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             : $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {BuildListingPrefixExpression(sp.ResourceKeyTemplate)})"));
 
         // A check of an instance expands the keys as the pipeline's check does, from the same analysis, whose diagnostics the
-        // pipeline contribution reports. A template that fails it gets no resolver, as it gets no check: the build fails.
+        // pipeline contribution reports, reading the caller through the runtime's lookup so a contract-only assembly compiles.
+        // A template that fails it gets no resolver, as it gets no check: the build fails.
         var (hasTemplateErrors, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames) =
             AnalyseTemplates(effectiveScopePairs, operationType, operationLocation, report: null);
 
@@ -247,7 +248,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             ? null
             : string.Join(", ", effectiveScopePairs.Select(sp => sp.ResourceKeyTemplate is null
                 ? $"new global::Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", null, null)"
-                : BuildResolvedScopePairExpression(sp, executionOperationExpr, ExecutionPrincipalExpression, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames)));
+                : BuildResolvedScopePairExpression(sp, executionOperationExpr, ExecutionPrincipalExpression, valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames, callerValueExpression: "callerValue")));
 
         // A [FromResource] operation records where its pairs came from, and any template it overrode them with, so an
         // app can read what the attributes declared without reflecting over them.
@@ -280,7 +281,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
             if (executionPairs is not null)
             {
                 writer.AppendLine(
-                    $"this.SetFeatureData(new global::Blueprint.Authorization.OperationExecutionAuthorizationFeatureData(static (operation, context) => [{executionPairs}]));");
+                    $"this.SetFeatureData(new global::Blueprint.Model.OperationExecutionAuthorizationFeatureData(static (operation, callerValue) => [{executionPairs}]));");
             }
         });
     }
@@ -956,11 +957,12 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         string principalExpr,
         HashSet<string> valueTypePropertyNames,
         HashSet<string> fallbackOnlyTokenNames,
-        HashSet<string> invalidFallbackTokenNames)
+        HashSet<string> invalidFallbackTokenNames,
+        string? callerValueExpression = null)
     {
         var tokens = ResourceKeyTemplateParser.ParseTokens(sp.ResourceKeyTemplate!);
         var expandedExpr = ResourceKeyTemplateParser.GenerateExpansionExpression(
-            sp.ResourceKeyTemplate!, tokens, operationExpr, principalExpr, "context", valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames);
+            sp.ResourceKeyTemplate!, tokens, operationExpr, principalExpr, "context", valueTypePropertyNames, fallbackOnlyTokenNames, invalidFallbackTokenNames, callerValueExpression);
 
         return $"new Blueprint.Model.ResolvedScopePair(\"{sp.Noun}\", \"{sp.Verb}\", \"{sp.ResourceKeyTemplate}\", {expandedExpr})";
     }
