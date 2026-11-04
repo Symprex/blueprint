@@ -25,6 +25,12 @@ public sealed class BlueprintHttpClientReflectionDisabledTests
         return RunProbeAsync("registration");
     }
 
+    [Fact]
+    public Task A_422_with_errors_is_a_validation_exception_when_reflection_is_disabled_and_the_context_covers_only_the_clients_own_types()
+    {
+        return RunProbeAsync("validation");
+    }
+
     private static async Task RunProbeAsync(string? mode = null)
     {
         // Built beside this project's own output, whatever the configuration and target framework folders are called.
