@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Blueprint.SourceGenerator.Sample;
@@ -96,6 +97,51 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         exception.HttpStatus.Should().Be(500);
         exception.Detail.Should().Be("The remote server did not respond");
         exception.InnerException.Should().BeSameAs(connectionError);
+    }
+
+    [Theory]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendAsync))]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventAsync))]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventEnvelopeAsync))]
+    public async Task When_a_body_read_from_the_server_ends_early_then_throws_service_unavailable(string method)
+    {
+        // A body the send did not buffer fails as the HttpIOException the connection raised, which is an IOException and
+        // not an HttpRequestException: only a buffering send wraps it in one. It used to escape the transport unmapped (#121).
+        var connectionError = new HttpIOException(HttpRequestError.ResponseEnded, $"The response ended prematurely ({InternalHost}:80)");
+        var client = this.CreateClientWhoseBodyFailsWhenRead(connectionError);
+
+        var act = () => SendBodyReadingAsync(client, method);
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Title.Should().Be("The remote server did not respond");
+        exception.Type.Should().Be("service_unavailable");
+        exception.HttpStatus.Should().Be(500);
+        exception.Detail.Should().Be("The remote server did not respond");
+        exception.Message.Should().NotContain(InternalHost);
+        exception.InnerException.Should().BeSameAs(connectionError);
+    }
+
+    [Fact]
+    public async Task When_a_real_connection_closes_mid_body_after_the_headers_then_throws_service_unavailable()
+    {
+        // The same failure from a real socket, so the exception type is the one SocketsHttpHandler raises, not a stand-in.
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var server = ServeTruncatedBodyAsync(listener);
+
+        using var httpClient = new HeadersReadHttpClient(new SocketsHttpHandler())
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/"),
+        };
+        var client = new BlueprintHttpClient<SampleBlueprintApp>(httpClient, this._fixture.App);
+
+        var act = () => client.SendAsync<TemplateApiResource>(new GetTemplateQuery { Id = "t-1" });
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Type.Should().Be("service_unavailable");
+        exception.HttpStatus.Should().Be(500);
+        exception.InnerException.Should().BeOfType<HttpIOException>().Which.HttpRequestError.Should().Be(HttpRequestError.ResponseEnded);
+        await server;
     }
 
     [Fact]
@@ -397,6 +443,41 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
             nameof(client.SendResourceEventEnvelopeAsync) => client.SendResourceEventEnvelopeAsync<TemplateApiResource>(new UpdateTemplateCommand { Id = "t-1", Name = "t" }),
             _ => throw new ArgumentOutOfRangeException(nameof(method), method, "Not a resource-event send."),
         };
+    }
+
+    private static Task SendBodyReadingAsync(BlueprintHttpClient<SampleBlueprintApp> client, string method)
+    {
+        return method == nameof(client.SendAsync)
+            ? client.SendAsync<TemplateApiResource>(new GetTemplateQuery { Id = "t-1" })
+            : SendResourceEventAsync(client, method);
+    }
+
+    /// <summary>
+    /// Accepts one connection, answers its request with a 200 whose headers promise more body than is sent, and closes it.
+    /// </summary>
+    private static async Task ServeTruncatedBodyAsync(TcpListener listener)
+    {
+        using var connection = await listener.AcceptTcpClientAsync();
+        var stream = connection.GetStream();
+
+        // Read to the end of the request's headers, so the close is not a reset of a request still being written.
+        var request = new StringBuilder();
+        var buffer = new byte[4096];
+
+        while (!request.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+        {
+            var read = await stream.ReadAsync(buffer);
+
+            if (read == 0)
+            {
+                return;
+            }
+
+            request.Append(Encoding.ASCII.GetString(buffer, 0, read));
+        }
+
+        await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{\"id\":\"t-"u8.ToArray());
+        await stream.FlushAsync();
     }
 
     private BlueprintHttpClient<SampleBlueprintApp> CreateClientWhoseBodyFailsWhenRead(Exception failure)

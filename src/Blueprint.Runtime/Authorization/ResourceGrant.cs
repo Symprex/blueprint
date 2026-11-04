@@ -29,6 +29,11 @@ public readonly struct ResourceGrant : IEquatable<ResourceGrant>
     }
 
     /// <summary>
+    /// Gets the root grant, <c>/*</c>, which covers every absolute key.
+    /// </summary>
+    public static ResourceGrant Root { get; } = new("/*");
+
+    /// <summary>
     /// Gets the grant as given, including any trailing <c>/*</c>.
     /// </summary>
     public string Value => this._value ?? string.Empty;
@@ -127,6 +132,31 @@ public readonly struct ResourceGrant : IEquatable<ResourceGrant>
 
         return demanded.StartsWith(grantBase, StringComparison.Ordinal)
                && (demanded.Length == grantBase.Length || demanded[grantBase.Length] == '/');
+    }
+
+    /// <summary>
+    /// Determines whether every key this grant covers is <paramref name="ancestor"/> or beneath it: whether the grant gives
+    /// nothing outside that part of the hierarchy. Use it to hold a grant an app assigns, such as a tenant role's, to the
+    /// tenant it is assigned in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The grant's base, its value without a trailing <c>/*</c>, must be <paramref name="ancestor"/> or beneath it at a
+    /// segment boundary, as <see cref="ResourceKey.IsWithin"/> decides: <c>/Tenants/ten_1/*</c> and
+    /// <c>/Tenants/ten_1/Users/usr_1</c> are within <c>/Tenants/ten_1</c>, but <c>/Tenants/*</c>, the root grant and
+    /// <c>/Tenants/ten_1*</c> are not. Comparison is ordinal, as <see cref="Covers"/> is.
+    /// </para>
+    /// <para>
+    /// A <c>*</c> that is not a trailing <c>/*</c> is literal, so <c>/Tenants/ten_1/Users*</c> covers only itself and is
+    /// within <c>/Tenants/ten_1</c>. Signature 365's <c>ResourceKeyHelpers.IsWithin</c> refused any such grant, and compared
+    /// case-insensitively; this decides by what the grant covers, as Blueprint matches it.
+    /// </para>
+    /// </remarks>
+    /// <param name="ancestor">The key the grant must be within, such as <c>/Tenants/ten_1</c>.</param>
+    /// <returns><see langword="true"/> if the grant covers nothing outside <paramref name="ancestor"/>.</returns>
+    public bool IsWithin(ResourceKey ancestor)
+    {
+        return this._value is not null && ancestor.IsAbsolute && ResourceKey.IsAtOrBeneath(this.Base, ancestor.Value.AsSpan());
     }
 
     /// <summary>

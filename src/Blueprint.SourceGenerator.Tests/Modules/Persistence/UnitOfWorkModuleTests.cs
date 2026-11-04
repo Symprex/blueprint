@@ -390,19 +390,128 @@ public class UnitOfWorkModuleTests
         SaveGuardOf(pipelines, "ProcessOrderTaskExecutorPipeline").Should().Be("if (this.HasUnitOfWork)");
     }
 
+    [Fact]
+    public void When_operation_saves_then_the_unit_of_work_is_begun_after_authorisation_and_validation_and_before_the_handler()
+    {
+        // Issue #98: a relational unit of work must open its transaction before the handler writes, and a refused or
+        // invalid request must open nothing.
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using System.ComponentModel.DataAnnotations;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class SaveOrderCommand : ICommand<string>
+                {
+                    [Required]
+                    public string OrderId { get; set; }
+
+                    public static Task<string> HandleAsync(SaveOrderCommand operation) => Task.FromResult("saved");
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipeline = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator))
+            .Single(static s => s.HintName.EndsWith("SaveOrderCommandExecutorPipeline.g.cs", StringComparison.Ordinal))
+            .SourceText;
+        var begin = pipeline.IndexOf("await BeginUnitOfWorkAsync(context)", StringComparison.Ordinal);
+
+        begin.Should().BeGreaterThan(0, "the pipeline must begin its unit of work");
+        begin.Should().BeGreaterThan(pipeline.IndexOf("return authoriserDenial;", StringComparison.Ordinal), "a refused request begins nothing");
+        begin.Should().BeGreaterThan(pipeline.LastIndexOf("validationResults", StringComparison.Ordinal), "an invalid request begins nothing");
+        begin.Should().BeLessThan(pipeline.IndexOf(".HandleAsync(", StringComparison.Ordinal), "the handler's writes must fall inside the unit of work");
+    }
+
+    [Fact]
+    public void When_operation_saves_then_its_begin_is_guarded_as_its_save_is()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using Blueprint.Tasks;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class GetOrdersQuery : IQuery<string>
+                {
+                    public static Task<string> HandleAsync(GetOrdersQuery operation) => Task.FromResult("result");
+                }
+
+                public partial class SaveOrderCommand : ICommand<string>
+                {
+                    public static Task<string> HandleAsync(SaveOrderCommand operation) => Task.FromResult("saved");
+                }
+
+                public partial class ProcessOrderTask : IBackgroundTask
+                {
+                    public static Task HandleAsync(ProcessOrderTask operation) => Task.CompletedTask;
+                }
+
+                [DoNotSaveChanges]
+                public partial class DryRunCommand : ICommand<string>
+                {
+                    public static Task<string> HandleAsync(DryRunCommand operation) => Task.FromResult("preview-only");
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelines = result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator));
+
+        GuardOf(pipelines, "GetOrdersQueryExecutorPipeline", "await BeginUnitOfWorkAsync(").Should().Be("if (this.HasUnitOfWork && !context.IsNested)");
+        GuardOf(pipelines, "SaveOrderCommandExecutorPipeline", "await BeginUnitOfWorkAsync(").Should().Be("if (this.HasUnitOfWork)");
+        GuardOf(pipelines, "ProcessOrderTaskExecutorPipeline", "await BeginUnitOfWorkAsync(").Should().Be("if (this.HasUnitOfWork)");
+        pipelines.Single(static s => s.HintName.EndsWith("DryRunCommandExecutorPipeline.g.cs", StringComparison.Ordinal))
+            .SourceText.Should().NotContain("BeginUnitOfWorkAsync", "an operation that is not saved is not begun");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────
 
     private static string SaveGuardOf(IEnumerable<GeneratedSourceSnapshot> pipelines, string pipelineName)
+    {
+        return GuardOf(pipelines, pipelineName, "await SaveUnitOfWorkAsync(");
+    }
+
+    private static string GuardOf(IEnumerable<GeneratedSourceSnapshot> pipelines, string pipelineName, string callPrefix)
     {
         var lines = pipelines.Single(s => s.HintName.EndsWith(pipelineName + ".g.cs", StringComparison.Ordinal))
             .SourceText.Split('\n')
             .Select(static line => line.Trim())
             .ToList();
-        var saveLine = lines.FindIndex(static line => line.StartsWith("await SaveUnitOfWorkAsync(", StringComparison.Ordinal));
+        var callLine = lines.FindIndex(line => line.StartsWith(callPrefix, StringComparison.Ordinal));
 
-        saveLine.Should().BeGreaterThan(1, "the pipeline must save its unit of work");
+        callLine.Should().BeGreaterThan(1, "the pipeline must make the call");
 
-        return lines[saveLine - 2];
+        return lines[callLine - 2];
     }
 
     private static CSharpCompilation CreateCompilation(string source)

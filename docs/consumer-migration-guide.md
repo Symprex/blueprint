@@ -397,6 +397,79 @@ true` so the document agrees:
 services.Configure<BlueprintHttpOptions>(o => o.NegotiateErrorContentType = true);
 ```
 
+**Writing results in a shape of your own (2.1, opt-in).** A client written against a legacy app's own error envelope,
+or a legacy app that applied `?format=csv` or in-memory OData to a successful result after the handler, needs to write
+some results itself. Register an `IHttpResultWriter` with `AddHttpResultWriter<T>()`. It is given every result an
+operation's HTTP request ends with — `OkResult`, `ValidationFailedResult` (422), `UnauthenticatedResult` (401),
+`ForbiddenResult` (403), `NotFoundResult`, `BindingFailureResult` (400), `UnhandledExceptionResult` and the rest — before
+Blueprint writes anything:
+- return `true` once it has written the whole response, status and content type included;
+- return `false` to leave that result to Blueprint, which writes it exactly as it would with no writer.
+
+An exception that escapes the pipeline or Blueprint's own write reaches the writer as an `UnhandledExceptionResult` too,
+so `Exception` is the original exception on every path, and an app can map exception types to statuses itself. A 422's
+`errors`, keyed and named as Blueprint keys them, come from `HttpOperationResultExecutor.GetValidationErrors`. One writer
+is consulted; it composes its own decisions. A legacy-envelope writer:
+
+```csharp
+services.AddBlueprintApi<MyApp, MyAppExecutor>(b => b.AddHttpResultWriter<LegacyErrorEnvelopeWriter>());
+
+public sealed class LegacyErrorEnvelopeWriter : IHttpResultWriter
+{
+    public ValueTask<bool> TryWriteAsync(HttpContext httpContext, ApiOperationContext operationContext, OperationResult result)
+    {
+        return result switch
+        {
+            ValidationFailedResult failed => WriteAsync(httpContext, 422, "validation_failed", "One or more validation errors occurred.",
+                HttpOperationResultExecutor.GetValidationErrors(operationContext, failed)),
+            UnauthenticatedResult denied => WriteAsync(httpContext, 401, "security_failure", denied.Failure?.Message ?? "Your session has expired"),
+            ForbiddenResult denied => WriteAsync(httpContext, 403, "feature_not_available", denied.Failure?.Message ?? "Forbidden"),
+            UnhandledExceptionResult { Exception: InvalidOperationException e } => WriteAsync(httpContext, 400, "invalid_operation", e.Message),
+            _ => ValueTask.FromResult(false),
+        };
+    }
+
+    private static async ValueTask<bool> WriteAsync(HttpContext httpContext, int status, string code, string message,
+        IReadOnlyDictionary<string, string[]>? errors = null)
+    {
+        using var body = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(body))
+        {
+            writer.WriteStartObject();
+            writer.WriteStartObject("error");
+            writer.WriteString("code", code);
+            writer.WriteString("message", message);
+            writer.WriteEndObject();
+            if (errors is not null)
+            {
+                // Written key by key: the keys are already named, and a dictionary key policy would name them again.
+                writer.WriteStartObject("errors");
+                foreach (var (key, messages) in errors)
+                {
+                    writer.WriteStartArray(key);
+                    foreach (var m in messages)
+                    {
+                        writer.WriteStringValue(m);
+                    }
+                    writer.WriteEndArray();
+                }
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+        }
+
+        httpContext.Response.StatusCode = status;
+        httpContext.Response.ContentType = "application/json";
+        await httpContext.Response.Body.WriteAsync(body.ToArray(), httpContext.RequestAborted);
+        return true;
+    }
+}
+```
+
+The writer is a singleton; take request-scoped services from `httpContext.RequestServices`. With no writer registered
+nothing changes, the pre-serialised 401 and 403 fast paths included. `HttpResultWriterWireTests` is the worked example,
+CSV included.
+
 #### State-based link visibility
 
 Use `StateBasedLinkChecker<TOperation, TResource>` (which implements `ILinkVisibilityAuthoriser`) for state-based link hiding:
@@ -468,6 +541,18 @@ Invalid property references in cross-property validators are caught at build tim
 contain at least one non-empty item if `{1}` field is `{2}`.", legacy Blueprint's exact text — it rejects a blank or
 `null` item as well as an empty collection, and the message now says so. Before v1.0.3 it said "at least one item".
 `RequiredItemsIfNotAttribute` (new-only, no legacy equivalent) still says "at least one item".
+
+**Behaviour change for a 422's `errors` keys (v2.0.0, breaking).** Each key is named with the app's JSON naming policy:
+the `DictionaryKeyPolicy` of the options its serializer context is built with, or else their `PropertyNamingPolicy`.
+Every member name in a path is converted and the separators and indexers are kept, so under camelCase `Items[0].UnitPrice`
+is `items[0].unitPrice`; a client reads the key by the same name as the property it belongs to. Blueprint's default
+options (`BlueprintJsonOptions`) are camelCase, so an app that does not change the policy now answers
+`{"errors":{"name":[...]}}` where it answered `{"errors":{"Name":[...]}}`, as legacy Blueprint did. Two members the policy
+names alike are written as one key with both messages. The form-level key stays `form` whatever the policy, and with
+neither policy set (both `null`) every key is the member path exactly as before. The OpenAPI document does not change:
+it describes `errors` as a map. Coming from legacy Blueprint nothing changes for a camelCase app. Coming from v1.x, a
+client that read a PascalCase key (`errors["Name"]`) must read the camelCase one, or the app must set both policies to
+`null` through `blueprint.ConfigureJson(...)` — which also writes its bodies' properties as their CLR names.
 
 ### 8. Migrate result types
 
@@ -847,6 +932,56 @@ Blueprint did all three after any operation: Signature365's `SaveMartenChangesMi
 
 A query that stores or sends something it must not keep needs `[DoNotSaveChanges]`. A query that must not share a Rebus
 transaction needs `[NoRebusTransaction]`.
+
+**Beginning a unit of work before the handler.** On the same rule as the save — every operation without
+`[DoNotSaveChanges]`, skipped when nested where the save is — the pipeline calls
+`IUnitOfWork.BeginAsync(operation, descriptor, cancellationToken)` once the operation is authorised and validated, and
+before the Rebus transaction scope opens and the handler runs. The default implementation does nothing, so a Marten unit
+of work is unaffected. A unit of work over a relational session opens its transaction here, which legacy apps did with a
+custom first-frame `IMiddlewareBuilder` (Timestamp's `NHibernateBeforeMiddleware`): without it, an identity-keyed
+`session.Save` or an auto-flush before a query commits on its own and survives a handler that then throws.
+
+```csharp
+public sealed class NHibernateUnitOfWork(ISession session) : IUnitOfWork
+{
+    public ValueTask BeginAsync(object operation, ApiOperationDescriptor descriptor, CancellationToken cancellationToken)
+    {
+        // Legacy opened no transaction for a GET request or an operation marked [NoTransaction]. The descriptor lists
+        // every method the operation is exposed on, not the current request's, so only a GET-only operation is
+        // skipped: one exposed on GET and POST still gets a transaction for its POSTs. TryGetFeatureData, not
+        // GetFeatureData, which throws for an operation with no HTTP metadata (a background task, an in-process-only
+        // operation); those are not GETs.
+        var isGetOnly = descriptor.TryGetFeatureData<OperationHttpMethodMetadataFeatureData>(out var http)
+            && http.HttpMethods.Length > 0
+            && http.HttpMethods.All(static method => method == "GET");
+
+        if (isGetOnly || descriptor.TypeAttributes.Any(static a => a is NoTransactionAttribute))
+        {
+            return default;
+        }
+
+        session.BeginTransaction();
+        return default;
+    }
+
+    public async Task SaveChangesAsync(CancellationToken cancellationToken)
+    {
+        if (session.GetCurrentTransaction() is { IsActive: true } transaction)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+        else
+        {
+            await session.FlushAsync(cancellationToken);
+        }
+    }
+}
+```
+
+Nothing calls a rollback when the handler throws or the operation fails: the DI scope disposes the session, and an
+uncommitted transaction is rolled back with it. `SaveChangesAsync` can be called more than once per operation — a
+resource event's self query saves first so it can read the command's writes — so an implementation that commits must
+cope with a second save.
 
 **Behaviour change for Marten domain events (v1.0.3).** Before v1.0.3, domain events raised by Marten entities were
 dispatched to in-process `IDomainEventHandler<TEvent>` implementations and never published:

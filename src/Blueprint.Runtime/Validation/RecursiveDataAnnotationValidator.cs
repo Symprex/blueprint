@@ -48,7 +48,7 @@ public static class RecursiveDataAnnotationValidator
         {
             if (value != null)
             {
-                foreach (var result in ValidateObject(value, $"{propertyPath}[{i}]", validationContext, maxDepth, visited))
+                foreach (var result in ValidateObject(value, $"{propertyPath}[{i}]", $"{propertyName}[{i}]", validationContext, maxDepth, visited))
                 {
                     yield return result;
                 }
@@ -83,7 +83,7 @@ public static class RecursiveDataAnnotationValidator
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
         var propertyPath = ToCamelCase(propertyName);
 
-        foreach (var result in ValidateObject(value, propertyPath, validationContext, maxDepth, visited))
+        foreach (var result in ValidateObject(value, propertyPath, propertyName, validationContext, maxDepth, visited))
         {
             yield return result;
         }
@@ -151,10 +151,16 @@ public static class RecursiveDataAnnotationValidator
         return results;
     }
 
+    /// <summary>
+    /// Validates <paramref name="value"/> and what it holds, naming each failure's member by <paramref name="path"/>, the
+    /// camelCased path, and keeping <paramref name="memberPath"/>, the same path of the members' own names, for the HTTP
+    /// host to name the failure with the app's naming policy (<see cref="MemberPathValidationResult"/>).
+    /// </summary>
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Callers propagate RequiresUnreferencedCode.")]
     private static IEnumerable<ValidationResult> ValidateObject(
         object value,
         string path,
+        string memberPath,
         ValidationContext parentContext,
         int remainingDepth,
         HashSet<object> visited)
@@ -181,14 +187,15 @@ public static class RecursiveDataAnnotationValidator
             {
                 hasMembers = true;
 
-                yield return new ValidationResult(
+                yield return new MemberPathValidationResult(
                     result.ErrorMessage,
-                    [$"{path}.{ToCamelCasePath(memberName)}"]);
+                    $"{path}.{ToCamelCasePath(memberName)}",
+                    $"{memberPath}.{memberName}");
             }
 
             if (!hasMembers)
             {
-                yield return new ValidationResult(result.ErrorMessage, [path]);
+                yield return new MemberPathValidationResult(result.ErrorMessage, path, memberPath);
             }
         }
 
@@ -220,6 +227,7 @@ public static class RecursiveDataAnnotationValidator
 
             var propertyType = property.PropertyType;
             var childPath = string.Concat(path, ".", ToCamelCase(property.Name));
+            var childMemberPath = string.Concat(memberPath, ".", property.Name);
 
             if (IsEnumerableType(propertyType))
             {
@@ -232,6 +240,7 @@ public static class RecursiveDataAnnotationValidator
                         foreach (var result in ValidateObject(
                             item,
                             $"{childPath}[{index}]",
+                            $"{childMemberPath}[{index}]",
                             parentContext,
                             remainingDepth - 1,
                             visited))
@@ -248,6 +257,7 @@ public static class RecursiveDataAnnotationValidator
                 foreach (var result in ValidateObject(
                     childValue,
                     childPath,
+                    childMemberPath,
                     parentContext,
                     remainingDepth - 1,
                     visited))

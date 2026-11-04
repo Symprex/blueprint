@@ -10,7 +10,7 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 /// <summary>
 /// Proves that the <c>UnitOfWorkModule</c> coordinates persistence saves through the generated
 /// pipeline variable sharing model: save-changes is called on command and query success, and skipped on
-/// validation failure and for <c>[DoNotSaveChanges]</c>.
+/// validation failure and for <c>[DoNotSaveChanges]</c>; the unit of work is begun before the handler on the same rule.
 /// </summary>
 public class UnitOfWorkModuleIntegrationTests
 {
@@ -118,6 +118,130 @@ public class UnitOfWorkModuleIntegrationTests
         unitOfWork.SaveChangesCallCount.Should().Be(0, "save-changes should NOT be called when [DoNotSaveChanges] is applied");
     }
 
+    [Fact]
+    public async Task When_command_handler_succeeds_then_unit_of_work_is_begun_before_the_handler_and_saved_after_it()
+    {
+        // Issue #98: a unit of work over a relational session must open its transaction before the handler writes, as
+        // Timestamp's legacy NHibernateBeforeMiddleware did, so the handler's writes and the save commit together.
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var unitOfWork = new TestUnitOfWork();
+        var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
+
+        var pipeline = executor.GetPipeline(typeof(UnitOfWorkOrderProofCommand));
+        var context = new ApiOperationContext(serviceProvider, app, UnitOfWorkOrderProofCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().NotBeOfType<ValidationFailedResult>();
+        unitOfWork.Events.Should().Equal("begin", "handler", "save");
+        unitOfWork.BegunOperation.Should().BeSameAs(context.Operation, "the unit of work is told which operation it is begun for");
+        unitOfWork.BegunDescriptor.Should().BeSameAs(context.Descriptor, "the unit of work can decide per operation from its descriptor");
+    }
+
+    [Fact]
+    public async Task When_command_fails_validation_then_unit_of_work_is_not_begun()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var unitOfWork = new TestUnitOfWork();
+        var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
+
+        var pipeline = executor.GetPipeline(typeof(PersistableCommand));
+        var context = new ApiOperationContext(serviceProvider, app, PersistableCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
+
+        // Leave Name null to trigger Required validation failure
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeOfType<ValidationFailedResult>();
+        unitOfWork.Events.Should().BeEmpty("an invalid request opens nothing");
+    }
+
+    [Fact]
+    public async Task When_command_handler_throws_then_unit_of_work_is_begun_and_not_saved()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var unitOfWork = new TestUnitOfWork();
+        var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
+
+        var pipeline = executor.GetPipeline(typeof(UnitOfWorkOrderProofCommand));
+        var context = new ApiOperationContext(serviceProvider, app, UnitOfWorkOrderProofCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
+        ((UnitOfWorkOrderProofCommand)context.Operation).ShouldThrow = true;
+
+        var result = await pipeline.ExecuteAsync(context);
+
+        result.Should().BeAssignableTo<UnhandledExceptionResult>();
+        unitOfWork.Events.Should().Equal("begin", "handler");
+    }
+
+    [Fact]
+    public async Task When_query_operation_succeeds_then_unit_of_work_is_begun_and_saved()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var unitOfWork = new TestUnitOfWork();
+        var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
+
+        var pipeline = executor.GetPipeline(typeof(PersistenceQueryProof));
+        var context = new ApiOperationContext(serviceProvider, app, PersistenceQueryProof.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
+
+        await pipeline.ExecuteAsync(context);
+
+        unitOfWork.Events.Should().Equal("begin", "save");
+    }
+
+    [Fact]
+    public async Task When_query_is_nested_then_unit_of_work_is_neither_begun_nor_saved()
+    {
+        // A nested query shares the unit of work its command has already begun, so the begin is skipped where the save is.
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var unitOfWork = new TestUnitOfWork();
+        var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
+
+        var parent = new ApiOperationContext(serviceProvider, app, PersistableCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
+        var nested = parent.CreateNested(new PersistenceQueryProof(), skipAuthorisation: true);
+
+        await executor.GetPipeline(typeof(PersistenceQueryProof)).ExecuteAsync(nested);
+
+        unitOfWork.Events.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_command_has_DoNotSaveChanges_then_unit_of_work_is_not_begun()
+    {
+        var app = new IntegrationTestBlueprintApp();
+        var executor = new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, app, NullServiceProvider.Instance);
+        var unitOfWork = new TestUnitOfWork();
+        var serviceProvider = new PersistenceTestServiceProvider(unitOfWork);
+
+        var pipeline = executor.GetPipeline(typeof(DoNotSaveChangesCommand));
+        var context = new ApiOperationContext(serviceProvider, app, DoNotSaveChangesCommand.Configure(), CancellationToken.None)
+        {
+            SkipAuthorisation = true,
+        };
+
+        await pipeline.ExecuteAsync(context);
+
+        unitOfWork.Events.Should().BeEmpty();
+    }
+
     private sealed class PersistenceTestServiceProvider : IServiceProvider
     {
         private readonly IUnitOfWork? _unitOfWork;
@@ -140,18 +264,61 @@ public class UnitOfWorkModuleIntegrationTests
 }
 
 /// <summary>
-/// Test unit-of-work that records save-changes calls for assertion.
+/// Test unit-of-work that records begin and save-changes calls, in order, for assertion.
 /// </summary>
 public sealed class TestUnitOfWork : IUnitOfWork
 {
     /// <summary>Gets the number of times SaveChangesAsync was called.</summary>
     public int SaveChangesCallCount { get; private set; }
 
+    /// <summary>Gets what happened to the unit of work, in order: <c>begin</c>, <c>save</c>, and <c>handler</c> when a handler records itself.</summary>
+    public List<string> Events { get; } = [];
+
+    /// <summary>Gets the operation the unit of work was last begun for.</summary>
+    public object? BegunOperation { get; private set; }
+
+    /// <summary>Gets the descriptor the unit of work was last begun for.</summary>
+    public ApiOperationDescriptor? BegunDescriptor { get; private set; }
+
+    /// <inheritdoc />
+    public ValueTask BeginAsync(object operation, ApiOperationDescriptor descriptor, CancellationToken cancellationToken = default)
+    {
+        this.Events.Add("begin");
+        this.BegunOperation = operation;
+        this.BegunDescriptor = descriptor;
+        return default;
+    }
+
     /// <inheritdoc />
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         this.SaveChangesCallCount++;
+        this.Events.Add("save");
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// A command whose handler records itself on the unit of work, and can throw, so a test can see where the begin and the
+/// save fall around it.
+/// </summary>
+public partial class UnitOfWorkOrderProofCommand : ICommand
+{
+    /// <summary>Gets or sets a value indicating whether the handler throws after recording itself.</summary>
+    public bool ShouldThrow { get; set; }
+
+    /// <summary>Handles the command.</summary>
+    /// <param name="operation">The command instance.</param>
+    /// <param name="unitOfWork">The scope's unit of work, which the handler records itself on.</param>
+    /// <returns>A completed task.</returns>
+    /// <exception cref="InvalidOperationException">When <see cref="ShouldThrow"/> is set.</exception>
+    public static Task HandleAsync(UnitOfWorkOrderProofCommand operation, IUnitOfWork unitOfWork)
+    {
+        ((TestUnitOfWork)unitOfWork).Events.Add("handler");
+
+        return operation.ShouldThrow
+            ? throw new InvalidOperationException("The handler failed.")
+            : Task.CompletedTask;
     }
 }
 
