@@ -282,25 +282,43 @@ A caller with no user context at all, as in an app without an `IUserAuthorisatio
 
 **Expanders.** `IResourceKeyExpander.ExpandAsync(partialKey, context, ct)` returns the absolute keys a partial key stands for, an empty list for a key it handles that identifies nothing (which is then denied), or `null` when the key is not its to expand.
 
-**Checking access directly.** `IResourceAccessChecker.HasAccessAsync(context, principal, demand, scopePair, ct)` makes the decision the provider makes for each pair, without the authentication checks. A handler that must filter by what the caller may do asks it directly:
+**Keys within keys.** A key or grant an app is given, such as a stored role assignment's, can be held to the part of the hierarchy it belongs in (Symprex/blueprint#129):
+
+| Member | Answers | Example |
+|---|---|---|
+| `ResourceKey.IsWithin(ancestor)` | Is this key the ancestor or beneath it? | `/Tenants/ten_1/Users/usr_1` is within `/Tenants/ten_1`; `/Tenants/ten_12` is not |
+| `ResourceGrant.IsWithin(ancestor)` | Does the grant cover nothing outside the ancestor? | `/Tenants/ten_1/*` is within `/Tenants/ten_1`; `/Tenants/*` and `/*` are not |
+| `ResourceKey.TryGetTopLevelPrefix(out prefix)` | Which part of the hierarchy is the key, or a template held as one, in? | `/Tenants/{Id}/Users` gives `/Tenants/`; `/` gives `/`; a partial key gives none |
+| `ResourceGrant.Root` | The root grant, `/*` | |
+| `ResourceGrant.TryParse(value, out _)` | Is the value absolute, as a grant must be? | |
+
+Each stops at a segment boundary and compares ordinally, as `Covers` does. They replace Signature 365's `ResourceKeyHelpers`, with two differences: its `IsWithin` compared case-insensitively, and refused any `*` that was not a trailing `/*`, where Blueprint treats such a `*` as literal, so the grant covers only itself.
+
+**Checking access directly.** A handler that must filter by what the caller may do with *another* operation asks its context, which every handler has without injecting anything:
 
 ```csharp
-public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery query, IResourceAccessChecker checker, ApiOperationContext context)
+public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery query, ApiOperationContext context)
 {
-    var create = context.App.FindOperation(typeof(CreateFolderCommand))!;
-    var pair = create.GetFeatureData<OperationAuthorizationFeatureData>()!.ScopePairs[0];
-    var key = $"/Accounts/{context.UserAuthorisationContext!.AccountId}";
+    var tenant = new ResourceKey($"/Tenants/{context.UserAuthorisationContext!.AccountId}");
 
-    var canCreate = await checker.HasAccessAsync(
-        context,
-        context.UserPrincipal!,
-        new ResourceDemand(create, new ResourceKey(key)),
-        new ResolvedScopePair(pair.Noun, pair.Verb, pair.ResourceKeyTemplate, key),
-        context.OperationCancelled);
+    var canCreate = await context.CanExecuteAsync<CreateFolderCommand>(tenant);
 
     // ...
 }
 ```
+
+A handler deriving from `BlueprintApiOperations` asks `this.Context.CanExecuteAsync<T>(key)`. `CanExecuteAsync<T>(key)`, or `CanExecuteAsync(type, key)`, decides as `T`'s own execution would:
+- every registered provider is asked, all-of in registration order, in `Execute` mode for `T`'s descriptor;
+- each of `T`'s scope pairs *with a template* is given `key` as its resolved key, whatever the template; a pair with none is given no key, as at execution, and `ResourceKeyAuthorizationProvider` refuses it. Any pair may satisfy a provider;
+- the providers are given a nested context for `T`, whose `Parent` is the asking context and whose `Operation` is a default instance of `T`, so a provider reading the operation's properties sees their defaults. It shares the asking context's caller, `UserAuthorisationContext`, `HttpContext`, `BaseUri` and `Data`;
+- the caller is `context.UserPrincipal`; with no authenticated principal it is refused as anonymous (`Authentication`) and no provider is asked;
+- with no provider registered it is refused, as the execution would be;
+- `context.SkipAuthorisation` does not apply, because the question is about the caller, not this context's execution;
+- the `IApiAuthoriser`s are not asked, because they judge an operation instance and there is none.
+
+It returns the `ExecutionAllowed`, so a denial's reason can be logged; never write it to the response. It throws `ArgumentException` when `T` is not an operation of the app, when `T` declares no scope pairs, or when the key is empty.
+
+`IResourceAccessChecker.HasAccessAsync(context, principal, demand, scopePair, ct)` remains for the narrower question: the decision `ResourceKeyAuthorizationProvider` makes for one pair, without the token's scopes or the authentication checks.
 
 ---
 
@@ -311,9 +329,14 @@ public static async Task<FolderListApiResource> HandleAsync(GetFoldersQuery quer
 | BPAU003 | Error | `[Resource]` or `[FromResource]` combined with `[AllowAnonymous]` |
 | BPAU004 | Error | Empty or whitespace noun or verb in `[Resource]` |
 | BPAU005 | Error | Both `[Resource]` and `[FromResource]` on the same operation |
-| BPAU006 | Warning | `[FromResource]` references a type with no `[Resource]` attributes |
+| BPAU006 | Error | `[FromResource]` references a type with no `[Resource]` attributes |
 | BPAU007 | Error | Unknown token in resource key template |
 | BPAU008 | Warning | `[Resource]` or `[FromResource]` on a background task that is not exposed over HTTP and not marked `[MustBeAuthenticated]`: it allows anonymous access, so the declaration is never enforced |
+| BPAU009 | Warning | The same noun and verb declared by more than one `[Resource]` on one operation |
+| BPAU010 | Warning | A `{Primary:Fallback}` fallback that nothing uses: not on the operation, nor on a linked resource type that lacks the primary |
+| BPAU011 | Error | A resource key template token that matches no readable public property of a resource type the operation links from, so a link from it could never be authorised |
+
+The authentication diagnostics, BPAU001 and BPAU002, are listed with the rest in [`diagnostic-reference.md`](diagnostic-reference.md).
 
 ---
 

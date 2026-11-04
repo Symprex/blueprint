@@ -56,4 +56,50 @@ public class ResourceKeyTests
         key.Value.Should().BeEmpty();
         key.IsAbsolute.Should().BeFalse();
     }
+
+    [Theory]
+    [InlineData("/Tenants/ten_1", "/Tenants/ten_1", true)]
+    [InlineData("/Tenants/ten_1/Users/usr_1", "/Tenants/ten_1", true)]
+    [InlineData("/Tenants/ten_1/*", "/Tenants/ten_1", true)]
+    [InlineData("/Tenants/ten_12", "/Tenants/ten_1", false)]
+    [InlineData("/Tenants/ten_1*", "/Tenants/ten_1", false)]
+    [InlineData("/Tenants", "/Tenants/ten_1", false)]
+    [InlineData("/Partners/par_1/Tenants/ten_1", "/Tenants/ten_1", false)]
+    [InlineData("/tenants/ten_1/Users/usr_1", "/Tenants/ten_1", false)]
+    [InlineData("Users/usr_1", "/Tenants/ten_1", false)]
+    [InlineData("Tenants/ten_1/Users", "Tenants/ten_1", false)]
+    public void IsWithin_is_true_for_the_key_itself_or_a_key_beneath_it_at_a_segment_boundary(string key, string ancestor, bool expected)
+    {
+        new ResourceKey(key).IsWithin(new ResourceKey(ancestor)).Should().Be(expected);
+    }
+
+    [Fact]
+    public void A_default_key_is_within_nothing_and_nothing_is_within_it()
+    {
+        default(ResourceKey).IsWithin(new ResourceKey("/Tenants")).Should().BeFalse();
+        new ResourceKey("/Tenants").IsWithin(default).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("/Tenants/{Id}/Users", "/Tenants/")]
+    [InlineData("/Tenants/ten_1", "/Tenants/")]
+    [InlineData("/Partners", "/Partners/")]
+    [InlineData("/", "/")]
+    [InlineData("/*", "/*/")]
+    [InlineData("//Tenants/ten_1", "//")]
+    public void TryGetTopLevelPrefix_gives_the_first_segment_between_slashes(string key, string expected)
+    {
+        new ResourceKey(key).TryGetTopLevelPrefix(out var prefix).Should().BeTrue();
+
+        prefix.Should().Be(expected);
+    }
+
+    [Fact]
+    public void A_partial_key_has_no_top_level_prefix()
+    {
+        new ResourceKey("Tenants/ten_1").TryGetTopLevelPrefix(out var prefix).Should().BeFalse();
+        default(ResourceKey).TryGetTopLevelPrefix(out _).Should().BeFalse();
+
+        prefix.Should().BeNull();
+    }
 }
