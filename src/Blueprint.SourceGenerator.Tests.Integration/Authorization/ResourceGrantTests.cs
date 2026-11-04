@@ -124,6 +124,39 @@ public class ResourceGrantTests
         (ResourceGrant.Parse("/a") != ResourceGrant.Parse("/b")).Should().BeTrue();
     }
 
+    [Fact]
+    public void Root_is_the_grant_that_covers_every_absolute_key()
+    {
+        ResourceGrant.Root.Should().Be(ResourceGrant.Parse("/*"));
+        ResourceGrant.Root.Value.Should().Be("/*");
+        ResourceGrant.Root.Covers(new ResourceKey("/Tenants/ten_1/Users/usr_1")).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("/Tenants/ten_1", "/Tenants/ten_1", true)]
+    [InlineData("/Tenants/ten_1/*", "/Tenants/ten_1", true)]
+    [InlineData("/Tenants/ten_1/Users/usr_1", "/Tenants/ten_1", true)]
+    [InlineData("/Tenants/ten_1/Users/*", "/Tenants/ten_1", true)]
+    [InlineData("/Tenants/ten_1/Users*", "/Tenants/ten_1", true)]
+    [InlineData("/Tenants/*", "/Tenants/ten_1", false)]
+    [InlineData("/*", "/Tenants/ten_1", false)]
+    [InlineData("/Tenants/ten_1*", "/Tenants/ten_1", false)]
+    [InlineData("/Tenants/ten_12/*", "/Tenants/ten_1", false)]
+    [InlineData("/Partners/par_1/*", "/Tenants/ten_1", false)]
+    [InlineData("/tenants/ten_1/*", "/Tenants/ten_1", false)]
+    [InlineData("/Tenants/ten_1/*", "Tenants/ten_1", false)]
+    public void IsWithin_is_true_only_when_every_key_the_grant_covers_is_the_ancestor_or_beneath_it(string grant, string ancestor, bool expected)
+    {
+        // A * that is not a trailing /* is literal, so /Tenants/ten_1/Users* covers only itself, which is within ten_1
+        ResourceGrant.Parse(grant).IsWithin(new ResourceKey(ancestor)).Should().Be(expected);
+    }
+
+    [Fact]
+    public void A_default_grant_is_within_nothing()
+    {
+        default(ResourceGrant).IsWithin(new ResourceKey("/Tenants/ten_1")).Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("/Tenants/ten_1/Users/*", "/Tenants/ten_1/Users/")]
     [InlineData("/Tenants/ten_1/*", "/Tenants/ten_1/Users/")]
