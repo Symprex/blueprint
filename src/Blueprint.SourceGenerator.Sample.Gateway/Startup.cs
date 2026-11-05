@@ -48,10 +48,13 @@ public class Startup
                 http.ExposeExceptionDetailsInErrorResponses = true;
             });
         });
+
+        // Serves the gateway's operations as MCP tools beside its HTTP API.
+        services.AddBlueprintMcp();
     }
 
     /// <summary>
-    /// Maps gateway endpoints under the <c>/gateway/</c> route prefix.
+    /// Maps gateway endpoints under the <c>/gateway/</c> route prefix, and its MCP tools at <c>/gateway/mcp</c>.
     /// </summary>
     /// <param name="app">The application builder.</param>
     public void Configure(IApplicationBuilder app)
@@ -68,6 +71,10 @@ public class Startup
                     info.Version = "1.0.0";
                     info.Description = "Gateway service that proxies template operations to the upstream template service.";
                 });
+
+            // One MCP tool per gateway operation, invoked through its pipeline with the caller's bearer token. It is
+            // mapped after the API because the tools are made from the API's input schemas.
+            endpoints.MapBlueprintMcp<GatewayBlueprintApp>("gateway/mcp");
         });
     }
 }

@@ -518,6 +518,80 @@ services.AddBlueprintHttpClient<TargetServiceApp>(client =>
 
 ---
 
+## Blueprint.Mcp
+
+**NuGet:** `Blueprint.Mcp` | **Source:** `src/Blueprint.Mcp`
+
+Serves a Blueprint app's operations as Model Context Protocol tools, over the official C# MCP SDK
+(`ModelContextProtocol.AspNetCore`) and its Streamable HTTP transport (D22). It is a package of its own so that only an
+app that serves MCP takes the SDK.
+
+### What It Provides
+
+| Abstraction | Member | Purpose |
+|---|---|---|
+| DI registration | `AddBlueprintMcp()` | Registers the app's MCP server, stateless, giving each MCP endpoint its own app's tools |
+| Endpoint mapping | `MapBlueprintMcp<TApp>(path)` | Serves one tool per operation `TApp` exposes over HTTP at `path` |
+
+### Registration
+
+```csharp
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>(_ => { });
+    services.AddBlueprintMcp();
+}
+
+public void Configure(IApplicationBuilder app)
+{
+    app.UseRouting();
+    app.UseAuthentication();
+
+    app.UseEndpoints(endpoints =>
+    {
+        endpoints.MapBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>("gateway/");
+
+        // After MapBlueprintApi: the tools are made from the API's input schemas.
+        endpoints.MapBlueprintMcp<GatewayBlueprintApp>("gateway/mcp");
+    });
+}
+```
+
+`Blueprint.SourceGenerator.Sample.Gateway` maps it at `gateway/mcp`, and `Blueprint.EndToEnd.Tests/McpToolsTests.cs`
+calls it there with the SDK's own MCP client.
+
+### How It Works
+
+- **Tools.** One per operation with a URL, named by its OpenAPI `operationId`, with the operation's flattened input
+  schema (`IOperationInputSchemaProvider`, D21) as its `inputSchema` and its summary and description as its
+  description. A GET-only operation is annotated `readOnlyHint`. An operation whose schema cannot be made fails
+  `MapBlueprintMcp`, as it fails the OpenAPI document, unless `RenderOpenApiDocumentOnFirstRequest` defers both.
+- **Calls run through the pipeline.** A call makes the HTTP request the operation's first URL answers: path arguments
+  into the route, query and header arguments as an HTTP caller writes them, and body arguments as the JSON body. The
+  request runs in process through the operation's own endpoint, so binding, validation, authentication and
+  authorisation are those of HTTP. It is the MCP request's caller that runs it: its `HttpContext.User`, its
+  `Authorization` header, its request services, its scheme, host and path base (so links point at the HTTP API).
+- **Results are the HTTP response.** The body is the tool result's text, and its structured content when it is a JSON
+  object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
+  problem body an HTTP caller gets, a call that fails validation the same 422.
+- **Stateless.** Every MCP request is answered within its own HTTP request, so a tool call always runs as the caller
+  that request authenticated. A stateful session would answer later calls as whoever opened it.
+
+### Limits
+
+- Listing tools needs no authentication, as reading the OpenAPI document needs none. Add `.RequireAuthorization()` to
+  the builder `MapBlueprintMcp` returns to require it.
+- ASP.NET Core authorisation policies attached to the API's own endpoints (`MapBlueprintApi(...).RequireAuthorization(...)`)
+  are not evaluated for a tool call. The operation's generated authorisation is.
+- Only the `Authorization` header is carried from the MCP request; any other header an operation reads must be a tool
+  argument.
+- There are no output schemas yet: `IOperationInputSchemaProvider` gives inputs only.
+- A body that is not text (a file or stream result) is described in the result rather than returned.
+- Blueprint owns the app's MCP server: tools registered with the SDK's own `WithTools` are not served at a
+  `MapBlueprintMcp` endpoint.
+
+---
+
 ## Blueprint.Testing
 
 **NuGet:** `Blueprint.Testing` | **Source:** `src/Blueprint.Testing`
@@ -628,6 +702,7 @@ response.StatusCode.Should().Be(HttpStatusCode.OK);
 | **Blueprint.Rebus** | ✅ | ✅ Activator, subscriptions | ❌ Built-in | Tenant from headers |
 | **Blueprint.Tasks.Hangfire** | ✅ | ✅ Schedule, recurring, retry | ❌ Built-in | Tenant context restore |
 | **Blueprint.HttpClient** | ✅ | ✅ Typed service clients, reflection-free registration, credentials, compile-time call plans | ❌ Built-in | Tenant/tracing headers (delegating handlers) |
+| **Blueprint.Mcp** | ✅ | ✅ One tool per op, same auth as HTTP | ✅ Through the op's own pipeline | Output schemas, file results |
 | **Blueprint.Testing** | ✅ | ✅ Full test infrastructure | ✅ `WithTenant()` | Audit/event assertions |
 
 ### Cross-Cutting: Multi-Tenancy

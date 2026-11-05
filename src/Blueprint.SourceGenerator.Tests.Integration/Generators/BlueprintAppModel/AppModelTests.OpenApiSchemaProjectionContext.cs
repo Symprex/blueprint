@@ -89,6 +89,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "NestedValidationItem",
             "NodaTimeEchoResponse",
             "OperationIdMixedLinkApiResource",
+            "OperationInputSchemaAddress",
             "PagedApiResourceOfLegacyShapeTenant",
             "ParameterTitlesApiResource",
             "ProblemDetails",

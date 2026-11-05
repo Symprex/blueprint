@@ -101,6 +101,13 @@ public sealed record OpenApiParameterModel(
     /// none: under <see cref="OpenApiSchemaNaming.Legacy"/>, the legacy name of the parameter's type, as legacy titled it.
     /// </summary>
     public string? SchemaTitle { get; init; }
+
+    /// <summary>
+    /// Gets the name of the operation's CLR property the parameter is projected from, or <see langword="null"/> for one an
+    /// operation processor made, so <see cref="IOperationInputSchemaProvider"/> can tell one property documented twice
+    /// from two that collide.
+    /// </summary>
+    internal string? ClrPropertyName { get; init; }
 }
 
 /// <summary>
@@ -228,4 +235,11 @@ public sealed record OpenApiRequestBodyPropertyModel(
 
     /// <summary>Gets the component schema name of the object this property holds, rendered as a <c>$ref</c> instead of an inline <c>object</c>.</summary>
     public string? SchemaRef { get; init; }
+
+    /// <summary>
+    /// Gets the name of the operation's CLR property this body property is projected from, or <see langword="null"/> for
+    /// one an operation processor made, so <see cref="IOperationInputSchemaProvider"/> can tell one property documented
+    /// twice from two that collide.
+    /// </summary>
+    internal string? ClrPropertyName { get; init; }
 }

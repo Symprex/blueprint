@@ -395,6 +395,15 @@ Call another Blueprint service through a generated typed client, not a runtime-d
 - **Removed:** the non-generic `CallAsync`/`SendVoidAsync` and `From<TApp>`. The operation-typed extension methods on `BlueprintHttpClient<TApp>` are opt-in: they exist only for an app carrying `[BlueprintHttpClientExtensions]`.
 - **Diagnostics:** a bad client or include is a `BPCL001`-`BPCL009` build diagnostic (see `docs/diagnostic-reference.md`); fix the declaration rather than working around it at runtime.
 
+### MCP tools (`Blueprint.Mcp`)
+
+To serve an app's operations as MCP tools, reference `Blueprint.Mcp`, call `services.AddBlueprintMcp()`, and map
+`endpoints.MapBlueprintMcp<MyApp>("mcp")` **after** `MapBlueprintApi` for the same app (the tools are made from its input
+schemas). Each tool is named by its operation's OpenAPI `operationId`, and a call runs through the operation's own HTTP
+endpoint as the MCP request's caller, so authentication, authorisation and validation are those of HTTP. The result's
+text is the HTTP response body, `_meta.httpStatus` its status, and a 4xx or 5xx is a tool error. Detail and limits:
+`docs/integration-packages.md#blueprintmcp`.
+
 ## ASP.NET Core infrastructure (consumer responsibility)
 
 Blueprint intentionally delegates standard ASP.NET Core concerns to the consumer rather than wrapping them:
