@@ -13,11 +13,22 @@ using global::Blueprint.Model;
 
 namespace TestNamespace
 {
-    public partial class UpdateUserCommand
+    public partial class UpdateUserCommand : global::Blueprint.Model.IHttpRequestBuilder<global::TestNamespace.UpdateUserCommand>
     {
         public static ApiOperationDescriptor Configure()
         {
             return new UpdateUserCommandDescriptor();
+        }
+
+        [return: global::System.Diagnostics.CodeAnalysis.MaybeNull]
+        static string global::Blueprint.Model.IHttpRequestBuilder<global::TestNamespace.UpdateUserCommand>.BuildRequestUrl(global::TestNamespace.UpdateUserCommand operation)
+        {
+            return Http.BuildUrl(operation);
+        }
+
+        static global::System.Net.Http.HttpMethod global::Blueprint.Model.IHttpRequestBuilder<global::TestNamespace.UpdateUserCommand>.GetHttpMethod()
+        {
+            return global::System.Net.Http.HttpMethod.Parse("POST");
         }
 
 #pragma warning disable CS0108
