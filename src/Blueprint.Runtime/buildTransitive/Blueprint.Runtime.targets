@@ -20,8 +20,9 @@
     <BlueprintOpenApiEnvironment Condition="'$(BlueprintOpenApiEnvironment)' == ''">Development</BlueprintOpenApiEnvironment>
     <!-- Milliseconds. An app that never calls AddBlueprintApi never stops on its own; this ends it and fails the build. -->
     <BlueprintOpenApiTimeout Condition="'$(BlueprintOpenApiTimeout)' == ''">120000</BlueprintOpenApiTimeout>
-    <!-- An app with TargetFrameworks writes its one document from one framework's build. Framework builds may run in
-         parallel, so each writing the file would race, and the last to finish would decide what it held. -->
+    <!-- An app with TargetFrameworks writes its one document from one framework's build, the first it lists unless this
+         names another. Framework builds may run in parallel, so each writing the file would race, and the last to finish
+         would decide what it held. -->
     <BlueprintOpenApiTargetFramework Condition="'$(BlueprintOpenApiTargetFramework)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(TargetFrameworks)', '[^;\s]+').Value)</BlueprintOpenApiTargetFramework>
   </PropertyGroup>
 
@@ -33,11 +34,37 @@
   </ItemGroup>
 
   <!-- Apps only: a library has nothing to start, and a test project's entry point runs its tests. Both ignore the
-       property, so it can be passed to a whole solution's build. An app with TargetFrameworks runs it in the build of
-       BlueprintOpenApiTargetFramework only, not in the outer build, which has no TargetPath to run. -->
+       property, so it can be passed to a whole solution's build. It runs in a framework's build, not in the outer build
+       of an app with TargetFrameworks, which has no TargetPath to run. -->
   <Target Name="BlueprintEmitOpenApi"
           AfterTargets="Build"
-          Condition="'$(BlueprintEmitOpenApi)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and ('$(TargetFrameworks)' == '' or '$(TargetFramework)' == '$(BlueprintOpenApiTargetFramework)') and ('$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe') and '$(IsTestProject)' != 'true'">
+          Condition="'$(BlueprintEmitOpenApi)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and ('$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe') and '$(IsTestProject)' != 'true'"
+          DependsOnTargets="_BlueprintCheckOpenApiTargetFramework;_BlueprintWriteOpenApiDocument;_BlueprintBuildOpenApiTargetFramework" />
+
+  <!-- A framework the app is never built for would never write the document, and the build would leave an earlier spec in
+       place for a CI check to accept. -->
+  <Target Name="_BlueprintCheckOpenApiTargetFramework">
+    <PropertyGroup>
+      <_BlueprintOpenApiFrameworks>;$(TargetFrameworks.Replace(' ', ''));</_BlueprintOpenApiFrameworks>
+    </PropertyGroup>
+
+    <Error Condition="'$(TargetFrameworks)' != '' and !$(_BlueprintOpenApiFrameworks.Contains(';$(BlueprintOpenApiTargetFramework);'))"
+           Text="$(MSBuildProjectName) targets $(TargetFrameworks), but BlueprintOpenApiTargetFramework names $(BlueprintOpenApiTargetFramework), so its OpenAPI document would never be written. Name one of the frameworks it targets." />
+
+    <Error Condition="'$(TargetFrameworks)' == '' and '$(BlueprintOpenApiTargetFramework)' != '' and '$(BlueprintOpenApiTargetFramework)' != '$(TargetFramework)'"
+           Text="$(MSBuildProjectName) targets $(TargetFramework) only, but BlueprintOpenApiTargetFramework names $(BlueprintOpenApiTargetFramework), so its OpenAPI document would never be written. Remove it, or name $(TargetFramework)." />
+  </Target>
+
+  <!-- Any other framework's build builds the named framework, which writes the document. MSBuild builds a project for a
+       framework once in a build, so where that framework's build has run, or is running, this waits for it and writes
+       nothing more; where it has not, as in `dotnet build -f` naming another framework, this builds it. -->
+  <Target Name="_BlueprintBuildOpenApiTargetFramework"
+          Condition="'$(TargetFrameworks)' != '' and '$(TargetFramework)' != '$(BlueprintOpenApiTargetFramework)'">
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Build" Properties="TargetFramework=$(BlueprintOpenApiTargetFramework)" />
+  </Target>
+
+  <Target Name="_BlueprintWriteOpenApiDocument"
+          Condition="'$(TargetFrameworks)' == '' or '$(TargetFramework)' == '$(BlueprintOpenApiTargetFramework)'">
     <PropertyGroup>
       <_BlueprintOpenApiFullPath>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildProjectDirectory)', '$(BlueprintOpenApiPath)'))))</_BlueprintOpenApiFullPath>
       <_BlueprintOpenApiDotnet>$(DOTNET_HOST_PATH)</_BlueprintOpenApiDotnet>

@@ -40,7 +40,8 @@ projects ignore it, so it can be passed to a whole solution's build, which write
 
 An app with `TargetFrameworks` writes its document from one framework's build: the first it lists, or the one
 `BlueprintOpenApiTargetFramework` names. Framework builds may run in parallel, so letting each write the one file would
-race.
+race. A build of another framework alone (`dotnet build -f net8.0`) builds that framework too, so the document is still
+written. Naming a framework the app does not target fails the build.
 
 The document is written from what `AddBlueprintApi` declares, so declare where the API is mapped and how it is described
 there, and call `MapBlueprintApi` without arguments:

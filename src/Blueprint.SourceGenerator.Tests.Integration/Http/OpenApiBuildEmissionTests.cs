@@ -132,6 +132,43 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
         CountOf($"MultiTargetedApp -> {this.OutputPath}", output).Should().Be(1, "one framework's build runs the app:{0}{1}", Environment.NewLine, output);
     }
 
+    [Fact]
+    public async Task When_only_another_framework_is_built_then_the_named_framework_is_built_and_runs_the_app()
+    {
+        // A build of one framework (dotnet build -f) that is not the one named used to write nothing and succeed, leaving
+        // an earlier spec in place for a CI check to accept.
+        var appProject = this.CreateMultiTargetedApp();
+
+        var output = await RunDotnetAsync("build", appProject, "-nologo", "-f", "net8.0", "-p:BlueprintEmitOpenApi=true", $"-p:BlueprintOpenApiPath={this.OutputPath}");
+
+        File.ReadAllText(this.OutputPath).Should().Be(".NETCoreApp,Version=v10.0");
+        CountOf($"MultiTargetedApp -> {this.OutputPath}", output).Should().Be(1, "one framework's build runs the app:{0}{1}", Environment.NewLine, output);
+    }
+
+    [Fact]
+    public async Task When_the_named_framework_is_not_one_the_app_targets_then_the_build_fails()
+    {
+        var appProject = this.CreateMultiTargetedApp();
+
+        var (exitCode, output) = await StartDotnetAsync("build", appProject, "-nologo", "-p:BlueprintEmitOpenApi=true", $"-p:BlueprintOpenApiPath={this.OutputPath}", "-p:BlueprintOpenApiTargetFramework=net9.0");
+
+        exitCode.Should().NotBe(0, "the build should fail:{0}{1}", Environment.NewLine, output);
+        output.Should().Contain("BlueprintOpenApiTargetFramework names net9.0");
+        File.Exists(this.OutputPath).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task When_a_single_framework_app_names_another_framework_then_the_build_fails()
+    {
+        var appProject = this.CreateMultiTargetedApp("<TargetFramework>net10.0</TargetFramework>");
+
+        var (exitCode, output) = await StartDotnetAsync("build", appProject, "-nologo", "-p:BlueprintEmitOpenApi=true", $"-p:BlueprintOpenApiPath={this.OutputPath}", "-p:BlueprintOpenApiTargetFramework=net8.0");
+
+        exitCode.Should().NotBe(0, "the build should fail:{0}{1}", Environment.NewLine, output);
+        output.Should().Contain("BlueprintOpenApiTargetFramework names net8.0");
+        File.Exists(this.OutputPath).Should().BeFalse();
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(this._directory))
@@ -211,10 +248,13 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
     }
 
     /// <summary>
-    /// Creates an app that targets two frameworks and does what the document mode does when it succeeds: it writes the
-    /// document, here the name of the framework it runs on, and records completion.
+    /// Creates an app that targets two frameworks, unless told otherwise, and does what the document mode does when it
+    /// succeeds: it writes the document, here the name of the framework it was built for, and records completion.
     /// </summary>
-    private string CreateMultiTargetedApp()
+    /// <remarks>
+    /// It rolls forward to a later major runtime, so that its .NET 8 build runs where only .NET 10 is installed.
+    /// </remarks>
+    private string CreateMultiTargetedApp(string frameworks = "<TargetFrameworks>net10.0;net8.0</TargetFrameworks>")
     {
         var appDirectory = Path.Combine(this._directory, "MultiTargetedApp");
         var appProject = Path.Combine(appDirectory, "MultiTargetedApp.csproj");
@@ -225,7 +265,8 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFrameworks>net10.0;net8.0</TargetFrameworks>
+                {frameworks}
+                <RollForward>Major</RollForward>
               </PropertyGroup>
               <Import Project="{targets}" />
             </Project>
