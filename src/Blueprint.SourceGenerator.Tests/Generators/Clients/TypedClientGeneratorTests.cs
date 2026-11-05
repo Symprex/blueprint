@@ -287,8 +287,8 @@ public class TypedClientGeneratorTests
     {
         // An include the client cannot call is reported, and skipped rather than generated into code that does not compile:
         // an operation of an assembly built without Blueprint's generator (no builders), one with no declared result, a type
-        // that is no operation, an open generic, and a repeat. An unexposed operation is skipped although it has builders, as
-        // it is left out of every published surface. A class that is not partial gets no generated half at all.
+        // that is no operation, an open generic, and a repeat. An unexposed operation is called: it is hidden from the published
+        // contract but still routed, and has its builders. A class that is not partial gets no generated half at all.
         var source = """
                      using Blueprint.HttpClient;
                      using Contract;
@@ -348,12 +348,13 @@ public class TypedClientGeneratorTests
 
         var result = TestHelpers.Compile<TypedClientGenerator>(source, [CreateContract(), unbuilt]);
 
-        result.Diagnostics.Select(static d => d.Id).Should().BeEquivalentTo("BPCL004", "BPCL003", "BPCL002", "BPCL002", "BPCL004", "BPCL005", "BPCL001");
+        result.Diagnostics.Select(static d => d.Id).Should().BeEquivalentTo("BPCL004", "BPCL003", "BPCL002", "BPCL002", "BPCL005", "BPCL001");
 
-        // Only the include the client can call is generated, on the class that can be completed.
+        // Only the includes the client can call are generated, on the class that can be completed.
         var generated = string.Join("\n", result.Output.Select(static t => t.ToString()));
 
-        generated.Should().Contain("SearchItemsAsync").And.NotContain("UnbuiltAsync").And.NotContain("NoResultAsync").And.NotContain("HiddenItemsAsync");
+        generated.Should().Contain("SearchItemsAsync").And.Contain("HiddenItemsAsync").And.NotContain("UnbuiltAsync").And.NotContain("NoResultAsync");
+        generated.Should().Contain("global::Contract.HiddenItemsQuery.Http.BuildUrl(operation)", "an unexposed operation is sent to its route like any other");
         result.Output.Should().ContainSingle("the class that is not partial is given no half");
     }
 

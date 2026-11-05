@@ -220,9 +220,10 @@ public class TypedClientDiagnosticsTests
             """,
             unbuilt);
 
+        // An unexposed operation is still routed, so it has its builders and is no BPCL004: Signature365's service-to-service
+        // includes are unexposed.
         result.Diagnostics.Where(static d => d.Id == "BPCL004").Select(d => TextOf(d)).Should().BeEquivalentTo(
             "BlueprintClientInclude(typeof(UnbuiltQuery))",
-            "BlueprintClientInclude(typeof(HiddenItemsQuery))",
             "BlueprintClientInclude(typeof(NoUrlQuery))",
             "BlueprintClientInclude(typeof(Outer.NestedQuery))");
     }

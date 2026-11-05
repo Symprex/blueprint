@@ -643,16 +643,12 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
     /// </para>
     /// <para>
     /// A derived operation is checked for builders of its own, never a base operation's, which would build the base's URL.
-    /// An unexposed operation has them, but is left out of every published surface, this one included.
+    /// An unexposed operation has them, and is called like any other: it is hidden from the published contract, but still
+    /// routed, so that other services can reach it.
     /// </para>
     /// </remarks>
     private static string? FindMissingRequestBuildersReason(INamedTypeSymbol operationType, Compilation compilation, bool appendsQueryString, CancellationToken cancellationToken)
     {
-        if (operationType.GetAttributes().Any(static a => a.AttributeClass is { Name: "UnexposedOperationAttribute" } c && c.IsInRootNamespace("Blueprint")))
-        {
-            return "it is marked [UnexposedOperation], which leaves it out of every published surface";
-        }
-
         if (SymbolEqualityComparer.Default.Equals(operationType.ContainingAssembly, compilation.Assembly))
         {
             if (operationType.ContainingType is not null)
