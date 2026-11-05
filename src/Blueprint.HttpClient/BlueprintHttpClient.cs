@@ -28,7 +28,7 @@ namespace Blueprint.HttpClient;
 /// <see cref="System.Net.Http.HttpClient"/> is.
 /// </para>
 /// </remarks>
-public partial class BlueprintHttpClient
+public class BlueprintHttpClient
 {
     private const string UpstreamServerErrorDetail = "The remote server returned an internal error response";
 
@@ -634,7 +634,7 @@ public partial class BlueprintHttpClient
 
             var errors = root.ValueKind == JsonValueKind.Object
                          && root.TryGetProperty("errors", out var errorsElement)
-                         && errorsElement.Deserialize<Dictionary<string, string[]>>(this._jsonOptions) is { } readErrors
+                         && ReadValidationErrors(errorsElement) is { } readErrors
                 ? readErrors
                 : [];
 
@@ -648,6 +648,65 @@ public partial class BlueprintHttpClient
                     [string.Empty] = [body],
                 });
         }
+    }
+
+    /// <summary>
+    /// Reads the <c>errors</c> member of a 422 as <c>Deserialize&lt;Dictionary&lt;string, string[]&gt;&gt;</c> read it, by hand:
+    /// the transport's own types must not depend on the consumer's resolver, which with reflection disabled supplies no
+    /// metadata for them. Keys are kept exactly as sent (a later duplicate replaces an earlier), a value is a JSON array of
+    /// strings or <c>null</c>, and a <c>null</c> element is a <see langword="null"/> string, as the serializer read them.
+    /// </summary>
+    /// <param name="errors">The <c>errors</c> member's value.</param>
+    /// <returns>The errors, or <see langword="null"/> for a JSON <c>null</c>.</returns>
+    /// <exception cref="JsonException">
+    /// The value is not an object, or a member of it is not an array of strings, as the serializer threw for one; the caller
+    /// treats it as an unreadable body.
+    /// </exception>
+    private static Dictionary<string, string[]>? ReadValidationErrors(JsonElement errors)
+    {
+        if (errors.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (errors.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException($"The validation errors are a JSON {errors.ValueKind}, not an object.");
+        }
+
+        var result = new Dictionary<string, string[]>();
+
+        foreach (var member in errors.EnumerateObject())
+        {
+            if (member.Value.ValueKind == JsonValueKind.Null)
+            {
+                result[member.Name] = null!;
+
+                continue;
+            }
+
+            if (member.Value.ValueKind != JsonValueKind.Array)
+            {
+                throw new JsonException($"The validation errors for '{member.Name}' are a JSON {member.Value.ValueKind}, not an array of strings.");
+            }
+
+            var messages = new string[member.Value.GetArrayLength()];
+            var index = 0;
+
+            foreach (var message in member.Value.EnumerateArray())
+            {
+                messages[index++] = message.ValueKind switch
+                {
+                    JsonValueKind.String => message.GetString()!,
+                    JsonValueKind.Null => null!,
+                    _ => throw new JsonException($"A validation error for '{member.Name}' is a JSON {message.ValueKind}, not a string."),
+                };
+            }
+
+            result[member.Name] = messages;
+        }
+
+        return result;
     }
 
     /// <summary>

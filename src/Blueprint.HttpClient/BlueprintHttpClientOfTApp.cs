@@ -234,43 +234,6 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
             .ConfigureAwait(false);
     }
 
-    // ──────────────────────────────────────────────
-    //  S365 compatibility: CallAsync aliases
-    // ──────────────────────────────────────────────
-
-    /// <summary>
-    /// Implements the legacy non-generic <c>CallAsync</c> surface exposed by <see cref="BlueprintHttpClient"/>.
-    /// The public compatibility overloads live on the base type so legacy callers and the generic client
-    /// share the same signatures without duplicating gateway-facing behavior.
-    /// </summary>
-    /// <typeparam name="TResponse">The expected response type.</typeparam>
-    /// <param name="operation">The operation to send.</param>
-    /// <param name="options">Optional call options to modify the outgoing request.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The deserialized response.</returns>
-    protected override async Task<TResponse> CallAsyncCore<TResponse>(
-        IReturn<TResponse> operation,
-        CallOptions? options,
-        CancellationToken cancellationToken)
-    {
-        return (await this.SendAsync<TResponse>((IOperation)operation, options, cancellationToken).ConfigureAwait(false))!;
-    }
-
-    /// <summary>
-    /// Implements the legacy non-generic void send surface exposed by <see cref="BlueprintHttpClient"/>.
-    /// </summary>
-    /// <param name="operation">The operation to send.</param>
-    /// <param name="options">Optional call options to modify the outgoing request.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task that completes when the request is processed.</returns>
-    protected override Task SendVoidAsyncCore(
-        IOperation operation,
-        CallOptions? options,
-        CancellationToken cancellationToken)
-    {
-        return this.SendAsync(operation, options, cancellationToken);
-    }
-
     private static string AppendQueryString(string url, ApiOperationDescriptor descriptor, IOperation operation)
     {
         // When property ownership metadata is available, use it as the source of truth
