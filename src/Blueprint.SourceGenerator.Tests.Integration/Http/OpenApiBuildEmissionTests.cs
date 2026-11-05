@@ -107,6 +107,35 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
         File.ReadAllText(this.OutputPath).Should().Be(Stale);
     }
 
+    [Fact]
+    public async Task When_the_app_targets_several_frameworks_then_only_its_framework_builds_run_the_app()
+    {
+        // The outer build of a project with TargetFrameworks has no TargetPath, and used to run `dotnet exec ""`, which
+        // failed the build after every framework's own build had emitted the document. This app does what the document
+        // mode does when it succeeds: it records completion.
+        var appDirectory = Path.Combine(this._directory, "MultiTargetedApp");
+        var appProject = Path.Combine(appDirectory, "MultiTargetedApp.csproj");
+        var targets = Path.Combine(FindRepositoryRoot(), "src", "Blueprint.Runtime", "buildTransitive", "Blueprint.Runtime.targets");
+        Directory.CreateDirectory(appDirectory);
+        var appProjectXml = $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFrameworks>net10.0</TargetFrameworks>
+              </PropertyGroup>
+              <Import Project="{targets}" />
+            </Project>
+            """;
+        File.WriteAllText(appProject, appProjectXml);
+        File.WriteAllText(
+            Path.Combine(appDirectory, "Program.cs"),
+            "System.IO.File.WriteAllText(System.Environment.GetEnvironmentVariable(\"BLUEPRINT_OPENAPI_COMPLETION_PATH\")!, \"\");");
+
+        var output = await RunDotnetAsync("build", appProject, "-nologo", "-p:BlueprintEmitOpenApi=true", $"-p:BlueprintOpenApiPath={this.OutputPath}");
+
+        output.Should().Contain($"MultiTargetedApp -> {this.OutputPath}", "the framework's own build still runs the app");
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(this._directory))
