@@ -9,6 +9,7 @@ public class TypedHttpClientExtensionsGeneratorTests
 
     private const string Usings = """
                                   using System.ComponentModel.DataAnnotations;
+                                  using Blueprint.HttpClient;
                                   using Blueprint.Model;
                                   using Blueprint.Model.Attributes;
                                   using Blueprint.Runtime.Exec;
@@ -44,6 +45,7 @@ public class TypedHttpClientExtensionsGeneratorTests
                      }
 
                      [BlueprintAppScan]
+                     [BlueprintHttpClientExtensions]
                      public partial class TestApp : BlueprintApp
                      {
                      }
@@ -63,6 +65,7 @@ public class TypedHttpClientExtensionsGeneratorTests
                      }
 
                      [BlueprintAppScan]
+                     [BlueprintHttpClientExtensions]
                      public partial class TestApp : BlueprintApp
                      {
                      }
@@ -84,6 +87,7 @@ public class TypedHttpClientExtensionsGeneratorTests
                      }
 
                      [BlueprintAppScan]
+                     [BlueprintHttpClientExtensions]
                      public partial class TestApp : BlueprintApp
                      {
                      }
@@ -111,6 +115,7 @@ public class TypedHttpClientExtensionsGeneratorTests
                      }
 
                      [BlueprintAppScan]
+                     [BlueprintHttpClientExtensions]
                      public partial class TestApp : BlueprintApp
                      {
                      }
@@ -136,6 +141,7 @@ public class TypedHttpClientExtensionsGeneratorTests
                      }
 
                      [BlueprintAppScan]
+                     [BlueprintHttpClientExtensions]
                      public partial class TestApp : BlueprintApp
                      {
                      }
@@ -170,6 +176,7 @@ public class TypedHttpClientExtensionsGeneratorTests
                      }
 
                      [BlueprintAppScan]
+                     [BlueprintHttpClientExtensions]
                      public partial class TestApp : BlueprintApp
                      {
                      }
@@ -220,6 +227,7 @@ public class TypedHttpClientExtensionsGeneratorTests
                      }
 
                      [BlueprintAppScan]
+                     [BlueprintHttpClientExtensions]
                      public partial class TestApp : BlueprintApp
                      {
                      }
@@ -254,12 +262,35 @@ public class TypedHttpClientExtensionsGeneratorTests
                      }
 
                      [BlueprintAppScan]
+                     [BlueprintHttpClientExtensions]
                      public partial class TestApp : BlueprintApp
                      {
                      }
                      """;
 
         await Compile(source).VerifySuccessAsync(SnapshotsFolder);
+    }
+
+    [Fact]
+    public void When_app_does_not_carry_the_extensions_attribute_then_no_extension_files_are_emitted()
+    {
+        var source = """
+                     public class GetTemplatesQuery : IQuery<string[]>
+                     {
+                         public int Page { get; set; }
+                         public static ApiOperationDescriptor Configure() => default!;
+                     }
+
+                     [BlueprintAppScan]
+                     public partial class TestApp : BlueprintApp
+                     {
+                     }
+                     """;
+
+        // Nothing is emitted, so there are no output steps for the cacheability assertion to track.
+        var result = TestHelpers.Compile<TypedHttpClientExtensionsGenerator>(Usings + source, assertCacheability: false);
+
+        result.Output.Should().BeEmpty();
     }
 
     private static GenerationResult Compile(string source)

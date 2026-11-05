@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Blueprint.SourceGenerator.Sample;
@@ -59,6 +60,88 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         exception.Type.Should().Be("service_timeout");
         exception.HttpStatus.Should().Be(408);
         exception.Detail.Should().Be(timeout.Message);
+    }
+
+    [Theory]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventAsync))]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventEnvelopeAsync))]
+    public async Task When_a_resource_event_body_times_out_as_it_is_read_then_throws_service_timeout(string method)
+    {
+        // A stock HttpClient reads the body while sending, inside the send's catch. One that answers at the headers leaves the
+        // body to the reader, which the resource-event paths used to read outside that catch, so the timeout escaped raw.
+        var timeout = new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.", new TimeoutException());
+        var client = this.CreateClientWhoseBodyFailsWhenRead(timeout);
+
+        var act = () => SendResourceEventAsync(client, method);
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Title.Should().Be("Timed out waiting for service response");
+        exception.Type.Should().Be("service_timeout");
+        exception.HttpStatus.Should().Be(408);
+        exception.Detail.Should().Be(timeout.Message);
+    }
+
+    [Theory]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventAsync))]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventEnvelopeAsync))]
+    public async Task When_a_resource_event_body_cannot_be_read_from_the_server_then_throws_service_unavailable(string method)
+    {
+        var connectionError = new HttpRequestException($"Error while copying content to a stream ({InternalHost}:80)");
+        var client = this.CreateClientWhoseBodyFailsWhenRead(connectionError);
+
+        var act = () => SendResourceEventAsync(client, method);
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Title.Should().Be("The remote server did not respond");
+        exception.Type.Should().Be("service_unavailable");
+        exception.HttpStatus.Should().Be(500);
+        exception.Detail.Should().Be("The remote server did not respond");
+        exception.InnerException.Should().BeSameAs(connectionError);
+    }
+
+    [Theory]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendAsync))]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventAsync))]
+    [InlineData(nameof(BlueprintHttpClient<SampleBlueprintApp>.SendResourceEventEnvelopeAsync))]
+    public async Task When_a_body_read_from_the_server_ends_early_then_throws_service_unavailable(string method)
+    {
+        // A body the send did not buffer fails as the HttpIOException the connection raised, which is an IOException and
+        // not an HttpRequestException: only a buffering send wraps it in one. It used to escape the transport unmapped (#121).
+        var connectionError = new HttpIOException(HttpRequestError.ResponseEnded, $"The response ended prematurely ({InternalHost}:80)");
+        var client = this.CreateClientWhoseBodyFailsWhenRead(connectionError);
+
+        var act = () => SendBodyReadingAsync(client, method);
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Title.Should().Be("The remote server did not respond");
+        exception.Type.Should().Be("service_unavailable");
+        exception.HttpStatus.Should().Be(500);
+        exception.Detail.Should().Be("The remote server did not respond");
+        exception.Message.Should().NotContain(InternalHost);
+        exception.InnerException.Should().BeSameAs(connectionError);
+    }
+
+    [Fact]
+    public async Task When_a_real_connection_closes_mid_body_after_the_headers_then_throws_service_unavailable()
+    {
+        // The same failure from a real socket, so the exception type is the one SocketsHttpHandler raises, not a stand-in.
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var server = ServeTruncatedBodyAsync(listener);
+
+        using var httpClient = new HeadersReadHttpClient(new SocketsHttpHandler())
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/"),
+        };
+        var client = new BlueprintHttpClient<SampleBlueprintApp>(httpClient, this._fixture.App);
+
+        var act = () => client.SendAsync<TemplateApiResource>(new GetTemplateQuery { Id = "t-1" });
+
+        var exception = (await act.Should().ThrowAsync<ApiException>()).Which;
+        exception.Type.Should().Be("service_unavailable");
+        exception.HttpStatus.Should().Be(500);
+        exception.InnerException.Should().BeOfType<HttpIOException>().Which.HttpRequestError.Should().Be(HttpRequestError.ResponseEnded);
+        await server;
     }
 
     [Fact]
@@ -352,6 +435,59 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         exception.ResponseBody.Should().Be("null");
     }
 
+    private static Task SendResourceEventAsync(BlueprintHttpClient<SampleBlueprintApp> client, string method)
+    {
+        return method switch
+        {
+            nameof(client.SendResourceEventAsync) => client.SendResourceEventAsync<TemplateApiResource>(new CreateTemplateCommand { Name = "t" }),
+            nameof(client.SendResourceEventEnvelopeAsync) => client.SendResourceEventEnvelopeAsync<TemplateApiResource>(new UpdateTemplateCommand { Id = "t-1", Name = "t" }),
+            _ => throw new ArgumentOutOfRangeException(nameof(method), method, "Not a resource-event send."),
+        };
+    }
+
+    private static Task SendBodyReadingAsync(BlueprintHttpClient<SampleBlueprintApp> client, string method)
+    {
+        return method == nameof(client.SendAsync)
+            ? client.SendAsync<TemplateApiResource>(new GetTemplateQuery { Id = "t-1" })
+            : SendResourceEventAsync(client, method);
+    }
+
+    /// <summary>
+    /// Accepts one connection, answers its request with a 200 whose headers promise more body than is sent, and closes it.
+    /// </summary>
+    private static async Task ServeTruncatedBodyAsync(TcpListener listener)
+    {
+        using var connection = await listener.AcceptTcpClientAsync();
+        var stream = connection.GetStream();
+
+        // Read to the end of the request's headers, so the close is not a reset of a request still being written.
+        var request = new StringBuilder();
+        var buffer = new byte[4096];
+
+        while (!request.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+        {
+            var read = await stream.ReadAsync(buffer);
+
+            if (read == 0)
+            {
+                return;
+            }
+
+            request.Append(Encoding.ASCII.GetString(buffer, 0, read));
+        }
+
+        await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{\"id\":\"t-"u8.ToArray());
+        await stream.FlushAsync();
+    }
+
+    private BlueprintHttpClient<SampleBlueprintApp> CreateClientWhoseBodyFailsWhenRead(Exception failure)
+    {
+        var handler = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new FailsWhenReadContent(failure) });
+        var httpClient = new HeadersReadHttpClient(handler) { BaseAddress = new Uri("https://localhost") };
+
+        return new BlueprintHttpClient<SampleBlueprintApp>(httpClient, this._fixture.App);
+    }
+
     private BlueprintHttpClient<SampleBlueprintApp> CreateClient(HttpStatusCode status, string body, string mediaType, string baseAddress = "https://localhost")
     {
         var handler = new FakeHttpHandler(_ => new HttpResponseMessage(status)
@@ -362,5 +498,53 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
         var httpClient = new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri(baseAddress) };
 
         return new BlueprintHttpClient<SampleBlueprintApp>(httpClient, this._fixture.App);
+    }
+
+    /// <summary>
+    /// Answers every send once the response's headers are in, as <see cref="HttpCompletionOption.ResponseHeadersRead"/>
+    /// does, so the body is left for the reader instead of being buffered inside the send.
+    /// </summary>
+    private sealed class HeadersReadHttpClient : System.Net.Http.HttpClient
+    {
+        public HeadersReadHttpClient(HttpMessageHandler handler)
+            : base(handler)
+        {
+        }
+
+        public override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return this.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// A body that fails with the given exception when it is read, and only then. Buffering it, as a stock
+    /// <see cref="System.Net.Http.HttpClient"/> does while sending, fails differently, so a test cannot pass by the send's
+    /// own catch instead of the reader's.
+    /// </summary>
+    private sealed class FailsWhenReadContent : HttpContent
+    {
+        private readonly Exception _failure;
+
+        public FailsWhenReadContent(Exception failure)
+        {
+            this._failure = failure;
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            throw new InvalidOperationException("The body was buffered while sending, before any reader ran.");
+        }
+
+        protected override Task<Stream> CreateContentReadStreamAsync()
+        {
+            return Task.FromException<Stream>(this._failure);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 }

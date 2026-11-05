@@ -397,6 +397,79 @@ true` so the document agrees:
 services.Configure<BlueprintHttpOptions>(o => o.NegotiateErrorContentType = true);
 ```
 
+**Writing results in a shape of your own (2.1, opt-in).** A client written against a legacy app's own error envelope,
+or a legacy app that applied `?format=csv` or in-memory OData to a successful result after the handler, needs to write
+some results itself. Register an `IHttpResultWriter` with `AddHttpResultWriter<T>()`. It is given every result an
+operation's HTTP request ends with — `OkResult`, `ValidationFailedResult` (422), `UnauthenticatedResult` (401),
+`ForbiddenResult` (403), `NotFoundResult`, `BindingFailureResult` (400), `UnhandledExceptionResult` and the rest — before
+Blueprint writes anything:
+- return `true` once it has written the whole response, status and content type included;
+- return `false` to leave that result to Blueprint, which writes it exactly as it would with no writer.
+
+An exception that escapes the pipeline or Blueprint's own write reaches the writer as an `UnhandledExceptionResult` too,
+so `Exception` is the original exception on every path, and an app can map exception types to statuses itself. A 422's
+`errors`, keyed and named as Blueprint keys them, come from `HttpOperationResultExecutor.GetValidationErrors`. One writer
+is consulted; it composes its own decisions. A legacy-envelope writer:
+
+```csharp
+services.AddBlueprintApi<MyApp, MyAppExecutor>(b => b.AddHttpResultWriter<LegacyErrorEnvelopeWriter>());
+
+public sealed class LegacyErrorEnvelopeWriter : IHttpResultWriter
+{
+    public ValueTask<bool> TryWriteAsync(HttpContext httpContext, ApiOperationContext operationContext, OperationResult result)
+    {
+        return result switch
+        {
+            ValidationFailedResult failed => WriteAsync(httpContext, 422, "validation_failed", "One or more validation errors occurred.",
+                HttpOperationResultExecutor.GetValidationErrors(operationContext, failed)),
+            UnauthenticatedResult denied => WriteAsync(httpContext, 401, "security_failure", denied.Failure?.Message ?? "Your session has expired"),
+            ForbiddenResult denied => WriteAsync(httpContext, 403, "feature_not_available", denied.Failure?.Message ?? "Forbidden"),
+            UnhandledExceptionResult { Exception: InvalidOperationException e } => WriteAsync(httpContext, 400, "invalid_operation", e.Message),
+            _ => ValueTask.FromResult(false),
+        };
+    }
+
+    private static async ValueTask<bool> WriteAsync(HttpContext httpContext, int status, string code, string message,
+        IReadOnlyDictionary<string, string[]>? errors = null)
+    {
+        using var body = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(body))
+        {
+            writer.WriteStartObject();
+            writer.WriteStartObject("error");
+            writer.WriteString("code", code);
+            writer.WriteString("message", message);
+            writer.WriteEndObject();
+            if (errors is not null)
+            {
+                // Written key by key: the keys are already named, and a dictionary key policy would name them again.
+                writer.WriteStartObject("errors");
+                foreach (var (key, messages) in errors)
+                {
+                    writer.WriteStartArray(key);
+                    foreach (var m in messages)
+                    {
+                        writer.WriteStringValue(m);
+                    }
+                    writer.WriteEndArray();
+                }
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+        }
+
+        httpContext.Response.StatusCode = status;
+        httpContext.Response.ContentType = "application/json";
+        await httpContext.Response.Body.WriteAsync(body.ToArray(), httpContext.RequestAborted);
+        return true;
+    }
+}
+```
+
+The writer is a singleton; take request-scoped services from `httpContext.RequestServices`. With no writer registered
+nothing changes, the pre-serialised 401 and 403 fast paths included. `HttpResultWriterWireTests` is the worked example,
+CSV included.
+
 #### State-based link visibility
 
 Use `StateBasedLinkChecker<TOperation, TResource>` (which implements `ILinkVisibilityAuthoriser`) for state-based link hiding:
@@ -1092,7 +1165,7 @@ parameter. This is what legacy Blueprint did (`ApiOperationLink.cs:59-61` read t
 the resource spells it. A placeholder that matches no property even ignoring case is still reported. Where two
 properties differ only in case, the placeholder takes the one spelled exactly as it (legacy threw on the ambiguity).
 
-**Behaviour change (v1.0.3).** A client registered with `AddBlueprintClient<TInterface, TImplementation>` serialises and
+**Behaviour change (v1.0.3).** A client registered with `AddBlueprintClient<TInterface, TImplementation>` (since the next major release `TImplementation` must be a generated `[BlueprintClient]`; see [Migrating Signature 365 service clients](#migrating-signature-365-service-clients-to-blueprint-clients)) serialises and
 deserialises through the app's configured `BlueprintJsonOptions` (`services.AddOptions<BlueprintJsonOptions>()` or
 `ConfigureJson`), as legacy's did: its `BlueprintHttpClient` took `IOptions<BlueprintJsonOptions>` from DI
 (`Common.Core/Api/BlueprintHttpClientRegistration.cs:83`, `BlueprintHttpClient.cs:40-44` in Signature365). Before v1.0.3
@@ -1698,7 +1771,7 @@ calls at the correct stage.
 
 ### Service-to-service calls (BlueprintHttpClient)
 
-**Behaviour change for a 204 (v1.0.3).** `SendAsync<T>` (and `CallAsync<T>`) read a 204 No Content as legacy Blueprint's
+**Behaviour change for a 204 (v1.0.3).** `SendAsync<T>` (and the since-removed `CallAsync<T>`) read a 204 No Content as legacy Blueprint's
 client read it: as a result the host writes as an empty 204 (`HttpNoContentResult`, a deleted
 `KeyOnlyResourceEventResult`, `StatusCodeResult.NoContent`), as `StatusCodeResult.NoContent.Instance` when `T` can hold a
 `StatusCodeResult` (`object`, `OperationResult`), and otherwise by throwing `InvalidOperationException` ("Could not
@@ -1740,6 +1813,92 @@ v1.0.2 it was a plain `Exception` with only `StatusCode` and `ResponseBody`, whi
   a 5xx's detail becomes "The remote server returned an internal error response" (the original goes to the inner
   exception); a 404 with a body that is not JSON becomes `not_found`; any other body that is not JSON becomes
   `invalid_json`; an unreachable server becomes `service_unavailable` (500) and a timeout `service_timeout` (408).
+
+### Migrating Signature 365 service clients to Blueprint clients
+
+**Breaking change (next major release).** Signature 365's `ServiceApiSourceGenerator` clients move to Blueprint's `[BlueprintClient]`. The generated `IXApi` method signatures are unchanged, so call sites and NSubstitute mocks keep compiling; what changes is the declaration, the extension points and the registration. A consumer on the previous major release is unaffected until it upgrades, and the upgrade is made in one step.
+
+#### Source changes
+
+| Before (S365 / previous Blueprint) | After |
+|---|---|
+| `[ServiceApiInclude(typeof(Op))]` | `[BlueprintClient]` on the class, plus `[BlueprintClientInclude(typeof(Op))]` per operation |
+| `api.UpdateJwt(jwt)` | `api.WithCredential(new BearerTokenCredential(jwt))`, which returns a new client and leaves the original unchanged |
+| `private static CallOptions? ModifyOptionsFor(Op operation, CallOptions? options)` | `partial void OnConfigure(Op operation, ref CallOptions? options)`, one per included operation |
+| Direct use of `DefaultModifyRequest` | `protected WithRequestModifier(Action<HttpRequestMessage>)` (`private` on a sealed client) |
+| The `BlueprintHttpClient` interface property | Removed; the transport is private to the generated client |
+| `new XApi(new BlueprintHttpClient<RuntimeScanBlueprintApp>(httpClient, jsonOptions))` | `new XApi(new BlueprintHttpClient(httpClient, jsonOptions))` |
+| `AddBlueprintClient<IX, X>((sp, c) => …, typeof(Op).Assembly)` (the trailing `contractsAssembly` was optional, and most S365 sites omitted it; it returned `void`) | `AddBlueprintClient<IX, X>((sp, c) => …)`, which returns `IHttpClientBuilder` |
+| `RuntimeScanBlueprintApp`, non-generic `CallAsync`/`SendVoidAsync`, `BlueprintHttpClient.From<TApp>` | Removed; use the generated client, or `BlueprintHttpClient<TApp>` with your own app |
+| A test reading `[ServiceApiInclude]` by reflection | No replacement: `[BlueprintClient]` and `[BlueprintClientInclude]` are `[Conditional("CODE_ANALYSIS")]` and absent from the compiled assembly |
+
+Before:
+
+```csharp
+[ServiceApiInclude(typeof(GetSentEmailQuery))]
+public partial class AnalyticsApi
+{
+    private static CallOptions? ModifyOptionsFor(GetSentEmailQuery operation, CallOptions? options) =>
+        options ?? new CallOptions { ModifyRequest = m => m.Headers.Add("X-Caller", "gateway") };
+}
+
+var scoped = api.UpdateJwt(jwt);
+services.AddBlueprintClient<IAnalyticsApi, AnalyticsApi>((sp, c) => c.BaseAddress = baseUri, typeof(GetSentEmailQuery).Assembly);
+```
+
+After:
+
+```csharp
+[BlueprintClient]
+[BlueprintClientInclude(typeof(GetSentEmailQuery))]
+public partial class AnalyticsApi
+{
+    partial void OnConfigure(GetSentEmailQuery operation, ref CallOptions? options) =>
+        options ??= new CallOptions { ModifyRequest = m => m.Headers.Add("X-Caller", "gateway") };
+}
+
+var scoped = api.WithCredential(new BearerTokenCredential(jwt));
+services.AddBlueprintClient<IAnalyticsApi, AnalyticsApi>((sp, c) => c.BaseAddress = baseUri);
+```
+
+Notes on each change:
+
+- **`WithRequestModifier` and relative URIs.** Request URIs are relative when modifiers run, so a modifier that moves a call to another host combines them: `message.RequestUri = new Uri(regionalBase, message.RequestUri!)`. Expose the method on the interface by writing a public method on the partial that calls it.
+- **`AddBlueprintClient<IX, X>`.** The call shape is the same. It now returns the named client's `IHttpClientBuilder`, so retry and other handlers chain on the result. It takes no trailing `contractsAssembly` argument. `X` must be a generated client (it implements `IBlueprintClient<X>`); anything else does not compile. It no longer sets an infinite timeout under `DEBUG`: set `c.Timeout` in the callback where you want one.
+- **Removed runtime scan.** `RuntimeScanBlueprintApp` and its helpers scanned assemblies for operations at run time. Each generated method now carries its own compile-time call plan, so nothing replaces the scan.
+
+#### Wire changes compared with the runtime scan
+
+| | `RuntimeScanBlueprintApp` | Generated client |
+|---|---|---|
+| GET query keys | The property's own name: `?TenantId=…&PageSize=10` | camelCase, or the binding name where one is declared: `?tenantId=…&pageSize=10` |
+| `bool?` query values | `true` / `false` | `True` / `False` |
+| GET properties that are not query-bound | With no ownership data the scan fell back to sending every public non-placeholder property in the query | Only what the server reads from the query is sent: the query-owned properties, or, when there are none, a route placeholder declared in only some of the operation's links that the chosen URL leaves out. Header-, cookie-, auth-context-, body- and route-bound values, and properties with no ownership entry (getter-only, computed, `CancellationToken`), are never sent in a GET's query |
+| URL template with two candidates | Tried the next template when the first had a null placeholder | Always the first template in declaration order; a null placeholder throws `InvalidOperationException` |
+
+- **Query keys.** Blueprint servers bind query strings case-insensitively, so a Blueprint service reads either form. A non-Blueprint server, a gateway matching on the exact key or a recorded fixture does not; update it.
+- **`bool?`.** `bool.TryParse` accepts both spellings. A server or fixture comparing the raw text must expect `True`/`False`.
+- **Non-query properties on GET.** The research found none in Signature 365: the only header-bound property is `IdempotencyKey`, on two POST operations, and it is sent in the body on both paths.
+- **URL templates.** In Signature 365 only `CheckTenantDomainsCommand` declares two. Supply the placeholder the first template needs.
+
+#### Typed extension methods are opt-in
+
+`TypedHttpClientExtensionsGenerator`, which emits extension methods on `BlueprintHttpClient<TApp>`, now emits only for an app carrying `[BlueprintHttpClientExtensions]`. Before, every `[BlueprintAppScan]` app received them. An app that calls those extension methods adds the attribute; an app that does not stops generating the unused code.
+
+```csharp
+using Blueprint.HttpClient;
+
+[BlueprintAppScan]
+[BlueprintHttpClientExtensions]
+public partial class MyApp : BlueprintApp;
+```
+
+#### Behaviour changes in both clients
+
+These apply to `BlueprintHttpClient<TApp>` and the generated clients alike, because they now share one transport.
+
+- **`Results<A, A>` with a non-JSON success body** returns member 1 of the union.
+- **Timeout and unreachable mapping** (`service_timeout` and `service_unavailable`) now also covers reading the body of a resource-event response, not only the send.
 
 ### Hangfire (background task scheduling)
 

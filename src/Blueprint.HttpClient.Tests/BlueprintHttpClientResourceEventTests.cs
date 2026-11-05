@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -152,6 +154,69 @@ public sealed class BlueprintHttpClientResourceEventTests : IClassFixture<Sample
         read.Data.Should().BeNull();
     }
 
+    [Fact]
+    public async Task When_the_declared_result_is_an_abstract_generic_resource_event_then_it_is_refused_before_anything_is_sent()
+    {
+        // No event of an abstract type can be made, so no response could ever be read as one. The reader of one used to be
+        // the JSON reader, ResourceEventReader.CanRead refusing abstract types, so the command was sent and only its
+        // response then failed.
+        await this.AssertRefusedBeforeSendingAsync<AbstractTemplateEvent<TemplateApiResource>>();
+    }
+
+    [Fact]
+    public async Task When_the_declared_result_is_an_abstract_resource_event_of_one_resource_then_it_is_refused_before_anything_is_sent()
+    {
+        await this.AssertRefusedBeforeSendingAsync<BlueprintHttpClientTransportTests.AbstractTemplateEvent>();
+    }
+
+    [Fact]
+    public async Task When_the_declared_result_is_an_abstract_resource_event_with_derived_types_then_it_is_read_as_the_one_the_body_names()
+    {
+        // System.Text.Json reads an abstract type its [JsonDerivedType] attributes make polymorphic, as it always read
+        // this one, so it is not refused as an event no read could make.
+        var client = this._fixture.CreateClient(new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"$type":"created","data":{"id":"t-1","name":"Found Template","htmlSource":"<p>x</p>","plainTextSource":"x"}}""",
+                new MediaTypeHeaderValue("application/json")),
+        }));
+
+        var read = await client.SendAsync<PolymorphicTemplateEvent>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        read.Should().BeOfType<PolymorphicTemplateCreatedEvent>().Which.Data!.Name.Should().Be("Found Template");
+    }
+
+    [Fact]
+    public async Task When_the_declared_result_is_an_abstract_resource_event_marked_polymorphic_then_the_options_derived_types_read_it()
+    {
+        // [JsonPolymorphic] alone marks the type; the derived types come from a resolver in the client's options.
+        var options = BlueprintJsonOptions.CreateDefaultOptions();
+        options.TypeInfoResolver = new DefaultJsonTypeInfoResolver
+        {
+            Modifiers =
+            {
+                static typeInfo =>
+                {
+                    if (typeInfo.Type == typeof(ResolverPolymorphicTemplateEvent))
+                    {
+                        typeInfo.PolymorphismOptions!.DerivedTypes.Add(new JsonDerivedType(typeof(ResolverPolymorphicTemplateCreatedEvent), "created"));
+                    }
+                },
+            },
+        };
+        var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"$type":"created","data":{"id":"t-1","name":"Found Template","htmlSource":"<p>x</p>","plainTextSource":"x"}}""",
+                new MediaTypeHeaderValue("application/json")),
+        });
+        var client = new BlueprintHttpClient<SampleBlueprintApp>(new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri("https://localhost") }, this._fixture.App, options);
+
+        var read = await client.SendAsync<ResolverPolymorphicTemplateEvent>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        read.Should().BeOfType<ResolverPolymorphicTemplateCreatedEvent>().Which.Data!.Name.Should().Be("Found Template");
+    }
+
     private static TemplateApiResource Template()
     {
         return new TemplateApiResource("t-1", "Welcome", "<p>Hi</p>", "Hi");
@@ -211,5 +276,84 @@ public sealed class BlueprintHttpClientResourceEventTests : IClassFixture<Sample
         httpContext.Response.StatusCode.Should().Be(200, "legacy sent every resource event as a 200");
 
         return (body.ToArray(), httpContext.Response.ContentType!);
+    }
+
+    private async Task AssertRefusedBeforeSendingAsync<TEvent>()
+    {
+        var sent = 0;
+        var client = this._fixture.CreateClient(new FakeHttpHandler(_ =>
+        {
+            Interlocked.Increment(ref sent);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"eventId":"template.created","changeType":"Created"}""", new MediaTypeHeaderValue("application/json")),
+            };
+        }));
+
+        var act = () => client.SendAsync<TEvent>(new ArchiveTemplateCommand { Id = "t-1" });
+
+        await act.Should().ThrowAsync<ArgumentException>();
+        sent.Should().Be(0, "an impossible result type is refused before the command is sent");
+    }
+
+    /// <summary>A generic event type no instance of which can be made, as a consumer could declare a family's base.</summary>
+    /// <typeparam name="TResource">The resource the event carries.</typeparam>
+    public abstract class AbstractTemplateEvent<TResource> : ResourceEvent<TResource>
+        where TResource : ApiResource
+    {
+        /// <summary>Initialises a new instance of the <see cref="AbstractTemplateEvent{TResource}"/> class.</summary>
+        /// <param name="data">The resource.</param>
+        protected AbstractTemplateEvent(TResource data)
+            : base(ResourceEventChangeType.Created, "template.created", data)
+        {
+        }
+    }
+
+    /// <summary>An abstract event System.Text.Json reads polymorphically, by the <c>$type</c> its body carries.</summary>
+    [JsonDerivedType(typeof(PolymorphicTemplateCreatedEvent), "created")]
+    public abstract class PolymorphicTemplateEvent : ResourceEvent<TemplateApiResource>
+    {
+        /// <summary>Initialises a new instance of the <see cref="PolymorphicTemplateEvent"/> class.</summary>
+        /// <param name="data">The template.</param>
+        protected PolymorphicTemplateEvent(TemplateApiResource data)
+            : base(ResourceEventChangeType.Created, "template.created", data)
+        {
+        }
+    }
+
+    /// <summary>An abstract event marked polymorphic, whose derived types a resolver in the options supplies.</summary>
+    [JsonPolymorphic]
+    public abstract class ResolverPolymorphicTemplateEvent : ResourceEvent<TemplateApiResource>
+    {
+        /// <summary>Initialises a new instance of the <see cref="ResolverPolymorphicTemplateEvent"/> class.</summary>
+        /// <param name="data">The template.</param>
+        protected ResolverPolymorphicTemplateEvent(TemplateApiResource data)
+            : base(ResourceEventChangeType.Created, "template.created", data)
+        {
+        }
+    }
+
+    /// <summary>The <see cref="ResolverPolymorphicTemplateEvent"/> the resolver adds.</summary>
+    public sealed class ResolverPolymorphicTemplateCreatedEvent : ResolverPolymorphicTemplateEvent
+    {
+        /// <summary>Initialises a new instance of the <see cref="ResolverPolymorphicTemplateCreatedEvent"/> class.</summary>
+        /// <param name="data">The template.</param>
+        [JsonConstructor]
+        public ResolverPolymorphicTemplateCreatedEvent(TemplateApiResource data)
+            : base(data)
+        {
+        }
+    }
+
+    /// <summary>The one <see cref="PolymorphicTemplateEvent"/> a body can name.</summary>
+    public sealed class PolymorphicTemplateCreatedEvent : PolymorphicTemplateEvent
+    {
+        /// <summary>Initialises a new instance of the <see cref="PolymorphicTemplateCreatedEvent"/> class.</summary>
+        /// <param name="data">The template.</param>
+        [JsonConstructor]
+        public PolymorphicTemplateCreatedEvent(TemplateApiResource data)
+            : base(data)
+        {
+        }
     }
 }

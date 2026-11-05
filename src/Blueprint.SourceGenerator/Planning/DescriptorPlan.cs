@@ -13,6 +13,7 @@ public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
     private readonly List<DiagnosticInfo> _diagnostics = [];
     private readonly List<object> _metadata = [];
     private readonly List<Action<ICodeWriter>> _renderSteps = [];
+    private readonly List<Action<ClassBuilder>> _operationMemberSteps = [];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DescriptorPlan"/> class.
@@ -108,6 +109,27 @@ public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
     }
 
     /// <summary>
+    /// Adds a step that declares members on the operation's generated partial class, beside <c>Configure()</c>.
+    /// </summary>
+    /// <param name="memberStep">The step, given the operation's generated class.</param>
+    public void AddOperationMemberStep(Action<ClassBuilder> memberStep)
+    {
+        this._operationMemberSteps.Add(memberStep);
+    }
+
+    /// <summary>
+    /// Declares the planned operation members on the operation's generated partial class.
+    /// </summary>
+    /// <param name="operationClass">The operation's generated class.</param>
+    public void RenderOperationMembers(ClassBuilder operationClass)
+    {
+        foreach (var memberStep in this._operationMemberSteps)
+        {
+            memberStep(operationClass);
+        }
+    }
+
+    /// <summary>
     /// Renders the descriptor plan using the supplied writer.
     /// </summary>
     /// <param name="codeWriter">The writer to render to.</param>
@@ -135,7 +157,8 @@ public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
         // Cheap count checks before expensive SequenceEqual traversals
         if (this.Diagnostics.Count != other.Diagnostics.Count
             || this.Metadata.Count != other.Metadata.Count
-            || this._renderSteps.Count != other._renderSteps.Count)
+            || this._renderSteps.Count != other._renderSteps.Count
+            || this._operationMemberSteps.Count != other._operationMemberSteps.Count)
         {
             return false;
         }
@@ -168,6 +191,7 @@ public sealed class DescriptorPlan : IEquatable<DescriptorPlan>
         }
 
         hash.Add(this._renderSteps.Count);
+        hash.Add(this._operationMemberSteps.Count);
         return hash.ToHashCode();
     }
 }
