@@ -89,7 +89,13 @@ public class HangfireTaskJobDescriberTests
     [Fact]
     public void Job_of_another_method_is_not_described()
     {
-        var invocationData = new InvocationData("SomeNamespace.SomeType, SomeAssembly", "SomeMethod", "[]", "[]", "default");
+        // The executor's type and a readable payload, so only the method tells this job apart from one Blueprint created.
+        var invocationData = new InvocationData(
+            "Blueprint.Hangfire.HangfireBackgroundTaskExecutor, Blueprint.Hangfire",
+            "SomeOtherMethod",
+            "[]",
+            """["\"{\\\"TaskTypeName\\\":\\\"Some.Task, Some\\\",\\\"TaskJson\\\":\\\"{}\\\"}\"",null]""",
+            "default");
 
         HangfireTaskJobDescriber.TryDescribe(invocationData, out var description).Should().BeFalse();
         description.Should().BeNull();
