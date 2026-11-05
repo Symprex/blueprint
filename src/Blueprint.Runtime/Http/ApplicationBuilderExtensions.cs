@@ -20,8 +20,51 @@ public static class EndpointRouteBuilderExtensions
     private static readonly HttpOperationResultExecutor DefaultOperationResultExecutor = new();
 
     /// <summary>
+    /// Maps all Blueprint operation endpoints from the given <see cref="BlueprintAppExecutor" /> under the base path, and
+    /// describes them in the OpenAPI document, as <c>AddBlueprintApi</c> declared with
+    /// <see cref="BlueprintServiceBuilder.UseBasePath" /> and the <c>ConfigureOpenApi</c> methods.
+    /// </summary>
+    /// <remarks>
+    /// The <c>BlueprintEmitOpenApi</c> build target writes the OpenAPI document from those declarations alone, without
+    /// reaching this call, so the document it writes is the one this serves.
+    /// </remarks>
+    /// <typeparam name="T">The Blueprint app type whose operations should be exposed.</typeparam>
+    /// <typeparam name="TExec">The generated executor type that can route those operations.</typeparam>
+    /// <param name="endpoints">The endpoint builder to register with.</param>
+    /// <returns>A builder that allows adding metadata / conventions to all mapped endpoints.</returns>
+    /// <exception cref="InvalidOperationException"><c>AddBlueprintApi</c> declared no base path.</exception>
+    public static IEndpointConventionBuilder MapBlueprintApi<T, TExec>(this IEndpointRouteBuilder endpoints)
+        where T : BlueprintApp, new()
+        where TExec : BlueprintAppExecutor
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+
+        var mapping = endpoints.ServiceProvider.GetKeyedService<BlueprintApiMapping>(typeof(T));
+
+        if (mapping?.BasePath is null)
+        {
+            throw new InvalidOperationException(
+                $"MapBlueprintApi<{typeof(T).Name}, {typeof(TExec).Name}>() was given no base path, and AddBlueprintApi declared none: " +
+                "call UseBasePath in AddBlueprintApi, or pass the base path to MapBlueprintApi.");
+        }
+
+        return MapBlueprintApiCore<T, TExec>(
+            endpoints,
+            mapping.BasePath,
+            mapping.ConfigureOpenApi,
+            mapping.ConfigureOpenApiSchemas,
+            mapping.ConfigureOpenApiOperations);
+    }
+
+    /// <summary>
     /// Maps all Blueprint operation endpoints from the given <see cref="BlueprintAppExecutor" />.
     /// </summary>
+    /// <remarks>
+    /// An app whose OpenAPI document the <c>BlueprintEmitOpenApi</c> build target writes declares these with
+    /// <c>AddBlueprintApi</c> instead and calls <see cref="MapBlueprintApi{T, TExec}(IEndpointRouteBuilder)" />: the
+    /// build target never reaches this call. Once <c>AddBlueprintApi</c> has declared any of them, this overload throws,
+    /// so that the API is not configured in two places.
+    /// </remarks>
     /// <typeparam name="T">The Blueprint app type whose operations should be exposed.</typeparam>
     /// <typeparam name="TExec">The generated executor type that can route those operations.</typeparam>
     /// <param name="endpoints">The endpoint builder to register with.</param>
@@ -48,11 +91,30 @@ public static class EndpointRouteBuilderExtensions
         Action<OpenApiOperationProcessorOptions>? configureOpenApiOperations = null) where T : BlueprintApp, new()
                          where TExec : BlueprintAppExecutor
     {
-        // Ensure ends with a slash, but only one, as legacy did (Signature365 8b40ecc961,
-        // Blueprint.Http/ApplicationBuilderExtensions.cs:45). Every route is this followed by a URL without its leading slash
-        // (RouteUnder), as legacy appended its leading-slash-trimmed link URLs (:105; Blueprint/ApiOperationLink.cs:48), and
-        // every absolute path is that with a leading slash: "", "/" -> "/"; "api", "api/", "/api/" -> "/api/".
-        basePath = basePath.TrimEnd('/') + '/';
+        ArgumentNullException.ThrowIfNull(endpoints);
+
+        if (endpoints.ServiceProvider.GetKeyedService<BlueprintApiMapping>(typeof(T))?.IsDeclared == true)
+        {
+            throw new InvalidOperationException(
+                $"MapBlueprintApi<{typeof(T).Name}, {typeof(TExec).Name}> was given a base path, but AddBlueprintApi already declared " +
+                "the API's base path or OpenAPI description. Declare them all with AddBlueprintApi (UseBasePath and the ConfigureOpenApi " +
+                "methods) and call MapBlueprintApi without arguments, so that the document the BlueprintEmitOpenApi build target writes " +
+                "is the one the app serves.");
+        }
+
+        return MapBlueprintApiCore<T, TExec>(endpoints, basePath, configureOpenApi, configureOpenApiSchemas, configureOpenApiOperations);
+    }
+
+    private static IEndpointConventionBuilder MapBlueprintApiCore<T, TExec>(
+        IEndpointRouteBuilder endpoints,
+        string basePath,
+        Action<OpenApiInfoOptions>? configureOpenApi,
+        Action<OpenApiSchemaProcessorOptions>? configureOpenApiSchemas,
+        Action<OpenApiOperationProcessorOptions>? configureOpenApiOperations)
+        where T : BlueprintApp, new()
+        where TExec : BlueprintAppExecutor
+    {
+        basePath = BlueprintApiMapping.NormaliseBasePath(basePath);
         var absoluteBasePath = "/" + basePath.TrimStart('/');
 
         // Prefer the DI-registered singleton (set up by AddBlueprintApi with serializer options applied).
@@ -74,52 +136,17 @@ public static class EndpointRouteBuilderExtensions
         var builders = new List<IEndpointConventionBuilder>((runtimeModel.OperationCount * 2) + 8);
 
         // OpenAPI is a required part of the HTTP host and is always exposed regardless of environment.
-        OpenApiInfoOptions? infoOptions = null;
-        if (configureOpenApi is not null)
-        {
-            infoOptions = new OpenApiInfoOptions();
-            configureOpenApi(infoOptions);
-        }
-
-        OpenApiSchemaProcessorOptions? schemaProcessorOptions = null;
-        if (configureOpenApiSchemas is not null)
-        {
-            schemaProcessorOptions = new OpenApiSchemaProcessorOptions();
-            configureOpenApiSchemas(schemaProcessorOptions);
-        }
-
-        OpenApiOperationProcessorOptions? operationProcessorOptions = null;
-        if (configureOpenApiOperations is not null)
-        {
-            operationProcessorOptions = new OpenApiOperationProcessorOptions();
-            configureOpenApiOperations(operationProcessorOptions);
-        }
-
-        // What the document could not describe is named once, when the document is rendered, for the consumer to act on.
-        var openApiLogger = endpoints.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.OpenApi");
-
-        var (openApiDelegate, openApiDocument) = OpenApiDocumentEndpoint.CreateDeferrable(
+        var (openApiDelegate, openApiDocument, documentTitle) = OpenApiDocumentEndpoint.CreateConfigured(
             runtimeModel,
-            infoOptions,
-            schemaProcessorOptions,
-            operationProcessorOptions,
+            endpoints.ServiceProvider,
             httpOptions,
             basePath,
-            httpOptions.RenderOpenApiDocumentOnFirstRequest,
-            document =>
-            {
-                if (openApiLogger is null)
-                {
-                    return;
-                }
+            configureOpenApi,
+            configureOpenApiSchemas,
+            configureOpenApiOperations,
+            httpOptions.RenderOpenApiDocumentOnFirstRequest);
 
-                foreach (var warning in document.Warnings)
-                {
-                    openApiLogger.LogWarning("{OpenApiWarning}", warning);
-                }
-            });
-
-        // Register the pre-rendered document in DI so development utilities (e.g. OutputOpenApi) can retrieve it
+        // Register the mapped document in DI, where OutputOpenApi reads it.
         endpoints.ServiceProvider.GetService<PreRenderedOpenApiDocumentHolder>()?.Set(openApiDocument);
 
         var openApiBuilder = endpoints.Map(
@@ -139,8 +166,6 @@ public static class EndpointRouteBuilderExtensions
         wellKnownBuilder.WithMetadata(new HttpMethodMetadata([HttpMethods.Get]));
 
         builders.Add(wellKnownBuilder);
-
-        var documentTitle = infoOptions?.Title ?? "Blueprint API";
 
         // Legacy served the document at {basePath}openapi from its anonymous OpenApiQuery ([RootLink("/openapi")]): JSON,
         // or for a browser a Scalar API reference page that loads the document relative to itself. Consumers still call

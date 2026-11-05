@@ -51,7 +51,7 @@ public sealed class BlueprintHttpOptions
     /// Rendering is most of what mapping a large API costs, and a process that builds many hosts pays it for every one,
     /// whether or not anything reads the document. Turn this on there - a test suite that builds a host per test is the
     /// case it exists for. The document is then rendered once, by the first request for it or the first read of
-    /// <see cref="PreRenderedOpenApiDocumentHolder.Document" /> (which <c>OutputOpenApi</c> makes), and a document that
+    /// <see cref="PreRenderedOpenApiDocumentHolder.Document" /> (which writing it at build time makes), and a document that
     /// cannot be rendered fails that request instead of the startup.
     /// </para>
     /// </remarks>
