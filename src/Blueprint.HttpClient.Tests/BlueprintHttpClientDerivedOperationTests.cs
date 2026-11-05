@@ -14,8 +14,14 @@ namespace Blueprint.HttpClient.Tests;
 /// (<c>d.OperationType.IsAssignableFrom(operationType)</c>). The exact-type lookup this used to be failed every such
 /// call with "Could not find an operation of the type".
 /// </summary>
+/// <remarks>
+/// The derived operations are declared in this assembly, so the generated <c>SampleBlueprintApp</c> of the contract's
+/// assembly does not register them, as a contract's app does not register a consumer's operations.
+/// </remarks>
 public sealed class BlueprintHttpClientDerivedOperationTests : IClassFixture<SampleAppFixture>
 {
+    private static readonly Uri _baseAddress = new("https://localhost");
+
     private readonly SampleAppFixture _fixture;
 
     public BlueprintHttpClientDerivedOperationTests(SampleAppFixture fixture)
@@ -24,7 +30,7 @@ public sealed class BlueprintHttpClientDerivedOperationTests : IClassFixture<Sam
     }
 
     [Fact]
-    public async Task A_derived_query_through_a_runtime_scanned_client_is_sent_to_its_contract_operations_url()
+    public async Task A_derived_query_through_an_apps_client_is_sent_to_its_contract_operations_url()
     {
         HttpRequestMessage? captured = null;
         var handler = new FakeHttpHandler(req =>
@@ -36,18 +42,17 @@ public sealed class BlueprintHttpClientDerivedOperationTests : IClassFixture<Sam
             };
         });
 
-        var client = BlueprintHttpClient.From(CreateRuntimeScannedClient(handler));
-
-        await client.CallAsync<TemplateApiResource[]>(new GatewaySearchTemplatesQuery { Q = "derived", Page = 2, PageSize = 5 });
+        await this._fixture.CreateClient(handler)
+            .SendAsync<TemplateApiResource[]>(new GatewaySearchTemplatesQuery { Q = "derived", Page = 2, PageSize = 5 });
 
         captured.Should().NotBeNull();
         captured!.Method.Should().Be(HttpMethod.Get);
         captured.RequestUri!.AbsolutePath.Should().Be("/templates/search");
-        captured.RequestUri.Query.Should().Contain("Q=derived").And.Contain("Page=2").And.Contain("PageSize=5");
+        captured.RequestUri.Query.Should().Contain("q=derived").And.Contain("page=2").And.Contain("pageSize=5");
     }
 
     [Fact]
-    public async Task A_derived_command_through_a_runtime_scanned_client_is_sent_to_its_contract_operations_url_with_its_body()
+    public async Task A_derived_command_through_an_apps_client_is_sent_to_its_contract_operations_url_with_its_body()
     {
         HttpRequestMessage? captured = null;
         string? body = null;
@@ -58,9 +63,7 @@ public sealed class BlueprintHttpClientDerivedOperationTests : IClassFixture<Sam
             return new HttpResponseMessage(HttpStatusCode.NoContent);
         });
 
-        var client = BlueprintHttpClient.From(CreateRuntimeScannedClient(handler));
-
-        await client.SendVoidAsync((Blueprint.Model.IOperation)new GatewayCreateTemplateCommand { Name = "Derived" });
+        await this._fixture.CreateClient(handler).SendAsync(new GatewayCreateTemplateCommand { Name = "Derived" });
 
         captured.Should().NotBeNull();
         captured!.Method.Should().Be(HttpMethod.Post);
@@ -71,7 +74,7 @@ public sealed class BlueprintHttpClientDerivedOperationTests : IClassFixture<Sam
     }
 
     [Fact]
-    public async Task A_derived_operation_through_a_generated_apps_client_is_sent_to_its_contract_operations_url()
+    public async Task A_derived_operation_bound_from_the_route_through_an_apps_client_is_sent_to_its_contract_operations_url()
     {
         HttpRequestMessage? captured = null;
         var handler = new FakeHttpHandler(req =>
@@ -80,9 +83,7 @@ public sealed class BlueprintHttpClientDerivedOperationTests : IClassFixture<Sam
             return new HttpResponseMessage(HttpStatusCode.NoContent);
         });
 
-        var client = this._fixture.CreateClient(handler);
-
-        await client.SendVoidAsync(new GatewayArchiveTemplateCommand { Id = "t-42" });
+        await this._fixture.CreateClient(handler).SendAsync(new GatewayArchiveTemplateCommand { Id = "t-42" });
 
         captured.Should().NotBeNull();
         captured!.Method.Should().Be(HttpMethod.Delete);
@@ -93,21 +94,67 @@ public sealed class BlueprintHttpClientDerivedOperationTests : IClassFixture<Sam
     public async Task An_operation_deriving_from_nothing_registered_is_refused_naming_its_type()
     {
         var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK));
-        var client = CreateRuntimeScannedClient(handler);
 
-        var act = () => client.SendVoidAsync(new UnregisteredOperation());
+        var act = () => this._fixture.CreateClient(handler).SendAsync(new UnregisteredOperation());
 
         (await act.Should().ThrowAsync<InvalidOperationException>())
             .WithMessage($"*{typeof(UnregisteredOperation).FullName}*");
     }
 
-    private static BlueprintHttpClient<RuntimeScanBlueprintApp> CreateRuntimeScannedClient(FakeHttpHandler handler)
+    [Fact]
+    public async Task A_derived_query_through_a_typed_client_is_sent_to_its_contract_operations_url()
     {
-        // AddBlueprintClient<TInterface, TImplementation> builds its app this way, from the contract assembly alone.
-        var app = RuntimeScanBlueprintApp.ScanAssembly(typeof(SearchTemplatesQuery).Assembly);
+        HttpRequestMessage? captured = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            captured = req;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[]", Encoding.UTF8, "application/json"),
+            };
+        });
 
-        return new BlueprintHttpClient<RuntimeScanBlueprintApp>(
-            new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri("https://localhost") },
-            app);
+        await CreateTypedClient(handler)
+            .SearchTemplatesAsync(new GatewaySearchTemplatesQuery { Q = "derived", Page = 2, PageSize = 5 });
+
+        captured.Should().NotBeNull();
+        captured!.Method.Should().Be(HttpMethod.Get);
+        captured.RequestUri!.AbsolutePath.Should().Be("/templates/search");
+        captured.RequestUri.Query.Should().Contain("q=derived").And.Contain("page=2").And.Contain("pageSize=5");
+    }
+
+    [Fact]
+    public async Task A_derived_command_through_a_typed_client_is_sent_to_its_contract_operations_url_with_its_body()
+    {
+        HttpRequestMessage? captured = null;
+        string? body = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            captured = req;
+            body = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+
+            // The envelope the host writes for the created event the contract operation declares.
+            return new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent(
+                    """{"changeType":"Created","eventId":"template.created","data":{"id":"t-1","name":"Derived"}}""",
+                    Encoding.UTF8,
+                    "application/json"),
+            };
+        });
+
+        await CreateTypedClient(handler).CreateTemplateAsync(new GatewayCreateTemplateCommand { Name = "Derived" });
+
+        captured.Should().NotBeNull();
+        captured!.Method.Should().Be(HttpMethod.Post);
+        captured.RequestUri!.AbsolutePath.Should().Be("/templates");
+
+        using var json = JsonDocument.Parse(body!);
+        json.RootElement.GetProperty("name").GetString().Should().Be("Derived");
+    }
+
+    private static SampleContractApi CreateTypedClient(FakeHttpHandler handler)
+    {
+        return new SampleContractApi(new BlueprintHttpClient(new System.Net.Http.HttpClient(handler) { BaseAddress = _baseAddress }));
     }
 }
