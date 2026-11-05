@@ -486,6 +486,7 @@ public sealed record OpenApiOperationRenderingContext(
                     {
                         Description = description,
                         ClrPropertyName = entry.PropertyName,
+                        BindingName = entry.BindingName,
                         MinLength = parameterConstraints.MinLength,
                         MaxLength = parameterConstraints.MaxLength,
                         Pattern = parameterConstraints.Pattern,

@@ -272,16 +272,45 @@ public sealed class OperationInputSchemaTests
     [Theory]
     [InlineData(OpenApiSchemaNaming.Default)]
     [InlineData(OpenApiSchemaNaming.Legacy)]
-    public void A_nullable_read_only_reference_is_read_only_and_not_required_of_an_input(OpenApiSchemaNaming naming)
+    public void A_read_only_property_the_serializer_requires_is_still_required_of_an_input(OpenApiSchemaNaming naming)
     {
-        // Admitting null moves a reference into an anyOf branch; read-only says what the whole property is, so it stays beside.
+        // [JsonRequired] with a setter: the body reader rejects a request without it, read-only or not. Admitting null moves
+        // the reference into an anyOf branch; read-only says what the whole property is, so it stays beside.
         var schema = CreateProvider(o => o.SchemaNaming = naming).GetSchema(NoteOperationName)!.Schema;
         var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
         var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
 
         address.GetProperty("properties").GetProperty("previous").GetProperty("readOnly").GetBoolean().Should().BeTrue();
-        (address.TryGetProperty("required", out var required) ? required.EnumerateArray().Select(static e => e.GetString()) : [])
-            .Should().NotContain("previous");
+        address.GetProperty("properties").GetProperty("previous").EnumerateObject().Select(static p => p.Name)
+            .Should().NotContain(static name => name.StartsWith("x-", StringComparison.Ordinal));
+        address.GetProperty("required").EnumerateArray().Select(static e => e.GetString()).Should().Contain("previous");
+    }
+
+    [Fact]
+    public async Task A_request_body_without_a_property_the_serializer_requires_is_refused_however_it_is_documented()
+    {
+        // What the schema above requires is what binding requires: the body reader refuses an address without "previous".
+        await using var host = await KestrelTestHost.StartAsync();
+
+        using var without = new StringContent("""{"text":"abc","address":{"postCode":"SW1"}}""", System.Text.Encoding.UTF8, "application/json");
+        using var refused = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", without);
+        using var with = new StringContent("""{"text":"abc","address":{"postCode":"SW1","previous":null}}""", System.Text.Encoding.UTF8, "application/json");
+        using var accepted = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", with);
+
+        ((int)refused.StatusCode).Should().BeInRange(400, 499);
+        accepted.IsSuccessStatusCode.Should().BeTrue(await accepted.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData(OpenApiParameterNaming.BindingName)]
+    [InlineData(OpenApiParameterNaming.PropertyName)]
+    public void A_query_property_is_an_input_by_the_name_the_request_is_bound_by(OpenApiParameterNaming queryNaming)
+    {
+        // [FromQuery("validationToken")] binds only that name, whichever name the document gives the parameter.
+        var schema = CreateProvider(o => o.QueryParameterNaming = queryNaming).GetSchema("AliasedTokenOperationInputSchema")!;
+
+        schema.Properties.Should().Equal(new OperationInputProperty("validationToken", OperationInputLocation.Query));
+        PropertyNames(schema.Schema).Should().Equal("validationToken");
     }
 
     [Fact]
@@ -476,6 +505,20 @@ public partial class CollidingOperationInputSchemaCommand : ICommand<string>
     public static string Handle(CollidingOperationInputSchemaCommand command)
     {
         return "collided";
+    }
+}
+
+/// <summary>A query whose query property is bound by an alias rather than its own name.</summary>
+[AllowAnonymous]
+[RootLink("/operation-input-schema/aliased-token")]
+public partial class AliasedTokenOperationInputSchemaQuery : IQuery<string>
+{
+    [FromQuery("validationToken")]
+    public string? Token { get; set; }
+
+    public static string Handle(AliasedTokenOperationInputSchemaQuery query)
+    {
+        return "validated";
     }
 }
 

@@ -223,7 +223,7 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiSchemaProcessorOptions? schemaProcessorOptions,
         BlueprintHttpOptions? httpOptions,
         string? basePath,
-        ICollection<(string ComponentKey, string PropertyName)>? readOnlyProperties)
+        ICollection<(string ComponentKey, string PropertyName, bool IsSerializerRequired)>? readOnlyProperties)
     {
         ArgumentNullException.ThrowIfNull(documentRendering);
 
@@ -243,7 +243,7 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
         BlueprintHttpOptions? httpOptions,
         string? basePath,
-        ICollection<(string ComponentKey, string PropertyName)>? readOnlyProperties)
+        ICollection<(string ComponentKey, string PropertyName, bool IsSerializerRequired)>? readOnlyProperties)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true });
@@ -261,7 +261,7 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
         BlueprintHttpOptions? httpOptions,
         string? basePath,
-        ICollection<(string ComponentKey, string PropertyName)>? readOnlyProperties)
+        ICollection<(string ComponentKey, string PropertyName, bool IsSerializerRequired)>? readOnlyProperties)
     {
         writer.WriteStartObject();
 
@@ -1572,7 +1572,7 @@ public sealed record OpenApiOutputRenderingContext(
         Func<string, string>? schemaNameFormatter,
         IReadOnlyDictionary<string, string> componentSources,
         bool omitLegacyExtras,
-        ICollection<(string ComponentKey, string PropertyName)>? readOnlyProperties)
+        ICollection<(string ComponentKey, string PropertyName, bool IsSerializerRequired)>? readOnlyProperties)
     {
         if (schemaComponents.IsEmpty && securitySchemes.Count == 0)
         {
@@ -1851,7 +1851,7 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiSchemaComponentModel component,
         Func<string, string>? schemaNameFormatter,
         bool omitLegacyExtras,
-        ICollection<(string ComponentKey, string PropertyName)>? readOnlyProperties)
+        ICollection<(string ComponentKey, string PropertyName, bool IsSerializerRequired)>? readOnlyProperties)
     {
         var key = SanitiseSchemaKey(component.BodyTypeName, schemaNameFormatter);
 
@@ -1859,7 +1859,7 @@ public sealed record OpenApiOutputRenderingContext(
         {
             foreach (var property in component.Properties.Where(static p => p.IsReadOnly))
             {
-                readOnlyProperties.Add((key, property.Name));
+                readOnlyProperties.Add((key, property.Name, property.IsSerializerRequired));
             }
         }
 

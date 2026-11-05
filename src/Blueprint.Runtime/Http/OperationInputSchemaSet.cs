@@ -29,6 +29,9 @@ internal sealed class OperationInputSchemaSet
     private const string ComponentReferencePrefix = "#/components/schemas/";
     private const string DefinitionReferencePrefix = "#/$defs/";
 
+    // Marks a read-only property the serializer requires, until conversion drops it with every other vendor extension.
+    private const string SerializerRequiredKeyword = "x-blueprint-serializer-required";
+
     private readonly FrozenDictionary<string, Entry> _entriesByName;
     private readonly FrozenDictionary<string, ImmutableArray<Entry>> _entriesByNameIgnoringCase;
     private readonly ImmutableArray<Entry> _entries;
@@ -51,14 +54,14 @@ internal sealed class OperationInputSchemaSet
     /// <param name="documentJson">The JSON the document was rendered as.</param>
     /// <param name="readOnlyProperties">
     /// Every read-only property of a component, by the component's key and its name, which the document does not mark under
-    /// <see cref="OpenApiSchemaNaming.Legacy"/>.
+    /// <see cref="OpenApiSchemaNaming.Legacy"/>, and whether the serializer requires it all the same.
     /// </param>
     /// <returns>The schemas.</returns>
     public static OperationInputSchemaSet Create(
         BlueprintApp app,
         OpenApiDocumentRenderingContext document,
         string documentJson,
-        IReadOnlyCollection<(string ComponentKey, string PropertyName)> readOnlyProperties)
+        IReadOnlyCollection<(string ComponentKey, string PropertyName, bool IsSerializerRequired)> readOnlyProperties)
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(document);
@@ -69,14 +72,20 @@ internal sealed class OperationInputSchemaSet
         var paths = root["paths"]?.AsObject();
         var components = root["components"]?["schemas"]?.AsObject();
 
-        // A request does not send a read-only property, so the schema must know one the document left unmarked.
-        foreach (var (componentKey, propertyName) in readOnlyProperties)
+        // A request does not send a read-only property, so the schema must know one the document left unmarked; unless the
+        // serializer requires it, as the body reader then rejects a request without it.
+        foreach (var (componentKey, propertyName, isSerializerRequired) in readOnlyProperties)
         {
             try
             {
                 if (components?[componentKey]?["properties"]?[propertyName] is JsonObject property)
                 {
                     property["readOnly"] = true;
+
+                    if (isSerializerRequired)
+                    {
+                        property[SerializerRequiredKeyword] = true;
+                    }
                 }
             }
             catch (ArgumentException)
@@ -276,7 +285,7 @@ internal sealed class OperationInputSchemaSet
                 .OfType<JsonObject>()
                 .FirstOrDefault(p => (string?)p["name"] == parameter.Name && (string?)p["in"] == parameter.In);
 
-            Add(parameter.Name, location.Value, parameter.ClrPropertyName, CreateParameterSchema(parameterJson), parameter.Required);
+            Add(InputName(parameter), location.Value, parameter.ClrPropertyName, CreateParameterSchema(parameterJson), parameter.Required);
         }
 
         JsonNode? additionalProperties = null;
@@ -309,7 +318,7 @@ internal sealed class OperationInputSchemaSet
             var parameterNamesByClrName = operation.Parameters
                 .Where(static p => p.ClrPropertyName is not null)
                 .GroupBy(static p => p.ClrPropertyName!, StringComparer.Ordinal)
-                .ToDictionary(static g => g.Key, static g => g.First().In == "cookie" ? null : g.First().Name, StringComparer.Ordinal);
+                .ToDictionary(static g => g.Key, static g => g.First().In == "cookie" ? null : InputName(g.First()), StringComparer.Ordinal);
             var copiedBodyNames = new Dictionary<string, string?>(StringComparer.Ordinal);
 
             foreach (var (name, propertySchema) in bodySchema["properties"]?.AsObject() ?? [])
@@ -382,6 +391,15 @@ internal sealed class OperationInputSchemaSet
                 Description = operation.Description,
             },
             null);
+    }
+
+    /// <summary>
+    /// Returns the name a request sends a parameter by: a query parameter's binding name, which the document does not write
+    /// under <see cref="OpenApiParameterNaming.PropertyName"/>, or else the name the document gives it.
+    /// </summary>
+    private static string InputName(OpenApiParameterModel parameter)
+    {
+        return parameter.BindingName ?? parameter.Name;
     }
 
     /// <summary>
@@ -531,6 +549,15 @@ internal sealed class OperationInputSchemaSet
             schema["examples"] = new JsonArray(example?.DeepClone());
         }
 
+        // OpenAPI 3.0 requires a read-only property of a response only; JSON Schema's required would ask a request for it,
+        // whether always or when a conditional's if holds. One the serializer requires, a request must carry all the same.
+        // They are found before the properties are converted, which drops the marker.
+        var readOnlyNames = (schema["properties"] as JsonObject ?? [])
+            .Where(static p => p.Value?["readOnly"]?.GetValueKind() == JsonValueKind.True
+                && p.Value?[SerializerRequiredKeyword]?.GetValueKind() != JsonValueKind.True)
+            .Select(static p => p.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
         foreach (var keyword in (string[])["properties", "patternProperties"])
         {
             if (schema[keyword] is JsonObject map)
@@ -542,25 +569,15 @@ internal sealed class OperationInputSchemaSet
             }
         }
 
-        // OpenAPI 3.0 requires a read-only property of a response only; JSON Schema's required would ask a request for it,
-        // whether always or when a conditional's if holds.
-        if (schema["properties"] is JsonObject declared)
+        if (readOnlyNames.Count > 0)
         {
-            var readOnlyNames = declared
-                .Where(static p => p.Value?["readOnly"]?.GetValueKind() == JsonValueKind.True)
-                .Select(static p => p.Key)
-                .ToHashSet(StringComparer.Ordinal);
+            RemoveRequired(schema, readOnlyNames);
 
-            if (readOnlyNames.Count > 0)
+            foreach (var conditional in schema["allOf"] as JsonArray ?? [])
             {
-                RemoveRequired(schema, readOnlyNames);
-
-                foreach (var conditional in schema["allOf"] as JsonArray ?? [])
+                if (conditional?["then"] is JsonObject then)
                 {
-                    if (conditional?["then"] is JsonObject then)
-                    {
-                        RemoveRequired(then, readOnlyNames);
-                    }
+                    RemoveRequired(then, readOnlyNames);
                 }
             }
         }
