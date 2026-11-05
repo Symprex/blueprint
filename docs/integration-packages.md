@@ -309,6 +309,11 @@ public class MyHandler
 5. For every other method (POST/PUT/PATCH/DELETE): operation serialized as JSON body, as legacy Blueprint's client sent it
 6. Response: 2xx → deserialize, 422 → `ValidationException`, other → `BlueprintApiException`
 
+Steps 3 and 4 are generated onto each routed operation as a public nested class, `Op.Http` (`BuildUrl`, and
+`AppendQueryString` for a GET), unless the operation already uses the name `Http`. A class deriving from an operation
+inherits `Http`, so inside it qualify an alias or namespace of that name (`global::System.Net.Http.HttpMethod`) or alias
+it under another name.
+
 For a `Results<T1, T2>` response type the client reads the member the host wrote, trying them in order: a
 `StatusCodeResult` (e.g. `StatusCodeResult.Accepted`) when the status is its own and there is no body, a
 `PlainTextResult` when the body is not JSON, and any other non-`OperationResult` type when it is JSON. A 204 that no
@@ -324,10 +329,14 @@ so a caller matches it by `Type`/`Title`/`HttpStatus` and a pipeline that lets i
 | Problem details response, 5xx | carried through, but `Detail` is "The remote server returned an internal error response"; the original is the `InnerException`'s message. `Extensions` are carried without `instance` or the `stackTrace` a host exposing exception details writes, so a gateway does not pass a development upstream's trace on |
 | 404 whose body is not JSON | "The remote server responded Not Found" / `not_found` / 404 / "Response from {path} was 404" (the path, never the host) |
 | Other body that is not JSON | "The remote server did not produce a valid JSON response" / `invalid_json` / the response status / the parser's message |
-| Server unreachable | "The remote server did not respond" / `service_unavailable` / 500 / same as title; the `HttpRequestException` (which names the host) is the `InnerException` |
+| Server unreachable, or the connection fails while the body is read | "The remote server did not respond" / `service_unavailable` / 500 / same as title; the `HttpRequestException`, or the `HttpIOException` of a body the send did not buffer (either names the host), is the `InnerException` |
 | Timed out | "Timed out waiting for service response" / `service_timeout` / 408 / the cancellation's message |
 
 `StatusCode` and `ResponseBody` still carry the raw response.
+
+An `HttpClient` that answers at the headers (`HttpCompletionOption.ResponseHeadersRead`, or a handler that streams)
+leaves the body to the reader, and `HttpClient.Timeout` does not cover that read: a body that stalls is bounded only by
+the call's `CancellationToken`, so pass one with a deadline.
 
 ### S365 Gateway Migration
 

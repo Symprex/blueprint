@@ -77,7 +77,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         context.AddMetadata(new BindingDescriptorRegistration(hasBodyBinding, hasHeaderOrCookieBinding));
         context.AddMetadata(new PropertyBindingEntriesMetadata(
-            entries.Select(static e => new PropertyBindingEntriesMetadata.Entry(e.PropertyName, e.Source, e.BindingName)).ToList()));
+            entries.Select(static e => new PropertyBindingEntriesMetadata.Entry(e.PropertyName, e.Source, e.BindingName, e.FallbackSource)).ToList()));
         context.AddRenderStep(writer => RenderDescriptorFeatureData(writer, entries));
     }
 
