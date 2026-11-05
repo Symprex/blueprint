@@ -20,6 +20,23 @@ namespace TestNamespace
             return new HealthCheckOperationDescriptor();
         }
 
+#pragma warning disable CS0108
+        [global::System.CodeDom.Compiler.GeneratedCode("Blueprint.SourceGenerator", null)]
+        public static class Http
+        {
+            public static string AppendQueryString(global::TestNamespace.HealthCheckOperation operation, string url)
+            {
+                return url;
+            }
+
+            [return: global::System.Diagnostics.CodeAnalysis.MaybeNull]
+            public static string BuildUrl(global::TestNamespace.HealthCheckOperation operation)
+            {
+                var typed = operation; return "/healthcheck";
+            }
+        }
+#pragma warning restore CS0108
+
         private class HealthCheckOperationDescriptor : global::Blueprint.Model.ApiOperationDescriptor
         {
             public HealthCheckOperationDescriptor()
@@ -30,7 +47,7 @@ namespace TestNamespace
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.RequiresAuthentication);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.DefaultFailureOutcomes);
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpGet);
-                this.SetFeatureData(new global::Blueprint.Model.CompiledHttpRequestFeatureData(static (op) => { var typed = (global::TestNamespace.HealthCheckOperation)op; return "/healthcheck"; }, null));
+                this.SetFeatureData(new global::Blueprint.Model.CompiledHttpRequestFeatureData(static (op) => global::TestNamespace.HealthCheckOperation.Http.BuildUrl((global::TestNamespace.HealthCheckOperation)op), null));
                 this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.AuthenticatedFailureResponsesFeatureData);
                 this.SetFeatureData(new global::Blueprint.Model.OperationSerializerContextCoverageFeatureData(global::System.Collections.Immutable.ImmutableArray.Create<string>("Microsoft.AspNetCore.Mvc.ProblemDetails", "Microsoft.AspNetCore.Mvc.ValidationProblemDetails")));
                 this.SetFeatureData(new global::Blueprint.Model.OperationDiscoveryFeatureData("operation", "TestNamespace", "HealthCheckOperation"));

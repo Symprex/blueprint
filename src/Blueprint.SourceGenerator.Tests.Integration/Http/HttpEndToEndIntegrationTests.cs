@@ -1156,6 +1156,40 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_GET_with_PascalCase_nullable_bool_query_params_capitalised_by_a_client_then_value_is_bound()
+    {
+        // The typed client sends bool? as "True"/"False" (Boolean.ToString) under PascalCase keys.
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/nullable-bool-binding")!;
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.Method = "GET";
+            ctx.Request.QueryString = new QueryString("?Archived=True&Verbose=False");
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("archived:True|verbose:False");
+    }
+
+    [Fact]
+    public async Task When_GET_with_nullable_bool_query_params_omitted_then_null_is_bound()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+        var endpoint = FindEndpoint(endpoints, "api/e2e/nullable-bool-binding")!;
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider, ctx =>
+        {
+            ctx.Request.Method = "GET";
+        });
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Contain("archived:null|verbose:null");
+    }
+
+    [Fact]
     public async Task When_POST_with_multiple_validation_errors_then_returns_422_with_all_errors()
     {
         var endpoints = CreateEndpoints();
@@ -2564,6 +2598,30 @@ public partial class E2EBoolBindingQuery : IQuery<string>
     public static Task<string> HandleAsync(E2EBoolBindingQuery query)
     {
         return Task.FromResult($"archived:{query.IncludeArchived}|verbose:{query.Verbose}");
+    }
+}
+
+/// <summary>
+/// GET with nullable bool query parameters.
+/// </summary>
+[Blueprint.Model.Attributes.RootLink("/e2e/nullable-bool-binding")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2ENullableBoolBindingQuery : IQuery<string>
+{
+    /// <summary>Whether to include archived items.</summary>
+    public bool? Archived { get; set; }
+
+    /// <summary>Whether to enable verbose output.</summary>
+    public bool? Verbose { get; set; }
+
+    /// <summary>Echoes back the bound values.</summary>
+    /// <param name="query">The query instance.</param>
+    /// <returns>A formatted string showing the bound values.</returns>
+    public static Task<string> HandleAsync(E2ENullableBoolBindingQuery query)
+    {
+        return Task.FromResult($"archived:{query.Archived?.ToString() ?? "null"}|verbose:{query.Verbose?.ToString() ?? "null"}");
     }
 }
 
