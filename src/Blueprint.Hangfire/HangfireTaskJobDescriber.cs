@@ -72,39 +72,16 @@ public static class HangfireTaskJobDescriber
     }
 
     /// <summary>
-    /// Takes the type's own name from its assembly-qualified name, without its namespace or any declaring type, and
-    /// ignoring the commas and dots inside any generic arguments: <c>Some.Namespace.Outer+MyTask, Some.Assembly</c> →
-    /// <c>MyTask</c>.
+    /// Takes the type's own name from its assembly-qualified name, without its namespace, any declaring type, any
+    /// generic arguments or its assembly: <c>Some.Namespace.Outer+MyTask`1[[Some.Model, Models]], Some.Assembly</c> →
+    /// <c>MyTask`1</c>.
     /// </summary>
     private static string GetShortTypeName(string assemblyQualifiedName)
     {
-        var depth = 0;
-        var end = assemblyQualifiedName.Length;
-        var start = 0;
+        // The type's full name runs up to its generic arguments or, without any, its assembly.
+        var end = assemblyQualifiedName.IndexOfAny(['[', ',']);
+        var fullName = end < 0 ? assemblyQualifiedName : assemblyQualifiedName[..end];
 
-        for (var i = 0; i < assemblyQualifiedName.Length; i++)
-        {
-            var c = assemblyQualifiedName[i];
-
-            if (c == '[')
-            {
-                depth++;
-            }
-            else if (c == ']')
-            {
-                depth--;
-            }
-            else if (depth == 0 && c is '.' or '+')
-            {
-                start = i + 1;
-            }
-            else if (depth == 0 && c == ',')
-            {
-                end = i;
-                break;
-            }
-        }
-
-        return assemblyQualifiedName[start..end].Trim();
+        return fullName[(fullName.LastIndexOfAny(['.', '+']) + 1)..].Trim();
     }
 }

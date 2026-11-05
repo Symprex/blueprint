@@ -54,6 +54,16 @@ public class HangfireTaskJobDescriberTests
     }
 
     [Fact]
+    public async Task Closed_generic_task_is_named_without_its_generic_arguments()
+    {
+        var job = await CaptureEnqueuedJobAsync(new GenericTask<DescribedTask>());
+
+        HangfireTaskJobDescriber.TryDescribe(InvocationData.SerializeJob(job), out var description).Should().BeTrue();
+        description!.Name.Should().Be("GenericTask`1");
+        description.TaskTypeName.Should().Be(typeof(GenericTask<DescribedTask>).AssemblyQualifiedName);
+    }
+
+    [Fact]
     public async Task Recurring_job_is_described_by_the_task_it_carries()
     {
         var manager = Substitute.For<IRecurringJobManager>();
@@ -126,5 +136,9 @@ public class HangfireTaskJobDescriberTests
     private sealed class DescribedTask : IBackgroundTask
     {
         public string? TenantId { get; set; }
+    }
+
+    private sealed class GenericTask<T> : IBackgroundTask
+    {
     }
 }
