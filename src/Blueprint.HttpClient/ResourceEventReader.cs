@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -36,6 +37,8 @@ namespace Blueprint.HttpClient;
 /// </remarks>
 internal static class ResourceEventReader
 {
+    private static readonly ConditionalWeakTable<JsonSerializerOptions, StrongBox<JsonTypeInfo?>> _objectTypeInfos = new();
+
     /// <summary>
     /// Gets a value indicating whether <paramref name="type"/> is a resource event type this reads: a generic, concrete type
     /// assignable to <see cref="ResourceEvent"/> that derives from a <see cref="ResourceEvent{TResource}"/>.
@@ -209,10 +212,10 @@ internal static class ResourceEventReader
 
         var dictionary = new Dictionary<string, object>();
 
-        // An object or array is what reading it as an object gives, without the options' metadata for object, which a
-        // source-generated context does not have unless the user names it: a JsonElement, or a JsonNode when the options say so.
-        // Options with a converter of their own for object read it through that, as they always did.
-        var convertsObject = options.Converters.Any(static converter => converter.CanConvert(typeof(object)));
+        // An object or array is read through the options' metadata for object, whichever resolver or converter supplies it, as
+        // it always was. Without it, which a source-generated context does not have unless the user names it, it is what that
+        // metadata would have given: a JsonElement, or a JsonNode when the options say so.
+        var objectTypeInfo = GetObjectTypeInfo(options);
 
         foreach (var entry in value.EnumerateObject())
         {
@@ -223,7 +226,7 @@ internal static class ResourceEventReader
                 JsonValueKind.String => entry.Value.GetString()!,
                 JsonValueKind.True => true,
                 JsonValueKind.False => false,
-                JsonValueKind.Object or JsonValueKind.Array when convertsObject => entry.Value.Deserialize<object>(options)!,
+                JsonValueKind.Object or JsonValueKind.Array when objectTypeInfo is not null => entry.Value.Deserialize(objectTypeInfo)!,
                 JsonValueKind.Object or JsonValueKind.Array => options.UnknownTypeHandling == JsonUnknownTypeHandling.JsonNode
                     ? JsonNode.Parse(entry.Value.GetRawText(), new JsonNodeOptions { PropertyNameCaseInsensitive = options.PropertyNameCaseInsensitive })!
                     : entry.Value.Clone(),
@@ -232,5 +235,20 @@ internal static class ResourceEventReader
         }
 
         return dictionary;
+    }
+
+    /// <summary>
+    /// Gets the metadata <paramref name="options"/>' resolver supplies for <see cref="object"/>, or <see langword="null"/> when
+    /// it supplies none. System.Text.Json fills that gap with a write-only converter of its own, so the resolver is asked
+    /// itself, once per options.
+    /// </summary>
+    private static JsonTypeInfo? GetObjectTypeInfo(JsonSerializerOptions options)
+    {
+        // Locked, as reading with them would lock them, with the reflection resolver filled in when they have none.
+        options.MakeReadOnly(populateMissingResolver: true);
+
+        return _objectTypeInfos.GetValue(
+            options,
+            static o => new StrongBox<JsonTypeInfo?>(o.TypeInfoResolver!.GetTypeInfo(typeof(object), o) is null ? null : o.GetTypeInfo(typeof(object)))).Value;
     }
 }
