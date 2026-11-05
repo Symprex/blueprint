@@ -107,6 +107,9 @@ public class HangfireTaskJobDescriberTests
     [InlineData("""[null,null]""")]
     [InlineData("""["\"not a payload\"",null]""")]
     [InlineData("""["\"{\\\"TaskTypeName\\\":\\\"\\\",\\\"TaskJson\\\":\\\"{}\\\"}\"",null]""")]
+    [InlineData("""["\"{\\\"TaskTypeName\\\":\\\"Some.Task, Some\\\"}\"",null]""")]
+    [InlineData("""["\"{\\\"TaskTypeName\\\":\\\"Some.Task, Some\\\",\\\"TaskJson\\\":null}\"",null]""")]
+    [InlineData("""["\"{\\\"TaskTypeName\\\":\\\"Some.Task, Some\\\",\\\"TaskJson\\\":\\\"\\\"}\"",null]""")]
     public void Executor_job_whose_payload_cannot_be_read_is_not_described(string arguments)
     {
         var invocationData = new InvocationData(

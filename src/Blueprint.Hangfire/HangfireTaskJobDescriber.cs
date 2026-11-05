@@ -32,7 +32,8 @@ public static class HangfireTaskJobDescriber
     /// <param name="description">The task the job carries, when this returns <see langword="true"/>.</param>
     /// <returns>
     /// <see langword="true"/> when the job invokes <see cref="HangfireBackgroundTaskExecutor.ExecuteAsync"/> with a payload
-    /// that can be read; <see langword="false"/> for any other job, such as one of Hangfire's own or one legacy Blueprint wrote.
+    /// that names the task's type and carries its JSON; <see langword="false"/> for any other job, such as one of Hangfire's
+    /// own or one legacy Blueprint wrote, and for a payload the executor could not run either.
     /// </returns>
     public static bool TryDescribe(InvocationData invocationData, [NotNullWhen(true)] out HangfireTaskJobDescription? description)
     {
@@ -56,7 +57,7 @@ public static class HangfireTaskJobDescriber
 
             if (arguments is not [{ } serialisedPayload, ..] ||
                 JsonSerializer.Deserialize<string>(serialisedPayload) is not { } payloadJson ||
-                JsonSerializer.Deserialize<HangfireTaskPayload>(payloadJson) is not { TaskTypeName.Length: > 0 } payload)
+                JsonSerializer.Deserialize<HangfireTaskPayload>(payloadJson) is not { TaskTypeName.Length: > 0, TaskJson.Length: > 0 } payload)
             {
                 return false;
             }
