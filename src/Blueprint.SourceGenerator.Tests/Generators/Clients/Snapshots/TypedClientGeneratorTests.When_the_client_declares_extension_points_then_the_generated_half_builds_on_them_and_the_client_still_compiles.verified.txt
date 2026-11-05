@@ -93,6 +93,7 @@ namespace Client
         /// </summary>
         /// <param name="operation">The operation being sent.</param>
         /// <param name="options">The call's options, which the hook may replace; its modifier runs first of those that shape the request.</param>
+        [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Implements an instance partial method.")]
         partial void OnConfigure(global::Client.SearchItemsQuery operation, ref global::Blueprint.HttpClient.CallOptions? options);
 
         /// <inheritdoc />

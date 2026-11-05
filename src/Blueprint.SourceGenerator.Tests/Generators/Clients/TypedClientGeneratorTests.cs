@@ -359,6 +359,33 @@ public class TypedClientGeneratorTests
     }
 
     [Fact]
+    public void When_an_operation_is_included_then_its_OnConfigure_hook_is_declared_exempt_from_CA1822()
+    {
+        // A hook that reads no instance state used to fail CA1822 in a consumer that treats it as an error, though it cannot
+        // be static: it implements this instance partial. The attributes of a partial method's parts merge, so the
+        // suppression on the generated part covers the hand-written one.
+        var result = TestHelpers.Compile<TypedClientGenerator>(
+            """
+            using Blueprint.HttpClient;
+            using Contract;
+
+            namespace Client;
+
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(SearchItemsQuery))]
+            public partial class ItemsApi
+            {
+            }
+            """,
+            [CreateContract()]);
+
+        var generated = string.Join("\n", result.Output.Select(static t => t.ToString()));
+
+        generated.Should().MatchRegex(
+            @"\[global::System\.Diagnostics\.CodeAnalysis\.SuppressMessage\(""Performance"", ""CA1822:Mark members as static""[^\]]*\)\]\s*partial void OnConfigure\(global::Contract\.SearchItemsQuery operation");
+    }
+
+    [Fact]
     public void When_an_operation_declares_several_methods_then_its_call_is_sent_with_the_first_its_descriptor_publishes()
     {
         // The descriptor publishes them in ordinal order, GET before POST, and the app-driven client sends the first; declared

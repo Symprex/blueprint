@@ -1149,6 +1149,10 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
         sb.AppendLine($"{indent}/// </summary>");
         sb.AppendLine($"{indent}/// <param name=\"operation\">The operation being sent.</param>");
         sb.AppendLine($"{indent}/// <param name=\"options\">The call's options, which the hook may replace; its modifier runs first of those that shape the request.</param>");
+
+        // A hook that reads no instance state cannot be static, as it implements this; the parts' attributes merge, so this
+        // exempts the hand-written one from CA1822.
+        sb.AppendLine($"{indent}[global::System.Diagnostics.CodeAnalysis.SuppressMessage(\"Performance\", \"CA1822:Mark members as static\", Justification = \"Implements an instance partial method.\")]");
         sb.AppendLine($"{indent}partial void OnConfigure({operation.OperationFqn} operation, ref global::Blueprint.HttpClient.CallOptions? options);");
         sb.AppendLine();
         sb.AppendLine($"{indent}/// <inheritdoc />");
