@@ -32,7 +32,7 @@ internal static class RequestSteps
 [BlueprintClientInclude(typeof(SignupTenantCommand))]
 internal partial class RegionalOperationsApi
 {
-    private readonly required RegionEndpoints _endpoints;
+    private readonly RegionEndpoints _endpoints;
 
     /// <summary>
     /// Rewrites each request this client sends to the region's base address, keeping its path and query. A request a preceding
