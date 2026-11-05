@@ -214,6 +214,22 @@ These attributes inspect an item count, so they only make sense on a collection 
 |----|----------|-------|
 | BPT001 | Warning | Background task handler returns a value that will be discarded |
 
+## Typed HTTP clients (BPCL)
+
+Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attributes. Each include is reported at the attribute, each member at its name, and the class at its name. An include or member with a problem is left out of the generated half, which is still generated for the rest, so one mistake does not raise follow-on errors in the code that uses the client. A class that cannot be completed at all (BPCL001) gets no generated half.
+
+| ID | Severity | Title |
+|----|----------|-------|
+| BPCL001 | Error | `[BlueprintClient]` class must be a partial, top-level, non-generic, non-static class (public or internal) |
+| BPCL002 | Error | `[BlueprintClientInclude]` type must be a concrete, non-generic class implementing `IOperation` |
+| BPCL003 | Error | Included operation declares no result (`IReturn<T>`) |
+| BPCL004 | Error | Included operation has no typed request builder: no URL, `[UnexposedOperation]`, named `Http` or declaring or inheriting a member named `Http`, nested in another type, not partial, or from an assembly not built with Blueprint's source generator |
+| BPCL005 | Error | Operation included more than once, or two includes produce the same method name |
+| BPCL006 | Error | Public method of the client class is generic, so cannot be repeated on the generated interface |
+| BPCL007 | Warning | The `[JsonSerializable]` types of the client's `SerializerContext` do not cover a type an included operation needs: its request (a GET sends none), and what its result is read as, which for a resource event or `ResourceEventResult<T>` is the `T` it carries, for a `Results<T1, T2>` each member's (an `OkResult<T>`, `CreatedResult<T>` or `AcceptedResult<T>` member by its `T`), and for any other result, an `OkResult<T>`, `CreatedResult<T>` or `AcceptedResult<T>` called alone included, the result itself. The call is still generated, and reads the uncovered type through the options' reflection metadata |
+| BPCL008 | Error | Included operation's result is one no response reader supports, such as a `StatusCodeResult` subclass with no public static `Instance`, an abstract resource event that does not declare `[JsonPolymorphic]` or `[JsonDerivedType]` itself (the event reader cannot make one; one that does is read as JSON), or a `Results<T1, T2>` with such a member |
+| BPCL009 | Error | Member of the client class conflicts with a generated member: a member of any kind named `_client`, `_plan`, `_credential`, `_requestModifier`, `BlueprintClientPlan`, `WithCredential` or `WithRequestModifier`; a readonly field whose constructor parameter would be named `client`, `source`, `credential`, `requestModifier` or `modify`; a public method named as a generated operation method; or a constructor taking the generated constructors' parameter types, either `(BlueprintHttpClient, <each readonly field's type>)` or the clone constructor's `(<the class>, IUpstreamCredential, Action<HttpRequestMessage>)` |
+
 ## Module system (BPMOD)
 
 | ID | Severity | Title |

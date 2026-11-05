@@ -240,6 +240,26 @@ public static class TestHelpers
     }
 
     /// <summary>
+    /// Runs a single tracked generator against one source string that references other assemblies, and verifies the same
+    /// driver can replay its work from cache on a second run, as <see cref="Compile{T}(string, bool)" /> does.
+    /// </summary>
+    /// <remarks>
+    /// For a generator whose input includes types from a referenced assembly, such as a typed client including another
+    /// assembly's operations; build the reference with <see cref="CreateReferenceFromSource{T}(string, string)" /> when
+    /// those types carry members a generator emits.
+    /// </remarks>
+    /// <typeparam name="T">The tracked incremental generator under test.</typeparam>
+    /// <param name="source">The handwritten source that should trigger the generator.</param>
+    /// <param name="additionalReferences">The referenced assemblies, beyond the harness's default references.</param>
+    /// <param name="assertCacheability">Set to <see langword="false"/> only when debugging a failing test and you need to inspect the first run in isolation.</param>
+    /// <returns>The captured diagnostics and generated syntax trees for the run.</returns>
+    public static GenerationResult Compile<T>(string source, MetadataReference[] additionalReferences, bool assertCacheability = true)
+        where T : IIncrementalGenerator, ITrackedSourceGenerator, new()
+    {
+        return Compile<T>([source], filePaths: null, assertCacheability, additionalReferences);
+    }
+
+    /// <summary>
     /// Runs a single generator once against one source string with analyzer config options and extra references, for the
     /// few tests that need what the default harness does not provide: a consumer's <c>.editorconfig</c> values, or types
     /// that live in another, referenced assembly rather than in source.
@@ -322,15 +342,15 @@ public static class TestHelpers
     }
 
     /// <summary>
-    /// Compiles <paramref name="source" />, with <typeparamref name="T" /> run over it, into an in-memory assembly and returns a
-    /// reference to it, so a test can reference what the generator itself emitted into another assembly rather than a
-    /// hand-written imitation of it that could drift from the real output.
+    /// Compiles <paramref name="source" />, with what <typeparamref name="T" /> generates from it, into an in-memory assembly
+    /// and returns a reference to it, so a test can reference an assembly built as a consumer's is: with members a generator
+    /// emitted that another assembly's generator can see only as metadata.
     /// </summary>
-    /// <typeparam name="T">The generator whose output the referenced assembly carries.</typeparam>
+    /// <typeparam name="T">The generator the referenced assembly is built with.</typeparam>
     /// <param name="source">The source of the referenced assembly.</param>
     /// <param name="assemblyName">The referenced assembly's name.</param>
     /// <returns>A metadata reference to the compiled assembly.</returns>
-    public static MetadataReference CreateGeneratedReferenceFromSource<T>(string source, string assemblyName)
+    public static MetadataReference CreateReferenceFromSource<T>(string source, string assemblyName)
         where T : IIncrementalGenerator, new()
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
@@ -338,14 +358,17 @@ public static class TestHelpers
             assemblyName,
             [CSharpSyntaxTree.ParseText(source, parseOptions)],
             CreateMetadataReferences(),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 
         CSharpGeneratorDriver.Create([new T().AsSourceGenerator()], parseOptions: parseOptions)
-            .RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
-        generatorDiagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+            .RunGeneratorsAndUpdateCompilation(compilation, out var generatedCompilation, out var generatorDiagnostics);
+
+        // A generator that refuses a type generates nothing for it, which would leave the reference silently without it.
+        generatorDiagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error)
+            .Should().BeEmpty(string.Join(Environment.NewLine, generatorDiagnostics));
 
         using var stream = new MemoryStream();
-        var emitResult = outputCompilation.Emit(stream);
+        var emitResult = generatedCompilation.Emit(stream);
         emitResult.Success.Should().BeTrue(string.Join(Environment.NewLine, emitResult.Diagnostics));
 
         return MetadataReference.CreateFromImage(stream.ToArray());
@@ -485,11 +508,17 @@ public static class TestHelpers
     private static GenerationResult Compile<T>(
         string[] sources, // C# source code
         string[]? filePaths,
-        bool assertCacheability = true) // You can disable cacheability checking during dev
+        bool assertCacheability = true, // You can disable cacheability checking during dev
+        MetadataReference[]? additionalReferences = null)
         where T : IIncrementalGenerator, ITrackedSourceGenerator, new() // T is your generator
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var compilation = CreateCompilation(sources, filePaths, parseOptions);
+        if (additionalReferences is { Length: > 0 })
+        {
+            compilation = compilation.AddReferences(additionalReferences);
+        }
+
         var syntaxTrees = compilation.SyntaxTrees.ToArray();
 
         // Run the generator, get the results, and assert cacheability if applicable

@@ -493,7 +493,7 @@ public class HttpClientRequestBuilderModuleTests
         // compilation it is invisible. Either way the derived operation declares its own, hiding the base's (CS0108 is
         // suppressed for that), so it is not an inherited member that blocks the nested class. The base here is the
         // generator's own output, so the marker it is recognised by is the one the generator emits.
-        var contract = TestHelpers.CreateGeneratedReferenceFromSource<OperationDescriptorSourceGenerator>(
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(
             """
             using Blueprint.Model;
 

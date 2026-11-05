@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json.Serialization.Metadata;
 using Blueprint.Runtime.Exec;
 
 namespace Blueprint.HttpClient.Readers;
@@ -23,15 +24,29 @@ public sealed class ContentResultResponseReader<TResult, TContent> : ResponseRea
     private readonly int _status;
     private readonly Func<TContent, TResult> _create;
 
+    private readonly JsonTypeInfo<TContent>? _contentTypeInfo;
+    private readonly JsonTypeInfo<TResult>? _resultTypeInfo;
+
     /// <summary>
     /// Initialises a new instance of the <see cref="ContentResultResponseReader{TResult, TContent}"/> class.
     /// </summary>
+    /// <param name="contentTypeInfo">
+    /// The metadata to read the content of a union's member with, from the transport's options; or <see langword="null"/> to
+    /// read it with the transport's options' own.
+    /// </param>
+    /// <param name="resultTypeInfo">
+    /// The metadata to read the result itself with when it is the whole declared result, not a union's member, from the
+    /// transport's options; or <see langword="null"/> to read it with the transport's options' own.
+    /// </param>
     /// <exception cref="ArgumentException">
     /// <typeparamref name="TResult"/> is not <see cref="OkResult{T}"/>, <see cref="CreatedResult{T}"/> or
     /// <see cref="AcceptedResult{T}"/> of <typeparamref name="TContent"/>.
     /// </exception>
-    public ContentResultResponseReader()
+    public ContentResultResponseReader(JsonTypeInfo<TContent>? contentTypeInfo = null, JsonTypeInfo<TResult>? resultTypeInfo = null)
     {
+        this._contentTypeInfo = contentTypeInfo;
+        this._resultTypeInfo = resultTypeInfo;
+
         if (typeof(TResult) == typeof(OkResult<TContent>))
         {
             this._status = (int)HttpStatusCode.OK;
@@ -62,7 +77,9 @@ public sealed class ContentResultResponseReader<TResult, TContent> : ResponseRea
             throw context.CreateNotUnderstoodException();
         }
 
-        var value = await context.Response.Content.ReadFromJsonAsync<TResult>(context.JsonOptions, cancellationToken).ConfigureAwait(false);
+        var value = this._resultTypeInfo is null
+            ? await context.Response.Content.ReadFromJsonAsync<TResult>(context.JsonOptions, cancellationToken).ConfigureAwait(false)
+            : await context.Response.Content.ReadFromJsonAsync(this._resultTypeInfo, cancellationToken).ConfigureAwait(false);
 
         return value ?? throw await context.CreateResponseEmptyExceptionAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -76,7 +93,9 @@ public sealed class ContentResultResponseReader<TResult, TContent> : ResponseRea
     /// <inheritdoc />
     internal override async ValueTask<(bool Read, TResult Value)> ReadJsonMemberAsync(ResponseReadContext context, CancellationToken cancellationToken)
     {
-        var content = await context.Response.Content.ReadFromJsonAsync<TContent>(context.JsonOptions, cancellationToken).ConfigureAwait(false);
+        var content = this._contentTypeInfo is null
+            ? await context.Response.Content.ReadFromJsonAsync<TContent>(context.JsonOptions, cancellationToken).ConfigureAwait(false)
+            : await context.Response.Content.ReadFromJsonAsync(this._contentTypeInfo, cancellationToken).ConfigureAwait(false);
 
         return content is null ? default : (true, this._create(content));
     }
