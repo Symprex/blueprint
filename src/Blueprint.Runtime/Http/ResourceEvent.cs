@@ -55,6 +55,20 @@ public class ResourceEvent : OperationResult
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceEvent"/> class that has no state but its field initialisers
+    /// (an empty <see cref="Metadata"/> and <see cref="SecureData"/>), for <c>BlueprintHttpClient</c> to read an event the
+    /// host wrote into: every other member, <see cref="Created"/> included, is left for the wire to set, as on the
+    /// uninitialised instance legacy's converter read one into.
+    /// </summary>
+    internal ResourceEvent()
+    {
+        // Null until read, as on an uninitialised instance; the reader sets them from the wire.
+        this.EventId = null!;
+        this.ResourceObject = null!;
+        this.ResourceType = null!;
+    }
+
+    /// <summary>
     /// Gets the object of this 'resource', which is "event".
     /// </summary>
     /// <remarks>
@@ -285,6 +299,15 @@ public class ResourceEvent<TResource> : ResourceEvent
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceEvent{TResource}"/> class that has no state but its field
+    /// initialisers, for <c>BlueprintHttpClient</c> to read an event the host wrote into, as the base
+    /// <see cref="Blueprint.Http.ResourceEvent"/>'s internal constructor describes.
+    /// </summary>
+    internal ResourceEvent()
+    {
+    }
+
+    /// <summary>
     /// Gets or sets the strongly-typed resource payload.
     /// Shadows <see cref="ResourceEvent.Data"/> so that STJ can bind the <see cref="JsonConstructorAttribute"/>
     /// parameter during deserialization while still serializing as the concrete <typeparamref name="TResource"/>.
@@ -387,6 +410,15 @@ public class ResourceCreated<TResource> : ResourceEvent<TResource>
         : base(ResourceEventChangeType.Created, CreateId(eventSubId), data)
     {
     }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceCreated{TResource}"/> class that has no state but its field
+    /// initialisers, not even its change type, for <c>BlueprintHttpClient</c> to read an event the host wrote into, as the
+    /// base <see cref="Blueprint.Http.ResourceEvent"/>'s internal constructor describes.
+    /// </summary>
+    internal ResourceCreated()
+    {
+    }
 }
 
 /// <summary>
@@ -439,6 +471,15 @@ public class ResourceUpdated<TResource> : ResourceEvent<TResource>
         : base(ResourceEventChangeType.Updated, CreateId(eventSubId), data)
     {
     }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceUpdated{TResource}"/> class that has no state but its field
+    /// initialisers, not even its change type, for <c>BlueprintHttpClient</c> to read an event the host wrote into, as the
+    /// base <see cref="Blueprint.Http.ResourceEvent"/>'s internal constructor describes.
+    /// </summary>
+    internal ResourceUpdated()
+    {
+    }
 }
 
 /// <summary>
@@ -489,6 +530,15 @@ public class ResourceDeleted<TResource> : ResourceEvent<TResource>
     [JsonConstructor]
     public ResourceDeleted(string eventSubId, TResource data)
         : base(ResourceEventChangeType.Deleted, CreateId(eventSubId), data)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceDeleted{TResource}"/> class that has no state but its field
+    /// initialisers, not even its change type, for <c>BlueprintHttpClient</c> to read an event the host wrote into, as the
+    /// base <see cref="Blueprint.Http.ResourceEvent"/>'s internal constructor describes.
+    /// </summary>
+    internal ResourceDeleted()
     {
     }
 }

@@ -68,4 +68,23 @@ public interface IResourceAuthorizationProvider
         ClaimsPrincipal principal,
         ResourceAuthorizationRequest request,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether this provider reads the operation instance, <see cref="ApiOperationContext.Operation"/>, when it judges
+    /// <paramref name="operation"/>, rather than only the request's scope pairs and keys.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ApiOperationContext.CanExecuteAsync{TOperation}(ResourceKey, CancellationToken)"/> has only a resource key,
+    /// so it can give a provider no more than a default instance, whose properties could allow what the real instance would
+    /// not. It refuses, asking no provider, when any provider returns <see langword="true"/> for the operation asked about,
+    /// and the caller must ask <see cref="ApiOperationContext.CanExecuteAsync(IOperation, CancellationToken)"/> with the
+    /// instance. Execution and that check are unaffected. Return <see langword="true"/> only for the operations whose
+    /// properties the provider reads, so a key-only check of the rest still works.
+    /// </remarks>
+    /// <param name="operation">The descriptor of the operation to be judged.</param>
+    /// <returns><see langword="true"/> if judging it reads the instance; <see langword="false"/>, the default, otherwise.</returns>
+    bool ReadsOperation(ApiOperationDescriptor operation)
+    {
+        return false;
+    }
 }
