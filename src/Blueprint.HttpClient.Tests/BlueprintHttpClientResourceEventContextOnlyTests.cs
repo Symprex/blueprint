@@ -82,6 +82,19 @@ public sealed class BlueprintHttpClientResourceEventContextOnlyTests
         result.ChangedValues!["Nested"].Should().Be("custom:" + """{"c":true}""");
     }
 
+    [Fact]
+    public async Task A_custom_object_converter_from_the_options_resolver_reads_nested_dictionary_values()
+    {
+        // A resolver's own converter, as a source-generated context names one: absent from the options' Converters.
+        var client = CreateClient(static options => options.TypeInfoResolver = new RawObjectResolver());
+
+        var result = await SendAsync(client, new ResourceEventResultResponseReader<TemplateApiResource>(client.ResolveTypeInfo<TemplateApiResource>()));
+
+        result.Metadata!["Nested"].Should().Be("custom:" + """{"a":1}""");
+        result.SecureData!["List"].Should().Be("custom:" + """["y"]""");
+        result.ChangedValues!["Nested"].Should().Be("custom:" + """{"c":true}""");
+    }
+
     private static void AssertNested(IReadOnlyDictionary<string, object>? dictionary, string nestedObject, string list)
     {
         dictionary!["Nested"].Should().BeOfType<JsonElement>().Which.GetRawText().Should().Be(nestedObject);
@@ -136,6 +149,22 @@ public sealed class BlueprintHttpClientResourceEventContextOnlyTests
         public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
         {
             return type == typeof(object) ? null : _inner.GetTypeInfo(type, options);
+        }
+    }
+
+    /// <summary>
+    /// Resolves <see cref="object"/> through a <see cref="RawObjectConverter"/> of its own, and every other type as the
+    /// default resolver does.
+    /// </summary>
+    private sealed class RawObjectResolver : IJsonTypeInfoResolver
+    {
+        private static readonly DefaultJsonTypeInfoResolver _inner = new();
+
+        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
+        {
+            return type == typeof(object)
+                ? JsonMetadataServices.CreateValueInfo<object>(options, new RawObjectConverter())
+                : _inner.GetTypeInfo(type, options);
         }
     }
 }

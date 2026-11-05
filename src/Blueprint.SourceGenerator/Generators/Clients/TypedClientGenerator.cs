@@ -22,8 +22,10 @@ namespace Blueprint.SourceGenerator.Generators.Clients;
 /// Its body is a plan settled at compile time: the operation's HTTP method as a constant, its URL from the request builders
 /// generated onto the operation itself (<c>Op.Http</c>), and a reader chosen for <c>R</c> here. The JSON metadata the body is
 /// written with and each reader reads with is resolved when a client is made, once per JSON options instance, into a plan
-/// every client over those options shares. So a call looks nothing up — no app, no descriptor, no metadata, no reflection
-/// over the operation or its result.
+/// every client over those options shares. So a call looks up no app and no descriptor, and no metadata but in two cases. A
+/// body's operation is compared with its declared type, and an instance of a derived type is written as its run-time type,
+/// with the options' metadata for that type, because the declared metadata would drop the derived type's own members. And a
+/// type whose metadata could not be resolved into the plan (BPCL007) is read or written with the options' own.
 /// </para>
 /// <para>
 /// The reader chosen for a result is the reader <c>BlueprintHttpClient&lt;TApp&gt;</c> chooses for it at run time, so the two
