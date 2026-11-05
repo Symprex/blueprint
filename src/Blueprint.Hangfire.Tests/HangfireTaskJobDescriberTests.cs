@@ -101,6 +101,25 @@ public class HangfireTaskJobDescriberTests
         description.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("[]")]
+    [InlineData("""[null,null]""")]
+    [InlineData("""["\"not a payload\"",null]""")]
+    [InlineData("""["\"{\\\"TaskTypeName\\\":\\\"\\\",\\\"TaskJson\\\":\\\"{}\\\"}\"",null]""")]
+    public void Executor_job_whose_payload_cannot_be_read_is_not_described(string arguments)
+    {
+        var invocationData = new InvocationData(
+            "Blueprint.Hangfire.HangfireBackgroundTaskExecutor, Blueprint.Hangfire",
+            "ExecuteAsync",
+            "[]",
+            arguments,
+            "default");
+
+        HangfireTaskJobDescriber.TryDescribe(invocationData, out var description).Should().BeFalse();
+        description.Should().BeNull();
+    }
+
     [Fact]
     public void Job_of_another_types_ExecuteAsync_is_not_described()
     {
