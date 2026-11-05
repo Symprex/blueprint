@@ -13,11 +13,23 @@ using global::Blueprint.Model;
 
 namespace TestNamespace
 {
-    public partial class OperationA
+    public partial class OperationA : global::Blueprint.Model.IHttpRequestBuilder<global::TestNamespace.OperationA>
     {
         public static ApiOperationDescriptor Configure()
         {
             return new OperationADescriptor();
+        }
+
+        [return: global::System.Diagnostics.CodeAnalysis.MaybeNull]
+        static string global::Blueprint.Model.IHttpRequestBuilder<global::TestNamespace.OperationA>.BuildRequestUrl(global::TestNamespace.OperationA operation)
+        {
+            var url = Http.BuildUrl(operation);
+            return url is null ? null : Http.AppendQueryString(operation, url);
+        }
+
+        static global::System.Net.Http.HttpMethod global::Blueprint.Model.IHttpRequestBuilder<global::TestNamespace.OperationA>.GetHttpMethod()
+        {
+            return global::System.Net.Http.HttpMethod.Parse("GET");
         }
 
 #pragma warning disable CS0108

@@ -139,6 +139,10 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
         var emitHttpClass = CanDeclareHttpClass(operationSymbol, context.GetSemanticModel);
 
+        // The method a typed client of the operation sends it with: the one its descriptor publishes first. An attribute that
+        // declares an empty one has none, which OperationHttpMethodMetadataModule reports, so no interface is implemented.
+        var requestBuilderMethod = OperationHttpMethodResolver.Resolve(operationSymbol).Methods.FirstOrDefault();
+
         if (emitHttpClass)
         {
             context.AddOperationMemberStep(operationClass =>
@@ -167,6 +171,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                         .AddParameter(operationFqn, "operation")
                         .AddParameter("string", "url")
                         .WithBody(codeWriter => codeWriter.AppendLine(queryStringBody ?? "return url;"));
+                }
+
+                if (requestBuilderMethod is not null)
+                {
+                    AddRequestBuilderInterface(operationClass, operationFqn, requestBuilderMethod);
                 }
             });
         }
@@ -370,6 +379,47 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             + ", "
             + appendQueryString
             + "));");
+    }
+
+    /// <summary>
+    /// Implements <c>IHttpRequestBuilder&lt;TSelf&gt;</c> on the operation's generated partial over its <c>Http</c> builders, so
+    /// <c>BlueprintHttpClient.ForwardAsync</c> sends the operation as its typed client does: with the method its descriptor
+    /// publishes first and its first URL, a GET's query string appended. Explicitly, so it adds no member name to the
+    /// operation's own.
+    /// </summary>
+    /// <param name="operationClass">The operation's generated partial.</param>
+    /// <param name="operationFqn">The operation's fully qualified name.</param>
+    /// <param name="httpMethod">The method the operation is sent with, upper-cased.</param>
+    private static void AddRequestBuilderInterface(ClassBuilder operationClass, string operationFqn, string httpMethod)
+    {
+        var builderInterface = $"global::Blueprint.Model.IHttpRequestBuilder<{operationFqn}>";
+
+        operationClass.AddInterface(builderInterface);
+
+        // HttpMethod.Parse returns the shared instance of a standard method, so a forward allocates none for one.
+        operationClass.AddMethod(builderInterface + ".GetHttpMethod")
+            .MakeStaticMethod()
+            .WithReturnType("global::System.Net.Http.HttpMethod")
+            .WithBody(codeWriter => codeWriter.AppendLine(
+                $"return global::System.Net.Http.HttpMethod.Parse({SymbolDisplay.FormatLiteral(httpMethod, quote: true)});"));
+
+        operationClass.AddMethod(builderInterface + ".BuildRequestUrl")
+            .MakeStaticMethod()
+            .AddAttribute(MaybeNullReturnAttribute)
+            .WithReturnType("string")
+            .AddParameter(operationFqn, "operation")
+            .WithBody(codeWriter =>
+            {
+                if (httpMethod == "GET")
+                {
+                    codeWriter.AppendLine($"var url = {HttpClassName}.BuildUrl(operation);");
+                    codeWriter.AppendLine($"return url is null ? null : {HttpClassName}.AppendQueryString(operation, url);");
+                }
+                else
+                {
+                    codeWriter.AppendLine($"return {HttpClassName}.BuildUrl(operation);");
+                }
+            });
     }
 
     private static string BuildUrlBuilderBody(

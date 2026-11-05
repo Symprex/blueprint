@@ -112,15 +112,16 @@ public sealed class GatewayHandlerIntegrationTests : IClassFixture<SampleAppFixt
     }
 
     [Fact]
-    public async Task GetGatewayTemplateQueryHandler_returns_not_found_when_upstream_returns_404()
+    public async Task GetGatewayTemplateQueryHandler_returns_not_found_when_upstream_returns_its_not_found_result()
     {
+        // The inner GetTemplateQuery answers an unknown id with its NotFoundResult, which the host writes as the content, JSON, at 404.
         var handler = new FakeHttpHandler(_ =>
             new HttpResponseMessage(HttpStatusCode.NotFound)
             {
                 Content = new StringContent(
-                    """{"status":404,"title":"Not Found"}""",
+                    """{"id":"missing","name":"","htmlSource":"","plainTextSource":""}""",
                     Encoding.UTF8,
-                    "application/problem+json"),
+                    "application/json"),
             });
 
         var client = this._fixture.CreateClient(handler);
@@ -130,7 +131,30 @@ public sealed class GatewayHandlerIntegrationTests : IClassFixture<SampleAppFixt
             new GetGatewayTemplateQuery { Id = "missing" },
             CancellationToken.None);
 
-        result.IsT2.Should().BeTrue("the upstream returned 404");
+        result.IsT2.Should().BeTrue("the upstream returned its not-found result");
+        result.AsT2.Content.Id.Should().Be("missing");
+    }
+
+    [Fact]
+    public async Task GetGatewayTemplateQueryHandler_lets_an_upstream_404_problem_escape_unchanged()
+    {
+        // A problem document is a thrown failure, not the not-found result's content, so the gateway answers it as the
+        // upstream problem rather than inventing a resource.
+        var handler = new FakeHttpHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent(
+                    """{"type":"not_found","status":404,"title":"Not Found"}""",
+                    Encoding.UTF8,
+                    "application/problem+json"),
+            });
+
+        var client = this._fixture.CreateClient(handler);
+        var sut = new GetGatewayTemplateQueryHandler(client);
+
+        var act = () => sut.Handle(new GetGatewayTemplateQuery { Id = "missing" }, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<BlueprintApiException>()).Which.Type.Should().Be("not_found");
     }
 
     [Fact]
