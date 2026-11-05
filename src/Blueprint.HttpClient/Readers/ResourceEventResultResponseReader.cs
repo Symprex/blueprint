@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
@@ -26,6 +27,19 @@ public sealed class ResourceEventResultResponseReader<T> : ResponseReader<Resour
     where T : notnull
 {
     private readonly string _resourceObject = ApiResource.GetTypeName(typeof(T));
+    private readonly JsonTypeInfo<T>? _dataTypeInfo;
+
+    /// <summary>
+    /// Initialises a new instance of the <see cref="ResourceEventResultResponseReader{T}"/> class.
+    /// </summary>
+    /// <param name="dataTypeInfo">
+    /// The metadata to read the content with, from the transport's options; or <see langword="null"/> to read it with the
+    /// transport's options' own.
+    /// </param>
+    public ResourceEventResultResponseReader(JsonTypeInfo<T>? dataTypeInfo = null)
+    {
+        this._dataTypeInfo = dataTypeInfo;
+    }
 
     /// <inheritdoc />
     internal override string? EventResourceObject => this._resourceObject;
@@ -38,7 +52,7 @@ public sealed class ResourceEventResultResponseReader<T> : ResponseReader<Resour
             throw context.CreateNotUnderstoodException();
         }
 
-        return await ReadEnvelopeAsync(context, cancellationToken).ConfigureAwait(false);
+        return await this.ReadEnvelopeAsync(context, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -51,14 +65,14 @@ public sealed class ResourceEventResultResponseReader<T> : ResponseReader<Resour
     /// <inheritdoc />
     internal override async ValueTask<(bool Read, ResourceEventResult<T> Value)> ReadJsonMemberAsync(ResponseReadContext context, CancellationToken cancellationToken)
     {
-        return (true, await ReadEnvelopeAsync(context, cancellationToken).ConfigureAwait(false));
+        return (true, await this.ReadEnvelopeAsync(context, cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
     /// Reads the body as the envelope the host writes for a <see cref="ResourceEventResult{T}"/>.
     /// </summary>
     /// <exception cref="InvalidOperationException">When the body is not an envelope with a change type and data.</exception>
-    private static async Task<ResourceEventResult<T>> ReadEnvelopeAsync(ResponseReadContext context, CancellationToken cancellationToken)
+    private async Task<ResourceEventResult<T>> ReadEnvelopeAsync(ResponseReadContext context, CancellationToken cancellationToken)
     {
         using var document = JsonDocument.Parse(await context.Response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
         var root = document.RootElement;
@@ -76,7 +90,7 @@ public sealed class ResourceEventResultResponseReader<T> : ResponseReader<Resour
         var eventId = root.TryGetProperty("eventId", out var eventIdElement) && eventIdElement.ValueKind == JsonValueKind.String
             ? eventIdElement.GetString()!
             : string.Empty;
-        var data = dataElement.Deserialize<T>(context.JsonOptions)!;
+        var data = (this._dataTypeInfo is null ? dataElement.Deserialize<T>(context.JsonOptions) : dataElement.Deserialize(this._dataTypeInfo))!;
         var result = new ResourceEventResult<T>(changeType, eventId, data);
 
         foreach (var (key, value) in ReadEnvelopeDictionary(root, "metadata", context.JsonOptions))

@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Blueprint.Http;
 using Blueprint.HttpClient.Readers;
@@ -26,7 +28,7 @@ namespace Blueprint.HttpClient;
 /// <see cref="System.Net.Http.HttpClient"/> is.
 /// </para>
 /// </remarks>
-public partial class BlueprintHttpClient
+public class BlueprintHttpClient
 {
     private const string UpstreamServerErrorDetail = "The remote server returned an internal error response";
 
@@ -40,6 +42,20 @@ public partial class BlueprintHttpClient
     /// </summary>
     private const string InstanceMemberName = "instance";
 
+    /// <summary>
+    /// The options derived from each options instance for each context, so that a transient typed client resolved many times
+    /// copies its options once. Keyed weakly, so neither the options nor their derivations outlive their users.
+    /// </summary>
+    private static readonly ConditionalWeakTable<JsonSerializerOptions, ConditionalWeakTable<JsonSerializerContext, JsonSerializerOptions>> _derivedOptions = new();
+
+    /// <summary>
+    /// The options of every transport given none: Blueprint's defaults, one instance so that what is cached by options (the
+    /// metadata resolved from them, the options derived from them for a context, a typed client's plan) is made once, and
+    /// locked so that no holder of it can change it under the others. Made on first use, so that a process with System.Text.Json's
+    /// reflection turned off, whose transports are all given metadata of their own, never makes options that need it.
+    /// </summary>
+    private static readonly Lazy<JsonSerializerOptions> _defaultJsonOptions = new(CreateDefaultJsonOptions, LazyThreadSafetyMode.ExecutionAndPublication);
+
     private readonly System.Net.Http.HttpClient _httpClient;
     private readonly JsonSerializerOptions _jsonOptions;
 
@@ -47,11 +63,14 @@ public partial class BlueprintHttpClient
     /// Initialises a new instance of the <see cref="BlueprintHttpClient"/> class.
     /// </summary>
     /// <param name="httpClient">The configured <see cref="System.Net.Http.HttpClient"/>, whose base address the URLs are relative to.</param>
-    /// <param name="jsonOptions">JSON serialization options, defaulting to Blueprint's standard camelCase config.</param>
+    /// <param name="jsonOptions">
+    /// JSON serialization options; by default Blueprint's standard camelCase options, one read-only instance that every
+    /// transport given none shares.
+    /// </param>
     public BlueprintHttpClient(System.Net.Http.HttpClient httpClient, JsonSerializerOptions? jsonOptions = null)
     {
         this._httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        this._jsonOptions = jsonOptions ?? BlueprintJsonOptions.CreateDefaultOptions();
+        this._jsonOptions = jsonOptions ?? _defaultJsonOptions.Value;
     }
 
     /// <summary>
@@ -59,6 +78,53 @@ public partial class BlueprintHttpClient
     /// <c>Common.Core/Api/BlueprintHttpClient.cs:47-50</c>), so a caller can read or set its default headers.
     /// </summary>
     public System.Net.Http.HttpClient HttpClient => this._httpClient;
+
+    /// <summary>
+    /// Gets the JSON options every call reads and writes with, by which a typed client finds the metadata it resolved from
+    /// them once. They are read-only once a call has used them or metadata has been resolved from them.
+    /// </summary>
+    public JsonSerializerOptions JsonOptions => this._jsonOptions;
+
+    /// <summary>
+    /// Makes a client that sends with the same <see cref="HttpClient"/> and reads and writes with the metadata of a
+    /// serializer context, as well as this client's JSON options, whose converters still apply.
+    /// </summary>
+    /// <remarks>
+    /// The options are derived once for each pair of this client's options instance and the context, then reused, so making
+    /// such a client for each resolve of a transient typed client over the same options copies nothing after the first: a
+    /// transport given no options shares one default instance, and one given them from DI is given the same instance each time.
+    /// Options still open to change are derived afresh each time instead, as what was derived from them would otherwise be
+    /// returned after they changed; they are read-only once a serializer call or <see cref="ResolveTypeInfo{T}"/> has used them.
+    /// </remarks>
+    /// <param name="context">The context whose metadata is consulted before the options' own.</param>
+    /// <returns>The new client; this client is unchanged.</returns>
+    public BlueprintHttpClient WithSerializerContext(JsonSerializerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return new BlueprintHttpClient(this._httpClient, GetDerivedOptions(this._jsonOptions, context));
+    }
+
+    /// <summary>
+    /// Resolves the metadata this client's JSON options give a type, for a reader or a request to be given once rather than
+    /// to look it up on every call.
+    /// </summary>
+    /// <remarks>
+    /// Options no serializer call has used yet are locked first, as that first use would lock them: until then options without
+    /// a resolver of their own (<see cref="JsonSerializerDefaults.Web"/>'s, Blueprint's defaults) resolve no metadata, and
+    /// options open to change cache none, so the same type's metadata could not be resolved once.
+    /// </remarks>
+    /// <typeparam name="T">The type.</typeparam>
+    /// <returns>The type's metadata, the one instance the options hold for it.</returns>
+    public JsonTypeInfo<T> ResolveTypeInfo<T>()
+    {
+        if (!this._jsonOptions.IsReadOnly)
+        {
+            this._jsonOptions.MakeReadOnly(populateMissingResolver: true);
+        }
+
+        return (JsonTypeInfo<T>)this._jsonOptions.GetTypeInfo(typeof(T));
+    }
 
     /// <summary>
     /// Sends an operation to the remote API with the given HTTP method and URL, and reads a successful response with
@@ -71,7 +137,9 @@ public partial class BlueprintHttpClient
     /// <c>Common.Core/Api/BlueprintHttpClient.cs:79</c>, <c>:88-91</c>) and as the host reads them.
     /// </para>
     /// <para>
-    /// <paramref name="options"/>' <see cref="CallOptions.ModifyRequest"/> runs on the built request before it is sent.
+    /// <paramref name="options"/>' <see cref="CallOptions.ModifyRequest"/> runs on the built request, then
+    /// <paramref name="requestModifier"/>, then <paramref name="credential"/> is applied, so the credential wins over anything
+    /// either set, before it is sent.
     /// A request that cannot be sent, or answers late, fails as a <see cref="BlueprintApiException"/>, as does any response
     /// that is not a success; a 422 fails as a <see cref="ValidationException"/>. A reader only ever reads a success.
     /// </para>
@@ -94,11 +162,17 @@ public partial class BlueprintHttpClient
     /// <param name="operation">The operation to send.</param>
     /// <param name="operationTypeInfo">
     /// The metadata to write the body with, from this client's JSON options; or <see langword="null"/> to write it as the
-    /// operation's run-time type with those options.
+    /// operation's run-time type with those options, as an instance of a type derived from <typeparamref name="TOperation"/>
+    /// is written whatever this is.
     /// </param>
     /// <param name="reader">The reader of a successful response, chosen for the operation's declared result.</param>
     /// <param name="operationName">The operation's name, which a failure to read the response names.</param>
     /// <param name="options">Optional per-call request customisation.</param>
+    /// <param name="requestModifier">
+    /// The customisation the caller applies to each of its requests, such as a typed client's <c>WithRequestModifier</c>
+    /// modifiers, run after <paramref name="options"/>' own; or <see langword="null"/> for none.
+    /// </param>
+    /// <param name="credential">The credential to authenticate the request with, applied last; or <see langword="null"/> for none.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The response, as <paramref name="reader"/> read it.</returns>
     /// <exception cref="BlueprintApiException">The request could not be sent or timed out, or the response was not a success.</exception>
@@ -112,6 +186,8 @@ public partial class BlueprintHttpClient
         ResponseReader<TResult> reader,
         string operationName,
         CallOptions? options,
+        Action<HttpRequestMessage>? requestModifier = null,
+        IUpstreamCredential? credential = null,
         CancellationToken cancellationToken = default)
         where TOperation : class, IOperation
     {
@@ -122,6 +198,12 @@ public partial class BlueprintHttpClient
 
         using var request = this.CreateRequest(method, url, operation, operationTypeInfo);
         options?.ModifyRequest?.Invoke(request);
+        requestModifier?.Invoke(request);
+
+        if (credential is not null)
+        {
+            await credential.ApplyAsync(request, cancellationToken).ConfigureAwait(false);
+        }
 
         try
         {
@@ -234,6 +316,57 @@ public partial class BlueprintHttpClient
         };
     }
 
+    private static JsonSerializerOptions CreateDefaultJsonOptions()
+    {
+        var options = BlueprintJsonOptions.CreateDefaultOptions();
+        options.MakeReadOnly(populateMissingResolver: true);
+
+        return options;
+    }
+
+    private static JsonSerializerOptions GetDerivedOptions(JsonSerializerOptions options, JsonSerializerContext context)
+    {
+        if (!options.IsReadOnly)
+        {
+            // Not cached, as the options can still change, and what is derived from them is a copy of how they are now.
+            return DeriveOptions(options, context);
+        }
+
+        var derivations = _derivedOptions.GetOrCreateValue(options);
+
+        return derivations.TryGetValue(context, out var derived)
+            ? derived
+            : derivations.GetValue(context, key => DeriveOptions(options, key));
+    }
+
+    private static JsonSerializerOptions DeriveOptions(JsonSerializerOptions options, JsonSerializerContext context)
+    {
+        // A copy, so the caller's options are neither locked by use nor changed.
+        var derived = new JsonSerializerOptions(options);
+        var hadResolver = derived.TypeInfoResolver is not null;
+
+        // A context that is the options' own resolver is already the only thing consulted, and cannot be put in front of itself.
+        // One in their chain is moved to the front of the copy's, so that it is consulted before a reflection resolver ahead of it.
+        if (!ReferenceEquals(derived.TypeInfoResolver, context))
+        {
+            derived.TypeInfoResolverChain.Remove(context);
+            derived.TypeInfoResolverChain.Insert(0, context);
+        }
+
+        if (!hadResolver)
+        {
+            // Options that had no resolver read through reflection; the context ahead of it must not take that away from the
+            // types it does not cover.
+            derived.TypeInfoResolverChain.Add(new DefaultJsonTypeInfoResolver());
+        }
+
+        // Locked, as the options a call uses are: options still open to change resolve their metadata afresh on each ask, and
+        // these are shared.
+        derived.MakeReadOnly();
+
+        return derived;
+    }
+
     private HttpRequestMessage CreateRequest<TOperation>(HttpMethod method, string? url, TOperation operation, JsonTypeInfo<TOperation>? operationTypeInfo)
         where TOperation : class, IOperation
     {
@@ -256,9 +389,11 @@ public partial class BlueprintHttpClient
 
         if (method != HttpMethod.Get)
         {
-            request.Content = operationTypeInfo is null
-                ? JsonContent.Create(operation, operation.GetType(), options: this._jsonOptions)
-                : JsonContent.Create(operation, operationTypeInfo);
+            // The declared type's metadata writes none of a derived type's own members, so an instance of one is written as its
+            // run-time type, as an operation without metadata is.
+            request.Content = operationTypeInfo is not null && operation.GetType() == typeof(TOperation)
+                ? JsonContent.Create(operation, operationTypeInfo)
+                : JsonContent.Create(operation, operation.GetType(), options: this._jsonOptions);
         }
 
         return request;
@@ -499,7 +634,7 @@ public partial class BlueprintHttpClient
 
             var errors = root.ValueKind == JsonValueKind.Object
                          && root.TryGetProperty("errors", out var errorsElement)
-                         && errorsElement.Deserialize<Dictionary<string, string[]>>(this._jsonOptions) is { } readErrors
+                         && ReadValidationErrors(errorsElement) is { } readErrors
                 ? readErrors
                 : [];
 
@@ -513,6 +648,65 @@ public partial class BlueprintHttpClient
                     [string.Empty] = [body],
                 });
         }
+    }
+
+    /// <summary>
+    /// Reads the <c>errors</c> member of a 422 as <c>Deserialize&lt;Dictionary&lt;string, string[]&gt;&gt;</c> read it, by hand:
+    /// the transport's own types must not depend on the consumer's resolver, which with reflection disabled supplies no
+    /// metadata for them. Keys are kept exactly as sent (a later duplicate replaces an earlier), a value is a JSON array of
+    /// strings or <c>null</c>, and a <c>null</c> element is a <see langword="null"/> string, as the serializer read them.
+    /// </summary>
+    /// <param name="errors">The <c>errors</c> member's value.</param>
+    /// <returns>The errors, or <see langword="null"/> for a JSON <c>null</c>.</returns>
+    /// <exception cref="JsonException">
+    /// The value is not an object, or a member of it is not an array of strings, as the serializer threw for one; the caller
+    /// treats it as an unreadable body.
+    /// </exception>
+    private static Dictionary<string, string[]>? ReadValidationErrors(JsonElement errors)
+    {
+        if (errors.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (errors.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException($"The validation errors are a JSON {errors.ValueKind}, not an object.");
+        }
+
+        var result = new Dictionary<string, string[]>();
+
+        foreach (var member in errors.EnumerateObject())
+        {
+            if (member.Value.ValueKind == JsonValueKind.Null)
+            {
+                result[member.Name] = null!;
+
+                continue;
+            }
+
+            if (member.Value.ValueKind != JsonValueKind.Array)
+            {
+                throw new JsonException($"The validation errors for '{member.Name}' are a JSON {member.Value.ValueKind}, not an array of strings.");
+            }
+
+            var messages = new string[member.Value.GetArrayLength()];
+            var index = 0;
+
+            foreach (var message in member.Value.EnumerateArray())
+            {
+                messages[index++] = message.ValueKind switch
+                {
+                    JsonValueKind.String => message.GetString()!,
+                    JsonValueKind.Null => null!,
+                    _ => throw new JsonException($"A validation error for '{member.Name}' is a JSON {message.ValueKind}, not a string."),
+                };
+            }
+
+            result[member.Name] = messages;
+        }
+
+        return result;
     }
 
     /// <summary>

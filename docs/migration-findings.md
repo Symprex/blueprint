@@ -23,7 +23,7 @@
 | Marten integration | ✅ Done | `IUnitOfWork`, scoped tenant sessions, and outbox support are in place |
 | Rebus integration | ✅ Done | Auto-detecting modules, transaction scope, subscriptions, and handler discovery are ready |
 | Hangfire integration | ✅ Done | Schedule providers, recurring tasks, and queue selection are supported; S365 keeps custom partitioned storage/admin ops |
-| HTTP client / gateway support | ✅ Done | `CallAsync` shims, `CallOptions`, JWT forwarding, `StatusCodeResult`, `PlainTextResult`, `ProxyResult`, and timeout mapping are supported |
+| HTTP client / gateway support | ✅ Done | `CallOptions`, JWT forwarding, `StatusCodeResult`, `PlainTextResult`, `ProxyResult`, and timeout mapping are supported |
 | Handler discovery | ✅ Verified | Inline `Invoke`/`InvokeAsync`/`Handle`/`HandleAsync` plus external handler classes all work |
 | BlueprintApiOperations base class | ✅ Verified | `Context`, `Identity`, `Logger`, `CancellationToken`, `HttpContext`, `HttpRequest`, and `HttpResponse` map directly |
 | ResourceEvent contract | ✅ Verified | Both `ResourceEvent<T>` (legacy, 253 S365 operations) and `ResourceEventResult<T>` (new) are supported by the source generator — zero-churn on return types |
@@ -549,7 +549,7 @@ The consolidated performance story is simple: the generated pipelines are alread
 ## HTTP Client / Gateway
 
 ### `CallAsync`, `SendAsync`, and minimal migration churn
-S365 gateways use `BlueprintHttpClient.CallAsync<TResponse>(IReturn<TResponse>, CallOptions?, CancellationToken)`, so the new client keeps `CallAsync` shims that delegate directly to `SendAsync` rather than forcing a mass rename. The package now also exposes a non-generic `BlueprintHttpClient` compatibility base so older S365-generated partial classes can still hold a legacy `_blueprintHttpClient` field while newer code continues to construct `BlueprintHttpClient<TApp>`. `CallOptions` is intentionally the same simple shape—`Action<HttpRequestMessage>? ModifyRequest`—and generated typed client extensions also carry `CallOptions` overloads so existing gateway call sites can stay almost unchanged.
+S365 gateways use `BlueprintHttpClient.CallAsync<TResponse>(IReturn<TResponse>, CallOptions?, CancellationToken)`, so the client once kept `CallAsync` shims that delegated to `SendAsync` and a compatibility base for older S365-generated partial classes. Those shims were removed in the next major release: S365 clients move to generated `[BlueprintClient]` classes (see the [consumer migration guide](consumer-migration-guide.md#migrating-signature-365-service-clients-to-blueprint-clients)), and the non-generic `BlueprintHttpClient` is now the concrete transport. `CallOptions` is intentionally the same simple shape—`Action<HttpRequestMessage>? ModifyRequest`—and generated typed client extensions also carry `CallOptions` overloads so existing gateway call sites can stay almost unchanged.
 
 ### Token forwarding and registration pattern
 The gateway auth story is also direct. `HttpClientTokenForwarding.ForwardAuthorizationHeader(sp, client)` now replaces S365’s older manual helper and forwards the inbound `Authorization` (and related request metadata) into downstream service calls. The new registration pattern is therefore concise and explicit:
@@ -565,7 +565,7 @@ services.AddBlueprintHttpClient<BackendApp>((sp, client) =>
 ### Response handling and resilience
 BlueprintHttpClient now covers the S365 result surface that was duplicated across several findings. It recognizes `StatusCodeResult` subclasses by matching their static `Instance` singleton, handles `PlainTextResult` for non-JSON payloads such as `text/vcard`, maps `TaskCanceledException` to `RequestTimeout`, maps `HttpRequestException` to `InternalServerError`, and uses cached property metadata plus efficient query-string building to avoid per-request reflection churn.
 
-A 204 for `SendAsync<T>`/`CallAsync<T>` is read as legacy's client read it (v1.0.3; it was `default` before): as a result
+A 204 for `SendAsync<T>`/the since-removed `CallAsync<T>` is read as legacy's client read it (v1.0.3; it was `default` before): as a result
 the host writes as an empty 204 (`HttpNoContentResult`, a deleted `KeyOnlyResourceEventResult`,
 `StatusCodeResult.NoContent`), as `StatusCodeResult.NoContent.Instance` when `T` can hold a `StatusCodeResult` (`object`,
 `OperationResult`), and otherwise as an `InvalidOperationException` ("Could not understand the response of calling …").
@@ -575,7 +575,7 @@ converter matched them, so one written in another casing is an extension.
 ### ResourceEvent HTTP-client fix
 A real compatibility gap did exist for typed `ResourceEvent<T>` HTTP responses. Because the base `ResourceEvent.Data` property is `object?` and the typed `new TResource? Data` property is ignored during default STJ deserialization, the client could surface `JsonElement` instead of `TResource`. The fix is explicit envelope parsing in `SendResourceEventEnvelopeAsync<TResource>()`, which reconstructs a properly typed `ResourceEvent<TResource>` including `$object`, event metadata, and the typed `data` payload. Its `metadata`, `secureData` and `changedValues` are read as `SendAsync` reads a resource event's (below): a number as an `int`, or a `double` when it is no `int` (v1.0.3; every number was a `double` before).
 
-`SendAsync<T>`/`CallAsync<T>` (and a `Results<,>` member) read every generic resource event type the host writes —
+`SendAsync<T>`/the since-removed `CallAsync<T>` (and a `Results<,>` member) read every generic resource event type the host writes —
 `ResourceEvent<T>`, `ResourceCreated<T>`, `ResourceUpdated<T>`, `ResourceDeleted<T>` — as legacy's
 `JsonConverterFactoryForResourceEventOfT` did (`ResourceEventReader`): an instance of the requested type with each wire
 property set by name, never through the subclasses' `eventSubId` constructor (which System.Text.Json cannot bind), and a
@@ -593,11 +593,11 @@ The gateway architecture is not exotic and no longer needs to be treated as a ri
 | Microsoft365.Gateway | Service forwarding |
 
 ### Typed client generation and coexistence
-S365’s custom `ServiceApiSourceGenerator` is orthogonal to Blueprint source generation, not a blocker. It generated typed interfaces over `BlueprintHttpClient.CallAsync`, while new Blueprint can generate typed extension methods over `BlueprintHttpClient<TApp>`. Both patterns can coexist during migration, and the framework now routes typed `ResourceEvent<T>` returns through the manual envelope parser so those generated client layers do not lose fidelity.
+S365’s custom `ServiceApiSourceGenerator` is orthogonal to Blueprint source generation, not a blocker. It generated typed interfaces over `BlueprintHttpClient.CallAsync`; Blueprint now replaces it with `[BlueprintClient]`, which generates the same interface shape. Both toolchains can coexist during migration, and the framework now routes typed `ResourceEvent<T>` returns through the manual envelope parser so those generated client layers do not lose fidelity.
 
 | HTTP-client fact | Consolidated finding |
 |---|---|
-| `CallAsync` usage | The corrected audit found 11 production usages, all in generated or typed-client HTTP paths rather than test infrastructure |
+| `CallAsync` usage | The corrected audit found 11 production usages, all in generated or typed-client HTTP paths rather than test infrastructure; they move to generated clients now that the shims are removed |
 | `CallOptions` | Same `ModifyRequest` shape as S365 |
 | Query-string casing | New generated clients use camelCase query keys; legacy Blueprint URLs were PascalCase |
 | `StatusCodeResult` handling | Reflection-based `Instance` matching keeps singleton result semantics |

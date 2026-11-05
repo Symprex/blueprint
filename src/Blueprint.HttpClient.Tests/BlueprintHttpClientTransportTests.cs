@@ -582,31 +582,25 @@ public sealed class BlueprintHttpClientTransportTests
     }
 
     [Fact]
+    public async Task A_standalone_content_result_is_read_with_the_wrapper_metadata_it_was_given()
+    {
+        // The transport's own options are camelCase, so "html_source" can only be read by the snake_case metadata the reader
+        // was given for the wrapper, which a standalone read deserialises (it has no union to take it out of).
+        var client = CreateClient(static _ => Json(HttpStatusCode.OK, """{"content":{"id":"t-1","name":"N","html_source":"<p>snake</p>"}}"""));
+        var wrapperTypeInfo = (JsonTypeInfo<OkResult<TemplateApiResource>>)SnakeCaseOptions().GetTypeInfo(typeof(OkResult<TemplateApiResource>));
+        var reader = new ContentResultResponseReader<OkResult<TemplateApiResource>, TemplateApiResource>(resultTypeInfo: wrapperTypeInfo);
+
+        var result = await SendArchiveAsync(client, reader);
+
+        result.Content.HtmlSource.Should().Be("<p>snake</p>");
+    }
+
+    [Fact]
     public void The_content_result_reader_refuses_a_result_that_is_not_written_as_its_content()
     {
         var act = static () => new ContentResultResponseReader<NotFoundResult<TemplateApiResource>, TemplateApiResource>();
 
         act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public async Task The_compatibility_CallAsync_of_a_transport_with_no_app_throws()
-    {
-        var client = CreateClient(static _ => Json(HttpStatusCode.OK, "[]"));
-
-        var act = () => client.CallAsync<TemplateApiResource[]>(new SearchTemplatesQuery { Q = "x", Page = 1, PageSize = 5 });
-
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*BlueprintApp*");
-    }
-
-    [Fact]
-    public async Task The_compatibility_SendVoidAsync_of_a_transport_with_no_app_throws()
-    {
-        var client = CreateClient(static _ => new HttpResponseMessage(HttpStatusCode.NoContent));
-
-        var act = () => client.SendVoidAsync(new ArchiveTemplateCommand { Id = "t-1" });
-
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*BlueprintApp*");
     }
 
     [Fact]
@@ -634,6 +628,58 @@ public sealed class BlueprintHttpClientTransportTests
             reader,
             "ArchiveTemplateCommand",
             options: null);
+    }
+
+    [Fact]
+    public void Transports_given_no_options_share_one_read_only_default()
+    {
+        var first = new BlueprintHttpClient(new System.Net.Http.HttpClient());
+        var second = new BlueprintHttpClient(new System.Net.Http.HttpClient());
+
+        first.JsonOptions.Should().BeSameAs(second.JsonOptions, "metadata resolved from options is cached by the options, so each transport's own copy would resolve it again");
+        first.JsonOptions.IsReadOnly.Should().BeTrue("options every transport shares cannot be open to change");
+        first.JsonOptions.PropertyNamingPolicy.Should().Be(JsonNamingPolicy.CamelCase);
+    }
+
+    [Fact]
+    public void Metadata_is_resolved_once_from_options_no_call_has_used_yet()
+    {
+        // Options with no resolver of their own, as JsonSerializerDefaults.Web and Blueprint's defaults are, have one only once
+        // a serializer call has used them; metadata asked of them before then, as a typed client asks when it is made, has none.
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var client = new BlueprintHttpClient(new System.Net.Http.HttpClient(), options);
+
+        var typeInfo = client.ResolveTypeInfo<ArchiveTemplateCommand>();
+
+        typeInfo.Should().BeSameAs(client.ResolveTypeInfo<ArchiveTemplateCommand>(), "metadata of locked options is cached by them");
+        options.IsReadOnly.Should().BeTrue("the options are locked, as their first use by a serializer call locks them");
+    }
+
+    [Fact]
+    public async Task An_operation_of_a_type_derived_from_the_declared_one_is_written_as_its_own_type()
+    {
+        // The declared type's metadata writes only the declared type's members; the app-driven client writes the operation as
+        // its run-time type, so the typed client writes a derived instance that way too.
+        string? body = null;
+        var client = CreateClient(
+            req =>
+            {
+                body = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            });
+
+        await client.SendAsync(
+            HttpMethod.Delete,
+            "/templates/t-1",
+            new AnnotatedArchiveTemplateCommand { Id = "t-1", Note = "tidy" },
+            client.ResolveTypeInfo<ArchiveTemplateCommand>(),
+            new JsonResponseReader<KeyOnlyResourceEventResult>(),
+            "ArchiveTemplateCommand",
+            options: null);
+
+        using var document = JsonDocument.Parse(body!);
+        document.RootElement.GetProperty("note").GetString().Should().Be("tidy");
+        document.RootElement.GetProperty("id").GetString().Should().Be("t-1");
     }
 
     private static BlueprintHttpClient CreateClient(Func<HttpRequestMessage, HttpResponseMessage> respond, string baseAddress = "https://localhost")

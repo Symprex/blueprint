@@ -1,4 +1,5 @@
 using System.Text;
+using Blueprint.SourceGenerator.Generators.Clients;
 using Blueprint.SourceGenerator.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -9,7 +10,7 @@ namespace Blueprint.SourceGenerator.Generators.App;
 /// <summary>
 /// Incremental source generator that emits strongly-typed extension methods on
 /// <c>BlueprintHttpClient&lt;TApp&gt;</c> for every operation registered through
-/// a <c>[BlueprintAppScan]</c> app class. Each generated method constructs the
+/// a <c>[BlueprintAppScan]</c> app class that also carries <c>[BlueprintHttpClientExtensions]</c>. Each generated method constructs the
 /// operation, populates its properties from method parameters, and calls the
 /// underlying typed <c>SendAsync</c> — giving consumers IntelliSense-driven,
 /// compile-time-safe service-to-service calls with zero runtime overhead beyond
@@ -18,16 +19,6 @@ namespace Blueprint.SourceGenerator.Generators.App;
 [Generator(LanguageNames.CSharp)]
 public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, ITrackedSourceGenerator
 {
-    /// <summary>
-    /// Extension of <see cref="SymbolDisplayFormat.FullyQualifiedFormat"/> that also renders
-    /// nullable reference type annotations (e.g. <c>string?</c>) on generic type arguments,
-    /// avoiding nullability mismatches like <c>Dictionary&lt;string, string&gt;</c> vs
-    /// <c>Dictionary&lt;string, string?&gt;</c>.
-    /// </summary>
-    private static readonly SymbolDisplayFormat _fullyQualifiedWithNullable =
-        SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
-            SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
-
     /// <inheritdoc />
     public string[] StageNames { get; } = StageHelpers.FindAll(typeof(Stages));
 
@@ -83,6 +74,14 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
             : appType.ContainingNamespace.ToDisplayString();
         var appClassName = appType.Name;
         var appFqn = appType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        // Extensions are opt-in: only an app that also carries [BlueprintHttpClientExtensions] gets them
+        if (!appType.GetAttributes().Any(static a =>
+                a.AttributeClass is { Name: "BlueprintHttpClientExtensionsAttribute" } attrClass
+                && attrClass.IsInNamespace("Blueprint", "HttpClient")))
+        {
+            return null;
+        }
 
         // Check if Blueprint.HttpClient assembly is referenced
         var httpClientType = context.SemanticModel.Compilation.GetTypeByMetadataName(
@@ -216,7 +215,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
                 continue;
             }
 
-            var typeFqn = prop.Type.ToDisplayString(_fullyQualifiedWithNullable);
+            var typeFqn = prop.Type.ToDisplayString(OperationClientShape.FullyQualifiedWithNullable);
             var isNullable = prop.Type.NullableAnnotation == NullableAnnotation.Annotated;
             var isRequired = prop.IsRequired
                 || propAttributes.Any(static a => a.AttributeClass?.Name is "RequiredAttribute");
@@ -296,47 +295,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
             }
 
             var resultType = iface.TypeArguments[0];
-            return ExtractResourceEventResourceType(resultType);
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Walks the type hierarchy to find <c>ResourceEvent&lt;T&gt;</c> and extract <c>T</c>.
-    /// Handles <c>ResourceEvent&lt;T&gt;</c>, <c>ResourceCreated&lt;T&gt;</c>,
-    /// <c>ResourceUpdated&lt;T&gt;</c>, and <c>ResourceDeleted&lt;T&gt;</c>.
-    /// </summary>
-    private static string? ExtractResourceEventResourceType(ITypeSymbol resultType)
-    {
-        if (resultType is not INamedTypeSymbol named)
-        {
-            return null;
-        }
-
-        // Check direct match: ResourceEvent<T>
-        if (named.IsGenericType
-            && named.TypeArguments.Length == 1
-            && named.Name == "ResourceEvent"
-            && named.IsInNamespace("Blueprint", "Http"))
-        {
-            return named.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        }
-
-        // Check subclasses: ResourceCreated<T>, ResourceUpdated<T>, ResourceDeleted<T>
-        // These extend ResourceEvent<T> which extends ResourceEvent
-        var current = named.BaseType;
-        while (current is not null)
-        {
-            if (current.IsGenericType
-                && current.TypeArguments.Length == 1
-                && current.Name == "ResourceEvent"
-                && current.IsInNamespace("Blueprint", "Http"))
-            {
-                return current.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            }
-
-            current = current.BaseType;
+            return OperationClientShape.FindResourceEventResourceType(resultType)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         }
 
         return null;
@@ -533,13 +492,13 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
         foreach (var param in positionalParams)
         {
             var paramName = ToParameterIdentifier(param.Name);
-            sb.AppendLine($"                {EscapeIdentifier(param.Name)} = {paramName},");
+            sb.AppendLine($"                {OperationClientShape.EscapeIdentifier(param.Name)} = {paramName},");
         }
 
         foreach (var param in optionalParams)
         {
             var paramName = ToParameterIdentifier(param.Name);
-            sb.AppendLine($"                {EscapeIdentifier(param.Name)} = {paramName},");
+            sb.AppendLine($"                {OperationClientShape.EscapeIdentifier(param.Name)} = {paramName},");
         }
 
         sb.AppendLine("            };");
@@ -672,19 +631,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
     /// </remarks>
     private static string ToParameterIdentifier(string propertyName)
     {
-        return EscapeIdentifier(ToCamelCase(propertyName));
-    }
-
-    /// <summary>
-    /// Returns <paramref name="name"/> prefixed with <c>@</c> when it is a reserved C# keyword. A symbol's name is
-    /// unescaped, so a property declared <c>@class</c> is named <c>class</c> and must be escaped again when emitted.
-    /// Contextual keywords (<c>value</c>, <c>async</c>, <c>var</c>) are legal identifiers here and are left alone.
-    /// </summary>
-    private static string EscapeIdentifier(string name)
-    {
-        return Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
-            ? "@" + name
-            : name;
+        return OperationClientShape.EscapeIdentifier(ToCamelCase(propertyName));
     }
 
     private static string ToCamelCase(string name)
