@@ -45,11 +45,12 @@
        place for a CI check to accept. -->
   <Target Name="_BlueprintCheckOpenApiTargetFramework">
     <PropertyGroup>
-      <_BlueprintOpenApiFrameworks>;$(TargetFrameworks.Replace(' ', ''));</_BlueprintOpenApiFrameworks>
+      <!-- Every space and line break removed, so that a list laid out over several lines still matches. -->
+      <_BlueprintOpenApiFrameworks>;$([System.Text.RegularExpressions.Regex]::Replace('$(TargetFrameworks)', '\s', ''));</_BlueprintOpenApiFrameworks>
     </PropertyGroup>
 
     <Error Condition="'$(TargetFrameworks)' != '' and !$(_BlueprintOpenApiFrameworks.Contains(';$(BlueprintOpenApiTargetFramework);'))"
-           Text="$(MSBuildProjectName) targets $(TargetFrameworks), but BlueprintOpenApiTargetFramework names $(BlueprintOpenApiTargetFramework), so its OpenAPI document would never be written. Name one of the frameworks it targets." />
+           Text="$(MSBuildProjectName) targets $(_BlueprintOpenApiFrameworks.Trim(`;`)), but BlueprintOpenApiTargetFramework names $(BlueprintOpenApiTargetFramework), so its OpenAPI document would never be written. Name one of the frameworks it targets." />
 
     <Error Condition="'$(TargetFrameworks)' == '' and '$(BlueprintOpenApiTargetFramework)' != '' and '$(BlueprintOpenApiTargetFramework)' != '$(TargetFramework)'"
            Text="$(MSBuildProjectName) targets $(TargetFramework) only, but BlueprintOpenApiTargetFramework names $(BlueprintOpenApiTargetFramework), so its OpenAPI document would never be written. Remove it, or name $(TargetFramework)." />

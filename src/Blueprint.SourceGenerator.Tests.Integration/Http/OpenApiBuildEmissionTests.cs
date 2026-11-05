@@ -133,6 +133,19 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
     }
 
     [Fact]
+    public async Task When_the_app_lists_its_frameworks_over_several_lines_then_the_named_framework_runs_the_app()
+    {
+        // The check that the named framework is one the app targets used to remove only spaces, so a framework after a
+        // line break never matched.
+        var appProject = this.CreateMultiTargetedApp("<TargetFrameworks>\n      net10.0;\n      net8.0\n    </TargetFrameworks>");
+
+        var output = await RunDotnetAsync("build", appProject, "-nologo", "-p:BlueprintEmitOpenApi=true", $"-p:BlueprintOpenApiPath={this.OutputPath}", "-p:BlueprintOpenApiTargetFramework=net8.0");
+
+        File.ReadAllText(this.OutputPath).Should().Be(".NETCoreApp,Version=v8.0");
+        CountOf($"MultiTargetedApp -> {this.OutputPath}", output).Should().Be(1, "one framework's build runs the app:{0}{1}", Environment.NewLine, output);
+    }
+
+    [Fact]
     public async Task When_only_another_framework_is_built_then_the_named_framework_is_built_and_runs_the_app()
     {
         // A build of one framework (dotnet build -f) that is not the one named used to write nothing and succeed, leaving
