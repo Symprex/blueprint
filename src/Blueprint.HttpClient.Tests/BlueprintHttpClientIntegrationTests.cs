@@ -785,15 +785,41 @@ public sealed class BlueprintHttpClientTests : IClassFixture<SampleAppFixture>
     }
 
     [Fact]
-    public async Task CallAsync_delegates_to_SendAsync_with_StatusCodeResult()
+    public async Task SendAsync_reads_a_StatusCodeResult_response_as_its_singleton()
     {
         var handler = new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.Accepted));
         var client = this._fixture.CreateClient(handler);
 
-        // Use SendAsync<TResponse>(IOperation) — CallAsync is just an alias
         var result = await client.SendAsync<Runtime.Exec.StatusCodeResult.Accepted>(
             (Model.IOperation)new ArchiveTemplateCommand { Id = "t-1" });
 
         result.Should().BeSameAs(Runtime.Exec.StatusCodeResult.Accepted.Instance);
+    }
+
+    [Fact]
+    public async Task HttpClient_is_the_inner_client_so_a_default_header_set_through_it_is_sent_with_the_next_call()
+    {
+        // Legacy's client exposed its HttpClient (Signature365 Common.Core/Api/BlueprintHttpClient.cs:47-50), and
+        // Signature365ProxyTests reads DefaultRequestHeaders.UserAgent from it.
+        HttpRequestMessage? captured = null;
+        var handler = new FakeHttpHandler(req =>
+        {
+            captured = req;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[]", Encoding.UTF8, "application/json"),
+            };
+        });
+
+        var client = this._fixture.CreateClient(handler);
+
+        client.HttpClient.BaseAddress.Should().Be(new Uri("https://localhost"));
+
+        client.HttpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Signature365-Test/1.0");
+
+        await client.SendAsync<TemplateApiResource[]>(new SearchTemplatesQuery { Q = "compat", Page = 1, PageSize = 5 });
+
+        captured.Should().NotBeNull();
+        captured!.Headers.UserAgent.ToString().Should().Be("Signature365-Test/1.0");
     }
 }

@@ -47,7 +47,7 @@ namespace Contract
         IItemsApi WithCredential(global::Blueprint.HttpClient.IUpstreamCredential credential);
     }
 
-    partial class ItemsApi : IItemsApi
+    partial class ItemsApi : IItemsApi, global::Blueprint.HttpClient.IBlueprintClient<ItemsApi>
     {
         private readonly global::Blueprint.HttpClient.BlueprintHttpClient _client;
         private readonly BlueprintClientPlan _plan;
@@ -62,6 +62,14 @@ namespace Contract
         {
             this._client = client ?? throw new global::System.ArgumentNullException(nameof(client));
             this._plan = BlueprintClientPlan.For(this._client);
+        }
+
+        /// <inheritdoc />
+        static ItemsApi global::Blueprint.HttpClient.IBlueprintClient<ItemsApi>.Create(global::System.IServiceProvider services, global::Blueprint.HttpClient.BlueprintHttpClient client)
+        {
+            global::System.ArgumentNullException.ThrowIfNull(services);
+
+            return new ItemsApi(client);
         }
 
         private ItemsApi(ItemsApi source, global::Blueprint.HttpClient.IUpstreamCredential? credential, global::System.Action<global::System.Net.Http.HttpRequestMessage>? requestModifier)

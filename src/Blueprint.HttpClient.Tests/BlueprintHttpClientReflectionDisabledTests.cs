@@ -14,7 +14,24 @@ namespace Blueprint.HttpClient.Tests;
 public sealed class BlueprintHttpClientReflectionDisabledTests
 {
     [Fact]
-    public async Task A_transport_given_source_generated_metadata_is_usable_when_reflection_is_disabled()
+    public Task A_transport_given_source_generated_metadata_is_usable_when_reflection_is_disabled()
+    {
+        return RunProbeAsync();
+    }
+
+    [Fact]
+    public Task A_registered_client_declaring_a_serializer_context_resolves_and_shares_its_options_over_default_options_when_reflection_is_disabled()
+    {
+        return RunProbeAsync("registration");
+    }
+
+    [Fact]
+    public Task A_422_with_errors_is_a_validation_exception_when_reflection_is_disabled_and_the_context_covers_only_the_clients_own_types()
+    {
+        return RunProbeAsync("validation");
+    }
+
+    private static async Task RunProbeAsync(string? mode = null)
     {
         // Built beside this project's own output, whatever the configuration and target framework folders are called.
         var probe = Path.Combine(
@@ -25,7 +42,7 @@ public sealed class BlueprintHttpClientReflectionDisabledTests
             "Blueprint.HttpClient.ReflectionDisabledProbe.dll");
         File.Exists(probe).Should().BeTrue("the test project builds the probe");
 
-        using var process = Process.Start(new ProcessStartInfo("dotnet", $"\"{probe}\"")
+        using var process = Process.Start(new ProcessStartInfo("dotnet", $"\"{probe}\" {mode}")
         {
             RedirectStandardError = true,
             RedirectStandardOutput = true,

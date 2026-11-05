@@ -11,4 +11,10 @@ namespace Blueprint.HttpClient.Tests;
 [BlueprintClient]
 [BlueprintClientInclude(typeof(CopyTemplateCommand))]
 [BlueprintClientInclude(typeof(FindTemplateCopiesQuery))]
-internal partial class LocalOperationsApi;
+internal partial class LocalOperationsApi
+{
+    /// <summary>
+    /// Gets the transport every call is sent with, which a registration test reads the JSON options of.
+    /// </summary>
+    public BlueprintHttpClient Transport => this._client;
+}

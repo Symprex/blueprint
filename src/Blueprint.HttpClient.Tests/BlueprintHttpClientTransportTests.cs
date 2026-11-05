@@ -604,26 +604,6 @@ public sealed class BlueprintHttpClientTransportTests
     }
 
     [Fact]
-    public async Task The_compatibility_CallAsync_of_a_transport_with_no_app_throws()
-    {
-        var client = CreateClient(static _ => Json(HttpStatusCode.OK, "[]"));
-
-        var act = () => client.CallAsync<TemplateApiResource[]>(new SearchTemplatesQuery { Q = "x", Page = 1, PageSize = 5 });
-
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*BlueprintApp*");
-    }
-
-    [Fact]
-    public async Task The_compatibility_SendVoidAsync_of_a_transport_with_no_app_throws()
-    {
-        var client = CreateClient(static _ => new HttpResponseMessage(HttpStatusCode.NoContent));
-
-        var act = () => client.SendVoidAsync(new ArchiveTemplateCommand { Id = "t-1" });
-
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*BlueprintApp*");
-    }
-
-    [Fact]
     public void Constructor_throws_when_httpClient_is_null()
     {
         var act = static () => new BlueprintHttpClient(null!);

@@ -77,11 +77,17 @@ internal sealed record TypedClientOperationModel(
 /// <param name="ParameterName">The constructor parameter the field is given by, escaped where it is a keyword.</param>
 /// <param name="TypeFqn">The field's fully qualified type, nullable annotations included.</param>
 /// <param name="RefusesNull">Whether a missing value is refused: the field is a reference type not declared nullable.</param>
+/// <param name="ResolveTypeFqn">The type the field is resolved from the container as: its own, with no nullable annotation.</param>
+/// <param name="IsOptional">Whether the field is declared nullable, so that a container with none leaves it null rather than failing.</param>
+/// <param name="IsNullableValueType">Whether the field is a <c>Nullable&lt;T&gt;</c>, which a missing service cannot be read as by <c>GetService&lt;T&gt;</c>, which would unbox null.</param>
 internal sealed record TypedClientFieldModel(
     string FieldName,
     string ParameterName,
     string TypeFqn,
-    bool RefusesNull);
+    bool RefusesNull,
+    string ResolveTypeFqn,
+    bool IsOptional,
+    bool IsNullableValueType);
 
 /// <summary>
 /// A public method of the hand-written class that the generated interface repeats, so a caller holding the interface can call

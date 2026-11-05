@@ -555,6 +555,50 @@ public class TypedClientDiagnosticsTests
     }
 
     [Fact]
+    public void When_a_member_is_named_Create_then_it_is_the_class_s_own_and_the_generated_half_still_compiles()
+    {
+        // The generated half implements IBlueprintClient<T>.Create explicitly, so a hand-written Create of any signature is
+        // not a conflict.
+        var result = Compile(
+            """
+            using Blueprint.HttpClient;
+            using Contract;
+
+            namespace Client;
+
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(SearchItemsQuery))]
+            public partial class ItemsApi
+            {
+                public static ItemsApi Create(string name) => null!;
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error || d.Id == "BPCL009").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_the_client_class_is_itself_named_Create_then_the_generated_half_compiles()
+    {
+        // A method cannot be named as its enclosing class (CS0542), so the factory is an explicit interface implementation.
+        var result = Compile(
+            """
+            using Blueprint.HttpClient;
+            using Contract;
+
+            namespace Client;
+
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(SearchItemsQuery))]
+            public partial class Create
+            {
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+    }
+
+    [Fact]
     public void When_a_constructor_takes_a_generated_constructor_s_parameters_then_BPCL009_is_reported_at_it()
     {
         // The generated half declares the constructor the client is made with, over the transport and then each readonly
