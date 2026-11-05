@@ -108,32 +108,28 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
     }
 
     [Fact]
-    public async Task When_the_app_targets_several_frameworks_then_only_its_framework_builds_run_the_app()
+    public async Task When_the_app_targets_several_frameworks_then_only_its_first_framework_runs_the_app()
     {
         // The outer build of a project with TargetFrameworks has no TargetPath, and used to run `dotnet exec ""`, which
-        // failed the build after every framework's own build had emitted the document. This app does what the document
-        // mode does when it succeeds: it records completion.
-        var appDirectory = Path.Combine(this._directory, "MultiTargetedApp");
-        var appProject = Path.Combine(appDirectory, "MultiTargetedApp.csproj");
-        var targets = Path.Combine(FindRepositoryRoot(), "src", "Blueprint.Runtime", "buildTransitive", "Blueprint.Runtime.targets");
-        Directory.CreateDirectory(appDirectory);
-        var appProjectXml = $"""
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup>
-                <OutputType>Exe</OutputType>
-                <TargetFrameworks>net10.0</TargetFrameworks>
-              </PropertyGroup>
-              <Import Project="{targets}" />
-            </Project>
-            """;
-        File.WriteAllText(appProject, appProjectXml);
-        File.WriteAllText(
-            Path.Combine(appDirectory, "Program.cs"),
-            "System.IO.File.WriteAllText(System.Environment.GetEnvironmentVariable(\"BLUEPRINT_OPENAPI_COMPLETION_PATH\")!, \"\");");
+        // failed the build after the framework builds had emitted the document. Framework builds may run in parallel, so
+        // each running the app would race to write one file, and the last to finish would decide what it held.
+        var appProject = this.CreateMultiTargetedApp();
 
         var output = await RunDotnetAsync("build", appProject, "-nologo", "-p:BlueprintEmitOpenApi=true", $"-p:BlueprintOpenApiPath={this.OutputPath}");
 
-        output.Should().Contain($"MultiTargetedApp -> {this.OutputPath}", "the framework's own build still runs the app");
+        File.ReadAllText(this.OutputPath).Should().Be(".NETCoreApp,Version=v10.0");
+        CountOf($"MultiTargetedApp -> {this.OutputPath}", output).Should().Be(1, "one framework's build runs the app:{0}{1}", Environment.NewLine, output);
+    }
+
+    [Fact]
+    public async Task When_the_app_names_the_framework_to_emit_from_then_that_framework_runs_the_app()
+    {
+        var appProject = this.CreateMultiTargetedApp();
+
+        var output = await RunDotnetAsync("build", appProject, "-nologo", "-p:BlueprintEmitOpenApi=true", $"-p:BlueprintOpenApiPath={this.OutputPath}", "-p:BlueprintOpenApiTargetFramework=net8.0");
+
+        File.ReadAllText(this.OutputPath).Should().Be(".NETCoreApp,Version=v8.0");
+        CountOf($"MultiTargetedApp -> {this.OutputPath}", output).Should().Be(1, "one framework's build runs the app:{0}{1}", Environment.NewLine, output);
     }
 
     public void Dispose()
@@ -142,6 +138,18 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
         {
             Directory.Delete(this._directory, recursive: true);
         }
+    }
+
+    private static int CountOf(string value, string text)
+    {
+        var count = 0;
+
+        for (var index = text.IndexOf(value, StringComparison.Ordinal); index >= 0; index = text.IndexOf(value, index + value.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     private static string GatewayDirectory => Path.Combine(FindRepositoryRoot(), "src", "Blueprint.SourceGenerator.Sample.Gateway");
@@ -200,6 +208,36 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
         }
 
         return (process.ExitCode, await output + Environment.NewLine + await error);
+    }
+
+    /// <summary>
+    /// Creates an app that targets two frameworks and does what the document mode does when it succeeds: it writes the
+    /// document, here the name of the framework it runs on, and records completion.
+    /// </summary>
+    private string CreateMultiTargetedApp()
+    {
+        var appDirectory = Path.Combine(this._directory, "MultiTargetedApp");
+        var appProject = Path.Combine(appDirectory, "MultiTargetedApp.csproj");
+        var targets = Path.Combine(FindRepositoryRoot(), "src", "Blueprint.Runtime", "buildTransitive", "Blueprint.Runtime.targets");
+        Directory.CreateDirectory(appDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(this.OutputPath)!);
+        var appProjectXml = $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFrameworks>net10.0;net8.0</TargetFrameworks>
+              </PropertyGroup>
+              <Import Project="{targets}" />
+            </Project>
+            """;
+        File.WriteAllText(appProject, appProjectXml);
+        const string Program = """
+            System.IO.File.WriteAllText(System.Environment.GetEnvironmentVariable("BLUEPRINT_OPENAPI_OUTPUT_PATH")!, System.AppContext.TargetFrameworkName);
+            System.IO.File.WriteAllText(System.Environment.GetEnvironmentVariable("BLUEPRINT_OPENAPI_COMPLETION_PATH")!, "");
+            """;
+        File.WriteAllText(Path.Combine(appDirectory, "Program.cs"), Program);
+
+        return appProject;
     }
 
     private static string FindRepositoryRoot()

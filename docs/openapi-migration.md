@@ -38,6 +38,10 @@ package directly or through another package has it. Only app projects act on the
 projects ignore it, so it can be passed to a whole solution's build, which writes each app's own `Spec/openapi.json`. A project that references `Blueprint.Runtime` as a project imports
 `src/Blueprint.Runtime/buildTransitive/Blueprint.Runtime.targets` itself, as the sample gateway does.
 
+An app with `TargetFrameworks` writes its document from one framework's build: the first it lists, or the one
+`BlueprintOpenApiTargetFramework` names. Framework builds may run in parallel, so letting each write the one file would
+race.
+
 The document is written from what `AddBlueprintApi` declares, so declare where the API is mapped and how it is described
 there, and call `MapBlueprintApi` without arguments:
 
