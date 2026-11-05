@@ -271,8 +271,10 @@ Background tasks do **not** automatically restore tenant context. Services shoul
 
 | Abstraction | Class | Purpose |
 |---|---|---|
-| Typed HTTP client | `BlueprintHttpClient<TApp>` | Calls Blueprint APIs using operation types |
-| Legacy compatibility base | `BlueprintHttpClient` | Lets old S365-generated partial clients compile against the non-generic client shape |
+| Typed HTTP client | `BlueprintHttpClient<TApp>` | Calls Blueprint APIs using operation types. Generated extension methods on it are emitted only for an app carrying `[BlueprintHttpClientExtensions]` |
+| Concrete transport | `BlueprintHttpClient` | The non-generic transport every Blueprint HTTP call goes through: sends a call with the HTTP method and URL its caller resolved, maps failures, and hands a success response to the reader its caller chose. `BlueprintHttpClient<TApp>` and generated typed clients both call it |
+| Generated typed client | `[BlueprintClient]` + `[BlueprintClientInclude]` | A hand-written `partial` class completed by the source generator into `I{Class}` plus its implementation (see [Typed Clients](#typed-clients)) |
+| Upstream credentials | `IUpstreamCredential`, `BearerTokenCredential` | Authenticates every request a typed client sends |
 | DI registration | `AddBlueprintHttpClient<TApp>()` | Registers typed `HttpClient` |
 | Fault handling | `BlueprintApiException` | An `ApiException` carrying the failed call's problem (see below) |
 
@@ -316,9 +318,18 @@ it under another name.
 
 For a `Results<T1, T2>` response type the client reads the member the host wrote, trying them in order: a
 `StatusCodeResult` (e.g. `StatusCodeResult.Accepted`) when the status is its own and there is no body, a
-`PlainTextResult` when the body is not JSON, and any other non-`OperationResult` type when it is JSON. A 204 that no
-member claims returns the default, as for any other response type; any other response that is none of them throws
-`InvalidOperationException`. Wrappers such as `OkResult<T>` are not read back.
+`PlainTextResult` when the body is not JSON, and any other non-`OperationResult` type when it is JSON. `OkResult<T>`,
+`CreatedResult<T>` and `AcceptedResult<T>` members are read back from their content at their own status (200, 201, 202),
+wrapped in the result. A response that no member claims, a 204 included, throws `InvalidOperationException`: a default
+union would hold no member at all.
+
+A 204 for any other declared result is read by that result's reader, which is chosen once per result type. A result the
+host writes with no body (`StatusCodeResult`, `HttpResult`, `OperationResult`, `object`, `HttpNoContentResult`,
+`NoResultOperationResult`, `HttpAcceptedResult`, `KeyOnlyResourceEventResult`) is the singleton, or status-only result,
+of the status; a 204 for any other result (a DTO, a `string`, an `OkResult<T>` read alone) is a contract mismatch and
+throws `InvalidOperationException`, as legacy's client did, rather than returning the default. A JSON `null` for a
+type that can hold one fails as a `response_empty` problem rather than returning `null`. The generated typed clients
+below use these same readers, chosen at compile time.
 
 `BlueprintApiException` is an `ApiException` with the problem the failure describes, as legacy S365's client threw,
 so a caller matches it by `Type`/`Title`/`HttpStatus` and a pipeline that lets it escape answers with the same problem:
@@ -337,6 +348,132 @@ so a caller matches it by `Type`/`Title`/`HttpStatus` and a pipeline that lets i
 An `HttpClient` that answers at the headers (`HttpCompletionOption.ResponseHeadersRead`, or a handler that streams)
 leaves the body to the reader, and `HttpClient.Timeout` does not cover that read: a body that stalls is bounded only by
 the call's `CancellationToken`, so pass one with a deadline.
+
+### Typed Clients
+
+A typed client is a hand-written `partial` class that the source generator completes into an `I{Class}` interface (one method per included operation) and the class's implementation of it over a `BlueprintHttpClient`. It has the shape Signature 365's `ServiceApiSourceGenerator` clients have, so S365 gateways move over without changing their call sites. A call looks up no app or descriptor at run time: the HTTP method is a constant, the URL comes from the request builders generated onto the operation itself (`Op.Http`), and the response reader is chosen at compile time. The one run-time type check is on a body: an operation whose run-time type is derived from the declared one is written as that run-time type, because the declared type's metadata would drop the derived type's own members.
+
+#### Attributes
+
+| Attribute | Placement | Purpose |
+|---|---|---|
+| `[BlueprintClient]` | A `partial`, top-level, non-generic, non-static class, `public` or `internal` | Marks the class for completion. Optional `SerializerContext` property, see below |
+| `[BlueprintClientInclude(typeof(Op))]` | The same class; repeatable | Adds one operation to the client. `Op` must be a concrete, non-generic class implementing `IOperation` that declares a result (`IReturn<T>`) |
+
+Both attributes are `[Conditional("CODE_ANALYSIS")]`, so they leave no trace in the compiled assembly. An operation from a referenced contract assembly is included the same way as one in the same project, provided that assembly was built with Blueprint's source generator (it carries the request builders as metadata).
+
+#### Generated signature and naming
+
+Each include becomes exactly this method, on the interface and the class:
+
+```csharp
+Task<R> {Name}Async(Op operation, CallOptions? options = null, CancellationToken cancellationToken = default);
+```
+
+- `{Name}` is the operation's type name with one trailing `Command` or `Query` removed: `GetTemplateQuery` becomes `GetTemplateAsync`, `SignupTenantCommand` becomes `SignupTenantAsync`, and a type with neither suffix keeps its whole name (`HealthCheck` becomes `HealthCheckAsync`).
+- `R` is the result the operation declares, exactly as written, not a wrapper. The HTTP method is the operation's own: its `[HttpGet]`, `[HttpPost]`… attribute, otherwise POST for an `ICommand` and GET for anything else. A GET carries the operation's other properties in the query string; every other method sends the operation as its JSON body.
+- `CallOptions.ModifyRequest` is the per-call hook; it runs on the built request.
+- The interface also declares `I{Class} WithCredential(IUpstreamCredential credential)` and a copy of each public method the class declares.
+
+#### Result types
+
+The reader for `R` is the one `BlueprintHttpClient<TApp>` chooses at run time, so the two clients read every response identically. In order of precedence: a nested `StatusCodeResult` by its singleton; `Results<T1, T2>` by its members' readers (see How It Works); the bodiless reader for `StatusCodeResult`, `HttpResult`, `OperationResult` and `object`; `PlainTextResult`; a resource event; `ResourceEventResult<T>`; `OkResult<T>`, `CreatedResult<T>` and `AcceptedResult<T>` by their content; and JSON for anything else, `string` included. An include with no reader (for instance a `StatusCodeResult` subclass with no public static `Instance`) is reported as BPCL008 and left out.
+
+#### Credentials
+
+`IUpstreamCredential` is a context-free strategy: `ValueTask ApplyAsync(HttpRequestMessage request, CancellationToken cancellationToken)` is given the request alone, never the operation or the caller being served. `BearerTokenCredential(string token)` sets `Authorization: Bearer {token}`. `WithCredential` returns a new client that applies the credential to every request; it replaces any credential already set, and the original client is unchanged, so a shared client can be given a per-call credential cheaply:
+
+```csharp
+var result = await api
+    .WithCredential(new BearerTokenCredential(jwt))
+    .GetTemplateAsync(new GetTemplateQuery { Id = id }, cancellationToken: ct);
+```
+
+The credential is applied last, so it wins over an `Authorization` header the caller or a modifier set.
+
+#### Extension points
+
+The generated half leaves four hooks to the hand-written half. The worked examples are `RegionalOperationsApi` and `SampleContractApi` in `src/Blueprint.HttpClient.Tests`.
+
+1. **Public methods are copied onto the interface.** Every public, non-generic instance method the class declares is repeated on `I{Class}`, so it is callable through the interface. A generic one is BPCL006; one named like a generated operation method or `WithCredential` is BPCL009.
+2. **Readonly fields become constructor parameters.** A `readonly` instance field with no initialiser, whatever its accessibility, is taken by the generated public constructor, after `client`, as a parameter named after the field without its underscore and in camel case (`_endpoints` becomes `endpoints`), and is carried by every clone. A null is refused for a non-nullable reference type. A field named `_client`, `_credential` or `_requestModifier`, or one whose parameter would be `client`, `source`, `credential`, `requestModifier` or `modify`, is BPCL009.
+3. **`partial void OnConfigure(Op operation, ref CallOptions? options)`** is declared once per included operation. Implement it to read the operation and shape the options for that call; assigning `options` replaces them. A call of an operation whose hook is not implemented is removed by the compiler. A replacement should chain the options' existing `ModifyRequest`, or the caller's modifier is lost.
+4. **`protected I{Class} WithRequestModifier(Action<HttpRequestMessage> modify)`** returns a clone that also runs `modify` on every request. It is `private` when the class is `sealed`. It is not on the interface; expose it by writing a public method that calls it. Modifiers accumulate in the order added.
+
+```csharp
+[BlueprintClient]
+[BlueprintClientInclude(typeof(FindTemplateCopiesQuery))]
+[BlueprintClientInclude(typeof(SignupTenantCommand))]
+internal partial class RegionalOperationsApi
+{
+    private readonly RegionEndpoints _endpoints;   // constructor parameter: endpoints
+
+    // Copied onto IRegionalOperationsApi; built on the protected WithRequestModifier.
+    public IRegionalOperationsApi ForRegion(string region)
+    {
+        var regionalBase = this._endpoints.Regions[region];
+
+        return this.WithRequestModifier(message =>
+        {
+            var uri = message.RequestUri!;
+
+            // A request is relative to the base address until a modifier resolves it, so one an earlier ForRegion ran on is
+            // already absolute, and an absolute URI ignores the base it is resolved against: swap its host instead.
+            message.RequestUri = uri.IsAbsoluteUri
+                ? new UriBuilder(uri) { Scheme = regionalBase.Scheme, Host = regionalBase.Host, Port = regionalBase.Port }.Uri
+                : new Uri(regionalBase, uri);
+        });
+    }
+
+    // Per-operation hook: reads the operation, chains the caller's modifier.
+    partial void OnConfigure(SignupTenantCommand operation, ref CallOptions? options)
+    {
+        var caller = options?.ModifyRequest;
+        var key = operation.IdempotencyKey;
+
+        options = new CallOptions
+        {
+            ModifyRequest = request =>
+            {
+                caller?.Invoke(request);
+                request.Headers.Add("Idempotency-Key", key);
+            },
+        };
+    }
+}
+```
+
+**Request URIs are relative when the first modifier runs, but not necessarily the next.** The URL the operation builds is relative to the `HttpClient`'s base address (a leading `/` is stripped), and `HttpClient` only makes it absolute on send. A modifier that rewrites the host, as `ForRegion` does, must combine a relative `RequestUri` against a base itself (`new Uri(regionalBase, message.RequestUri!)`); but a modifier that runs after another that did so is given an absolute one, which ignores the base it is combined with, so it must check `IsAbsoluteUri` and change the host of the URI it was given, as `ForRegion` does, or `ForRegion("eu").ForRegion("us")` would still send to the EU host.
+
+#### Request-shaping order
+
+For each call, in this order:
+
+1. `OnConfigure` runs and may replace the call's options.
+2. The request is built: the HTTP method, the relative URL (with a GET's query string) and, for any other method, the JSON body.
+3. The call's `CallOptions.ModifyRequest` (the caller's, or the one `OnConfigure` installed).
+4. Each `WithRequestModifier` modifier, in the order added.
+5. The credential from `WithCredential`.
+6. The request is sent.
+
+#### Construction and registration
+
+A client is constructed over a `BlueprintHttpClient`, which wraps a configured `HttpClient` (its base address is what the operations' URLs are relative to) and takes optional `JsonSerializerOptions`, defaulting to Blueprint's camelCase options (one read-only instance shared by every transport given none). Options passed in are locked when a typed client is first made over them, as their first serializer call would lock them. Readonly-field parameters follow:
+
+```csharp
+var transport = new BlueprintHttpClient(httpClient, jsonOptions);
+IRegionalOperationsApi api = new RegionalOperationsApi(transport, endpoints);
+```
+
+A client is cheap, immutable and thread-safe, because `WithCredential` and `WithRequestModifier` make clones that share the transport and fields. Register it with `services.AddBlueprintClient<IItemsApi, ItemsApi>((sp, client) => client.BaseAddress = ...)`, which returns the named client's `IHttpClientBuilder` (so handlers such as retry still apply), makes the client transient, and resolves each readonly field the class declares from the container through the generated `Create` (a field declared nullable is left null where the container has none).
+
+#### Serializer context
+
+`[BlueprintClient(SerializerContext = typeof(MyContext))]` optionally names a `JsonSerializerContext` for the client to read and write with. The generated constructor calls `client.WithSerializerContext(MyContext.Default)`, which derives read-only options with the context first in the resolver chain. The derived options are cached per read-only options and context (options still open to change are derived afresh for each client, so a change is never missed), so converters on the transport's options (NodaTime, for example) still apply. Each included operation's request and result type infos, and its reader, are resolved once per options instance into a plan that every client over those options shares, clones included: making a client is one lookup, and a call looks up no metadata, except for a derived operation's body or a type the plan could not resolve. A GET request type needs no context entry, as it has no body. A type reachable from one the context names (through its public properties and fields, collection and array elements, and generic arguments) is covered, as the System.Text.Json source generator gives the context metadata for it too; a request or result type the context does not cover is warning BPCL007. Without a context, the metadata comes from the JSON options' own resolver, resolved into the plan the same way; a transport given no options shares one read-only default instance, so its clients share one plan.
+
+#### Diagnostics
+
+Problems are reported at the include (BPCL002 to BPCL005, BPCL007, BPCL008), at the member (BPCL006, BPCL009) or at the class (BPCL001). For an error, the offending include or member is left out so the rest of the client is still generated. BPCL007 is a warning: the call is still generated, and only the request or result type the serializer context does not cover falls back to the JSON options' metadata. See the [BPCL table in the diagnostic reference](diagnostic-reference.md#typed-http-clients-bpcl) for each ID.
 
 ### S365 Gateway Migration
 
@@ -362,7 +499,7 @@ public class GetTemplateHandler : IQueryHandler<GetTemplateQuery, TemplateResour
 
 ### Gaps for S365
 
-- **No Authorization header injection** — Bearer token forwarding must be configured via `HttpClient` delegating handlers
+- **No automatic Authorization header injection** — On a typed client use `WithCredential(new BearerTokenCredential(jwt))`; otherwise configure bearer token forwarding via `HttpClient` delegating handlers
 - **No distributed tracing** — Add `HttpClientHandler` for W3C trace context propagation
 - **No retry/circuit breaker** — Use Polly via `IHttpClientBuilder.AddPolicyHandler()`
 - **No tenant header** — Add delegating handler for `X-Tenant-Id` header
@@ -490,7 +627,7 @@ response.StatusCode.Should().Be(HttpStatusCode.OK);
 | **Blueprint.Marten** | ✅ | ✅ UoW, outbox, events | ❌ Built-in | Tenant session isolation |
 | **Blueprint.Rebus** | ✅ | ✅ Activator, subscriptions | ❌ Built-in | Tenant from headers |
 | **Blueprint.Tasks.Hangfire** | ✅ | ✅ Schedule, recurring, retry | ❌ Built-in | Tenant context restore |
-| **Blueprint.HttpClient** | ✅ | ✅ Typed client, URL building | ❌ Built-in | Auth/tracing headers |
+| **Blueprint.HttpClient** | ✅ | ✅ Typed service clients, reflection-free registration, credentials, compile-time call plans | ❌ Built-in | Tenant/tracing headers (delegating handlers) |
 | **Blueprint.Testing** | ✅ | ✅ Full test infrastructure | ✅ `WithTenant()` | Audit/event assertions |
 
 ### Cross-Cutting: Multi-Tenancy

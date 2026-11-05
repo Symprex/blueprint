@@ -8,7 +8,7 @@ namespace Blueprint.HttpClient.Readers;
 /// the singleton, and any other success is <see langword="null"/>, for the caller to decide whether that is an error.
 /// </summary>
 /// <remarks>
-/// This is the pattern Signature365's gateways use through <c>CallAsync&lt;StatusCodeResult.Accepted&gt;(...)</c>. The
+/// This is the pattern Signature365's gateways use through <c>SendAsync&lt;StatusCodeResult.Accepted&gt;(...)</c>. The
 /// body, if any, is never read. In a union, only a response with no media type is this member.
 /// </remarks>
 /// <typeparam name="T">The nested <see cref="StatusCodeResult"/> type.</typeparam>

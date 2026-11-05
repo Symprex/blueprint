@@ -493,7 +493,7 @@ public class HttpClientRequestBuilderModuleTests
         // compilation it is invisible. Either way the derived operation declares its own, hiding the base's (CS0108 is
         // suppressed for that), so it is not an inherited member that blocks the nested class. The base here is the
         // generator's own output, so the marker it is recognised by is the one the generator emits.
-        var contract = TestHelpers.CreateGeneratedReferenceFromSource<OperationDescriptorSourceGenerator>(
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(
             """
             using Blueprint.Model;
 
@@ -935,6 +935,78 @@ public class HttpClientRequestBuilderModuleTests
         // Collection should use foreach to emit repeated keys
         source.Should().Contain("foreach (var _item in typed.Ids)");
         source.Should().Contain("ids=");
+    }
+
+    [Fact]
+    public void When_query_has_collection_of_custom_structs_then_each_elements_ToString_is_checked_before_the_key_is_added()
+    {
+        var result = CompileDescriptor(
+            """
+            [System.ComponentModel.TypeConverter(typeof(System.ComponentModel.TypeConverter))]
+            public readonly struct ItemId
+            {
+                private readonly string _value;
+                public override string ToString() => _value;
+            }
+
+            [System.ComponentModel.TypeConverter(typeof(System.ComponentModel.TypeConverter))]
+            public class ItemIds : System.Collections.Generic.List<ItemId> { }
+
+            [System.ComponentModel.TypeConverter(typeof(System.ComponentModel.TypeConverter))]
+            public class Numbers : System.Collections.Generic.List<int> { }
+
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class SearchItemsQuery : IQuery<string>
+            {
+                public ItemIds Ids { get; set; }
+                public Numbers Numbers { get; set; }
+
+                public static Task<string> HandleAsync(SearchItemsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Should().NotContain(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
+
+        var source = GetDescriptorSource(result, "SearchItemsQuery");
+
+        source.Should().Contain("foreach (var _item in typed.Ids) { { var s = _item.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"ids=\"");
+        source.Should().Contain("parts.Add(\"numbers=\" + global::System.Uri.EscapeDataString(_item.ToString()!));");
+    }
+
+    [Fact]
+    public void When_query_has_custom_struct_and_nullable_struct_then_ToString_is_checked_and_built_in_values_are_not()
+    {
+        var result = CompileDescriptor(
+            """
+            [System.ComponentModel.TypeConverter(typeof(System.ComponentModel.TypeConverter))]
+            public readonly struct ItemId
+            {
+                private readonly string _value;
+                public override string ToString() => _value;
+            }
+
+            [global::Blueprint.Model.Attributes.RootLink("/items")]
+            public partial class GetItemQuery : IQuery<string>
+            {
+                public ItemId Id { get; set; }
+                public ItemId? Other { get; set; }
+                public int Page { get; set; }
+
+                public static Task<string> HandleAsync(GetItemQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        var source = GetDescriptorSource(result, "GetItemQuery");
+
+        source.Should().Contain("{ var s = typed.Id.ToString(); if (!string.IsNullOrEmpty(s))");
+        source.Should().Contain("{ var s = typed.Other.Value.ToString(); if (!string.IsNullOrEmpty(s))");
+        source.Should().Contain("EscapeDataString(typed.Page.ToString()!)");
     }
 
     [Fact]

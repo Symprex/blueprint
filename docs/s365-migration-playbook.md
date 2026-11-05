@@ -222,7 +222,10 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 | `HttpResult` | ✅ | Runtime/Http/HttpResult.cs |
 | `IPropertyPopulator` (SetTenantMiddleware equiv) | ✅ | Runtime/Middleware/IPropertyPopulator.cs |
 | Handler discovery (OperationsHandlerScanner equiv) | ✅ | SourceGenerator/Generators/Pipelines/HandlerDiscovery.cs |
-| `ServiceApiInclude` (gateway API client decl) | ✅ | SourceGenerator/Generators/App/TypedHttpClientExtensionsGenerator.cs |
+| `[ServiceApiInclude]` (gateway API client decl) | ✅ | `[BlueprintClientInclude]`, completed by SourceGenerator/Generators/Clients/TypedClientGenerator.cs |
+| `UpdateJwt(jwt)` | ✅ | `WithCredential(new BearerTokenCredential(jwt))` (HttpClient/IUpstreamCredential.cs) |
+| `ModifyOptionsFor` | ✅ | `partial void OnConfigure(Op, ref CallOptions?)` per included operation |
+| `DefaultModifyRequest` | ✅ | `protected WithRequestModifier(Action<HttpRequestMessage>)` |
 | `PagedApiResource`/`OrderedPagedQuery` | ✅ | Runtime.Model/PagedApiResource.cs |
 | `ResourceEventDefinition` factory | ✅ | Runtime/Http/ResourceEventDefinition.cs |
 | `IApiAuthoriser` | ✅ | Runtime/Authorization/IApiAuthoriser.cs |
@@ -234,7 +237,18 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 
 **Resource expansion note:** Blueprint source-gen has **compile-time** resource expansion support that replaces S365's runtime `ResourceExpandMiddleware`. The `ResourceExpansionModule` discovers `Expandable<T>` properties at compile time and generates typed expansion calls in the `PostExecution` pipeline stage. S365's `IResourceExpander` implementations (e.g., `AzureAdGroupApiResourceExpander`) can be ported directly — the interface is identical. The `?expand=` and `?expand[]=` query parameter parsing, comma-separated values, and case-insensitive matching are all handled by `ResourceExpansionRuntime`.
 
-**Gateway migration note:** `ServiceApiInclude` is replaced by Blueprint's `TypedHttpClientExtensionsGenerator`, which automatically generates strongly-typed extension methods on `BlueprintHttpClient<TApp>` for every operation registered through `[BlueprintAppScan]`. Gateway projects inject `BlueprintHttpClient<TargetApp>` and call the generated methods directly — no separate interface/implementation classes needed. The S365 pattern of `IServiceApi` + `ServiceApi` class is simplified to just `BlueprintHttpClient<TargetApp>.OperationNameAsync(params)`. JWT propagation uses `CallOptions` or HttpClient message handler configuration.
+**Gateway migration note:** `[ServiceApiInclude]` and `ServiceApiSourceGenerator` are replaced by Blueprint's `[BlueprintClient]` and `[BlueprintClientInclude(typeof(Op))]`. The hand-written `partial` class keeps its shape; the generator completes it into `I{Class}` with one `Task<R> {Name}Async(Op operation, CallOptions? options = null, CancellationToken cancellationToken = default)` per include (`{Name}` is the type name minus one trailing `Command` or `Query`), exactly S365's interface shape, so call sites do not change. The S365 extension points map as follows:
+
+| S365 | Blueprint |
+|---|---|
+| `[ServiceApiInclude(typeof(Op))]` | `[BlueprintClientInclude(typeof(Op))]` |
+| `ServiceApiSourceGenerator` | `[BlueprintClient]` on the partial class (`TypedClientGenerator`) |
+| `UpdateJwt(jwt)` | `WithCredential(new BearerTokenCredential(jwt))`, which returns a new client and leaves the original unchanged |
+| `ModifyOptionsFor` | `partial void OnConfigure(Op operation, ref CallOptions? options)`, one per included operation |
+| `DefaultModifyRequest` | `protected WithRequestModifier(Action<HttpRequestMessage>)`, callable from public methods that are copied onto the interface. Request URIs are still relative when modifiers run |
+| Constructor-injected dependencies | A `private readonly` field with no initialiser becomes a constructor parameter after the transport |
+
+Construct a client as `new XApi(new BlueprintHttpClient(httpClient, jsonOptions), …)`. Register it with `services.AddBlueprintClient<IXApi, XApi>((sp, client) => …)`, the call shape S365 uses today: it now returns the `IHttpClientBuilder`, takes no `contractsAssembly` argument and requires `XApi` to be a generated client (`IBlueprintClient<XApi>`). Request-shaping order is `OnConfigure`, the call's own `ModifyRequest`, each `WithRequestModifier` in the order added, then the credential last. See [Typed Clients](integration-packages.md#typed-clients) for the full behaviour and the BPCL diagnostics ([diagnostic reference](diagnostic-reference.md#typed-http-clients-bpcl)). The older `TypedHttpClientExtensionsGenerator`, which generates extension methods on `BlueprintHttpClient<TApp>`, now emits only for an app carrying `[BlueprintHttpClientExtensions]`. The full before/after list, including the wire changes, is in the [consumer migration guide](consumer-migration-guide.md#migrating-signature-365-service-clients-to-blueprint-clients).
 
 **S365 custom source generator coexistence:** S365 has 3 custom generators in `Symprex.Signature365.SourceGenerators` that are **orthogonal** to Blueprint source-gen and **must coexist** during and after migration:
 
@@ -242,7 +256,7 @@ Cross-referenced S365 codebase patterns against Blueprint source-gen support. **
 |---|---|---|---|
 | `DtoSourceGenerator` | `[DtoMap(Type)]` | DTO mapping classes with `MapFrom(source)` | None — S365-specific |
 | `MetricsSourceGenerator` | `[AppCounter<T>]` | OpenTelemetry counter classes | None — S365-specific |
-| `ServiceApiSourceGenerator` | `[ServiceApiInclude(typeof(Op))]` | Service client interface + implementation | Partially: `TypedHttpClientExtensionsGenerator` |
+| `ServiceApiSourceGenerator` | `[ServiceApiInclude(typeof(Op))]` | Service client interface + implementation | `[BlueprintClient]` / `[BlueprintClientInclude(typeof(Op))]` (`TypedClientGenerator`) |
 
 Both toolchains emit `.g.cs` files with no name collisions. During migration, S365 generators keep running unchanged; Blueprint source-gen is additive. **Do not remove S365 generators.**
 
@@ -1019,14 +1033,14 @@ Keep `BlueprintHttpClient` but feed it source-generated metadata instead of runt
 
 S365 gateways use typed API client interfaces to call downstream services. The migration
 replaces the old `ServiceApiInclude` attribute + code-generated typed client with the
-new `BlueprintHttpClient<TApp>` + source-generated extension methods.
+generated `[BlueprintClient]` typed client (a mockable `IXApi`/`XApi` pair).
 
 #### Current S365 Gateway Architecture
 
 Each gateway project:
 1. Defines its own operations (e.g., `VCardGatewayGenerateVCardQuery`)
 2. Injects a typed API client (e.g., `IVCardApi`) via constructor parameter injection
-3. Registers the client via `services.AddBlueprintClient<IVCardApi, VCardApi>(...)`
+3. Registers the client via `services.AddBlueprintClient<IVCardApi, VCardApi>(...)` (the same call after migration, where `VCardApi` is a generated `[BlueprintClient]`)
 4. Uses an `IOperationScannerConvention` to strip the gateway prefix from operation names
 
 **Typed Client Registration (S365):**
@@ -1057,40 +1071,53 @@ public class VCardGatewayGenerateVCardQueryHandler : BlueprintApiOperations
 
 #### Migrated Gateway Architecture
 
-**Step 1: Register `BlueprintHttpClient<TTargetApp>`:**
+**Step 1: Declare the client as a generated `[BlueprintClient]`, keeping `IVCardApi`:**
 ```csharp
-// New Blueprint registration
-services.AddBlueprintHttpClient<VCardBlueprintApp>(options =>
+// The generator completes this class and emits IVCardApi with one method per included operation.
+[BlueprintClient]
+[BlueprintClientInclude(typeof(GenerateVCardQuery))]
+public partial class VCardApi;
+```
+
+**Step 2: Register it with the same call as before:**
+```csharp
+services.AddBlueprintClient<IVCardApi, VCardApi>((s, c) =>
 {
-    options.BaseAddress = new Uri($"{internalServiceEndpoints.VCard}/api/");
-    options.Timeout = TimeSpan.FromSeconds(10);
-    options.ConfigureHttpClient = (sp, client) =>
-    {
-        HttpClientHelpers.AddAuthorizationHeaderIfPresent(sp, client);
-    };
+    HttpClientHelpers.AddAuthorizationHeaderIfPresent(s, c);
+    c.BaseAddress = new Uri($"{internalServiceEndpoints.VCard}/api/");
+    c.Timeout = TimeSpan.FromSeconds(10);
 });
 ```
 
-**Step 2: Use generated extension methods in handlers:**
+**Step 3: Handlers keep injecting `IVCardApi`:**
 ```csharp
 public async Task<HttpResult> HandleAsync(
     VCardGatewayGenerateVCardQuery operation,
-    BlueprintHttpClient<VCardBlueprintApp> vCardClient,  // new typed client
+    IVCardApi vCardApi,        // unchanged: still the mockable interface
     ILogger<...> logger)
 {
-    var result = await vCardClient.SendAsync<GeneratedUserTemplateApiResource>(
-        new GenerateVCardQuery { TenantId = tenantId, UserId = userId });
+    var result = await vCardApi.GenerateVCardAsync(new GenerateVCardQuery { ... });
     return new PlainTextResult(result.RenderedTemplate) { ContentType = "text/vcard" };
 }
 ```
 
-Or using the generated extension methods:
+**Alternative: an app-bound client.** Where the gateway wants no hand-declared client class, register
+`BlueprintHttpClient<VCardBlueprintApp>` instead and call the generated extension methods
+(`[BlueprintHttpClientExtensions]`). This replaces `IVCardApi` in every handler, so it is a larger change and not the
+default path:
 ```csharp
-var result = await vCardClient.GenerateVCardAsync(
-    new GenerateVCardQuery { TenantId = tenantId, UserId = userId });
+services.AddBlueprintHttpClient<VCardBlueprintApp>((sp, client) =>
+{
+    HttpClientHelpers.AddAuthorizationHeaderIfPresent(sp, client);
+    client.BaseAddress = new Uri($"{internalServiceEndpoints.VCard}/api/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+
+// In the handler:
+var result = await vCardClient.GenerateVCardAsync(new GenerateVCardQuery { TenantId = tenantId, UserId = userId });
 ```
 
-**Step 3: Operation scanner convention replacement:**
+**Step 4: Operation scanner convention replacement:**
 
 S365 gateways use `IOperationScannerConvention` to strip prefixes from operation names
 (e.g., `VCardGatewayGenerateVCardQuery` → `GeneratevCard` in the API surface: legacy's casing had already folded the
@@ -1115,14 +1142,16 @@ Renaming the gateway operations directly remains an alternative.
 
 #### Key Differences
 
-| Aspect | S365 (Legacy) | Blueprint Source-Gen |
-|--------|---------------|---------------------|
-| Client type | Interface + class (`IVCardApi` / `VCardApi`) | `BlueprintHttpClient<VCardBlueprintApp>` |
-| Method generation | Old Blueprint codegen → methods on class | Source generator → extension methods |
-| Metadata source | `ServiceApiInclude` + `ApiDataModel` | Generated `ApiOperationDescriptor` |
-| Auth propagation | `HttpClientHelpers.AddAuthorizationHeaderIfPresent` | Same (configuration callback) |
-| URL construction | Runtime from `ApiDataModel` | Source-generated `BuildUrl()` |
-| Error handling | `ApiException` | `ApiException` (same shape) |
+| Aspect | S365 (Legacy) | Blueprint Source-Gen (interface-preserving) | Alternative: app-bound client |
+|--------|---------------|---------------------|---------------------|
+| Client type | Interface + class (`IVCardApi` / `VCardApi`) | Same pair; `VCardApi` is a generated `[BlueprintClient]` | `BlueprintHttpClient<VCardBlueprintApp>` |
+| Registration | `AddBlueprintClient<IVCardApi, VCardApi>` | Same call | `AddBlueprintHttpClient<VCardBlueprintApp>` |
+| Handler dependency | `IVCardApi` | `IVCardApi` (unchanged) | `BlueprintHttpClient<VCardBlueprintApp>` |
+| Method generation | Old Blueprint codegen → methods on class | Source generator → methods on the client class, each calling its operation's builders with the reader its call plan selects | Source generator → extension methods |
+| Metadata source | `ServiceApiInclude` + `ApiDataModel` | None at run time: the generator emits each call from a compile-time call plan (HTTP method, URL, reader and request metadata), so no app or descriptor registration is needed | Generated `ApiOperationDescriptor` |
+| Auth propagation | `HttpClientHelpers.AddAuthorizationHeaderIfPresent` | Same (configuration callback) | Same (configuration callback) |
+| URL construction | Runtime from `ApiDataModel` | Typed per-operation builders the generator emits (`Op.Http.BuildUrl` / `AppendQueryString`) | Source-generated `BuildUrl()` |
+| Error handling | `ApiException` | `ApiException` (same shape) | `ApiException` (same shape) |
 
 ---
 
@@ -1876,7 +1905,7 @@ All patterns audited and verified across the S365 codebase:
 | Background tasks | 40+ usages | ✅ Identical | No change |
 | `TenantId` population | 100+ operations | ✅ Compile-time | Implement `ITenantResolver`, delete middleware |
 | `IPropertyPopulator` | 0 usages | N/A | Not used in S365 |
-| `CallAsync` (HTTP gateway) | ~20 files | ✅ Shims exist | Zero changes |
+| `CallAsync` (HTTP gateway) | ~20 files | ✅ Generated client | The compat shims were removed; the calls move to `[BlueprintClient]` generated clients (same `IXApi` method shapes) |
 | Custom middleware | 14+ builders | ⚠️ Remove | Replaced by source-gen modules |
 | Test `ApiFixture` | 42 test projects | ✅ All APIs match | Alias `ApiFixture` → `BlueprintTestFixture` |
 | Test `Authentication` | Every test file | ✅ All APIs match | No change (Set/As/MakeAnonymous identical) |
@@ -2069,7 +2098,7 @@ and serves as the template migration for all other services.
 <!-- REMOVE: old SourceGenerators analyzer if it scans for Blueprint patterns -->
 ```
 
-**File: `AnalyticsApi.cs`** — Already `partial`, replace `[ServiceApiInclude]` with `[BlueprintAppScan]`:
+**File: `AnalyticsApi.cs`** — Already `partial`, replace `[ServiceApiInclude]` with `[BlueprintClient]` and `[BlueprintClientInclude]`:
 
 ```csharp
 // BEFORE
@@ -2078,8 +2107,12 @@ and serves as the template migration for all other services.
 [ServiceApiInclude(typeof(FindSentEmailsQuery))]
 public partial class AnalyticsApi;
 
-// AFTER — move to API host project as BlueprintApp root
-// This file becomes unnecessary (or keep as marker interface)
+// AFTER — stays a generated client (IAnalyticsApi + AnalyticsApi)
+[UsedImplicitly]
+[BlueprintClient]
+[BlueprintClientInclude(typeof(GetSentEmailQuery))]
+[BlueprintClientInclude(typeof(FindSentEmailsQuery))]
+public partial class AnalyticsApi;
 ```
 
 **File: `Api/GetSentEmailQuery.cs`** — Add `partial`:

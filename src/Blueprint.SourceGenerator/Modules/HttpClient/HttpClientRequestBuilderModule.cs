@@ -556,7 +556,15 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             }
             else if (prop.Type.IsValueType && prop.Type.NullableAnnotation != NullableAnnotation.Annotated)
             {
-                parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!); sep = '&';");
+                if (HasNonEmptyToString(prop.Type))
+                {
+                    parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!); sep = '&';");
+                }
+                else
+                {
+                    // A struct's ToString() may be null or empty when default (e.g. Signature365's ApiId): skip the key.
+                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
+                }
             }
             else
             {
@@ -569,7 +577,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 }
                 else if (prop.Type.IsValueType)
                 {
-                    parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.Value.ToString()!); sep = '&';");
+                    parts.Add($"{{ var s = {propAccess}.Value.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
                 }
                 else
                 {
@@ -615,7 +623,14 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             }
             else if (prop.Type.IsValueType && prop.Type.NullableAnnotation != NullableAnnotation.Annotated)
             {
-                parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!));");
+                if (HasNonEmptyToString(prop.Type))
+                {
+                    parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!));");
+                }
+                else
+                {
+                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+                }
             }
             else
             {
@@ -628,7 +643,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 }
                 else if (prop.Type.IsValueType)
                 {
-                    parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.Value.ToString()!));");
+                    parts.Add($"{{ var s = {propAccess}.Value.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
                 }
                 else
                 {
@@ -714,19 +729,31 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         {
             parts.Add($"parts.Add(\"{escapedName}=\" + (_item ? \"true\" : \"false\"));");
         }
-        else if (elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated })
+        else if (elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated } && HasNonEmptyToString(elementType))
         {
-            // Non-nullable value types (int, Guid, etc.) — ToString() is always safe
+            // Built-in value types (int, enums, etc.) — ToString() is never null or empty
             parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(_item.ToString()!));");
         }
         else
         {
-            // Reference types or nullable value types — null-check required
-            parts.Add($"{{ var s = _item?.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+            // Reference types, nullable value types and structs whose ToString() may be null or empty — skip those.
+            // A non-nullable struct has no null to propagate, so `?.` is only valid on the others.
+            var access = elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated } ? "_item" : "_item?";
+            parts.Add($"{{ var s = {access}.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
         }
 
         parts.Add("}");
         parts.Add("}");
+    }
+
+    /// <summary>
+    /// Whether <c>ToString()</c> on <paramref name="type"/> can never be null or empty: the built-in
+    /// primitives and enums. Any other struct (e.g. an id whose <c>ToString()</c> returns null when default)
+    /// has its value checked before the key is emitted.
+    /// </summary>
+    private static bool HasNonEmptyToString(ITypeSymbol type)
+    {
+        return type.TypeKind == TypeKind.Enum || type.SpecialType != SpecialType.None;
     }
 
     /// <summary>
