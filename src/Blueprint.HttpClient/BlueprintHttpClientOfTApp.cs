@@ -588,14 +588,12 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
     /// The method and URL; the URL is <see langword="null"/> when the generated builder found a route placeholder with no
     /// value, which the transport refuses before anything is sent.
     /// </returns>
-    /// <exception cref="InvalidOperationException">The app has no descriptor of the operation, or the descriptor no URL.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The app has no descriptor of the operation or of any type it derives from, or the descriptor no URL.
+    /// </exception>
     private (HttpMethod Method, string? Url) ResolveRequest(IOperation operation)
     {
-        var operationType = operation.GetType();
-        var descriptor = this._app.FindOperation(operationType)
-            ?? throw new InvalidOperationException(
-                $"No operation descriptor found for type '{operationType.FullName}'. " +
-                $"Ensure the operation is registered in the BlueprintApp '{typeof(TApp).Name}'.");
+        var descriptor = this.FindDescriptor(operation.GetType());
 
         var httpMethod = ResolveHttpMethod(descriptor);
 
@@ -615,5 +613,26 @@ public sealed class BlueprintHttpClient<TApp> : BlueprintHttpClient
         var url = ResolveUrl(descriptor, operation);
 
         return (httpMethod, isGet ? AppendQueryString(url, descriptor, operation) : url);
+    }
+
+    /// <summary>
+    /// Finds the descriptor of the operation's own type or, failing that, of the nearest type it derives from that the
+    /// app registers. A consumer's operation can derive from a contract operation and send itself through that contract's
+    /// client, where only the contract operation is registered; it is sent as that operation, as legacy's client sent it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Neither the type nor any type it derives from is registered.</exception>
+    private ApiOperationDescriptor FindDescriptor(Type operationType)
+    {
+        for (var current = operationType; current is not null; current = current.BaseType)
+        {
+            if (this._app.TryFindOperation(current, out var descriptor))
+            {
+                return descriptor;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"No operation descriptor found for type '{operationType.FullName}' or any type it derives from. " +
+            $"Ensure the operation is registered in the BlueprintApp '{typeof(TApp).Name}'.");
     }
 }
