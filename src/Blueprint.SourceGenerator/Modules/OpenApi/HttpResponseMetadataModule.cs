@@ -17,6 +17,9 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
 {
     private const string ValidationProblemDetailsTypeName = "Microsoft.AspNetCore.Mvc.ValidationProblemDetails";
     private const string ProblemDetailsTypeName = "Microsoft.AspNetCore.Mvc.ProblemDetails";
+    private const string ProducesContentTypeAttributeTypeName = "Blueprint.Model.Attributes.ProducesContentTypeAttribute";
+    private const string FileStreamResultTypeName = "Blueprint.Runtime.Exec.FileStreamResult";
+    private const string ProxyResultTypeName = "Blueprint.Http.ProxyResult";
 
     /// <inheritdoc />
     public string ModuleId => nameof(HttpResponseMetadataModule);
@@ -52,7 +55,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             return;
         }
 
-        var responses = GetResponses(context);
+        var responses = ApplyDeclaredContentTypes(GetResponses(context), operationType);
         if (responses.Length == 0)
         {
             return;
@@ -64,6 +67,41 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         }
 
         context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<HttpResponseMetadataRegistration>()));
+    }
+
+    /// <summary>
+    /// Gives a streamed response (a <c>FileStreamResult</c> or <c>ProxyResult</c>) the media types the operation's
+    /// <c>[ProducesContentType]</c> declares, as a response with a body. Without the attribute every response is unchanged.
+    /// </summary>
+    private static ImmutableArray<HttpResponseMetadataRegistration> ApplyDeclaredContentTypes(
+        ImmutableArray<HttpResponseMetadataRegistration> responses,
+        INamedTypeSymbol operationType)
+    {
+        var attribute = operationType.GetAttributes().FirstOrDefault(static attribute =>
+            attribute.AttributeClass?.ToDisplayString() == ProducesContentTypeAttributeTypeName);
+
+        if (attribute is null || attribute.ConstructorArguments.Length != 2)
+        {
+            return responses;
+        }
+
+        var contentTypes = ImmutableArray.CreateBuilder<string>();
+
+        if (attribute.ConstructorArguments[0].Value is string first)
+        {
+            contentTypes.Add(first);
+        }
+
+        if (attribute.ConstructorArguments[1].Kind == TypedConstantKind.Array)
+        {
+            contentTypes.AddRange(attribute.ConstructorArguments[1].Values.Select(static value => value.Value).OfType<string>());
+        }
+
+        return responses
+            .Select(response => response.ResultTypeNames.Any(static name => name is FileStreamResultTypeName or ProxyResultTypeName)
+                ? response with { HasResponseBody = true, ContentTypes = contentTypes.ToImmutable() }
+                : response)
+            .ToImmutableArray();
     }
 
     private static ImmutableArray<HttpResponseMetadataRegistration> GetResponses(DescriptorContributorContext context)
@@ -766,6 +804,11 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                 .Select(static reference => $"new global::Blueprint.Model.OperationProblemExample({reference}.Title, {reference}.Type)");
 
             arguments += $", global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", examples)})";
+        }
+
+        if (!response.ContentTypes.IsDefaultOrEmpty)
+        {
+            arguments += $", ContentTypes: {RenderStringArray(response.ContentTypes)}";
         }
 
         return $"new global::Blueprint.Model.OperationHttpResponseMetadata({arguments})";

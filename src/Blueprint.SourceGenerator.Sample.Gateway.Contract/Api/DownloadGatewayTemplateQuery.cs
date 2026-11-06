@@ -12,6 +12,7 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Contract.Api;
 [ApiOperations("GatewayTemplates")]
 [RootLink("/templates/{Id}/download")]
 [HttpGet]
+[ProducesContentType("application/octet-stream")]
 [Description("Download a template's content from the upstream template service via the gateway.")]
 public partial class DownloadGatewayTemplateQuery : IQuery<ProxyResult>
 {

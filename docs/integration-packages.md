@@ -498,6 +498,25 @@ public async Task<Results<OkResult<GatewayTemplateResource>, NotFoundResult<Gate
 - **An upstream 404 becomes the declared `NotFoundResult<T>`** when `TResult` is a `Results<…>` with one, and the upstream wrote it as that result (its content as JSON). Every other failure, a thrown not-found's problem document included, escapes as the `BlueprintApiException` the transport raises (or `ValidationException` for a 422), so the gateway answers the upstream problem unchanged. A typed client's own calls do not do this: there, a 404 always fails.
 - **Inner `$links` are never forwarded.** `ApiResource.Links` is get-only, so deserialising a forwarded resource drops the inner service's `$links`, which name the inner host. The gateway generates its own links from its own route attributes.
 
+#### Streaming a forward
+
+Declare `ProxyResult` as `TResult` to pass the upstream response through unbuffered. Use it for an inner operation that returns a `FileStreamResult`, or anything large:
+
+```csharp
+[ProducesContentType("application/octet-stream")]
+public partial class DownloadGatewayTemplateQuery : IQuery<ProxyResult> { /* ... */ }
+
+public Task<ProxyResult> Handle(DownloadGatewayTemplateQuery query, BlueprintHttpClient upstream, CancellationToken ct)
+    => upstream.ForwardAsync<DownloadTemplateQuery, ProxyResult>(new DownloadTemplateQuery { Id = query.Id }, cancellationToken: ct);
+```
+
+- **Answered at the headers.** The transport sends with `HttpCompletionOption.ResponseHeadersRead` and returns the response unread. The gateway sends its own headers at once and copies the body as it arrives.
+- **`ProxyResult` owns the response.** It disposes the response once the body is written, or when the caller goes away. The copy is cancelled by `RequestAborted`.
+- **Hop-by-hop headers are dropped:** `Connection`, `Keep-Alive`, `Transfer-Encoding`, `Upgrade`, `Proxy-*`, `TE` and `Trailer`. Every other response and content header is copied.
+- **A failure is not streamed.** An upstream response that is not a success is read and mapped exactly as for any forward, so the gateway answers with the upstream problem.
+- **OpenAPI.** `[ProducesContentType(...)]` on the operation documents the success response of a `FileStreamResult` or `ProxyResult` with those media types, each as a binary string. Without the attribute, a `FileStreamResult` is documented as `application/octet-stream` and a `ProxyResult` with no content.
+- **Hand-written requests.** `CreateRequest` builds the request a call would send without sending it. `SendRawAsync` sends a request at its headers, failures mapped first, and returns a response the caller owns, ready for `new ProxyResult(response)`.
+
 ### S365 Gateway Migration
 
 S365 gateways wrap inter-service calls. With Blueprint.HttpClient:

@@ -205,13 +205,15 @@ public class BlueprintHttpClient
             await credential.ApplyAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
-        // A reader that takes the response (a forward's ProxyResult) is handed it at its headers, to stream its body.
-        var completionOption = reader.TakesResponse ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead;
         HttpResponseMessage? response = null;
 
         try
         {
-            response = await this._httpClient.SendAsync(request, completionOption, cancellationToken).ConfigureAwait(false);
+            // A reader that takes the response (a forward's ProxyResult) is handed it at its headers, to stream its body.
+            // Every other call is sent exactly as before, leaving the body to the client's own handling.
+            response = reader.TakesResponse
+                ? await this._httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false)
+                : await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             var context = new ResponseReadContext(request, response, operationName, this._jsonOptions);
 
             if (!response.IsSuccessStatusCode)
