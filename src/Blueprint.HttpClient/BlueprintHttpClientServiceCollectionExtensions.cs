@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 using Blueprint.Http;
 using Blueprint.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,8 +11,6 @@ namespace Blueprint.HttpClient;
 /// </summary>
 public static class BlueprintHttpClientServiceCollectionExtensions
 {
-    private static readonly object _freezeLock = new();
-
     /// <summary>
     /// Registers a <see cref="BlueprintHttpClient{TApp}"/> as a typed HTTP client using
     /// <see cref="IHttpClientFactory"/>. The caller provides a <paramref name="configureClient"/>
@@ -152,44 +149,13 @@ public static class BlueprintHttpClientServiceCollectionExtensions
         {
             var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient(httpClientName);
 
-            // The app's configured options (NodaTime's converters, say), or Blueprint's defaults when it configures none, as
-            // legacy's client took them from DI (Signature365 origin/master, Common.Core/Api/BlueprintHttpClient.cs:40-44).
-            // IOptions gives the one instance each time, and the transport shares it, so what is cached by options (a typed
-            // client's plan) is made once, not for each resolve.
-            var jsonOptions = sp.GetRequiredService<IOptions<BlueprintJsonOptions>>().Value.SerializerOptions;
-
-            // Read-only before the client is made, as its first call would make them (ResolveTypeInfo): options still open to
-            // change are derived afresh by a client declaring a SerializerContext, for each resolve, so each would rebuild its plan.
-            if (!jsonOptions.IsReadOnly)
-            {
-                FreezeOptions(jsonOptions);
-            }
+            // The one Blueprint JSON options instance, read-only, which a gateway's generated forward through this client
+            // uses too (BlueprintClientTransport).
+            var jsonOptions = BlueprintClientTransport.GetJsonOptions(sp);
 
             return TImplementation.Create(sp, new BlueprintHttpClient(httpClient, jsonOptions));
         });
 
         return builder;
-    }
-
-    private static void FreezeOptions(JsonSerializerOptions jsonOptions)
-    {
-        // Together, so that resolves racing to be first do not set a resolver on options another has already made read-only.
-        lock (_freezeLock)
-        {
-            if (jsonOptions.IsReadOnly)
-            {
-                return;
-            }
-
-            if (jsonOptions.TypeInfoResolver is null && !JsonSerializer.IsReflectionEnabledByDefault)
-            {
-                // Reflection is off and nothing supplies metadata, where a missing resolver cannot be filled in and freezing
-                // would throw before the client's own context is applied. An empty one holds the place: a type that no
-                // context covers then fails for want of metadata, rather than the whole client failing to resolve.
-                jsonOptions.TypeInfoResolver = JsonTypeInfoResolver.Combine();
-            }
-
-            jsonOptions.MakeReadOnly(populateMissingResolver: true);
-        }
     }
 }

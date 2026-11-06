@@ -1,5 +1,7 @@
 using Blueprint.SourceGenerator.Generators.Pipelines.Model;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Modules.Gateway;
+using Blueprint.SourceGenerator.Planning;
 using JetBrains.Annotations;
 using Microsoft.CodeAnalysis;
 
@@ -23,6 +25,9 @@ public static class HandlerDiscovery
         INamedTypeSymbol operationType,
         ExternalHandlerIndex externalHandlerIndex)
     {
+        // An [Expose<TInner>] operation's handler is generated (D12), so a hand-written one would make the attribute misleading.
+        var exposedType = OperationPropertyModelBuilder.FindExposedType(operationType, out _);
+
         // First, try to find an inline handler
         var (inlineValue, inlineDiagnostic) = FindInlineHandler(operationType);
         if (inlineDiagnostic != null)
@@ -32,7 +37,9 @@ public static class HandlerDiscovery
 
         if (inlineValue != null)
         {
-            return Result.Success(inlineValue);
+            return exposedType is null
+                ? Result.Success(inlineValue)
+                : Result<OperationHandlerModel>.Failure(GatewayForward.HandWrittenHandler(operationType, exposedType, inlineValue));
         }
 
         // If no inline handler, look up from the pre-built index
@@ -44,7 +51,15 @@ public static class HandlerDiscovery
 
         if (externalValue != null)
         {
-            return Result.Success(externalValue);
+            return exposedType is null
+                ? Result.Success(externalValue)
+                : Result<OperationHandlerModel>.Failure(GatewayForward.HandWrittenHandler(operationType, exposedType, externalValue));
+        }
+
+        // Last, the forward the pipeline generator synthesises for an [Expose<TInner>] operation.
+        if (exposedType is not null)
+        {
+            return GatewayForward.CreateHandler(operationType, exposedType, externalHandlerIndex.GatewayClients);
         }
 
         // No handler found - create diagnostic
@@ -107,7 +122,7 @@ public static class HandlerDiscovery
             }
         }
 
-        return new ExternalHandlerIndex(candidates);
+        return new ExternalHandlerIndex(candidates, compilation);
     }
 
     /// <summary>

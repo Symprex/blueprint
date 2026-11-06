@@ -437,7 +437,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                 foreach (var placeholder in placeholders.Cast<Match>())
                 {
                     var placeholderName = placeholder.Value.Trim('{', '}', '*');
-                    memberNames ??= new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
+                    memberNames ??= new HashSet<string>(OperationPropertyModelBuilder.GetMembersWithContributed(operationType).Select(static m => m.Name), StringComparer.Ordinal);
 
                     if (!memberNames.Contains(placeholderName))
                     {
@@ -553,7 +553,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
             {
                 // A placeholder finds the operation's and the resource's property ignoring case, and the URL is registered
                 // under the operation property's own name, as legacy routed it (RoutePlaceholderSyntax).
-                var operationMembers = operationType.GetAllMembers().ToList();
+                var operationMembers = OperationPropertyModelBuilder.GetMembersWithContributed(operationType).ToList();
                 var resourceMembers = resourceTypeSymbol.GetAllMembers().ToList();
 
                 normalisedUrl = _mappedPlaceholderRegex.Replace(
@@ -723,7 +723,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
                     foreach (var placeholder in placeholders.Cast<Match>())
                     {
                         var placeholderName = placeholder.Value.Trim('{', '}', '*');
-                        memberNames ??= new HashSet<string>(operationType.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
+                        memberNames ??= new HashSet<string>(OperationPropertyModelBuilder.GetMembersWithContributed(operationType).Select(static m => m.Name), StringComparer.Ordinal);
 
                         if (!memberNames.Contains(placeholderName))
                         {
@@ -774,7 +774,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
             if (normalisedUrl.Contains("{"))
             {
-                var operationMembers = operationType.GetAllMembers().ToList();
+                var operationMembers = OperationPropertyModelBuilder.GetMembersWithContributed(operationType).ToList();
                 var opMemberNames = BuildMemberNameSet(operationType);
                 var resMemberCache = BuildMemberCache(resourceTypeSymbol);
 
@@ -869,7 +869,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
 
     private static bool TryFindMember(INamedTypeSymbol namedTypeSymbol, string placeholderName, LocationInfo? argumentLocationInfo, DescriptorContributorContext context)
     {
-        var memberExists = namedTypeSymbol.GetAllMembers().Any(m => m.Name == placeholderName);
+        var memberExists = GetMembers(namedTypeSymbol).Any(m => m.Name == placeholderName);
 
         if (!memberExists)
         {
@@ -889,7 +889,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     /// </summary>
     private static bool HasMember(INamedTypeSymbol typeSymbol, string memberName)
     {
-        return typeSymbol.GetAllMembers().Any(m => m.Name == memberName);
+        return GetMembers(typeSymbol).Any(m => m.Name == memberName);
     }
 
     /// <summary>
@@ -950,7 +950,7 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     {
         var cache = new Dictionary<string, ISymbol>(StringComparer.Ordinal);
 
-        foreach (var member in type.GetAllMembers())
+        foreach (var member in GetMembers(type))
         {
             if (!cache.ContainsKey(member.Name))
             {
@@ -966,7 +966,18 @@ public class LinkGenerationModule : IBlueprintSourceGeneratorModule, IPostInitia
     /// </summary>
     private static HashSet<string> BuildMemberNameSet(ITypeSymbol type)
     {
-        return new HashSet<string>(type.GetAllMembers().Select(static m => m.Name), StringComparer.Ordinal);
+        return new HashSet<string>(GetMembers(type).Select(static m => m.Name), StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Gets a type's members, with an operation's contributed properties (D25) among them, which a link placeholder can bind
+    /// although this compilation cannot see them emitted into the operation's partial.
+    /// </summary>
+    private static IEnumerable<ISymbol> GetMembers(ITypeSymbol type)
+    {
+        return type is INamedTypeSymbol namedType
+            ? OperationPropertyModelBuilder.GetMembersWithContributed(namedType)
+            : type.GetAllMembers();
     }
 
     private static DiagnosticInfo CreatePlaceholderMissingDiagnostic(ITypeSymbol namedType, string placeholderName, LocationInfo? argumentLocationInfo)

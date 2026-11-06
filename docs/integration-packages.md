@@ -498,6 +498,26 @@ public async Task<Results<OkResult<GatewayTemplateResource>, NotFoundResult<Gate
 - **An upstream 404 becomes the declared `NotFoundResult<T>`** when `TResult` is a `Results<…>` with one, and the upstream wrote it as that result (its content as JSON). Every other failure, a thrown not-found's problem document included, escapes as the `BlueprintApiException` the transport raises (or `ValidationException` for a 422), so the gateway answers the upstream problem unchanged. A typed client's own calls do not do this: there, a 404 always fails.
 - **Inner `$links` are never forwarded.** `ApiResource.Links` is get-only, so deserialising a forwarded resource drops the inner service's `$links`, which name the inner host. The gateway generates its own links from its own route attributes.
 
+### Exposing an Operation
+
+A gateway operation that only forwards an inner operation is declared with `[Expose<TInner>]` (in `Blueprint.Model.Attributes`), and needs no properties or handler:
+
+```csharp
+[Expose<GetTemplateQuery>]
+[MustBeAuthenticated]
+[SelfLink(typeof(TemplateApiResource), "/templates/{Id}")]
+[HttpGet]
+public partial class GetGatewayTemplateQuery : IQuery<Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>;
+```
+
+- **Properties.** The source generator gives the class each public settable property of `TInner` that is not obsolete, with its type, attributes (validation and binding included), an `<inheritdoc>` of its documentation, and the default `TInner`'s initialiser gives it. Every generator reads them from one shared property model, so the operation binds, validates, documents and links them as `TInner` does. A property the class declares itself wins over the inner one.
+- **Handler.** The generated handler creates a fresh `TInner` from those properties and forwards it with `ForwardAsync`, reading the response as the class's declared result. It forwards through the one `[BlueprintClient]` that includes `TInner`, using the named client and JSON options `AddBlueprintClient` registered for it (`BlueprintClientTransport.Create<TClient>`), so register that client with its base address.
+- **What the class declares.** Its operation interface (the inner operation's, for its result), route, HTTP method and authorisation. Authorisation must be one of `[AllowAnonymous]`, `[MustBeAuthenticated]`, `[Resource]` or `[FromResource]`; the inner operation's is never copied.
+- **Response types.** The gateway reads the upstream response with the JSON options it writes its own with. A type its serializer context covers needs a constructor the source-generated metadata can call: a public one, not a private `[JsonConstructor]`.
+- **Minimal mode is for first-party apps.** A property added to `TInner` becomes settable at the gateway with no change to its source. A public API sets `<BlueprintGatewayAllowExpose>false</BlueprintGatewayAllowExpose>`, which makes every `[Expose<TInner>]` error BPGW001.
+
+The `BPGW` diagnostics are listed in [diagnostic-reference.md](diagnostic-reference.md#gateway-operations-bpgw).
+
 ### S365 Gateway Migration
 
 S365 gateways wrap inter-service calls. With Blueprint.HttpClient:

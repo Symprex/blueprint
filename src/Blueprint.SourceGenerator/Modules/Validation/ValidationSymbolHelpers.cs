@@ -18,7 +18,7 @@ internal static class ValidationSymbolHelpers
     /// <returns>The public instance properties declared on the operation type.</returns>
     public static IEnumerable<IPropertySymbol> GetPublicInstanceProperties(INamedTypeSymbol operationType)
     {
-        return operationType.GetAllMembers()
+        return Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType)
             .OfType<IPropertySymbol>()
             .Where(static property => property is { IsStatic: false, Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public });
     }

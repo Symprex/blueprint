@@ -50,7 +50,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var everyLinkPlaceholders = ExtractPlaceholdersPresentInEveryTemplate(routeTemplates);
         ValidateRoutePlaceholderSyntax(operationType, routeTemplates, context);
         ValidateRoutePlaceholdersResolveToProperties(operationType, routeTemplates, context);
-        var httpMethods = ResolveHttpMethods(context, operationType);
+        var httpMethods = ResolveHttpMethods(operationType);
 
         var diagnostics = new List<DiagnosticInfo>();
         var entries = AnalyzePropertyOwnership(operationType, routePlaceholders, everyLinkPlaceholders, httpMethods, diagnostics);
@@ -77,7 +77,12 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         context.AddMetadata(new BindingDescriptorRegistration(hasBodyBinding, hasHeaderOrCookieBinding));
         context.AddMetadata(new PropertyBindingEntriesMetadata(
-            entries.Select(static e => new PropertyBindingEntriesMetadata.Entry(e.PropertyName, e.Source, e.BindingName, e.FallbackSource)).ToList()));
+            entries.Select(static e => new PropertyBindingEntriesMetadata.Entry(
+                e.PropertyName,
+                e.Source,
+                e.BindingName,
+                e.FallbackSource,
+                QueryOnGetBindingName: e.QueryOnGet ? GetCamelCaseName(e.PropertyName) : null)).ToList()));
         context.AddRenderStep(writer => RenderDescriptorFeatureData(writer, entries));
     }
 
@@ -107,7 +112,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var hasNonStringNonBodyProperties = entries.Any(static e =>
             (e.Source is PropertyOwnershipSource.Query or PropertyOwnershipSource.Header or PropertyOwnershipSource.Cookie
                 && !IsStringType(e.TypeSymbol))
-            || (e.FallbackSource == PropertyOwnershipSource.Query && !IsStringType(e.TypeSymbol)));
+            || ((e.FallbackSource == PropertyOwnershipSource.Query || e.QueryOnGet) && !IsStringType(e.TypeSymbol)));
 
         // Body reading requires async; typed non-body values with TryParse + early return also need async
         if (hasBodyProperties || hasNonStringNonBodyProperties)
@@ -286,7 +291,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         DescriptorContributorContext context)
     {
         var propertyNames = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var member in operationType.GetAllMembers())
+        foreach (var member in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType))
         {
             if (member is IPropertySymbol prop)
             {
@@ -362,75 +367,18 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         return LocationInfo.CreateFrom(attributeSyntax);
     }
 
-    private static string[] ResolveHttpMethods(DescriptorContributorContext context, INamedTypeSymbol operationType)
-    {
-        var methods = context.GetMetadata<OperationHttpMethodMetadataRegistration>()
-            .Select(static r => r.HttpMethod)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        if (methods.Length > 0)
-        {
-            return methods;
-        }
-
-        // Fallback to convention
-        return IsCommand(operationType) ? ["POST"] : ["GET"];
-    }
-
+    /// <summary>
+    /// Resolves the operation's HTTP methods through <see cref="OperationHttpMethodResolver"/>, the one rule the descriptor
+    /// publishes and a client sends the first of. An operation whose method attribute is invalid has none there, and fails
+    /// the build with that resolver's own diagnostic; it is bound here by convention, POST for a command and GET otherwise.
+    /// </summary>
     private static string[] ResolveHttpMethods(INamedTypeSymbol operationType)
     {
-        // Re-derive from attributes in pipeline context (no descriptor metadata available)
-        var explicitMethods = new List<string>();
+        var methods = OperationHttpMethodResolver.Resolve(operationType).Methods;
 
-        foreach (var attribute in operationType.GetAttributes())
-        {
-            var name = attribute.AttributeClass?.Name;
-
-            switch (name)
-            {
-                case "HttpGetAttribute":
-                    explicitMethods.Add("GET");
-                    break;
-                case "HttpPostAttribute":
-                    explicitMethods.Add("POST");
-                    break;
-                case "HttpPutAttribute":
-                    explicitMethods.Add("PUT");
-                    break;
-                case "HttpPatchAttribute":
-                    explicitMethods.Add("PATCH");
-                    break;
-                case "HttpDeleteAttribute":
-                    explicitMethods.Add("DELETE");
-                    break;
-                case "HttpMethodAttribute" when attribute.ConstructorArguments.Length > 0:
-                    if (attribute.ConstructorArguments[0].Value is string method)
-                    {
-                        explicitMethods.Add(method.ToUpperInvariant());
-                    }
-
-                    break;
-            }
-        }
-
-        if (explicitMethods.Count > 0)
-        {
-            // Deduplicate without LINQ Distinct() iterator allocation
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var deduped = new List<string>(explicitMethods.Count);
-            foreach (var m in explicitMethods)
-            {
-                if (seen.Add(m))
-                {
-                    deduped.Add(m);
-                }
-            }
-
-            return [.. deduped];
-        }
-
-        return IsCommand(operationType) ? ["POST"] : ["GET"];
+        return methods.Length > 0
+            ? methods
+            : IsCommand(operationType) ? ["POST"] : ["GET"];
     }
 
     private static bool IsCommand(INamedTypeSymbol operationType)
@@ -441,12 +389,15 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     }
 
     /// <summary>
-    /// Returns true when the operation answers any method but GET, whose unowned properties therefore come from the body.
+    /// Returns true when the operation answers any method but GET, whose unowned properties therefore come from the body of
+    /// a request sent with one of those methods.
     /// </summary>
     /// <remarks>
     /// Legacy Blueprint read the body of every request but a GET (Signature365 <c>8b40ecc961</c>,
     /// <c>Blueprint.Http/MessagePopulation/HttpBodyMessagePopulationSource.cs:145-147</c>), a DELETE's included, and the
-    /// query string of a GET alone (<c>BlueprintApiBuilderExtensions.cs:68-73</c>).
+    /// query string of a GET alone (<c>BlueprintApiBuilderExtensions.cs:68-73</c>). That rule is per request, so an
+    /// operation answering GET as well as another method also reads such a property from the query string of a GET
+    /// (<see cref="PropertyOwnershipEntry.QueryOnGet"/>).
     /// </remarks>
     private static bool IsBodyMethod(string[] httpMethods)
     {
@@ -456,6 +407,16 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     private static bool IsQueryMethod(string[] httpMethods)
     {
         return httpMethods.Any(static m => string.Equals(m, "GET", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Returns true when a property otherwise read from the body is also read from the query string of a GET: the operation
+    /// answers GET as well as another method, and the property's type can be read from a query string. One whose type
+    /// cannot is read from the body alone, as before.
+    /// </summary>
+    private static bool IsQueryOnGet(string[] httpMethods, ITypeSymbol type)
+    {
+        return IsBodyMethod(httpMethods) && IsQueryMethod(httpMethods) && IsSupportedQueryType(type);
     }
 
     /// <summary>
@@ -484,7 +445,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var isGetOnly = IsGetOnlyMethod(httpMethods);
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var member in operationType.GetAllMembers().OfType<IPropertySymbol>())
+        foreach (var member in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType).OfType<IPropertySymbol>())
         {
             if (member.IsStatic || member.IsReadOnly || member.SetMethod is null || member.DeclaredAccessibility != Accessibility.Public)
             {
@@ -636,6 +597,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 // Legacy's "every link" rule: a placeholder property is exclusively route-owned only when it appears in
                 // every one of the operation's route templates. One in only some links also falls back to the query
                 // string (GET) or body (any other method) for a request through a link that leaves it out.
+                // An operation answering GET as well as another method falls back to the body of a request with the other
+                // method and to the query string of a GET, as legacy decided per request (IsBodyMethod's remarks).
                 var fallbackSource = everyLinkPlaceholders.Contains(member.Name)
                     ? (PropertyOwnershipSource?)null
                     : IsBodyMethod(httpMethods)
@@ -643,8 +606,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                         : IsQueryMethod(httpMethods) && IsSupportedQueryType(member.Type)
                             ? PropertyOwnershipSource.Query
                             : null;
+                var fallbackQueryOnGet = fallbackSource == PropertyOwnershipSource.Body && IsQueryOnGet(httpMethods, member.Type);
 
-                entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name, isInitOnly, FallbackSource: fallbackSource));
+                entries.Add(new PropertyOwnershipEntry(member.Name, member.Type, PropertyOwnershipSource.Route, member.Name, isInitOnly, FallbackSource: fallbackSource, QueryOnGet: fallbackQueryOnGet));
 
                 if (IsTypeConverterOnlyType(member.Type))
                 {
@@ -660,12 +624,14 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
             if (IsBodyMethod(httpMethods))
             {
+                // Also read from the query string of a GET when the operation answers GET too (IsBodyMethod's remarks).
                 entries.Add(new PropertyOwnershipEntry(
                     member.Name,
                     member.Type,
                     PropertyOwnershipSource.Body,
                     GetCamelCaseName(member.Name),
-                    isInitOnly));
+                    isInitOnly,
+                    QueryOnGet: IsQueryOnGet(httpMethods, member.Type)));
             }
             else if (IsQueryMethod(httpMethods))
             {
@@ -1123,6 +1089,22 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         };
     }
 
+    /// <summary>
+    /// Projects an entry's <see cref="PropertyOwnershipEntry.QueryOnGet"/> into a synthetic query entry, rendered to run only
+    /// when the request is a GET, and read exactly as any other query property is — camel-case key included.
+    /// </summary>
+    private static PropertyOwnershipEntry ToGetQueryEntry(PropertyOwnershipEntry entry)
+    {
+        return entry with
+        {
+            Source = PropertyOwnershipSource.Query,
+            BindingName = GetCamelCaseName(entry.PropertyName),
+            FallbackSource = null,
+            QueryOnGet = false,
+            VariableSuffix = entry.PropertyName + "OnGet",
+        };
+    }
+
     private static bool ImplementsIParsable(ITypeSymbol type)
     {
         return TypeConversionHelpers.ImplementsIParsable(type);
@@ -1173,7 +1155,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         foreach (var entry in entries)
         {
-            if (entry.Source is not (PropertyOwnershipSource.Route or PropertyOwnershipSource.Query))
+            if (entry.Source is not (PropertyOwnershipSource.Route or PropertyOwnershipSource.Query) && !entry.QueryOnGet)
             {
                 continue;
             }
@@ -1293,6 +1275,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         List<PropertyOwnershipEntry>? queryEntries = null;
         List<PropertyOwnershipEntry>? headerEntries = null;
         List<PropertyOwnershipEntry>? cookieEntries = null;
+        List<PropertyOwnershipEntry>? getQueryEntries = null;
 
         foreach (var entry in entries)
         {
@@ -1328,6 +1311,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 case PropertyOwnershipSource.Query:
                     (queryEntries ??= []).Add(ToFallbackQueryEntry(entry));
                     break;
+            }
+
+            if (entry.QueryOnGet)
+            {
+                (getQueryEntries ??= []).Add(ToGetQueryEntry(entry));
             }
         }
 
@@ -1371,7 +1359,21 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 }
             }
 
-            if (queryEntries is { Count: > 0 } && routeEntries is { Count: > 0 })
+            // A property of an operation answering GET as well as another method is read from the query string only when this
+            // request is a GET, as legacy read the query string of a GET alone (IsBodyMethod's remarks). It is rendered before
+            // the route for the reason above.
+            if (getQueryEntries is not null)
+            {
+                bindingBranch.If("global::Microsoft.AspNetCore.Http.HttpMethods.IsGet(httpContext.Request.Method)", getBranch =>
+                {
+                    foreach (var entry in getQueryEntries)
+                    {
+                        WriteQueryExtraction(getBranch, operationExpr, entry, converterFieldMap);
+                    }
+                });
+            }
+
+            if ((queryEntries is { Count: > 0 } || getQueryEntries is { Count: > 0 }) && routeEntries is { Count: > 0 })
             {
                 bindingBranch.WriteBlankLine();
             }
@@ -1385,7 +1387,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 }
             }
 
-            if ((routeEntries is { Count: > 0 } || queryEntries is { Count: > 0 }) && (headerEntries is { Count: > 0 } || cookieEntries is { Count: > 0 }))
+            if ((routeEntries is { Count: > 0 } || queryEntries is { Count: > 0 } || getQueryEntries is { Count: > 0 }) && (headerEntries is { Count: > 0 } || cookieEntries is { Count: > 0 }))
             {
                 bindingBranch.WriteBlankLine();
             }
@@ -1893,7 +1895,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         bool IsInitOnly = false,
         string? ClaimType = null,
         PropertyOwnershipSource? FallbackSource = null,
-        string? VariableSuffix = null)
+        string? VariableSuffix = null,
+        bool QueryOnGet = false)
     {
         /// <summary>
         /// The suffix used to build this entry's generated local variable names. A partially route-owned property is

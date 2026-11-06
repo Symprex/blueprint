@@ -230,6 +230,19 @@ Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attr
 | BPCL008 | Error | Included operation's result is one no response reader supports, such as a `StatusCodeResult` subclass with no public static `Instance`, an abstract resource event that does not declare `[JsonPolymorphic]` or `[JsonDerivedType]` itself (the event reader cannot make one; one that does is read as JSON), or a `Results<T1, T2>` with such a member |
 | BPCL009 | Error | Member of the client class conflicts with a generated member: a member of any kind named `_client`, `_plan`, `_credential`, `_requestModifier`, `BlueprintClientPlan`, `WithCredential` or `WithRequestModifier`; a readonly field whose constructor parameter would be named `client`, `source`, `credential`, `requestModifier` or `modify`; a public method named as a generated operation method; or a constructor taking the generated constructors' parameter types, either `(BlueprintHttpClient, <each readonly field's type>)` or the clone constructor's `(<the class>, IUpstreamCredential, Action<HttpRequestMessage>)` |
 
+## Gateway operations (BPGW)
+
+Reported for an operation marked `[Expose<TInner>]`. BPGW001 and BPGW006 are reported at the attribute; the others at the operation's name. An operation with BPGW003, BPGW004 or BPGW005 gets no pipeline.
+
+| ID | Severity | Title |
+|----|----------|-------|
+| BPGW001 | Error | `[Expose<TInner>]` in a project that sets the MSBuild property `BlueprintGatewayAllowExpose` to `false`, as a public API gateway does, so that each public contract is written out |
+| BPGW002 | Error | Gateway operation declares none of `[AllowAnonymous]`, `[MustBeAuthenticated]`, `[Resource]` or `[FromResource]` from `Blueprint.Model.Attributes`. The inner operation's authorisation is never copied, and no other attribute counts |
+| BPGW003 | Error | No `[BlueprintClient]` visible to the gateway includes the inner operation: none declared in the project with `[BlueprintClientInclude(typeof(TInner))]`, and no generated client in a referenced assembly with a method for it |
+| BPGW004 | Error | More than one `[BlueprintClient]` includes the inner operation, so the upstream to forward to is ambiguous |
+| BPGW005 | Error | Gateway operation has a hand-written handler, inline or external, but `[Expose<TInner>]` generates its handler |
+| BPGW006 | Error | `[Expose<TInner>]` class declares no operation interface, or one with no result. Declare the inner operation's own, for example `partial class X : IQuery<R>`, since no generator can see an interface another generator emits |
+
 ## Module system (BPMOD)
 
 | ID | Severity | Title |
