@@ -119,9 +119,12 @@ public sealed class EntityOperationResourceLinkGenerator : IResourceLinkGenerato
                 continue;
             }
 
+            // Typed as ApiLinkGenerator.CreateSelfLink types the same resource's self link, which Timestamp's SPA resolves
+            // a link's model by (#132). Legacy wrote these links with a null type.
             linkableResource.AddLink(link.Rel, new Link
             {
                 Href = url,
+                Type = ApiResource.GetTypeName(link.ResourceType),
             });
         }
     }

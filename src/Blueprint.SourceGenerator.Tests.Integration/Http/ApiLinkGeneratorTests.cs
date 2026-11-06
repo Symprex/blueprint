@@ -118,6 +118,33 @@ public class ApiLinkGeneratorTests
         nonMatchingResource.Links.Should().BeEmpty();
     }
 
+    // A self link's type used to be the CLR name, typeof(T).Name ("ClientApiResource"), until #144. Legacy named it as it
+    // named the resource, ApiResource.GetTypeName(typeof(T)) (Blueprint.Http/ApiLinkGenerator.cs:83-87 at 0.8.4), and
+    // Timestamp's SPA resolves a link's model by that name.
+    [Fact]
+    public void CreateSelfLink_with_a_string_id_types_the_link_with_the_resources_object_name()
+    {
+        var generator = new ApiLinkGenerator(CreateAppWithSelfLink(typeof(ClientApiResource)), "https://api.example.com/");
+
+        generator.CreateSelfLink<ClientApiResource>("c1").Type.Should().Be("client");
+    }
+
+    [Fact]
+    public void CreateSelfLink_with_an_id_definition_types_the_link_with_the_resources_object_name()
+    {
+        var generator = new ApiLinkGenerator(CreateAppWithSelfLink(typeof(ClientApiResource)), "https://api.example.com/");
+
+        generator.CreateSelfLink<ClientApiResource>(new { Id = "c1" }).Type.Should().Be("client");
+    }
+
+    [Fact]
+    public void CreateSelfLink_with_a_guid_id_types_the_link_with_the_resources_object_name()
+    {
+        var generator = new ApiLinkGenerator(CreateAppWithSelfLink(typeof(ClientApiResource)), "https://api.example.com/");
+
+        generator.CreateSelfLink<ClientApiResource>(Guid.Empty).Type.Should().Be("client");
+    }
+
     [Fact]
     public void CreateSelfLink_with_query_string_uses_camelCase_parameter_names()
     {
@@ -268,6 +295,23 @@ public class ApiLinkGeneratorTests
         app.Register(descriptor);
 
         return (app, link);
+    }
+
+    private static BlueprintApp CreateAppWithSelfLink(Type resourceType)
+    {
+        var app = new BlueprintApp();
+        var descriptor = new ApiOperationDescriptor(typeof(LinkGenTestOperation), "LinkGenTestOperation", "test");
+        descriptor.AddLink(new ApiOperationLink(descriptor, "clients/{Id}", "clients/{Id}", "self", resourceType));
+        app.Register(descriptor);
+
+        return app;
+    }
+
+    private class ClientApiResource : ApiResource
+    {
+        public string Id { get; set; } = string.Empty;
+
+        public override string Object => "client";
     }
 
     private class LinkGenTestResource : ApiResource

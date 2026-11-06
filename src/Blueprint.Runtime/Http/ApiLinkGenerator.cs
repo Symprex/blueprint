@@ -77,7 +77,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
         return new Link
         {
             Href = fullUri,
-            Type = typeof(T).Name,
+            Type = ApiResource.GetTypeName(typeof(T)),
         };
     }
 
@@ -112,7 +112,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
         return new Link
         {
             Href = fullUri,
-            Type = typeof(T).Name,
+            Type = ApiResource.GetTypeName(typeof(T)),
         };
     }
 
@@ -155,7 +155,7 @@ public sealed class ApiLinkGenerator : IApiLinkGenerator
         return new Link
         {
             Href = fullUri,
-            Type = typeof(T).Name,
+            Type = ApiResource.GetTypeName(typeof(T)),
         };
     }
 
