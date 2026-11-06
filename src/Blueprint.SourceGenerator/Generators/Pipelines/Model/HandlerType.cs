@@ -15,4 +15,10 @@ public enum HandlerType
     /// is the operation type.
     /// </summary>
     External,
+
+    /// <summary>
+    /// The handler is generated: the operation is marked <c>[Expose&lt;TInner&gt;]</c> and forwards a fresh inner operation
+    /// upstream (D12). See <see cref="OperationHandlerModel.Forward"/>.
+    /// </summary>
+    Forward,
 }

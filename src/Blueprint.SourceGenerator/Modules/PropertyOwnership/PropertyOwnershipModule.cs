@@ -291,7 +291,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         DescriptorContributorContext context)
     {
         var propertyNames = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var member in operationType.GetAllMembers())
+        foreach (var member in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType))
         {
             if (member is IPropertySymbol prop)
             {
@@ -445,7 +445,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var isGetOnly = IsGetOnlyMethod(httpMethods);
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var member in operationType.GetAllMembers().OfType<IPropertySymbol>())
+        foreach (var member in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType).OfType<IPropertySymbol>())
         {
             if (member.IsStatic || member.IsReadOnly || member.SetMethod is null || member.DeclaredAccessibility != Accessibility.Public)
             {

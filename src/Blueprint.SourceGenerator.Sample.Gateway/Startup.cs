@@ -38,8 +38,11 @@ public class Startup
         // Register the upstream service's BlueprintApp so the HTTP client can discover
         // operation descriptors, URLs, and HTTP methods at zero-reflection cost.
         services.AddSingleton<SampleBlueprintApp>();
-        services.AddBlueprintHttpClient<SampleBlueprintApp>(
-            new Uri(this._configuration[TemplateServiceAddressKey] ?? DefaultTemplateServiceAddress));
+        var templateServiceAddress = new Uri(this._configuration[TemplateServiceAddressKey] ?? DefaultTemplateServiceAddress);
+        services.AddBlueprintHttpClient<SampleBlueprintApp>(templateServiceAddress);
+
+        // The typed client the [Expose<TInner>] reads forward through: their generated handlers use its named HTTP client.
+        services.AddBlueprintClient<Api.ITemplateServiceApi, Api.TemplateServiceApi>((_, client) => client.BaseAddress = templateServiceAddress);
 
         services.AddBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>(blueprint =>
         {

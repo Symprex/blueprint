@@ -56,7 +56,7 @@ public sealed class SensitivePropertyMetadataModule : IBlueprintSourceGeneratorM
     {
         var result = new List<string>();
 
-        foreach (var member in operationSymbol.GetAllMembers())
+        foreach (var member in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationSymbol))
         {
             if (member is not IPropertySymbol property)
             {

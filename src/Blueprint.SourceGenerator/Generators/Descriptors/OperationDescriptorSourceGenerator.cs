@@ -8,6 +8,7 @@ using Blueprint.SourceGenerator.Modules.Auditing;
 using Blueprint.SourceGenerator.Modules.Authentication;
 using Blueprint.SourceGenerator.Modules.Authorization;
 using Blueprint.SourceGenerator.Modules.BackgroundTaskFlush;
+using Blueprint.SourceGenerator.Modules.Gateway;
 using Blueprint.SourceGenerator.Modules.HttpClient;
 using Blueprint.SourceGenerator.Modules.LinkGeneration;
 using Blueprint.SourceGenerator.Modules.Messaging;
@@ -116,6 +117,35 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
 
         context.RegisterDiagnosticOutput(configuredModels.Select(static (result, _) => result!.Diagnostics));
 
+        // D9/D25: an [Expose<TInner>] class's contributed properties, emitted into its partial whether or not its descriptor
+        // can be planned, so a failing plan does not cascade into errors for every read of them. Every generator reads the
+        // same properties from OperationPropertyModelBuilder, so none needs to see this output.
+        var allowExpose = context.AnalyzerConfigOptionsProvider
+            .Select(static (options, _) => !(options.GlobalOptions.TryGetValue("build_property.BlueprintGatewayAllowExpose", out var value)
+                && string.Equals(value.Trim(), "false", StringComparison.OrdinalIgnoreCase)))
+            .WithTrackingName(Stages.ExposePolicy);
+
+        var exposedOperations = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                OperationPropertyModelBuilder.ExposeAttributeMetadataName,
+                predicate: static (node, _) => node is ClassDeclarationSyntax,
+                transform: static (ctx, _) => ((INamedTypeSymbol)ctx.TargetSymbol).ToFullMetadataName())
+            .Combine(context.CompilationProvider)
+            .Select(static (x, _) => ExposedOperationAnalysis.Analyse(x.Left, x.Right))
+            .Where(static analysis => analysis is not null)
+            .Select(static (analysis, _) => analysis!)
+            .WithTrackingName(Stages.ExposedOperations);
+
+        context.RegisterDiagnosticOutput(exposedOperations
+            .Combine(allowExpose)
+            .Select(static (x, _) => x.Left.GetDiagnostics(allowExpose: x.Right)));
+
+        context.RegisterSourceOutput(
+            exposedOperations.Where(static analysis => analysis.Model.HasContributedProperties),
+            static (spc, analysis) => spc.AddSource(
+                $"{analysis.Model.OperationTypeName}_ExposedProperties.g.cs",
+                SourceText.From(OperationPropertyModelBuilder.RenderContributedProperties(analysis.Model), Encoding.UTF8)));
+
         context.RegisterSourceOutput(
             configuredModels,
             (spc, result) =>
@@ -184,7 +214,22 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             }
         }
 
-        return result with { Value = operation with { DeclarationChecksums = EquatableList<string>.TakeOwnership(checksums) } };
+        // D25: an exposed operation's descriptor depends on its inner operation, which may be in another file or assembly,
+        // where no checksum above reaches (a rebuilt contract assembly has no file here), so its property model is part of
+        // the key too.
+        var type = compilation.GetTypeByMetadataName(operation.FullClassName);
+        var exposedProperties = type is not null && OperationPropertyModelBuilder.FindExposedType(type, out _) is not null
+            ? OperationPropertyModelBuilder.Build(type)
+            : null;
+
+        return result with
+        {
+            Value = operation with
+            {
+                DeclarationChecksums = EquatableList<string>.TakeOwnership(checksums),
+                ExposedProperties = exposedProperties,
+            },
+        };
     }
 
     private static Result<DescriptorPlan> Configure(
@@ -310,12 +355,19 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             new HttpMethodManifestModule(),
             new SensitivePropertyManifestModule(),
             new OperationGroupManifestModule(),
+            new GatewayModule(),
             .. additionalModules,
         ]);
     }
 
     private static bool HasRequiredMembers(INamedTypeSymbol type)
     {
+        // A contributed property is emitted required when the inner one is (D25), which this compilation cannot see.
+        if (OperationPropertyModelBuilder.GetProperties(type).Any(static p => p.Info is { Origin: OperationPropertyOrigin.Contributed, IsRequired: true }))
+        {
+            return true;
+        }
+
         for (var current = type; current is not null; current = current.BaseType)
         {
             foreach (var member in current.GetMembers())
@@ -389,6 +441,12 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         /// <see cref="DeclarationText"/>, whose file the syntax provider does not revisit while it is unedited.
         /// </summary>
         public EquatableList<string> DeclarationChecksums { get; init; } = EquatableList<string>.Empty;
+
+        /// <summary>
+        /// Gets the property model of an operation that exposes another with <c>[Expose&lt;TInner&gt;]</c>, so an edit to
+        /// the inner operation re-plans the descriptor although no file of the operation changed.
+        /// </summary>
+        public OperationPropertyModel? ExposedProperties { get; init; }
     }
 
     /// <summary>
@@ -402,5 +460,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         public const string ExceptionTranslationPolicy = nameof(ExceptionTranslationPolicy);
         public const string CombineWithCompilation = nameof(CombineWithCompilation);
         public const string Configuration = nameof(Configuration);
+        public const string ExposePolicy = nameof(ExposePolicy);
+        public const string ExposedOperations = nameof(ExposedOperations);
     }
 }
