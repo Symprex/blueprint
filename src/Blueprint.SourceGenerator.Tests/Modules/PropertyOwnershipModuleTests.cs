@@ -2152,6 +2152,55 @@ public class PropertyOwnershipModuleTests
             .Should().BeEmpty();
     }
 
+    [Fact]
+    public void When_a_command_is_declared_GET_by_an_HttpMethodAttribute_subclass_then_its_pipeline_binds_from_the_query_string()
+    {
+        // The pipeline used to resolve methods by matching attribute simple names, so it missed a subclass and bound this
+        // command from the body, while its descriptor, and so every client, sent it as a GET (Symprex/blueprint#142).
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [System.AttributeUsage(System.AttributeTargets.Class)]
+                public sealed class HttpFetchAttribute(string httpMethod) : HttpMethodAttribute(httpMethod);
+
+                [RootLink("/reports/refresh")]
+                [HttpFetch("GET")]
+                public partial class RefreshReportCommand : ICommand<string>
+                {
+                    public string Name { get; set; }
+
+                    public static Task<string> HandleAsync(RefreshReportCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSource = string.Concat(result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText.ToString()));
+
+        pipelineSource.Should().Contain("httpContext.Request.Query[\"name\"]");
+        pipelineSource.Should().NotContain("ReadJsonBodyAsync");
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(
