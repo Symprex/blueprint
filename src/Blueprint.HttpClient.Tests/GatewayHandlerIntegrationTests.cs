@@ -99,10 +99,12 @@ public sealed class GatewayHandlerIntegrationTests : IClassFixture<SampleAppFixt
             });
 
         var client = this._fixture.CreateClient(handler);
+        await using var contexts = new GatewayContextFactory();
         var sut = new GetGatewayTemplateQueryHandler(client);
 
         var result = await sut.Handle(
             new GetGatewayTemplateQuery { Id = "t-42" },
+            contexts.For<GetGatewayTemplateQuery>(),
             CancellationToken.None);
 
         result.IsT1.Should().BeTrue("the upstream returned a valid template");
@@ -125,10 +127,12 @@ public sealed class GatewayHandlerIntegrationTests : IClassFixture<SampleAppFixt
             });
 
         var client = this._fixture.CreateClient(handler);
+        await using var contexts = new GatewayContextFactory();
         var sut = new GetGatewayTemplateQueryHandler(client);
 
         var result = await sut.Handle(
             new GetGatewayTemplateQuery { Id = "missing" },
+            contexts.For<GetGatewayTemplateQuery>(),
             CancellationToken.None);
 
         result.IsT2.Should().BeTrue("the upstream returned its not-found result");
@@ -150,9 +154,10 @@ public sealed class GatewayHandlerIntegrationTests : IClassFixture<SampleAppFixt
             });
 
         var client = this._fixture.CreateClient(handler);
+        await using var contexts = new GatewayContextFactory();
         var sut = new GetGatewayTemplateQueryHandler(client);
 
-        var act = () => sut.Handle(new GetGatewayTemplateQuery { Id = "missing" }, CancellationToken.None);
+        var act = () => sut.Handle(new GetGatewayTemplateQuery { Id = "missing" }, contexts.For<GetGatewayTemplateQuery>(), CancellationToken.None);
 
         (await act.Should().ThrowAsync<BlueprintApiException>()).Which.Type.Should().Be("not_found");
     }
@@ -174,9 +179,10 @@ public sealed class GatewayHandlerIntegrationTests : IClassFixture<SampleAppFixt
         });
 
         var client = this._fixture.CreateClient(handler);
+        await using var contexts = new GatewayContextFactory();
         var sut = new GetGatewayTemplateQueryHandler(client);
 
-        await sut.Handle(new GetGatewayTemplateQuery { Id = "t-99" }, CancellationToken.None);
+        await sut.Handle(new GetGatewayTemplateQuery { Id = "t-99" }, contexts.For<GetGatewayTemplateQuery>(), CancellationToken.None);
 
         captured.Should().NotBeNull();
         captured!.Method.Should().Be(HttpMethod.Get);

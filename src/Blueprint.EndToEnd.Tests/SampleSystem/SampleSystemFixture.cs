@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Blueprint.EndToEnd.Tests.Harness;
 
 namespace Blueprint.EndToEnd.Tests.SampleSystem;
@@ -20,6 +21,9 @@ public sealed class SampleSystemFixture : IAsyncLifetime
     /// <summary>The name the gateway is started under.</summary>
     public const string GatewayName = "gateway";
 
+    /// <summary>The name the gateway without the harness's caller-credential forwarding is started under.</summary>
+    public const string NativeGatewayName = "gateway-native";
+
     /// <summary>The scopes a caller needs for every template operation the gateway reaches.</summary>
     public static readonly string[] TemplateScopes = ["template:read", "template:write"];
 
@@ -33,6 +37,21 @@ public sealed class SampleSystemFixture : IAsyncLifetime
 
     /// <summary>The gateway, configured to call <see cref="Inner"/> at its real address.</summary>
     public RunningApp Gateway => this.Host[GatewayName];
+
+    /// <summary>
+    /// A second gateway whose outbound calls carry only the credentials the gateway itself chose: the harness does not
+    /// fill in the caller's <c>Authorization</c> header, as it does for <see cref="Gateway"/>.
+    /// </summary>
+    public RunningApp NativeGateway => this.Host[NativeGatewayName];
+
+    /// <summary>Every request <see cref="Inner"/> has received, with the <c>Authorization</c> header it arrived with.</summary>
+    public InboundRequestLog InnerRequests { get; } = new();
+
+    /// <summary>
+    /// The gateway's own service token, which the gateways' <c>ServiceTokenCredentialStrategy</c> sends: subject
+    /// <c>gateway-service</c>, read scope only.
+    /// </summary>
+    public string ServiceToken { get; private set; } = string.Empty;
 
     private MultiAppHost Host => this._host ?? throw new InvalidOperationException("The sample system has not been started.");
 
@@ -54,15 +73,20 @@ public sealed class SampleSystemFixture : IAsyncLifetime
     {
         this._host = new MultiAppHost(this.Issuer);
 
-        var inner = await this._host.StartAsync<Blueprint.SourceGenerator.Sample.Startup>(InnerName);
+        var inner = await this._host.StartAsync<Blueprint.SourceGenerator.Sample.Startup>(InnerName, inner => inner.ConfigureServices = this.InnerRequests.InstallInto);
+
+        this.ServiceToken = this.Issuer.CreateToken([new Claim("sub", "gateway-service"), new Claim("scope", "template:read")]);
 
         await this._host.StartAsync<Blueprint.SourceGenerator.Sample.Gateway.Startup>(GatewayName, gateway =>
         {
-            gateway.Settings[Blueprint.SourceGenerator.Sample.Gateway.Startup.TemplateServiceAddressKey] = new Uri(inner.BaseAddress, "api/").ToString();
+            this.ConfigureGateway(gateway, inner);
 
-            // The sample gateway's handlers call the inner app with no credential of their own.
+            // The sample gateway's typed-client handlers call the inner app with no credential of their own.
             gateway.ForwardCallerCredential = true;
         });
+
+        // Its forwards' credentials are the gateway's own: nothing in the harness fills a missing Authorization header.
+        await this._host.StartAsync<Blueprint.SourceGenerator.Sample.Gateway.Startup>(NativeGatewayName, gateway => this.ConfigureGateway(gateway, inner));
     }
 
     /// <inheritdoc />
@@ -72,6 +96,30 @@ public sealed class SampleSystemFixture : IAsyncLifetime
         {
             await this._host.DisposeAsync();
         }
+    }
+
+    /// <summary>
+    /// Creates a template directly in the inner app, over its own socket, and returns its id.
+    /// </summary>
+    /// <param name="name">The template's name.</param>
+    /// <returns>The new template's id.</returns>
+    public async Task<string> SeedTemplateAsync(string name)
+    {
+        using var inner = this.Inner.CreateClient(this.CreateCallerToken());
+        var response = await inner.PostAsJsonAsync(
+            "api/templates",
+            new { name, htmlSource = $"<p>{name}</p>", plainTextSource = name });
+        var body = await response.Content.ReadAsStringAsync();
+        response.IsSuccessStatusCode.Should().BeTrue($"seeding should succeed, but the inner app returned {response.StatusCode}: {body}");
+
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("data").GetProperty("id").GetString()!;
+    }
+
+    private void ConfigureGateway(EndToEndAppOptions gateway, RunningApp inner)
+    {
+        gateway.Settings[Blueprint.SourceGenerator.Sample.Gateway.Startup.TemplateServiceAddressKey] = new Uri(inner.BaseAddress, "api/").ToString();
+        gateway.Settings[Blueprint.SourceGenerator.Sample.Gateway.Startup.ServiceTokenKey] = this.ServiceToken;
     }
 }
 
