@@ -9,6 +9,7 @@ namespace Blueprint.SourceGenerator.Sample.Gateway;
 /// execution to upstream services via <c>BlueprintHttpClient</c>.
 /// </summary>
 [BlueprintAppScan(FromAssemblyOf = typeof(ListGatewayTemplatesQuery))]
+[BlueprintAppScan(FromAssemblyOf = typeof(GatewayBlueprintApp))]
 [BlueprintHttpClientExtensions]
 [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(GatewayBlueprintAppJsonContext))]
 public partial class GatewayBlueprintApp : BlueprintApp;

@@ -9,7 +9,7 @@ using FluentAssertions;
 namespace Blueprint.HttpClient.Tests;
 
 /// <summary>
-/// <see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}"/> sends an inner operation through its own generated request
+/// <see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}(TInner, CallOptions, CancellationToken)"/> sends an inner operation through its own generated request
 /// builders, with no app or descriptor, and reads the upstream outcome as the result the caller declares: an upstream 404 the
 /// host wrote as a <see cref="NotFoundResult{T}"/> becomes that member of a declared <see cref="Results{T1, T2}"/>, and every
 /// other failure escapes as the <see cref="BlueprintApiException"/> the transport raises.

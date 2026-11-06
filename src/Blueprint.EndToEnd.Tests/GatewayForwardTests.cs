@@ -9,7 +9,7 @@ using Blueprint.SourceGenerator.Sample.Contract.Api;
 namespace Blueprint.EndToEnd.Tests;
 
 /// <summary>
-/// <see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}"/> against the real inner template service, over a real
+/// <see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}(TInner, CallOptions, CancellationToken)"/> against the real inner template service, over a real
 /// socket: an upstream 404 becomes the declared <see cref="NotFoundResult{T}"/>, and a forwarded resource arrives without the
 /// inner service's <c>$links</c> (D5, D6). The sample gateway's single-template query forwards with it.
 /// </summary>
