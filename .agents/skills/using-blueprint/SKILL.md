@@ -205,6 +205,10 @@ Route patterns support `{PropertyName}` syntax. The placeholder binds to the ope
 
 A `[Link]` without a `Rel` is keyed — in the resource's `$links` and in `x-links` — by its operation's own descriptor name, before any `[BlueprintAppOperationNames]` removal, as legacy Blueprint keyed it: `DeleteGroupCommand`'s link is `DeleteGroup`, and `GetUserVCardQuery`'s is `GetUservCard`. Two Rel-less links on one resource therefore have two keys.
 
+### Link type
+
+Every generated link carries `type`, the object name `ApiResource.GetTypeName` gives the link's resource type: `{"href":"...","type":"client"}` for a link on `ClientApiResource`. That holds for the `[SelfLink]` and `[Link]` links in `$links` and for `IApiLinkGenerator.CreateSelfLink<T>` (since v3.1.0; before, `$links` had `"type":null` and `CreateSelfLink<T>` used the CLR name, `ClientApiResource`). An explicit `[ResourceObjectName]` or `[JsonSchema]` name does not change it: the name is derived from the type, as the resource's events' `resourceObject` is. A link nothing types — the root-metadata document's, or one a handler adds without `Type` — is written with `"type":null`.
+
 ### Compile-time diagnostics
 
 - **BPLG001** — Route placeholder `{X}` does not match any public property on the operation

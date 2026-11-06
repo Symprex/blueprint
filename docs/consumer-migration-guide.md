@@ -703,10 +703,26 @@ operation's, and a second Rel-less link on the same resource, which v1.0.2 silen
 clients from the new document. `BPLG006` is retired.
 
 **Behaviour change for a link without a type (v1.0.3).** A link whose `Type` is null is written with `"type":null`:
-`{"href":"...","type":null}`. This covers a resource's own links, those of a resource event's data (and so what an audit
-stores), and the root-metadata document's. Legacy Blueprint wrote them that way. Coming from legacy nothing changes.
-Coming from v1.0.2 or earlier, each such link gains the member, which the OpenAPI document already described as
-nullable and not required.
+`{"href":"...","type":null}`. Legacy Blueprint wrote them that way. Coming from v1.0.2 or earlier, each such link gains
+the member, which the OpenAPI document already described as nullable and not required. Since v3.1.0 (below) this covers
+only the links nothing types: the root-metadata document's, and a link a handler or a custom `IResourceLinkGenerator`
+adds without setting `Type`.
+
+**Behaviour change for a generated link's type (v3.1.0, wire values only).** Every link Blueprint generates for a
+resource now carries `type`, the resource's object name as `ApiResource.GetTypeName` gives it: `client` for
+`ClientApiResource`.
+
+- `IApiLinkGenerator.CreateSelfLink<T>` typed its link with the CLR name, `typeof(T).Name` (`"ClientApiResource"`). It
+  now uses `ApiResource.GetTypeName(typeof(T))` (`"client"`), as legacy Blueprint did.
+- The links in a resource's `$links` made from `[SelfLink]` and `[Link]` (and so those of a resource event's data, and
+  what an audit stores) were written with `"type":null`, as legacy wrote them. They now carry the same name for the
+  link's resource type. This departs from legacy deliberately: a client that resolves a link's model from its `type`
+  needs one.
+
+The name comes from the resource's type, not from an explicit `$object`: a resource with `[ResourceObjectName]` or
+`[JsonSchema]` gets the derived name (`GatewayImportRunApiResource` is `gatewayImportRun` even where its `$object` is
+`importRun`), as its events' `resourceObject` already does. No code change is needed to upgrade. Re-accept any snapshot,
+and update any client, that matched `"type":null` on a generated link or a CLR name on a self link.
 
 Link generation is automatic when link metadata exists — no `AddHateoasLinks()` call needed, and `BPMIG002` removes one
 that is present.
