@@ -1,6 +1,7 @@
 using System.Net;
 using System.Reflection;
 using System.Text.Json;
+using Blueprint.Http;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 
@@ -31,6 +32,11 @@ internal static class ForwardResponseReaders
     private static ResponseReader<T> Create<T>()
     {
         var type = typeof(T);
+
+        if (type == typeof(ProxyResult))
+        {
+            return (ResponseReader<T>)(object)new ProxyResultResponseReader();
+        }
 
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Results<,>))
         {

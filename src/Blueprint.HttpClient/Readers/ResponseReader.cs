@@ -57,6 +57,13 @@ public abstract class ResponseReader<T>
     internal virtual string? EventResourceObject => null;
 
     /// <summary>
+    /// Gets a value indicating whether what this reader reads owns the response, so that the transport hands it over at its
+    /// headers (<see cref="HttpCompletionOption.ResponseHeadersRead"/>) and does not dispose it after a successful read. Only
+    /// a forward's <see cref="Blueprint.Http.ProxyResult"/> reader does, to stream the body on unbuffered.
+    /// </summary>
+    internal virtual bool TakesResponse => false;
+
+    /// <summary>
     /// Reads the response as the declared result.
     /// </summary>
     /// <param name="context">The response and what it is read with.</param>

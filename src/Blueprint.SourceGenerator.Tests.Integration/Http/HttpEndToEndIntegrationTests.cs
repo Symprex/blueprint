@@ -904,6 +904,25 @@ public class HttpEndToEndIntegrationTests
     }
 
     [Fact]
+    public async Task When_handler_returns_ProxyResult_then_hop_by_hop_headers_are_not_forwarded()
+    {
+        var endpoints = CreateEndpoints();
+        endpoints.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>("api/");
+
+        var endpoint = FindEndpoint(endpoints, "api/e2e/proxy-hop-by-hop");
+        endpoint.Should().NotBeNull("the hop-by-hop proxy query route should be registered");
+
+        var response = await InvokeEndpointAsync(endpoint!, endpoints.ServiceProvider);
+
+        response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        response.Body.Should().Be("proxied");
+        response.Headers.Keys.Should().NotContain(
+            ["Connection", "Keep-Alive", "Transfer-Encoding", "Upgrade", "Proxy-Authenticate", "Proxy-Connection", "TE", "Trailer"]);
+        response.Headers["X-End-To-End"].ToString().Should().Be("kept");
+        response.Headers["Cache-Control"].ToString().Should().Be("no-store");
+    }
+
+    [Fact]
     public async Task When_conditional_RequiredIf_is_satisfied_and_field_missing_then_returns_422()
     {
         var endpoints = CreateEndpoints();
@@ -1523,7 +1542,8 @@ public class HttpEndToEndIntegrationTests
             Encoding.UTF8.GetString(body.ToArray()),
             context.Response.Headers.Location.ToString() is { Length: > 0 } loc ? loc : null,
             context.Response.Headers.ContentDisposition.ToString() is { Length: > 0 } cd ? cd : null,
-            customHeaders);
+            customHeaders,
+            context.Response.Headers);
     }
 
     private static RouteEndpoint? FindEndpoint(TestEndpointRouteBuilder builder, string routePattern)
@@ -1594,7 +1614,7 @@ public class HttpEndToEndIntegrationTests
         }
     }
 
-    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader, string? ContentDisposition, Dictionary<string, string> CustomHeaders);
+    private sealed record TestHttpResponse(int StatusCode, string? ContentType, string Body, string? LocationHeader, string? ContentDisposition, Dictionary<string, string> CustomHeaders, IHeaderDictionary Headers);
 }
 
 // ─── E2E test operations ──────────────────────────────────────────────────────
@@ -2926,6 +2946,47 @@ public partial class E2EProxyQuery : IQuery<Blueprint.Http.ProxyResult>
 
         downstream.Headers.Add("X-Downstream-Id", "cubejs-123");
         downstream.Headers.Add("X-Request-Id", "req-456");
+
+        return Task.FromResult(new Blueprint.Http.ProxyResult(downstream));
+    }
+}
+
+/// <summary>
+/// Anonymous GET returning a <see cref="Blueprint.Http.ProxyResult" /> whose downstream response carries hop-by-hop
+/// headers, which describe the downstream connection and must not be forwarded to the caller's.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/e2e/proxy-hop-by-hop")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Auditing.DoNotAudit]
+public partial class E2EHopByHopProxyQuery : IQuery<Blueprint.Http.ProxyResult>
+{
+    /// <summary>Simulates a downstream response with every hop-by-hop header and two end-to-end ones.</summary>
+    /// <param name="query">The query instance (unused).</param>
+    /// <returns>A proxy result wrapping the simulated downstream response.</returns>
+    public static Task<Blueprint.Http.ProxyResult> HandleAsync(E2EHopByHopProxyQuery query)
+    {
+        var downstream = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent("proxied", Encoding.UTF8, "text/plain"),
+        };
+
+        foreach (var (name, value) in new[]
+                 {
+                     ("Connection", "keep-alive"),
+                     ("Keep-Alive", "timeout=5"),
+                     ("Transfer-Encoding", "chunked"),
+                     ("Upgrade", "websocket"),
+                     ("Proxy-Authenticate", "Basic"),
+                     ("Proxy-Connection", "keep-alive"),
+                     ("TE", "trailers"),
+                     ("Trailer", "Expires"),
+                     ("X-End-To-End", "kept"),
+                     ("Cache-Control", "no-store"),
+                 })
+        {
+            downstream.Headers.TryAddWithoutValidation(name, value);
+        }
 
         return Task.FromResult(new Blueprint.Http.ProxyResult(downstream));
     }
