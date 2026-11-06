@@ -12,6 +12,7 @@ Register via `IOptions<BlueprintHttpOptions>` in DI. Key settings:
 |---------|---------|-------------|
 | `ExposeExceptionDetailsInErrorResponses` | `false` | When `true`, 500 responses include exception messages and stack traces. **Must be `false` in production.** |
 | `PublicHost` | `null` (uses request host) | Override the domain used for absolute link URLs. Set this behind reverse proxies. |
+| `PublicBaseUri` | `null` (built from the request) | The whole base URI for absolute link URLs, resource event hrefs and the root-metadata document, mount path included. Wins over `PublicHost`. |
 
 ### Reverse proxy setup
 
@@ -29,6 +30,18 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 });
 ```
+
+Where clients compare hrefs with an API root they are configured with, set `PublicBaseUri` to that root instead. It replaces the request's scheme, host and path base and the base path given to `MapBlueprintApi`, so give the whole address the API is published at:
+
+```csharp
+services.Configure<BlueprintHttpOptions>(options =>
+{
+    // Mapped with MapBlueprintApi<...>("api/"); every href is written as "https://api.example.com/api/...".
+    options.PublicBaseUri = "https://api.example.com/api/";
+});
+```
+
+It is written as configured, made to end with exactly one `/`. A value that is not an absolute `http` or `https` URI, or that has a query or fragment, fails `MapBlueprintApi`. It does not change the api-catalog or the OpenAPI `servers` entry (`PublicApiHost`).
 
 ### Exception detail control
 

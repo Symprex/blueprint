@@ -89,6 +89,39 @@ public sealed class BlueprintHttpOptions
     public string? PublicHost { get; set; }
 
     /// <summary>
+    /// An optional absolute <c>http</c> or <c>https</c> URI that every absolute URL the API writes is made under, in place
+    /// of the base URI built from the incoming request: <c>https://api.example.com/api/</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// By default this is <c>null</c>, and the base URI is built from the request, as
+    /// <c>{scheme}://{PublicHost ?? Host}{PathBase}/{basePath}/</c>, where <c>basePath</c> is the path passed to
+    /// <c>MapBlueprintApi</c>.
+    /// </para>
+    /// <para>
+    /// When set, it is the whole base URI: the resource links Blueprint generates (<c>self</c> links and <c>[Link]</c>
+    /// links, and so the <c>Location</c> of a created resource), resource event hrefs and the links of the root-metadata
+    /// document are this followed by the link's URL. It must therefore include the path the API is mounted at — the
+    /// request's <c>PathBase</c> and the base path passed to <c>MapBlueprintApi</c> are <em>not</em> appended — so an API
+    /// mapped at <c>api/</c> and published at <c>https://api.example.com/api/</c> is configured with exactly that. It takes
+    /// precedence over <see cref="PublicHost" />.
+    /// </para>
+    /// <para>
+    /// It is written as configured, character for character, except that it is made to end with exactly one <c>/</c>:
+    /// <c>https://api.example.com/api</c> and <c>https://api.example.com/api//</c> both give
+    /// <c>https://api.example.com/api/</c>. Set it where clients compare hrefs with an API root they are configured with,
+    /// and the request reaches the API through a proxy that changes its scheme, host or path.
+    /// </para>
+    /// <para>
+    /// A value that is not an absolute <c>http</c> or <c>https</c> URI, or that carries a query or a fragment, fails
+    /// <c>MapBlueprintApi</c>. It does not change the RFC 9727 api-catalog, the OpenAPI <c>servers</c> entry (see
+    /// <see cref="PublicApiHost" />), or the <c>IApiLinkGenerator</c> a host resolves from the container outside an
+    /// operation's pipeline.
+    /// </para>
+    /// </remarks>
+    public string? PublicBaseUri { get; set; }
+
+    /// <summary>
     /// An optional authority, which may carry a path prefix as well as a host (<c>gateway.example.com/import</c>), that
     /// this API should advertise to its clients as its own address — the default OpenAPI <c>servers</c> entry, with the
     /// base path the API is mapped at appended.

@@ -495,6 +495,9 @@ public static class EndpointRouteBuilderExtensions
         private readonly ILogger<BlueprintApiRouter<TExec>> _logger;
         private readonly BlueprintHttpOptions _httpOptions;
         private readonly PathString _normalizedBasePath;
+
+        // BlueprintHttpOptions.PublicBaseUri, made to end with one slash; when set it is every request's base URI.
+        private readonly string? _publicBaseUri;
         private readonly TExec _executor;
         private readonly HttpOperationResultExecutor? _resultExecutor;
         private readonly IHttpResultWriter? _resultWriter;
@@ -516,6 +519,7 @@ public static class EndpointRouteBuilderExtensions
             this._logger = logger;
             this._httpOptions = httpOptions;
             this._normalizedBasePath = new PathString("/" + basePath.TrimStart('/'));
+            this._publicBaseUri = NormalisePublicBaseUri(httpOptions.PublicBaseUri);
 
             // Cache singleton services that are resolved on every request
             this._executor = rootServiceProvider.GetRequiredService<TExec>();
@@ -620,7 +624,8 @@ public static class EndpointRouteBuilderExtensions
         }
 
         /// <summary>
-        /// Gives the request's base URI, for link generation and redirect targets: the scheme, the public host when
+        /// Gives the request's base URI, for link generation and redirect targets: the configured
+        /// <see cref="BlueprintHttpOptions.PublicBaseUri"/> when there is one, otherwise the scheme, the public host when
         /// configured, the request's path base and the app's base path.
         /// </summary>
         /// <remarks>
@@ -630,6 +635,12 @@ public static class EndpointRouteBuilderExtensions
         /// </remarks>
         private string GetBaseUri(HttpRequest httpRequest)
         {
+            // The same string instance for every request, so the per-request link generator cache always hits.
+            if (this._publicBaseUri is not null)
+            {
+                return this._publicBaseUri;
+            }
+
             var scheme = httpRequest.Scheme;
             var host = this._httpOptions.PublicHost ?? httpRequest.Host.Value;
             var baseUriCache = this._baseUriCache;
@@ -648,6 +659,36 @@ public static class EndpointRouteBuilderExtensions
 
             // Hot path: nothing changed, the cached URI is reused with zero allocation.
             return baseUriCache.BaseUri;
+        }
+
+        /// <summary>
+        /// Checks a configured <see cref="BlueprintHttpOptions.PublicBaseUri"/> and makes it end with exactly one slash,
+        /// leaving every other character as configured, since clients may compare hrefs with it by exact string.
+        /// </summary>
+        /// <param name="publicBaseUri">The configured value.</param>
+        /// <returns>The base URI, or <see langword="null"/> when none is configured.</returns>
+        /// <exception cref="InvalidOperationException">
+        /// The value is not an absolute <c>http</c> or <c>https</c> URI without a query or a fragment.
+        /// </exception>
+        private static string? NormalisePublicBaseUri(string? publicBaseUri)
+        {
+            if (publicBaseUri is null)
+            {
+                return null;
+            }
+
+            if (!Uri.TryCreate(publicBaseUri, UriKind.Absolute, out var parsed)
+                || (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)
+                || publicBaseUri.Contains('?', StringComparison.Ordinal)
+                || publicBaseUri.Contains('#', StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"{nameof(BlueprintHttpOptions)}.{nameof(BlueprintHttpOptions.PublicBaseUri)} must be an absolute http or https URI " +
+                    "without a query or a fragment, including the path the API is mounted at (for example " +
+                    $"https://api.example.com/api/), but was '{publicBaseUri}'.");
+            }
+
+            return publicBaseUri.TrimEnd('/') + '/';
         }
 
         /// <summary>
