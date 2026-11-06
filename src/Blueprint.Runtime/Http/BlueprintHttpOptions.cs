@@ -113,8 +113,8 @@ public sealed class BlueprintHttpOptions
     /// and the request reaches the API through a proxy that changes its scheme, host or path.
     /// </para>
     /// <para>
-    /// A value that is not an absolute <c>http</c> or <c>https</c> URI, or that carries a query or a fragment, fails
-    /// <c>MapBlueprintApi</c>. It does not change the RFC 9727 api-catalog, the OpenAPI <c>servers</c> entry (see
+    /// A value that is not a well-formed absolute <c>http</c> or <c>https</c> URI, or that carries a query, a fragment,
+    /// whitespace, control characters or backslashes, fails <c>MapBlueprintApi</c>. It does not change the RFC 9727 api-catalog, the OpenAPI <c>servers</c> entry (see
     /// <see cref="PublicApiHost" />), or the <c>IApiLinkGenerator</c> a host resolves from the container outside an
     /// operation's pipeline.
     /// </para>

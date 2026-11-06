@@ -41,7 +41,7 @@ services.Configure<BlueprintHttpOptions>(options =>
 });
 ```
 
-It is written as configured, made to end with exactly one `/`. A value that is not an absolute `http` or `https` URI, or that has a query or fragment, fails `MapBlueprintApi`. It does not change the api-catalog or the OpenAPI `servers` entry (`PublicApiHost`).
+It is written as configured, made to end with exactly one `/`. A value that is not a well-formed absolute `http` or `https` URI, or that has a query, fragment, whitespace, control characters or backslashes, fails `MapBlueprintApi`. It does not change the api-catalog or the OpenAPI `servers` entry (`PublicApiHost`).
 
 ### Exception detail control
 

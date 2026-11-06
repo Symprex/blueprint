@@ -668,7 +668,7 @@ public static class EndpointRouteBuilderExtensions
         /// <param name="publicBaseUri">The configured value.</param>
         /// <returns>The base URI, or <see langword="null"/> when none is configured.</returns>
         /// <exception cref="InvalidOperationException">
-        /// The value is not an absolute <c>http</c> or <c>https</c> URI without a query or a fragment.
+        /// The value is not a well-formed absolute <c>http</c> or <c>https</c> URI, or has a query, a fragment, whitespace, control characters or backslashes.
         /// </exception>
         private static string? NormalisePublicBaseUri(string? publicBaseUri)
         {
@@ -677,14 +677,17 @@ public static class EndpointRouteBuilderExtensions
                 return null;
             }
 
-            if (!Uri.TryCreate(publicBaseUri, UriKind.Absolute, out var parsed)
+            // The value is written into hrefs as configured, so it must already be well formed: Uri.TryCreate alone would
+            // accept, and silently trim or escape, whitespace, control characters and backslashes the hrefs would carry.
+            if (!Uri.IsWellFormedUriString(publicBaseUri, UriKind.Absolute)
+                || !Uri.TryCreate(publicBaseUri, UriKind.Absolute, out var parsed)
                 || (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)
-                || publicBaseUri.Contains('?', StringComparison.Ordinal)
-                || publicBaseUri.Contains('#', StringComparison.Ordinal))
+                || publicBaseUri.AsSpan().IndexOfAny("?#\\") >= 0
+                || publicBaseUri.Any(static c => char.IsWhiteSpace(c) || char.IsControl(c)))
             {
                 throw new InvalidOperationException(
-                    $"{nameof(BlueprintHttpOptions)}.{nameof(BlueprintHttpOptions.PublicBaseUri)} must be an absolute http or https URI " +
-                    "without a query or a fragment, including the path the API is mounted at (for example " +
+                    $"{nameof(BlueprintHttpOptions)}.{nameof(BlueprintHttpOptions.PublicBaseUri)} must be a well-formed absolute http or https URI " +
+                    "without a query, fragment, whitespace, control characters or backslashes, including the path the API is mounted at (for example " +
                     $"https://api.example.com/api/), but was '{publicBaseUri}'.");
             }
 

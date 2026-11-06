@@ -105,6 +105,12 @@ public sealed class PublicBaseUriTests
     [InlineData("ftp://api.example.test/v1/")]
     [InlineData("https://api.example.test/v1/?tenant=1")]
     [InlineData("https://api.example.test/v1/#links")]
+    [InlineData("https://api.example.test/my api/")]
+    [InlineData("https://api.example.test\\v1\\")]
+    [InlineData(" https://api.example.test/v1/")]
+    [InlineData("https://api.example.test/v1/ ")]
+    [InlineData("https://api.example.test/v1/\n")]
+    [InlineData("https://api.example.test/v1/\t")]
     public async Task A_public_base_uri_that_is_not_an_absolute_http_uri_fails_the_mapping(string configured)
     {
         var act = async () =>
