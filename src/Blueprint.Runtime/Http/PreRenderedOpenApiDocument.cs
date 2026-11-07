@@ -27,6 +27,12 @@ public sealed class PreRenderedOpenApiDocument
     /// a request-body property whose type the app's serializer context does not describe.
     /// </summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
+
+    /// <summary>
+    /// Gets the flattened input schema of each operation the document writes, made from the same rendering when first
+    /// read, or <see langword="null"/> for a document made otherwise.
+    /// </summary>
+    internal Lazy<OperationInputSchemaSet>? InputSchemas { get; init; }
 }
 
 /// <summary>
