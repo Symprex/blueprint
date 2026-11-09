@@ -5,10 +5,11 @@ using Blueprint.Model.Attributes;
 namespace Blueprint.SourceGenerator.Sample.Gateway.Api;
 
 /// <summary>
-/// Retrieves a template within a tenant from the upstream template service. Minimal mode with a declared credential and
-/// error translation (#69): the generated forward exchanges the caller's token for one scoped to the inner operation's
-/// <c>TenantId</c>, which the upstream's tenant isolation requires, and answers the upstream's <c>not_found</c> problem as
-/// the gateway's own.
+/// Retrieves a template within the caller's tenant from the upstream template service. Minimal mode with a declared
+/// credential and error translation (#69): the inner <c>TenantId</c> is bound from the caller's <c>tenant_id</c> claim by
+/// the gateway's <c>[GatewayBind]</c> (#66), so the gateway operation has none of its own; the generated forward exchanges
+/// the caller's token for one scoped to that bound tenant, which the upstream's tenant isolation requires, and answers the
+/// upstream's <c>not_found</c> problem as the gateway's own.
 /// </summary>
 /// <remarks>
 /// Declared in the gateway rather than its contract assembly because <see cref="ExchangeTenantTokenAttribute"/> names the
@@ -17,7 +18,7 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Api;
 [Expose<GetTenantTemplateQuery>]
 [ApiOperations("GatewayTemplates")]
 [MustBeAuthenticated]
-[RootLink("/tenants/{TenantId}/templates/{Id}")]
+[RootLink("/tenants/current/templates/{Id}")]
 [HttpGet]
 [ExchangeTenantToken(TenantIdProperty = nameof(GetTenantTemplateQuery.TenantId))]
 [TranslateError("not_found", nameof(TenantTemplateMissing))]

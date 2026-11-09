@@ -2,6 +2,28 @@
 
 ## Operations
 
+### AddTenantNote
+  Type: AddTenantNoteCommand
+  Source: Source Generated
+  HTTP Methods: POST
+  URL: /tenants/{TenantId}/notes
+  Hosts: http
+  Auth: Authenticated
+  Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.AddTenantNoteCommand)
+  Group: TenantNotes
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TenantNoteApiResource]
+    - 400: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 415: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+
 ### ArchiveTemplate
   Type: ArchiveTemplateCommand
   Source: Source Generated

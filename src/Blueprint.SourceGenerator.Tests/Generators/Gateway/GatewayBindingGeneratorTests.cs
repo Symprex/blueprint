@@ -1,0 +1,438 @@
+using Blueprint.SourceGenerator.Generators.Descriptors;
+using Blueprint.SourceGenerator.Planning;
+using FluentAssertions;
+using Microsoft.CodeAnalysis;
+using static Blueprint.SourceGenerator.Tests.Generators.Gateway.ExposeGeneratorTests;
+
+namespace Blueprint.SourceGenerator.Tests.Generators.Gateway;
+
+/// <summary>
+/// Binding tiers (Symprex/blueprint#66, D11): <c>[assembly: GatewayBind]</c>, <c>[Bind]</c>, <c>[Hide]</c> and the
+/// <c>OnMap</c>/<c>OnMapAsync</c> hook. A bound or hidden inner property is left out of the shared property model (D25),
+/// so no generator gives it to the gateway operation's public shape, and the generated forward (D12) fills it instead.
+/// </summary>
+public class GatewayBindingGeneratorTests
+{
+    private const string InnerSource = """
+        namespace Inner
+        {
+            using System.ComponentModel.DataAnnotations;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            public class NoteResult : ApiResource
+            {
+                public string TenantId { get; set; } = "";
+            }
+
+            [RootLink("/tenants/{TenantId}/notes")]
+            [HttpPost]
+            public partial class AddNoteCommand : ICommand<NoteResult>
+            {
+                /// <summary>The tenant the note belongs to.</summary>
+                public string TenantId { get; set; } = "";
+
+                /// <summary>The note.</summary>
+                [Required]
+                public string Text { get; set; } = "";
+
+                /// <summary>Where the note came from.</summary>
+                public string? Source { get; set; }
+
+                /// <summary>A note for staff only.</summary>
+                public string? InternalNote { get; set; }
+
+                /// <summary>The partner adding the note.</summary>
+                public System.Guid PartnerId { get; set; }
+
+                /// <summary>The note's priority.</summary>
+                public int Priority { get; set; }
+            }
+        }
+        """;
+
+    private const string ClientSource = """
+        namespace Gateway
+        {
+            using Blueprint.HttpClient;
+
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(Inner.AddNoteCommand))]
+            public partial class NoteApi;
+        }
+        """;
+
+    private const string AppBindingSource = """
+        [assembly: Blueprint.Model.Attributes.GatewayBind("TenantId", FromClaim = "tenant_id")]
+        """;
+
+    private const string GatewaySource = """
+        namespace Gateway
+        {
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            [Expose<Inner.AddNoteCommand>]
+            [MustBeAuthenticated]
+            [RootLink("/gateway/notes")]
+            [HttpPost]
+            public partial class AddGatewayNoteCommand : ICommand<Inner.NoteResult>;
+        }
+        """;
+
+    private const string AppSource = """
+        namespace Gateway
+        {
+            using Blueprint.Model;
+
+            [BlueprintAppScan]
+            public partial class GatewayApp : BlueprintApp;
+        }
+        """;
+
+    private static readonly Lazy<MetadataReference> _innerContract = new(
+        static () => TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(InnerSource, "InnerNoteContract"));
+
+    [Fact]
+    public void An_app_bound_property_is_left_out_of_the_model()
+    {
+        var model = BuildModel(AppBindingSource, GatewaySource);
+
+        model.Properties.Select(static p => p.Name).Should().Equal("Text", "Source", "InternalNote", "PartnerId", "Priority");
+    }
+
+    [Fact]
+    public void Without_a_binding_every_inner_property_is_in_the_model()
+    {
+        var model = BuildModel(GatewaySource);
+
+        model.Properties.Select(static p => p.Name).Should().Equal("TenantId", "Text", "Source", "InternalNote", "PartnerId", "Priority");
+    }
+
+    [Fact]
+    public void An_op_bound_or_hidden_property_is_left_out_of_the_model()
+    {
+        var gateway = WithAttributes(
+            GatewaySource,
+            "[Bind(nameof(Inner.AddNoteCommand.Source), Value = \"partner-portal\")]",
+            "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]");
+
+        var model = BuildModel(AppBindingSource, gateway);
+
+        model.Properties.Select(static p => p.Name).Should().Equal("Text", "PartnerId", "Priority");
+    }
+
+    [Fact]
+    public void A_bound_property_is_absent_from_the_emitted_partial_the_binding_plan_and_the_request_builders()
+    {
+        var gateway = WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.GeneratorErrors.Should().BeEmpty();
+        run.DescriptorAndAppReplayedFromCache.Should().BeTrue();
+
+        var properties = run.Source("Gateway.AddGatewayNoteCommand_ExposedProperties.g.cs");
+        properties.Should().Contain("public string Text { get; set; }")
+            .And.NotContain("TenantId")
+            .And.NotContain("InternalNote");
+
+        var descriptor = run.Source("Gateway.AddGatewayNoteCommand_Descriptor.g.cs");
+        descriptor.Should().Contain("OperationPropertyBindingEntry(\"Text\"")
+            .And.NotContain("TenantId")
+            .And.NotContain("InternalNote");
+    }
+
+    [Fact]
+    public void The_forward_fills_an_app_bound_property_from_the_callers_claim()
+    {
+        var run = RunAllGenerators([ClientSource, AppBindingSource, GatewaySource, AppSource], _innerContract.Value);
+
+        run.EmitErrors.Should().BeEmpty();
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().Contain("FindFirst(\"tenant_id\")")
+            .And.Contain("TenantId = _bound_TenantId")
+            .And.Contain("Text = operation.Text");
+    }
+
+    [Fact]
+    public void An_op_binding_overrides_the_app_binding_of_the_same_property()
+    {
+        var gateway = WithAttributes(GatewaySource, "[Bind(nameof(Inner.AddNoteCommand.TenantId), FromClaim = \"account_id\")]");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.EmitErrors.Should().BeEmpty();
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().Contain("FindFirst(\"account_id\")").And.NotContain("\"tenant_id\"");
+    }
+
+    [Fact]
+    public void A_hide_overrides_the_app_binding_and_leaves_the_property_unset()
+    {
+        var gateway = WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.TenantId))]");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.EmitErrors.Should().BeEmpty();
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().NotContain("\"tenant_id\"").And.NotContain("TenantId =");
+    }
+
+    [Fact]
+    public void Property_and_route_bindings_read_the_gateway_operations_own_properties()
+    {
+        var gateway = """
+            namespace Gateway
+            {
+                using Blueprint.Model;
+                using Blueprint.Model.Attributes;
+
+                [Expose<Inner.AddNoteCommand>]
+                [MustBeAuthenticated]
+                [RootLink("/gateway/tenants/{tenant}/notes")]
+                [HttpPost]
+                [Bind(nameof(Inner.AddNoteCommand.TenantId), FromRoute = "tenant")]
+                [Bind(nameof(Inner.AddNoteCommand.Source), FromProperty = nameof(Origin))]
+                public partial class AddGatewayNoteCommand : ICommand<Inner.NoteResult>
+                {
+                    public string Tenant { get; set; } = "";
+
+                    public string? Origin { get; set; }
+                }
+            }
+            """;
+
+        var run = RunAllGenerators([ClientSource, gateway, AppSource], _innerContract.Value);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.GeneratorErrors.Should().BeEmpty();
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().Contain("TenantId = operation.Tenant").And.Contain("Source = operation.Origin");
+    }
+
+    [Fact]
+    public void The_on_map_async_hook_runs_after_the_copy_with_injected_parameters()
+    {
+        var gateway = WithBody(
+            GatewaySource,
+            "internal System.Threading.Tasks.ValueTask OnMapAsync(Inner.AddNoteCommand inner, System.TimeProvider clock, System.Threading.CancellationToken cancellationToken) { inner.Text += clock.GetUtcNow().Year; return default; }");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.GeneratorErrors.Should().BeEmpty();
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().Contain("GetRequiredService<global::System.TimeProvider>")
+            .And.Contain("await operation.OnMapAsync(forwardInner, _handlerArg_clock, context.OperationCancelled).ConfigureAwait(false);");
+        pipeline.IndexOf("OnMapAsync(forwardInner", StringComparison.Ordinal)
+            .Should().BeGreaterThan(pipeline.IndexOf("var forwardInner", StringComparison.Ordinal))
+            .And.BeLessThan(pipeline.IndexOf("forwardTransport.ForwardAsync", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_synchronous_on_map_hook_is_called()
+    {
+        var gateway = WithBody(GatewaySource, "internal void OnMap(Inner.AddNoteCommand inner) => inner.Priority = 5;");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().Contain("operation.OnMap(forwardInner);");
+    }
+
+    [Fact]
+    public async Task The_generated_forward_with_every_binding_tier_matches_the_snapshot()
+    {
+        var gateway = WithAttributes(
+            GatewaySource,
+            "[Bind(nameof(Inner.AddNoteCommand.PartnerId), FromClaim = \"partner_id\")]",
+            "[Bind(nameof(Inner.AddNoteCommand.Source), Value = \"partner-portal\")]",
+            "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]");
+        gateway = WithBody(
+            gateway,
+            "internal System.Threading.Tasks.ValueTask OnMapAsync(Inner.AddNoteCommand inner, System.TimeProvider clock) { inner.Priority = clock.GetUtcNow().Hour; return default; }");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.EmitErrors.Should().BeEmpty();
+
+        await Verify(string.Join(
+                "\n",
+                new[] { "Gateway.AddGatewayNoteCommand_ExposedProperties.g.cs", "Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs" }
+                    .Select(hint => hint + ":\n\n" + run.Source(hint))))
+            .UseDirectory("Snapshots");
+    }
+
+    [Fact]
+    public void When_a_binding_names_a_property_the_inner_operation_lacks_then_BPGW007_is_reported()
+    {
+        var gateway = WithAttributes(GatewaySource, "[Hide(\"Colour\")]");
+
+        var diagnostic = SingleDescriptorDiagnostic(gateway, "BPGW007");
+
+        diagnostic.GetMessage().Should().Contain("Colour").And.Contain("AddNoteCommand");
+        Located(diagnostic).Should().StartWith("Hide(");
+    }
+
+    [Theory]
+    [InlineData("[Bind(nameof(Inner.AddNoteCommand.Source))]")]
+    [InlineData("[Bind(nameof(Inner.AddNoteCommand.Source), Value = \"a\", FromClaim = \"b\")]")]
+    public void When_a_binding_sets_no_source_or_several_then_BPGW008_is_reported(string binding)
+    {
+        var diagnostic = SingleDescriptorDiagnostic(WithAttributes(GatewaySource, binding), "BPGW008");
+
+        diagnostic.GetMessage().Should().Contain("Source");
+        Located(diagnostic).Should().StartWith("Bind(");
+    }
+
+    [Fact]
+    public void When_an_app_binding_sets_no_claim_then_BPGW008_is_reported()
+    {
+        var appBinding = "[assembly: Blueprint.Model.Attributes.GatewayBind(\"TenantId\")]";
+
+        var diagnostic = SingleDescriptorDiagnostic([appBinding, GatewaySource], "BPGW008");
+
+        Located(diagnostic).Should().StartWith("Blueprint.Model.Attributes.GatewayBind(");
+    }
+
+    [Fact]
+    public void When_a_required_inner_property_is_hidden_then_BPGW009_is_reported()
+    {
+        var inner = InnerSource.Replace("public string? InternalNote { get; set; }", "public required string InternalNote { get; set; }", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([AppBindingSource, gateway], additionalReferences: [contract]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW009").Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("InternalNote");
+    }
+
+    [Fact]
+    public void When_an_inner_route_placeholder_the_gateway_route_lacks_is_neither_bound_nor_hidden_then_BPGW010_is_reported()
+    {
+        var diagnostic = SingleDescriptorDiagnostic([GatewaySource], "BPGW010");
+
+        diagnostic.GetMessage().Should().Contain("TenantId").And.Contain("/tenants/{TenantId}/notes");
+        Located(diagnostic).Should().StartWith("Expose<");
+    }
+
+    [Theory]
+    [InlineData(AppBindingSource, "")]
+    [InlineData("", "[Hide(nameof(Inner.AddNoteCommand.TenantId))]")]
+    [InlineData("", "[Bind(nameof(Inner.AddNoteCommand.TenantId), Value = \"t\")]")]
+    public void When_the_inner_route_placeholder_is_bound_or_hidden_then_BPGW010_is_not_reported(string appBinding, string opBinding)
+    {
+        var gateway = opBinding.Length == 0 ? GatewaySource : WithAttributes(GatewaySource, opBinding);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([appBinding, gateway], additionalReferences: [_innerContract.Value]);
+
+        result.Diagnostics.Should().NotContain(static d => d.Id.StartsWith("BPGW", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void When_the_gateway_route_has_the_inner_placeholder_then_BPGW010_is_not_reported()
+    {
+        var gateway = GatewaySource.Replace("[RootLink(\"/gateway/notes\")]", "[RootLink(\"/gateway/tenants/{TenantId}/notes\")]", StringComparison.Ordinal);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([gateway], additionalReferences: [_innerContract.Value]);
+
+        result.Diagnostics.Should().NotContain(static d => d.Id.StartsWith("BPGW", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("[Bind(nameof(Inner.AddNoteCommand.Priority), Value = \"high\")]", "Priority")]
+    [InlineData("[Bind(nameof(Inner.AddNoteCommand.Source), FromProperty = nameof(Count))]", "Source")]
+    [InlineData("[Bind(nameof(Inner.AddNoteCommand.Priority), FromClaim = \"priority_bag\")]", null)]
+    public void When_a_binding_source_does_not_convert_to_the_inner_type_then_BPGW011_is_reported(string binding, string? property)
+    {
+        // A claim converts to any type route binding converts to, so only a type route binding cannot read fails.
+        var inner = property is null
+            ? InnerSource.Replace("public int Priority { get; set; }", "public System.Collections.Generic.List<int> Priority { get; set; } = new();", StringComparison.Ordinal)
+            : InnerSource;
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = WithAttributes(GatewaySource, binding).Replace(
+            "public partial class AddGatewayNoteCommand : ICommand<Inner.NoteResult>;",
+            "public partial class AddGatewayNoteCommand : ICommand<Inner.NoteResult> { public int Count { get; set; } }",
+            StringComparison.Ordinal);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([AppBindingSource, gateway], additionalReferences: [contract]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW011").Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain(property ?? "Priority");
+    }
+
+    [Theory]
+    [InlineData("[Bind(nameof(Inner.AddNoteCommand.Source), FromProperty = \"Missing\")]", "Missing")]
+    [InlineData("[Bind(nameof(Inner.AddNoteCommand.Source), FromRoute = \"missing\")]", "missing")]
+    public void When_a_binding_source_is_not_on_the_gateway_operation_then_BPGW012_is_reported(string binding, string source)
+    {
+        var diagnostic = SingleDescriptorDiagnostic(WithAttributes(GatewaySource, binding), "BPGW012");
+
+        diagnostic.GetMessage().Should().Contain(source);
+    }
+
+    [Theory]
+    [InlineData("[Bind(nameof(Inner.AddNoteCommand.Source), Value = \"a\")]", "[Hide(nameof(Inner.AddNoteCommand.Source))]")]
+    [InlineData("[Bind(nameof(Inner.AddNoteCommand.Source), Value = \"a\")]", "[Bind(nameof(Inner.AddNoteCommand.Source), Value = \"b\")]")]
+    public void When_a_property_is_bound_twice_on_one_operation_then_BPGW013_is_reported(string first, string second)
+    {
+        var diagnostic = SingleDescriptorDiagnostic(WithAttributes(GatewaySource, first, second), "BPGW013");
+
+        diagnostic.GetMessage().Should().Contain("Source");
+    }
+
+    [Theory]
+    [InlineData("internal void OnMap(Inner.NoteResult inner) { }")]
+    [InlineData("private void OnMap(Inner.AddNoteCommand inner) { }")]
+    [InlineData("internal int OnMapAsync(Inner.AddNoteCommand inner) => 0;")]
+    [InlineData("internal static void OnMap(Inner.AddNoteCommand inner) { }")]
+    public void When_the_map_hook_has_the_wrong_shape_then_BPGW014_is_reported(string hook)
+    {
+        var gateway = GatewaySource.Replace(
+            "public partial class AddGatewayNoteCommand : ICommand<Inner.NoteResult>;",
+            "public partial class AddGatewayNoteCommand : ICommand<Inner.NoteResult> { " + hook + " }",
+            StringComparison.Ordinal);
+
+        var diagnostic = SingleDescriptorDiagnostic([AppBindingSource, gateway], "BPGW014");
+
+        diagnostic.GetMessage().Should().Contain("AddGatewayNoteCommand").And.Contain("AddNoteCommand");
+    }
+
+    private static OperationPropertyModel BuildModel(params string[] sources)
+    {
+        var compilation = CreateCompilation(sources, _innerContract.Value);
+        return OperationPropertyModelBuilder.Build(compilation.GetTypeByMetadataName("Gateway.AddGatewayNoteCommand")!);
+    }
+
+    private static Diagnostic SingleDescriptorDiagnostic(string gateway, string id)
+    {
+        return SingleDescriptorDiagnostic([AppBindingSource, gateway], id);
+    }
+
+    private static Diagnostic SingleDescriptorDiagnostic(string[] sources, string id)
+    {
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>(sources, additionalReferences: [_innerContract.Value]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(d => d.Id == id).Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        return diagnostic;
+    }
+
+    private static string WithBody(string gateway, string body)
+    {
+        return gateway.Replace(
+            "public partial class AddGatewayNoteCommand : ICommand<Inner.NoteResult>;",
+            "public partial class AddGatewayNoteCommand : ICommand<Inner.NoteResult>\n{\n    " + body + "\n}",
+            StringComparison.Ordinal);
+    }
+
+    private static string WithAttributes(string gateway, params string[] attributes)
+    {
+        return gateway.Replace("[Expose<Inner.AddNoteCommand>]", "[Expose<Inner.AddNoteCommand>]\n" + string.Join("\n", attributes), StringComparison.Ordinal);
+    }
+}

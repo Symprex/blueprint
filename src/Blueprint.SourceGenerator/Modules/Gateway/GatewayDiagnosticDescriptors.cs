@@ -77,6 +77,94 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
+    /// BPGW007: a <c>[Bind]</c> or <c>[Hide]</c> naming a property the inner operation has no public settable property of (D11).
+    /// </summary>
+    public static readonly DiagnosticDescriptor BoundPropertyNotOnInnerOperation = new(
+        id: "BPGW007",
+        title: "A binding names a property the inner operation does not have",
+        messageFormat: "Gateway operation '{0}' has [{1}(\"{2}\")], but '{3}' has no public settable property '{2}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW008: a <c>[Bind]</c> that sets no source or several, or a <c>[GatewayBind]</c> without <c>FromClaim</c> (D11).
+    /// </summary>
+    public static readonly DiagnosticDescriptor BindingNeedsOneSource = new(
+        id: "BPGW008",
+        title: "A binding must set exactly one source",
+        messageFormat: "[{0}(\"{1}\")] must set exactly one of {2}",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW009: a <c>[Hide]</c> on a property the inner operation requires (D11, edge cases).
+    /// </summary>
+    public static readonly DiagnosticDescriptor HiddenPropertyIsRequired = new(
+        id: "BPGW009",
+        title: "A required inner property cannot be hidden",
+        messageFormat: "Gateway operation '{0}' hides '{1}', which '{2}' requires. Bind it with [Bind] instead.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW010: an inner route placeholder that the gateway's routes lack and that is neither bound nor hidden (D11, edge cases).
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnboundInnerRoutePlaceholder = new(
+        id: "BPGW010",
+        title: "An inner route placeholder must be in the gateway's route, bound or hidden",
+        messageFormat: "Gateway operation '{0}' does not carry '{1}' in its route, but '{2}' routes by it ('{3}'). Add it to the gateway's route, or bind it with [GatewayBind] or [Bind], or hide it with [Hide].",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW011: a binding whose source does not convert to the inner property's type (D11).
+    /// </summary>
+    public static readonly DiagnosticDescriptor BindingDoesNotConvert = new(
+        id: "BPGW011",
+        title: "A binding's source does not convert to the inner property's type",
+        messageFormat: "Gateway operation '{0}' binds '{1}' from {2}, which does not convert to '{3}'. A claim converts to any type a route value does; a property or value has to be of the inner property's type.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW012: a <c>[Bind(FromRoute)]</c> or <c>[Bind(FromProperty)]</c> naming something the gateway operation does not have (D11).
+    /// </summary>
+    public static readonly DiagnosticDescriptor BindingSourceNotOnOperation = new(
+        id: "BPGW012",
+        title: "A binding's source is not on the gateway operation",
+        messageFormat: "Gateway operation '{0}' binds '{1}' from {2}, which it does not declare. A route placeholder has to be in the gateway's own route and bind a property it declares.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW013: one inner property bound or hidden more than once on one operation (D11).
+    /// </summary>
+    public static readonly DiagnosticDescriptor PropertyBoundTwice = new(
+        id: "BPGW013",
+        title: "A property can be bound or hidden only once per operation",
+        messageFormat: "Gateway operation '{0}' binds or hides '{1}' more than once",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW014: an <c>OnMap</c> or <c>OnMapAsync</c> the generated forward cannot call (D11).
+    /// </summary>
+    public static readonly DiagnosticDescriptor InvalidMapHook = new(
+        id: "BPGW014",
+        title: "A gateway operation's map hook has the wrong shape",
+        messageFormat: "'{0}.{1}' is not a map hook the generated forward can call: it must be a single internal or public instance method whose first parameter is '{2}', and OnMap returns void while OnMapAsync returns ValueTask or Task",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// BPGW015: an operation carries more than one upstream credential attribute (D7).
     /// </summary>
     public static readonly DiagnosticDescriptor SeveralUpstreamCredentials = new(
