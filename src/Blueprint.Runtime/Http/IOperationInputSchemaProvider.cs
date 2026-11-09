@@ -50,8 +50,9 @@ public interface IOperationInputSchemaProvider
 /// </summary>
 /// <param name="OperationName">The operation's name, as its descriptor gives it.</param>
 /// <param name="OperationId">
-/// The <c>operationId</c> the OpenAPI document gives the operation at the first URL it declares, which is unique
-/// across the document.
+/// The <c>operationId</c> the OpenAPI document gives the operation at the slot a request made from
+/// <paramref name="Schema"/> is sent to: the first URL it declares with a placeholder for each of its path inputs, at a
+/// method that reads its body when it has one. The id is unique across the document.
 /// </param>
 /// <param name="Schema">
 /// A self-contained JSON Schema (draft 2020-12) of an object whose properties are the operation's inputs: any type

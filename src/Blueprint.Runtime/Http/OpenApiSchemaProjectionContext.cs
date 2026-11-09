@@ -683,6 +683,30 @@ public sealed record OpenApiSchemaProjectionContext(
         return property.Get is not null || property.Set is not null;
     }
 
+    /// <summary>
+    /// Returns whether System.Text.Json sets <paramref name="property"/> from a request body, though it has no public setter
+    /// or is marked read-only: by a setter, by a constructor parameter, or by populating the object or collection its getter
+    /// returns, where the property, its declaring type or the options say to populate rather than replace.
+    /// </summary>
+    private static bool IsDeserialized(JsonPropertyInfo property, JsonTypeInfo? declaringTypeInfo, JsonTypeInfo? propertyTypeInfo)
+    {
+        if (property.Set is not null || property.AssociatedParameter is not null)
+        {
+            return true;
+        }
+
+        var creationHandling = property.ObjectCreationHandling
+            ?? declaringTypeInfo?.PreferredPropertyObjectCreationHandling
+            ?? property.Options.PreferredObjectCreationHandling;
+
+        // The serializer populates only a reference type it reads as an object, a collection or a dictionary; it replaces any
+        // other, which a property without a setter cannot be.
+        return creationHandling == JsonObjectCreationHandling.Populate
+            && property.Get is not null
+            && !property.PropertyType.IsValueType
+            && propertyTypeInfo?.Kind is JsonTypeInfoKind.Object or JsonTypeInfoKind.Enumerable or JsonTypeInfoKind.Dictionary;
+    }
+
     private static OpenApiSchemaPropertyModel CreateProperty(
         JsonPropertyInfo property,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type bodyType,
@@ -828,7 +852,7 @@ public sealed record OpenApiSchemaProjectionContext(
             SchemaName: referencedSchemaName)
         {
             AllowsAdditionalProperties = valuesAreAnyValue,
-            IsDeserialized = property.Set is not null || property.AssociatedParameter is not null,
+            IsDeserialized = IsDeserialized(property, serializerContext.GetTypeInfo(bodyType), propertyTypeInfo),
             AdditionalPropertiesAreNullable = valuesAreNullable,
             AdditionalPropertiesItemsAreNullable = additionalPropertiesKind == OpenApiSchemaKind.Array
                 && OpenApiNullability.AreValueItemsNullable(dictValueType),
@@ -1769,8 +1793,8 @@ public sealed record OpenApiSchemaPropertyModel(
     public bool AllowsAdditionalProperties { get; init; }
 
     /// <summary>
-    /// Gets a value indicating whether System.Text.Json sets the property when it reads the type, by a setter or a
-    /// constructor parameter, though the document marks it read-only (<c>[ReadOnly(true)]</c>), so
+    /// Gets a value indicating whether System.Text.Json sets the property when it reads the type, by a setter, a
+    /// constructor parameter or populating what its getter returns, though the document marks it read-only (<c>[ReadOnly(true)]</c>), so
     /// <see cref="IOperationInputSchemaProvider"/> keeps what the serializer or validation requires of a request body.
     /// </summary>
     internal bool IsDeserialized { get; init; }

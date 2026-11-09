@@ -240,6 +240,52 @@ public sealed class OperationInputSchemaTests
         accepted.IsSuccessStatusCode.Should().BeTrue(await accepted.Content.ReadAsStringAsync());
     }
 
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void A_conditional_requirement_of_a_getter_only_collection_the_serializer_populates_is_still_asked_of_an_input(OpenApiSchemaNaming naming)
+    {
+        // The list has no setter, but the serializer populates the one the getter returns, and validation requires items.
+        var schema = CreateProvider(o => o.SchemaNaming = naming).GetSchema(NoteOperationName)!.Schema;
+        var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
+        var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
+
+        address.GetProperty("properties").GetProperty("lines").GetProperty("readOnly").GetBoolean().Should().BeTrue();
+        ConditionallyRequired(address).Should().Contain("lines");
+    }
+
+    [Fact]
+    public async Task A_request_body_without_items_validation_requires_of_a_populated_collection_is_refused()
+    {
+        // What the schema above requires when the post code is EC1A 1BB is what validation requires of the request.
+        await using var host = await KestrelTestHost.StartAsync();
+
+        using var without = new StringContent("""{"text":"abc","address":{"postCode":"EC1A 1BB","previous":null}}""", System.Text.Encoding.UTF8, "application/json");
+        using var refused = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", without);
+        using var with = new StringContent("""{"text":"abc","address":{"postCode":"EC1A 1BB","previous":null,"lines":["1 Main Street"]}}""", System.Text.Encoding.UTF8, "application/json");
+        using var accepted = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", with);
+
+        ((int)refused.StatusCode).Should().BeInRange(400, 499);
+        accepted.IsSuccessStatusCode.Should().BeTrue(await accepted.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task An_operation_declaring_a_url_without_its_route_placeholder_first_is_described_at_one_with_it()
+    {
+        // The schema has the route property as a path input, so its operationId must name a URL with that placeholder,
+        // and a request made from the schema at that URL must reach the handler with the value.
+        var schema = CreateProvider().GetSchema(PartialRouteOperationName)!;
+
+        schema.Properties.Should().Equal(new OperationInputProperty("Id", OperationInputLocation.Path));
+
+        await using var host = await KestrelTestHost.StartAsync();
+        var slot = await FindSlotAsync(host, schema.OperationId);
+
+        slot.Path.Should().Contain("{Id}");
+
+        (await host.Client.GetStringAsync("api" + slot.Path.Replace("{Id}", "abc", StringComparison.Ordinal))).Should().Contain("id:abc");
+    }
+
     [Fact]
     public async Task An_operation_answering_GET_and_POST_is_described_at_the_method_that_reads_its_inputs()
     {
@@ -252,12 +298,7 @@ public sealed class OperationInputSchemaTests
             new OperationInputProperty("count", OperationInputLocation.Body));
 
         await using var host = await KestrelTestHost.StartAsync();
-        using var document = JsonDocument.Parse(await host.Client.GetStringAsync("api/.blueprint/openapi.json"));
-        var slot = document.RootElement.GetProperty("paths").EnumerateObject()
-            .SelectMany(static path => path.Value.EnumerateObject().Select(method => (Path: path.Name, Method: method.Name, Operation: method.Value)))
-            .Single(s => s.Operation.ValueKind == JsonValueKind.Object
-                && s.Operation.TryGetProperty("operationId", out var id)
-                && id.GetString() == schema.OperationId);
+        var slot = await FindSlotAsync(host, schema.OperationId);
 
         slot.Method.Should().Be("post");
 
@@ -386,6 +427,23 @@ public sealed class OperationInputSchemaTests
     private const string DuplicateBodyNameOperationName = "DuplicateBodyNameOperationInputSchema";
 
     private const string MultiMethodOperationName = "MultiMethodEchoOperationInputSchema";
+
+    private const string PartialRouteOperationName = "PartialRouteOperationInputSchema";
+
+    /// <summary>Finds the path and method the app's served document gives <paramref name="operationId"/>.</summary>
+    private static async Task<(string Path, string Method)> FindSlotAsync(KestrelTestHost host, string operationId)
+    {
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync("api/.blueprint/openapi.json"));
+
+        return document.RootElement.GetProperty("paths").EnumerateObject()
+            .SelectMany(static path => path.Value.EnumerateObject()
+                .Where(static method => method.Value.ValueKind == JsonValueKind.Object
+                    && method.Value.TryGetProperty("operationId", out _))
+                .Select(method => (Path: path.Name, Method: method.Name, Id: method.Value.GetProperty("operationId").GetString())))
+            .Where(slot => slot.Id == operationId)
+            .Select(static slot => (slot.Path, slot.Method))
+            .Single();
+    }
 
     private static IEnumerable<string?> ConditionallyRequired(JsonElement schema)
     {
@@ -520,6 +578,11 @@ public sealed class OperationInputSchemaAddress
     [ReadOnly(true)]
     public string? Region { get; set; }
 
+    /// <summary>Gets the lines of the address, which a request fills though the list has no setter.</summary>
+    [RequiredItemsIf(nameof(PostCode), "EC1A 1BB")]
+    [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+    public List<string> Lines { get; } = [];
+
     /// <summary>Gets the district the server finds for a post code, which a request cannot carry.</summary>
     [RequiredIf(nameof(PostCode), "SW1A 1AA")]
     public string? District => this.PostCode is null ? null : "Westminster";
@@ -606,6 +669,20 @@ public partial class MultiMethodEchoOperationInputSchemaQuery : IQuery<string>
     public static string Handle(MultiMethodEchoOperationInputSchemaQuery query)
     {
         return $"{query.Name}:{query.Count}";
+    }
+}
+
+/// <summary>A query declaring a URL without its route placeholder before one with it.</summary>
+[AllowAnonymous]
+[RootLink("/operation-input-schema/partial-route", Rel = "operation-input-schema-partial-route-fallback")]
+[RootLink("/operation-input-schema/partial-route/{Id}")]
+public partial class PartialRouteOperationInputSchemaQuery : IQuery<string>
+{
+    public string Id { get; set; } = string.Empty;
+
+    public static string Handle(PartialRouteOperationInputSchemaQuery query)
+    {
+        return "id:" + query.Id;
     }
 }
 

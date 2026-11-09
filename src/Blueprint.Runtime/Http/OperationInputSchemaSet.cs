@@ -197,17 +197,23 @@ internal sealed class OperationInputSchemaSet
     /// <summary>
     /// Finds the slot whose <c>operationId</c> names the operation: the first URL it declares, as legacy's document gave
     /// that URL its unnumbered id (<see cref="LegacyOperationIds"/>), at the first of its methods, where the document writes
-    /// it rather than another operation sharing the slot. An operation with a body is found at a method whose body is read,
-    /// which a GET's is not, so that a request made from the schema at that slot carries every input.
+    /// it rather than another operation sharing the slot. So that a request made from the schema at that slot carries every
+    /// input where the schema says, the URL is the first with a placeholder for each of its path inputs, which one declared
+    /// without them reads from the query string or body instead, and the method of an operation with a body is one whose
+    /// body is read, which a GET's is not.
     /// </summary>
     private static (string UrlFormat, string Method) FindFirstDeclaredSlot(
         OpenApiOperationModel operation,
         ApiOperationDescriptor? descriptor,
         Dictionary<(string UrlFormat, string Method), OpenApiOperationModel> primaryBySlot)
     {
-        var urlFormats = descriptor is null
+        var pathInputs = operation.Parameters.Where(static p => p.In == "path").Select(static p => p.Name).ToList();
+        var declaredUrlFormats = descriptor is null
             ? operation.UrlFormats
             : [.. descriptor.Urls.Select(static url => OpenApiOperationRenderingContext.ToPathKey(url.UrlFormat))];
+
+        // OrderBy is stable, so the URLs that have every placeholder stay in the order they are declared in.
+        var urlFormats = declaredUrlFormats.OrderBy(url => !HasPlaceholderForEach(url, pathInputs)).ToList();
         var methods = operation.HttpMethods
             .OrderBy(method => operation.RequestBody is not null && string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase))
             .ThenBy(static method => method, StringComparer.Ordinal)
@@ -228,6 +234,29 @@ internal sealed class OperationInputSchemaSet
 
         // Every operation reached here is the primary of a slot, so one is always found above.
         return primaryBySlot.First(pair => ReferenceEquals(pair.Value, operation)).Key;
+    }
+
+    /// <summary>Returns whether a route template has a placeholder for each of <paramref name="names"/>.</summary>
+    private static bool HasPlaceholderForEach(string urlFormat, List<string> names)
+    {
+        var placeholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var start = urlFormat.IndexOf('{', StringComparison.Ordinal); start >= 0; start = urlFormat.IndexOf('{', start + 1))
+        {
+            var end = urlFormat.IndexOf('}', start);
+
+            if (end < 0)
+            {
+                break;
+            }
+
+            // A placeholder's name is what precedes any constraint, default or optional marker, after any catch-all star.
+            var placeholder = urlFormat[(start + 1)..end].TrimStart('*');
+            var nameEnd = placeholder.IndexOfAny([':', '=', '?']);
+            placeholders.Add(nameEnd < 0 ? placeholder : placeholder[..nameEnd]);
+        }
+
+        return names.TrueForAll(placeholders.Contains);
     }
 
     private static Entry CreateEntry(
