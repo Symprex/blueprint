@@ -362,6 +362,22 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
+    public void A_mutable_default_of_an_inner_op_with_required_members_is_created_for_each_instance_without_setting_them()
+    {
+        var inner = CommandInnerSource.Replace("public List<string> Tags { get; set; } = new();", "public required List<string> Tags { get; set; } = new();", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+
+        var run = RunAllGenerators([CommandClientSource, CommandGatewaySource, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
+        const string OwnInner = "((global::Inner.TagWidgetCommand)global::System.Activator.CreateInstance(typeof(global::Inner.TagWidgetCommand))!)";
+        properties.Should().Contain("public required global::System.Collections.Generic.List<string> Tags { get; set; } = " + OwnInner + ".Tags;")
+            .And.Contain("Labels { get; set; } = " + OwnInner + ".Labels;")
+            .And.Contain("public string Name { get; set; } = __blueprintExposedDefaults.Name;");
+    }
+
+    [Fact]
     public void A_self_link_placeholder_binds_a_contributed_property()
     {
         var gateway = GatewaySource.Replace(
