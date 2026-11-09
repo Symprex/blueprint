@@ -113,6 +113,14 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                     queryBindingNames[entry.PropertyName] = entry.BindingName ?? entry.PropertyName;
                 }
 
+                // An operation answering GET as well as another method reads such a property from the query string of a GET,
+                // which is the request built here when one is, so it is query-owned for this request.
+                if (entry.QueryOnGetBindingName is { } queryOnGetBindingName
+                    && !placeholders.Contains(entry.PropertyName))
+                {
+                    queryBindingNames[entry.PropertyName] = queryOnGetBindingName;
+                }
+
                 if (entry.FallbackSource == PropertyOwnershipModule.PropertyOwnershipSource.Query)
                 {
                     queryFallbackNames.Add(entry.PropertyName);
