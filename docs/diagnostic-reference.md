@@ -232,7 +232,7 @@ Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attr
 
 ## Gateway operations (BPGW)
 
-BPGW001 to BPGW014 are reported for an operation marked `[Expose<TInner>]`; BPGW015 to BPGW017 for any operation, and BPGW017 also for an app, since hand-written and generated forwards read the same attributes. BPGW001, BPGW006 and BPGW010 are reported at the `[Expose<TInner>]` attribute; BPGW007, BPGW008, BPGW009, BPGW011, BPGW012 and BPGW013 at the binding attribute; BPGW014 at the hook; BPGW016 and BPGW017 at their attribute; BPGW015 at the second credential attribute; and the others at the operation's name. An operation with BPGW003, BPGW004 or BPGW005 gets no pipeline. An invalid binding is ignored by the generated forward, so its property stays in the public shape until it is fixed.
+BPGW001 to BPGW014 and BPGW018 are reported for an operation marked `[Expose<TInner>]`; BPGW015 to BPGW017 for any operation, and BPGW017 also for an app, since hand-written and generated forwards read the same attributes. BPGW001, BPGW006, BPGW010 and BPGW018 are reported at the `[Expose<TInner>]` attribute; BPGW007, BPGW008, BPGW009, BPGW011, BPGW012 and BPGW013 at the binding attribute; BPGW014 at the hook; BPGW016 and BPGW017 at their attribute; BPGW015 at the second credential attribute; and the others at the operation's name. An operation with BPGW003, BPGW004 or BPGW005 gets no pipeline. An invalid binding is ignored by the generated forward, so its property stays in the public shape until it is fixed.
 
 | ID | Severity | Title |
 |----|----------|-------|
@@ -253,6 +253,7 @@ BPGW001 to BPGW014 are reported for an operation marked `[Expose<TInner>]`; BPGW
 | BPGW015 | Error | Gateway operation carries more than one upstream credential attribute (`[UpstreamCredential<T>]` or one deriving from it); its forwards authenticate with one strategy |
 | BPGW016 | Error | An upstream credential attribute selects a type that does not implement `Blueprint.HttpClient.IUpstreamCredentialStrategy` |
 | BPGW017 | Error | `[TranslateError(fromType, to)]` on an operation or app names no static `ApiExceptionFactory` field or property of that class called `to`. Members inherited from a base class do not count, as the forward does not read them |
+| BPGW018 | Error | A contributed property's validation attribute is a type the gateway's assembly cannot access (not public, and not internal to an assembly with `InternalsVisibleTo` the gateway), so the emitted property cannot carry it and the gateway would forward without applying the rule |
 
 ## Module system (BPMOD)
 

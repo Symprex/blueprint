@@ -13,6 +13,9 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Api;
 [ApiOperations("GatewayTemplates")]
 [MustBeAuthenticated]
 [SelfLink(typeof(TemplateApiResource), "/templates/{Id}")]
+
+// The create command still answers the gateway's own resource type, so its self link is this operation too.
+[SelfLink(typeof(GatewayTemplateResource), "/templates/{Id}")]
 [HttpGet]
 [Description("Retrieve a single template from the upstream template service via the gateway.")]
 public partial class GetGatewayTemplateQuery : IQuery<Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>;

@@ -37,6 +37,20 @@ public sealed class BlueprintClientTransportTests
     }
 
     [Fact]
+    public async Task A_forward_through_a_client_with_a_serializer_context_reads_and_writes_with_that_context()
+    {
+        // The transport used to take the container's options alone, without the context the client's constructor applies.
+        var services = new ServiceCollection();
+        services.AddBlueprintClient<PricingApi, PricingApi>(static (_, client) => client.BaseAddress = _baseAddress);
+
+        await using var provider = services.BuildServiceProvider();
+
+        var transport = BlueprintClientTransport.Create<PricingApi>(provider);
+
+        transport.JsonOptions.TypeInfoResolverChain.Should().Contain(PricingSerializerContext.Default);
+    }
+
+    [Fact]
     public async Task A_client_with_no_registration_is_refused_naming_it()
     {
         var services = new ServiceCollection();

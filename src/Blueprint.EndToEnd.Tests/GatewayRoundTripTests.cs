@@ -97,10 +97,17 @@ public sealed class GatewayRoundTripTests(SampleSystemFixture system)
             "gateway/templates",
             new { name = "Gateway Created", htmlSource = "<p>gw</p>", plainTextSource = "gw" });
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-        var resource = await response.Content.ReadFromJsonAsync<GatewayTemplateResource>();
-        resource!.Name.Should().Be("Gateway Created");
-        resource.IsArchived.Should().BeFalse();
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, text);
+        using var body = JsonDocument.Parse(text);
+        body.RootElement.GetProperty("name").GetString().Should().Be("Gateway Created");
+        body.RootElement.GetProperty("isArchived").GetBoolean().Should().BeFalse();
+
+        // The gateway's own self link for its create response. It used to have none once the get became
+        // [Expose<GetTemplateQuery>] and answered the inner resource type, taking the only self link registration with it.
+        var id = body.RootElement.GetProperty("id").GetString();
+        body.RootElement.GetProperty("$links").GetProperty("self").GetProperty("href").GetString()
+            .Should().Be(new Uri(system.Gateway.BaseAddress, $"gateway/templates/{id}").ToString());
     }
 
     [Fact]

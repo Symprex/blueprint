@@ -14,13 +14,15 @@ namespace Blueprint.SourceGenerator.Modules.Gateway;
 /// <param name="AttributeLocation">The <c>[Expose&lt;TInner&gt;]</c> attribute, where the diagnostics are reported.</param>
 /// <param name="MissingInterface">BPGW006, when the class declares no operation interface.</param>
 /// <param name="BindingDiagnostics">BPGW007 to BPGW014, D11's binding and map hook diagnostics.</param>
+/// <param name="InaccessibleValidation">BPGW018, for each validation attribute the emitted properties cannot carry.</param>
 internal sealed record ExposedOperationAnalysis(
     OperationPropertyModel Model,
     string OperationName,
     string InnerName,
     LocationInfo? AttributeLocation,
     DiagnosticInfo? MissingInterface,
-    EquatableList<DiagnosticInfo> BindingDiagnostics)
+    EquatableList<DiagnosticInfo> BindingDiagnostics,
+    EquatableList<DiagnosticInfo> InaccessibleValidation)
 {
     private const string OperationInterfaceMetadataName = "Blueprint.Model.IOperation";
 
@@ -51,13 +53,32 @@ internal sealed record ExposedOperationAnalysis(
                 [type.Name, inner.Name, SuggestInterface(inner)]);
         }
 
+        // An attribute the gateway's assembly cannot name is not emitted; a validation one would leave its rule unapplied.
+        var inaccessibleValidation = new List<DiagnosticInfo>();
+        foreach (var property in OperationPropertyModelBuilder.GetProperties(type))
+        {
+            if (property.Info.Origin != OperationPropertyOrigin.Contributed)
+            {
+                continue;
+            }
+
+            foreach (var attributeClass in OperationPropertyModelBuilder.GetInaccessibleValidationAttributes(property.Member, type.ContainingAssembly))
+            {
+                inaccessibleValidation.Add(new DiagnosticInfo(
+                    GatewayDiagnosticDescriptors.InaccessibleValidationAttribute,
+                    location,
+                    [type.Name, attributeClass.Name, inner.Name, property.Info.Name]));
+            }
+        }
+
         return new ExposedOperationAnalysis(
             OperationPropertyModelBuilder.Build(type),
             type.Name,
             inner.Name,
             location,
             missingInterface,
-            EquatableList<DiagnosticInfo>.TakeOwnership(GatewayBindings.Analyse(type, inner, location)));
+            EquatableList<DiagnosticInfo>.TakeOwnership(GatewayBindings.Analyse(type, inner, location)),
+            EquatableList<DiagnosticInfo>.TakeOwnership(inaccessibleValidation));
     }
 
     /// <summary>
@@ -79,6 +100,7 @@ internal sealed record ExposedOperationAnalysis(
         }
 
         diagnostics.AddRange(this.BindingDiagnostics);
+        diagnostics.AddRange(this.InaccessibleValidation);
 
         return EquatableList<DiagnosticInfo>.TakeOwnership(diagnostics);
     }

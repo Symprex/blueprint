@@ -18,7 +18,8 @@ public static class BlueprintClientTransport
 
     /// <summary>
     /// Creates the transport of <typeparamref name="TClient"/>: its named client, <c>typeof(TClient).Name</c>, with the
-    /// base address, handlers and retry its <c>AddBlueprintClient</c> registration configured.
+    /// base address, handlers and retry its <c>AddBlueprintClient</c> registration configured, and the serializer context the
+    /// client declares (<see cref="IBlueprintClient{TSelf}.ConfigureTransport"/>).
     /// </summary>
     /// <remarks>
     /// The JSON options are the one <see cref="BlueprintJsonOptions.SerializerOptions"/> instance of the container's
@@ -42,7 +43,7 @@ public static class BlueprintClientTransport
                 $"The HTTP client '{typeof(TClient).Name}' has no base address. Register {typeof(TClient).Name} with AddBlueprintClient, setting its base address, before forwarding through it.");
         }
 
-        return new BlueprintHttpClient(httpClient, GetJsonOptions(services));
+        return TClient.ConfigureTransport(new BlueprintHttpClient(httpClient, GetJsonOptions(services)));
     }
 
     /// <summary>
