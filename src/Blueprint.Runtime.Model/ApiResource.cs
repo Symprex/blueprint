@@ -36,8 +36,14 @@ public abstract class ApiResource : ILinkableResource, IHaveResourceKey
     /// The links for this resource, other endpoints that apply to this resource
     /// in it's current state.
     /// </summary>
+    /// <remarks>
+    /// Never read from JSON, even with options that populate read-only members
+    /// (<see cref="JsonObjectCreationHandling.Populate"/>): links describe the host that wrote them, so a resource read from
+    /// another service, such as a gateway's forward, drops that service's links and gets its own.
+    /// </remarks>
     [DoNotCompare]
     [JsonPropertyName("$links")]
+    [JsonObjectCreationHandling(JsonObjectCreationHandling.Replace)]
     public IDictionary<string, Link> Links => this._links;
 
     /// <summary>
