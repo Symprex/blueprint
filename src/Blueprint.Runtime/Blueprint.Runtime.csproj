@@ -25,4 +25,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- The BlueprintEmitOpenApi build target, imported by every project that consumes the package, directly or not. -->
+    <None Include="buildTransitive\Blueprint.Runtime.targets" Pack="true" PackagePath="buildTransitive\Blueprint.Runtime.targets" />
+  </ItemGroup>
 </Project>
