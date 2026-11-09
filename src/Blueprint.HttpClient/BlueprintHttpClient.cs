@@ -262,8 +262,16 @@ public class BlueprintHttpClient
     /// raises, so a gateway answers the upstream problem unchanged.
     /// </para>
     /// <para>
-    /// A forwarded resource arrives without the inner service's <c>$links</c>: <see cref="ApiResource.Links"/> is get-only, so
-    /// they are never read, and a gateway generates its own from its own routes.
+    /// The two are told apart by content type: a host writes a <see cref="Blueprint.Runtime.Exec.NotFoundResult{T}"/> as
+    /// <c>application/json</c> and a problem as <c>application/problem+json</c>. A forward asks for its errors as
+    /// <c>Accept: application/problem+json</c>, so a host with <c>NegotiateErrorContentType</c> on, which otherwise writes a
+    /// problem as <c>application/json</c> to a request with no <c>Accept</c>, still writes it as a problem. It replaces any
+    /// <c>Accept</c> the caller sets through <see cref="CallOptions.ModifyRequest"/>, which would otherwise let a negotiating
+    /// host's 404 problem be read as the not-found member.
+    /// </para>
+    /// <para>
+    /// A forwarded resource arrives without the inner service's <c>$links</c>: <see cref="ApiResource.Links"/> is get-only and
+    /// never read from JSON, and a gateway generates its own from its own routes.
     /// </para>
     /// </remarks>
     /// <typeparam name="TInner">The inner operation's type, exactly: a forward sends a fresh instance of it and nothing else.</typeparam>
@@ -353,6 +361,19 @@ public class BlueprintHttpClient
         {
             throw e.Detail is null ? factory.Create(e) : factory.Create(e, e.Detail);
         }
+    }
+
+    /// <summary>
+    /// Asks a forward's errors to be written as <c>application/problem+json</c>, replacing any <c>Accept</c> the caller set; see
+    /// <see cref="ForwardAsync{TInner, TResult}(TInner, CallOptions, CancellationToken)"/>. A Blueprint host reads <c>Accept</c> for nothing but an error's content
+    /// type, so a success is written as it would be without it, and a caller's own <c>Accept</c> could only make a thrown 404
+    /// look like a not-found result.
+    /// </summary>
+    /// <param name="request">The forward's request, after <see cref="CallOptions.ModifyRequest"/> has run.</param>
+    private static void AcceptProblemJson(HttpRequestMessage request)
+    {
+        request.Headers.Accept.Clear();
+        request.Headers.TryAddWithoutValidation("Accept", "application/problem+json");
     }
 
     /// <summary>
@@ -545,7 +566,7 @@ public class BlueprintHttpClient
             ForwardResponseReaders.For<TResult>(),
             typeof(TInner).Name,
             options,
-            requestModifier: null,
+            AcceptProblemJson,
             credential,
             cancellationToken);
     }

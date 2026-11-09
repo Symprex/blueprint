@@ -1,9 +1,11 @@
 using System.Net;
 using System.Text.Json;
+using Blueprint.EndToEnd.Tests.Harness;
 using Blueprint.EndToEnd.Tests.SampleSystem;
 using Blueprint.HttpClient;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
+using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
 
 namespace Blueprint.EndToEnd.Tests;
@@ -44,6 +46,28 @@ public sealed class GatewayForwardTests(SampleSystemFixture system)
         exception.StatusCode.Should().Be(HttpStatusCode.NotFound);
         exception.Type.Should().Be("not_found");
         exception.Detail.Should().Be("Template 'missing' not found.");
+    }
+
+    [Fact]
+    public async Task Against_a_host_negotiating_error_content_types_a_thrown_404_escapes_and_a_NotFoundResult_is_still_read()
+    {
+        // A host with NegotiateErrorContentType writes an error as application/json to a request with no Accept, so a
+        // forward asks for problem JSON; without that, the thrown 404 below would be read as the not-found member.
+        await using var host = new MultiAppHost(system.Issuer);
+        var inner = await host.StartAsync<Blueprint.SourceGenerator.Sample.Startup>("negotiating-inner", app =>
+            app.ConfigureServices = static services => services.Configure<BlueprintHttpOptions>(static http => http.NegotiateErrorContentType = true));
+        using var httpClient = inner.CreateClient(system.CreateCallerToken());
+        httpClient.BaseAddress = new Uri(inner.BaseAddress, "api/");
+        var upstream = new BlueprintHttpClient(httpClient);
+
+        var thrown = () => upstream.ForwardAsync<UpdateTemplateCommand, Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>(
+            new UpdateTemplateCommand { Id = "missing", Name = "Renamed", HtmlSource = "<p>Renamed</p>" });
+        var notFound = await upstream.ForwardAsync<GetTemplateQuery, Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>(
+            new GetTemplateQuery { Id = "no-such-template" });
+
+        (await thrown.Should().ThrowAsync<BlueprintApiException>()).Which.Detail.Should().Be("Template 'missing' not found.");
+        notFound.IsT2.Should().BeTrue();
+        notFound.AsT2.Content.Id.Should().Be("no-such-template");
     }
 
     [Fact]
