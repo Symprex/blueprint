@@ -171,6 +171,7 @@ These attributes inspect an item count, so they only make sense on a collection 
 |----|----------|-------|
 | BPOA001 | Error | Explicit HTTP method is null or whitespace |
 | BPOA002 | Warning | Operation declares multiple conflicting HTTP methods |
+| BPOA003 | Error | `[ProducesContentType]` declares a value that is not a `type/subtype` media type |
 
 ## Operation discovery (BPOD)
 

@@ -18,9 +18,15 @@ namespace Blueprint.Http;
 /// </para>
 /// <para>
 /// Hop-by-hop headers (<c>Connection</c>, <c>Keep-Alive</c>, <c>Transfer-Encoding</c>, <c>Upgrade</c>,
-/// <c>Proxy-*</c>, <c>TE</c> and <c>Trailer</c>) describe the downstream connection, not the response, so they are
-/// not forwarded. Content headers such as <c>Content-Type</c> and <c>Content-Length</c> are copied from
+/// <c>Proxy-*</c>, <c>TE</c> and <c>Trailer</c>, and any header the downstream <c>Connection</c> header names) describe
+/// the downstream connection, not the response, so they are not forwarded, whether they arrive as response or content
+/// headers. Content headers such as <c>Content-Type</c> and <c>Content-Length</c> are copied from
 /// <see cref="HttpResponseMessage.Content"/> separately to ensure the ASP.NET Core response is well-formed.
+/// </para>
+/// <para>
+/// A result Blueprint's HTTP host serves never goes undisposed: the host also disposes the response with the request, so
+/// an <c>IHttpResultWriter</c> or an operation result executor that answers in this result's place, or fails on it,
+/// without executing it does not leave the downstream connection open.
 /// </para>
 /// </remarks>
 /// <example>
@@ -71,10 +77,15 @@ public class ProxyResult : HttpResult
 
             var response = httpContext.Response;
 
+            // The headers the downstream Connection header names are hop-by-hop too (RFC 9110 7.6.1).
+            var connectionNominated = this._downstreamResponse.Headers.Connection.Count == 0
+                ? null
+                : new HashSet<string>(this._downstreamResponse.Headers.Connection, StringComparer.OrdinalIgnoreCase);
+
             // Forward end-to-end response headers (e.g. Cache-Control, ETag, X-* custom headers)
             foreach (var (key, values) in this._downstreamResponse.Headers)
             {
-                if (!IsHopByHop(key))
+                if (!IsHopByHop(key, connectionNominated))
                 {
                     response.Headers[key] = new StringValues([.. values]);
                 }
@@ -85,7 +96,10 @@ public class ProxyResult : HttpResult
             {
                 foreach (var (key, values) in this._downstreamResponse.Content.Headers)
                 {
-                    response.Headers[key] = new StringValues([.. values]);
+                    if (!IsHopByHop(key, connectionNominated))
+                    {
+                        response.Headers[key] = new StringValues([.. values]);
+                    }
                 }
 
                 // Sent now, so the caller has the headers while the body is still arriving from downstream.
@@ -100,9 +114,10 @@ public class ProxyResult : HttpResult
         }
     }
 
-    private static bool IsHopByHop(string headerName)
+    private static bool IsHopByHop(string headerName, HashSet<string>? connectionNominated)
     {
-        return headerName.Equals("Connection", StringComparison.OrdinalIgnoreCase)
+        return connectionNominated?.Contains(headerName) == true
+               || headerName.Equals("Connection", StringComparison.OrdinalIgnoreCase)
                || headerName.Equals("Keep-Alive", StringComparison.OrdinalIgnoreCase)
                || headerName.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
                || headerName.Equals("Upgrade", StringComparison.OrdinalIgnoreCase)

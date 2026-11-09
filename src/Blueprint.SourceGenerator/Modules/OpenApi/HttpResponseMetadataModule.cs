@@ -55,7 +55,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             return;
         }
 
-        var responses = ApplyDeclaredContentTypes(GetResponses(context), operationType);
+        var responses = ApplyDeclaredContentTypes(context, GetResponses(context), operationType);
         if (responses.Length == 0)
         {
             return;
@@ -73,7 +73,12 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
     /// Gives a streamed response (a <c>FileStreamResult</c> or <c>ProxyResult</c>) the media types the operation's
     /// <c>[ProducesContentType]</c> declares, as a response with a body. Without the attribute every response is unchanged.
     /// </summary>
+    /// <remarks>
+    /// The attribute is read from source, never constructed, so a value that is not a media type is reported here as
+    /// BPOA003 and the declaration is ignored.
+    /// </remarks>
     private static ImmutableArray<HttpResponseMetadataRegistration> ApplyDeclaredContentTypes(
+        DescriptorContributorContext context,
         ImmutableArray<HttpResponseMetadataRegistration> responses,
         INamedTypeSymbol operationType)
     {
@@ -85,16 +90,28 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             return responses;
         }
 
+        // A null params array (a bare null) declares a null content type as surely as a null element does.
+        var additional = attribute.ConstructorArguments[1];
+        IEnumerable<object?> declared = additional.Kind == TypedConstantKind.Array && !additional.IsNull
+            ? [attribute.ConstructorArguments[0].Value, .. additional.Values.Select(static value => value.Value)]
+            : [attribute.ConstructorArguments[0].Value, null];
+
         var contentTypes = ImmutableArray.CreateBuilder<string>();
+        var location = attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? operationType.Locations.FirstOrDefault();
 
-        if (attribute.ConstructorArguments[0].Value is string first)
+        foreach (var value in declared)
         {
-            contentTypes.Add(first);
-        }
+            if (value is not string contentType || !IsMediaType(contentType))
+            {
+                context.AddDiagnostic(new DiagnosticInfo(
+                    HttpResponseMetadataDiagnosticDescriptors.InvalidDeclaredContentType,
+                    location,
+                    [operationType.Name, value as string ?? "null"]));
 
-        if (attribute.ConstructorArguments[1].Kind == TypedConstantKind.Array)
-        {
-            contentTypes.AddRange(attribute.ConstructorArguments[1].Values.Select(static value => value.Value).OfType<string>());
+                return responses;
+            }
+
+            contentTypes.Add(contentType);
         }
 
         return responses
@@ -102,6 +119,27 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                 ? response with { HasResponseBody = true, ContentTypes = contentTypes.ToImmutable() }
                 : response)
             .ToImmutableArray();
+    }
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is a media type: a <c>type/subtype</c> of two RFC 9110 tokens, optionally followed
+    /// by <c>;</c> and its parameters, which are not checked.
+    /// </summary>
+    private static bool IsMediaType(string value)
+    {
+        var parametersStart = value.IndexOf(';');
+        var essence = parametersStart < 0 ? value : value.Substring(0, parametersStart);
+        var slash = essence.IndexOf('/');
+
+        return slash > 0
+               && IsToken(essence.Substring(0, slash))
+               && IsToken(essence.Substring(slash + 1));
+
+        static bool IsToken(string part)
+        {
+            return part.Length > 0 && part.All(static c => c is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9')
+                || "!#$%&'*+-.^_`|~".IndexOf(c) >= 0);
+        }
     }
 
     private static ImmutableArray<HttpResponseMetadataRegistration> GetResponses(DescriptorContributorContext context)

@@ -682,6 +682,19 @@ public static class EndpointRouteBuilderExtensions
         }
 
         /// <summary>
+        /// Disposes the upstream response a <see cref="ProxyResult"/> owns once the request ends, as well as when the result
+        /// is written. A result writer or executor may answer in the result's place, or fail on it, without executing it, and
+        /// the response would then hold its upstream connection open. Disposing it twice is harmless.
+        /// </summary>
+        private static void DisposeWithRequest(HttpContext httpContext, OperationResult result)
+        {
+            if (result is ProxyResult proxy)
+            {
+                httpContext.Response.RegisterForDispose(proxy.DownstreamResponse);
+            }
+        }
+
+        /// <summary>
         /// Handles the result when pipeline execution completed synchronously. If response
         /// writing also completes synchronously, returns <see cref="Task.CompletedTask"/> to
         /// avoid allocating an async state machine Task entirely.
@@ -692,6 +705,8 @@ public static class EndpointRouteBuilderExtensions
             OperationResult result,
             ApiOperationDescriptor operation)
         {
+            DisposeWithRequest(httpContext, result);
+
             var operationResultExecutor = this._resultExecutor ?? DefaultOperationResultExecutor;
 
             Task<bool> writeTask;
@@ -821,6 +836,7 @@ public static class EndpointRouteBuilderExtensions
             try
             {
                 var result = await executionTask.ConfigureAwait(false);
+                DisposeWithRequest(httpContext, result);
 
                 isRecovery = true;
                 var written = await resultWriter.TryWriteAsync(httpContext, apiContext, result).ConfigureAwait(false);
@@ -856,6 +872,7 @@ public static class EndpointRouteBuilderExtensions
             try
             {
                 var result = await executionTask.ConfigureAwait(false);
+                DisposeWithRequest(httpContext, result);
 
                 var operationResultExecutor = this._resultExecutor ?? DefaultOperationResultExecutor;
                 if (await operationResultExecutor.TryExecuteAsync(httpContext, apiContext, result, this._httpOptions).ConfigureAwait(false) == false)

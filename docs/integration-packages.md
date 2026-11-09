@@ -511,10 +511,10 @@ public Task<ProxyResult> Handle(DownloadGatewayTemplateQuery query, BlueprintHtt
 ```
 
 - **Answered at the headers.** The transport sends with `HttpCompletionOption.ResponseHeadersRead` and returns the response unread. The gateway sends its own headers at once and copies the body as it arrives.
-- **`ProxyResult` owns the response.** It disposes the response once the body is written, or when the caller goes away. The copy is cancelled by `RequestAborted`.
-- **Hop-by-hop headers are dropped:** `Connection`, `Keep-Alive`, `Transfer-Encoding`, `Upgrade`, `Proxy-*`, `TE` and `Trailer`. Every other response and content header is copied.
+- **`ProxyResult` owns the response.** It disposes the response once the body is written, or when the caller goes away. The host also disposes it with the request, so a result writer that answers in its place, or throws on it, does not leave the upstream connection open. The copy is cancelled by `RequestAborted`.
+- **Hop-by-hop headers are dropped:** `Connection`, `Keep-Alive`, `Transfer-Encoding`, `Upgrade`, `Proxy-*`, `TE`, `Trailer`, and any header the upstream `Connection` header names, among the response or the content headers. Every other header is copied.
 - **A failure is not streamed.** An upstream response that is not a success is read and mapped exactly as for any forward, so the gateway answers with the upstream problem.
-- **OpenAPI.** `[ProducesContentType(...)]` on the operation documents the success response of a `FileStreamResult` or `ProxyResult` with those media types, each as a binary string. Without the attribute, a `FileStreamResult` is documented as `application/octet-stream` and a `ProxyResult` with no content.
+- **OpenAPI.** `[ProducesContentType(...)]` on the operation documents the success response of a `FileStreamResult` or `ProxyResult` with those media types, each as a binary string. Without the attribute, a `FileStreamResult` is documented as `application/octet-stream` and a `ProxyResult` with no content. A value that is not a `type/subtype` media type fails the build with BPOA003.
 - **Hand-written requests.** `CreateRequest` builds the request a call would send without sending it. `SendRawAsync` sends a request at its headers, failures mapped first, and returns a response the caller owns, ready for `new ProxyResult(response)`.
 
 ### S365 Gateway Migration

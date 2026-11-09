@@ -918,7 +918,11 @@ public class HttpEndToEndIntegrationTests
         response.Body.Should().Be("proxied");
         response.Headers.Keys.Should().NotContain(
             ["Connection", "Keep-Alive", "Transfer-Encoding", "Upgrade", "Proxy-Authenticate", "Proxy-Connection", "TE", "Trailer"]);
+        response.Headers.Keys.Should().NotContain(
+            ["X-Upstream-Only", "X-Content-Only", "Proxy-Content-Leak"],
+            "a header the Connection header names, or a Proxy-* header, is hop-by-hop wherever it arrives");
         response.Headers["X-End-To-End"].ToString().Should().Be("kept");
+        response.Headers["X-Content-Kept"].ToString().Should().Be("kept");
         response.Headers["Cache-Control"].ToString().Should().Be("no-store");
     }
 
@@ -2971,9 +2975,15 @@ public partial class E2EHopByHopProxyQuery : IQuery<Blueprint.Http.ProxyResult>
             Content = new StringContent("proxied", Encoding.UTF8, "text/plain"),
         };
 
+        // A header the Connection header names, and a Proxy-* header, can arrive among the content headers too.
+        downstream.Content.Headers.TryAddWithoutValidation("X-Content-Only", "nominated");
+        downstream.Content.Headers.TryAddWithoutValidation("Proxy-Content-Leak", "proxy");
+        downstream.Content.Headers.TryAddWithoutValidation("X-Content-Kept", "kept");
+
         foreach (var (name, value) in new[]
                  {
-                     ("Connection", "keep-alive"),
+                     ("Connection", "keep-alive, X-Upstream-Only, x-content-only"),
+                     ("X-Upstream-Only", "nominated"),
                      ("Keep-Alive", "timeout=5"),
                      ("Transfer-Encoding", "chunked"),
                      ("Upgrade", "websocket"),

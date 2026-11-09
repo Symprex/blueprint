@@ -163,6 +163,34 @@ public sealed class HttpResultWriterWireTests
             .Should().Equal("OkResult`1", "UnhandledExceptionResult:The writer failed twice");
     }
 
+    [Fact]
+    public async Task A_writer_that_writes_a_proxy_result_itself_still_has_its_upstream_response_disposed()
+    {
+        // The writer answers in place of ProxyResult.ExecuteAsync, which used to be the only thing that disposed the
+        // upstream response a forward hands over.
+        await using var host = await ResultWriterHost.StartAsync(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
+        var disposed = ResultWriterProxyQuery.Track("writer-writes");
+
+        var response = await host.GetAsync("result-writer/proxy?key=writer-writes&writer=writes");
+
+        response.Status.Should().Be(200, response.Body);
+        response.Body.Should().Be("written by the writer");
+        (await Task.WhenAny(disposed, Task.Delay(TimeSpan.FromSeconds(10)))).Should().BeSameAs(disposed, "the upstream response is disposed with the request");
+    }
+
+    [Fact]
+    public async Task A_writer_that_throws_on_a_proxy_result_still_has_its_upstream_response_disposed()
+    {
+        await using var host = await ResultWriterHost.StartAsync(static b => b.AddHttpResultWriter<LegacyEnvelopeResultWriter>());
+        var disposed = ResultWriterProxyQuery.Track("writer-throws");
+
+        var response = await host.GetAsync("result-writer/proxy?key=writer-throws&writer=throws");
+
+        response.Status.Should().Be(400, response.Body);
+        response.Body.Should().Be("""{"error":{"code":"invalid_operation","message":"The writer failed on a proxy"}}""");
+        (await Task.WhenAny(disposed, Task.Delay(TimeSpan.FromSeconds(10)))).Should().BeSameAs(disposed, "the upstream response is disposed with the request");
+    }
+
     [Theory]
     [InlineData("throws")]
     [InlineData("faulted")]
@@ -331,8 +359,21 @@ public sealed class HttpResultWriterWireTests
                 UnauthenticatedResult denied => WriteEnvelopeAsync(httpContext, 401, "security_failure", denied.Failure?.Message ?? "Your session has expired"),
                 ForbiddenResult denied => WriteEnvelopeAsync(httpContext, 403, "feature_not_available", denied.Failure?.Message ?? "Forbidden"),
                 UnhandledExceptionResult { Exception: InvalidOperationException exception } => WriteEnvelopeAsync(httpContext, 400, "invalid_operation", exception.Message),
+
+                // A proxy result answered, or failed on, without ever being executed.
+                Blueprint.Http.ProxyResult when httpContext.Request.Query["writer"] == "throws" => throw new InvalidOperationException("The writer failed on a proxy"),
+                Blueprint.Http.ProxyResult when httpContext.Request.Query["writer"] == "writes" => WritePlainAsync(httpContext, "written by the writer"),
                 _ => ValueTask.FromResult(false),
             };
+        }
+
+        private static async ValueTask<bool> WritePlainAsync(HttpContext httpContext, string body)
+        {
+            httpContext.Response.StatusCode = 200;
+            httpContext.Response.ContentType = "text/plain";
+            await httpContext.Response.WriteAsync(body);
+
+            return true;
         }
 
         private static async ValueTask<bool> WriteCsvAsync(HttpContext httpContext, E2EWidgetResponse widget)
@@ -625,3 +666,52 @@ public sealed class HttpResultWriterWireTests
     }
 }
 
+/// <summary>
+/// Anonymous GET returning a <see cref="Blueprint.Http.ProxyResult"/> whose upstream content reports, under the request's
+/// <c>key</c>, when it is disposed: the result writer tests answer it without executing it.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/result-writer/proxy")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Auditing.DoNotAudit]
+public partial class ResultWriterProxyQuery : Blueprint.Model.IQuery<Blueprint.Http.ProxyResult>
+{
+    private static readonly ConcurrentDictionary<string, TaskCompletionSource> Disposals = new();
+
+    /// <summary>Gets or sets the key the upstream content's disposal is reported under.</summary>
+    public string Key { get; set; } = string.Empty;
+
+    /// <summary>Starts tracking the disposal of the upstream content a request with <paramref name="key"/> creates.</summary>
+    /// <param name="key">The request's key.</param>
+    /// <returns>A task that completes when that content is disposed.</returns>
+    public static Task Track(string key)
+    {
+        return Disposals.GetOrAdd(key, static _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+    }
+
+    /// <summary>Simulates an upstream response handed over unread, as a forward hands one over.</summary>
+    /// <param name="query">The query, naming the key to report disposal under.</param>
+    /// <returns>A proxy result owning the simulated upstream response.</returns>
+    public static Task<Blueprint.Http.ProxyResult> HandleAsync(ResultWriterProxyQuery query)
+    {
+        var upstream = new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new DisposalReportingContent(query.Key),
+        };
+
+        return Task.FromResult(new Blueprint.Http.ProxyResult(upstream));
+    }
+
+    private sealed class DisposalReportingContent(string key) : System.Net.Http.StringContent("upstream")
+    {
+        protected override void Dispose(bool disposing)
+        {
+            if (Disposals.TryGetValue(key, out var disposed))
+            {
+                disposed.TrySetResult();
+            }
+
+            base.Dispose(disposing);
+        }
+    }
+}
