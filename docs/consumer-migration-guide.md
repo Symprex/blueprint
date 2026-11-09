@@ -19,7 +19,7 @@ This guide walks through migrating a legacy Blueprint application (such as a Sig
 | `AddOpenApi()` | Automatic with HTTP host | Auto-fixable (BPMIG001) |
 | `AddHateoasLinks()` | Automatic when `[SelfLink]`/`[RootLink]` exist; an app that never called it needs `DisableHateoasLinks()` | Auto-fixable (BPMIG002) where present; configuration-required where absent |
 | `AddAuthorisation()` | Automatic when `[Resource]`/`[MustBeAuthenticated]` exist | Auto-fixable (BPMIG003) |
-| `AddOpenApi(Action<OpenApiOptions>)` | `configureOpenApi:` parameter on `MapBlueprintApi` | Configuration-required (BPMIG100) |
+| `AddOpenApi(Action<OpenApiOptions>)` | `ConfigureOpenApi(...)` in `AddBlueprintApi` | Configuration-required (BPMIG100) |
 | `AddAuthentication(...)` | ASP.NET Core `AddAuthentication()` + `UseAuthentication()` | Configuration-required (BPMIG101) |
 | `[FromResource(...)]` attribute | `[Resource("noun", "verb")]` + `[FromResource(typeof(X))]` | Consumer rewrite (BPMIG200) |
 | `{Auth:...}` placeholders | Source-generated auth metadata | Consumer rewrite (BPMIG201) |
@@ -132,6 +132,14 @@ services.AddBlueprintApi<MyBlueprintApp, MyBlueprintAppExecutor>(blueprint =>
     {
         http.ExposeExceptionDetailsInErrorResponses = env.IsDevelopment();
     });
+
+    // Where the API is mapped and how it is described
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info =>
+    {
+        info.Title = "My API";
+        info.Version = "1.0.0";
+    });
 });
 ```
 
@@ -148,15 +156,15 @@ app.UseAuthorization();
 
 app.UseEndpoints(endpoints =>
 {
-    endpoints.MapBlueprintApi<MyBlueprintApp, MyBlueprintAppExecutor>(
-        "api/",
-        configureOpenApi: info =>
-        {
-            info.Title = "My API";
-            info.Version = "1.0.0";
-        });
+    endpoints.MapBlueprintApi<MyBlueprintApp, MyBlueprintAppExecutor>();
 });
 ```
+
+`MapBlueprintApi` maps the API under the base path `UseBasePath` declared and describes it as `ConfigureOpenApi`
+declared. Declared in `AddBlueprintApi`, the OpenAPI document is the one `BlueprintEmitOpenApi` writes to
+`Spec/openapi.json` at build time (see [openapi-migration.md](openapi-migration.md)). The older form,
+`MapBlueprintApi<MyBlueprintApp, MyBlueprintAppExecutor>("api/", configureOpenApi: ...)`, still works, but cannot be
+combined with `BlueprintEmitOpenApi`, which never reaches `MapBlueprintApi`.
 
 The base path may be given as `""`, `"/"`, `"api"`, `"api/"` or `"/api/"`; each is normalised to end with one slash, and
 every route, whether declared with a leading slash or not, is mapped under it with one slash, as legacy mapped it.
@@ -1263,12 +1271,13 @@ These endpoints are only mapped when `IWebHostEnvironment.IsDevelopment()` is tr
 
 ### OpenAPI operation customisation
 
-Use `configureOpenApiOperations` in `MapBlueprintApi` to modify rendered OpenAPI operations before the document is cached. This replaces legacy Blueprint's `OpenApiOptions.ConfigureOperation` hook.
+Use `ConfigureOpenApiOperations` in `AddBlueprintApi` to modify rendered OpenAPI operations before the document is cached. This replaces legacy Blueprint's `OpenApiOptions.ConfigureOperation` hook.
 
 ```csharp
-endpoints.MapBlueprintApi<MyApp, MyAppExecutor>(
-    "api/",
-    configureOpenApiOperations: ops =>
+services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
+{
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApiOperations(ops =>
     {
         // Remove auto-populated TenantId parameters from the public spec
         ops.Processors.Add(static (operation, descriptor) =>
@@ -1282,6 +1291,7 @@ endpoints.MapBlueprintApi<MyApp, MyAppExecutor>(
                 : operation;
         });
     });
+});
 ```
 
 Processors run once at startup and receive both the rendered `OpenApiOperationModel` and the source `ApiOperationDescriptor`, so you can filter by descriptor metadata (e.g. only strip parameters from authenticated operations).
@@ -1720,6 +1730,9 @@ public class Startup
             {
                 http.ExposeExceptionDetailsInErrorResponses = env.IsDevelopment();
             });
+
+            blueprint.UseBasePath("api/");
+            blueprint.ConfigureOpenApi(info => { info.Title = "Templates API"; info.Version = "1.0.0"; });
         });
     }
 
@@ -1731,9 +1744,7 @@ public class Startup
 
         app.UseEndpoints(endpoints =>
         {
-            endpoints.MapBlueprintApi<TemplatesBlueprintApp, TemplatesBlueprintAppExecutor>(
-                "api/",
-                configureOpenApi: info => { info.Title = "Templates API"; info.Version = "1.0.0"; });
+            endpoints.MapBlueprintApi<TemplatesBlueprintApp, TemplatesBlueprintAppExecutor>();
         });
     }
 }
@@ -1745,14 +1756,14 @@ public class Startup
 |---------|--------|-----------------|
 | Operation scanning | `.Operations(o => o.Scan(...))` | `[BlueprintAppScan(FromAssemblyOf = ...)]` on app class |
 | Handler discovery | `.Executors(e => e.AddScanner<...>())` | Automatic (built-in) |
-| OpenAPI | `.AddOpenApi(o => {...})` | `configureOpenApi:` parameter on `MapBlueprintApi` |
+| OpenAPI | `.AddOpenApi(o => {...})` | `ConfigureOpenApi(...)` in `AddBlueprintApi` |
 | Authentication | `.AddAuthentication(a => ...)` | ASP.NET Core `AddAuthentication()` + `AddUserAuthorisationContextFactory<T>()` |
 | Authorization | `.AddAuthorisation()` | Automatic from `[Resource]`/`[MustBeAuthenticated]` attributes |
 | Middleware pipeline | Runtime middleware chain | Generated `IOperationExecutorPipeline` per operation |
 | Serialization | Newtonsoft.Json | System.Text.Json with source-generated context |
 | Persistence | Blueprint middleware | `AddUnitOfWork<T>()` seam |
 | Messaging | Blueprint Rebus middleware | `AddMessageOutbox<T>()` seam |
-| Endpoint mapping | `endpoints.MapBlueprintApi("api/")` | `endpoints.MapBlueprintApi<TApp, TExecutor>("api/")` |
+| Endpoint mapping | `endpoints.MapBlueprintApi("api/")` | `UseBasePath("api/")` in `AddBlueprintApi`, then `endpoints.MapBlueprintApi<TApp, TExecutor>()` |
 
 ## Convenience result types
 
