@@ -64,6 +64,15 @@ public sealed partial class AppDataModelSourceGenerator
         // Cache the model class type outside the attribute loop — metadata name is constant.
         var modelClassType = compilation.GetTypeByMetadataName(dataModelClass.MetadataName);
 
+        // An app's [TranslateError]s apply to every forward it hosts (D8); the operations' own are checked by GatewayModule.
+        if (modelClassType is not null)
+        {
+            foreach (var translationDiagnostic in Modules.Gateway.UpstreamForwardPolicyAnalysis.AnalyseTranslations(modelClassType))
+            {
+                diagnostics.Add(translationDiagnostic);
+            }
+        }
+
         // Collect the distinct assemblies that [BlueprintAppScan] targets so the self-link
         // cache only considers operations owned by this app, not transitively-referenced ones.
         var scannedAssemblies = new HashSet<IAssemblySymbol>(SymbolEqualityComparer.Default);

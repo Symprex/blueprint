@@ -53,6 +53,10 @@ public class Startup
         // The strategy GetServiceTemplateQuery's [UpstreamCredential<T>] selects, resolved per forward.
         services.AddSingleton<ServiceTokenCredentialStrategy>();
 
+        // The strategy GetGatewayTenantTemplateQuery's [ExchangeTenantToken] selects. It exchanges through the
+        // ITenantTokenExchanger the deployment registers: the sample has no identity service of its own.
+        services.AddSingleton<TenantTokenCredentialStrategy>();
+
         services.AddBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>(blueprint =>
         {
             blueprint.ConfigureHttp(http =>

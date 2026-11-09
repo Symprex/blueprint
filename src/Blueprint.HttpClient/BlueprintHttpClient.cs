@@ -343,7 +343,7 @@ public class BlueprintHttpClient
         ArgumentNullException.ThrowIfNull(context);
 
         var policy = UpstreamForwardPolicy.For(context.Descriptor.OperationType, context.App.GetType());
-        var credential = CreateForwardCredential(context, policy);
+        var credential = CreateForwardCredential(context, inner, policy);
 
         try
         {
@@ -374,9 +374,10 @@ public class BlueprintHttpClient
     /// Creates the credential a forward from the gateway operation <paramref name="context"/> serves authenticates with.
     /// </summary>
     /// <param name="context">The gateway operation being served.</param>
+    /// <param name="inner">The inner operation being forwarded, which a strategy reads its arguments from.</param>
     /// <param name="policy">The operation's forward policy.</param>
     /// <returns>The strategy's credential when the operation selects one; otherwise the caller's own.</returns>
-    private static IUpstreamCredential CreateForwardCredential(ApiOperationContext context, UpstreamForwardPolicy policy)
+    private static IUpstreamCredential CreateForwardCredential(ApiOperationContext context, IOperation inner, UpstreamForwardPolicy policy)
     {
         if (policy.CredentialAttribute is not { } attribute)
         {
@@ -387,7 +388,7 @@ public class BlueprintHttpClient
             ?? throw new InvalidOperationException(
                 $"{context.Descriptor.OperationType.Name} forwards with the upstream credential strategy {attribute.CredentialType.Name}, which is not registered in the request's services as an {nameof(IUpstreamCredentialStrategy)}. Register it, for example with services.AddSingleton<{attribute.CredentialType.Name}>().");
 
-        return strategy.CreateCredential(context, attribute);
+        return strategy.CreateCredential(context, inner, attribute);
     }
 
     /// <summary>

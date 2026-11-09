@@ -14,7 +14,8 @@ namespace Blueprint.SourceGenerator.Modules.Gateway;
 /// The generated body creates a fresh <c>TInner</c> (D4), copies the operation's properties onto it by name, read from the
 /// shared property model (D25), and sends it with <c>BlueprintHttpClient.ForwardAsync</c> (D5) over the named client and
 /// JSON options that <c>AddBlueprintClient</c> registered for the <c>[BlueprintClient]</c> that includes <c>TInner</c> (D2,
-/// D29). Bindings (D11), <c>OnMap</c>, credentials (D7) and error translations (D8) are later issues.
+/// D29), passing the operation's context so the forward applies its upstream credential (D7) and error translations (D8).
+/// Bindings (D11) and <c>OnMap</c> are later issues.
 /// </remarks>
 public static class GatewayForward
 {
@@ -190,7 +191,10 @@ public static class GatewayForward
             TransportFactory + "<" + forward.ClientTypeName + ">(" + context.GetContextPropertyExpression("ServiceProvider") + ")");
         context.WriteBlankLine();
 
-        return "forwardTransport.ForwardAsync<" + forward.InnerTypeName + ", " + forward.ResultTypeName + ">(forwardInner, null, "
+        // The context overload applies the operation's credential, or else the caller's, and its error translations (D7,
+        // D8), exactly as a hand-written forward that passes its context does.
+        return "forwardTransport.ForwardAsync<" + forward.InnerTypeName + ", " + forward.ResultTypeName + ">("
+            + context.GetContextExpression() + ", forwardInner, null, "
             + context.GetContextPropertyExpression("OperationCancelled") + ")";
     }
 
