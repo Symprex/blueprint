@@ -263,9 +263,9 @@ public class BlueprintHttpClient
     /// The two are told apart by content type: a host writes a <see cref="Blueprint.Runtime.Exec.NotFoundResult{T}"/> as
     /// <c>application/json</c> and a problem as <c>application/problem+json</c>. A forward asks for its errors as
     /// <c>Accept: application/problem+json</c>, so a host with <c>NegotiateErrorContentType</c> on, which otherwise writes a
-    /// problem as <c>application/json</c> to a request with no <c>Accept</c>, still writes it as a problem. An
-    /// <c>Accept</c> the caller sets through <see cref="CallOptions.ModifyRequest"/> is kept, and then a negotiating host's
-    /// 404 problem may be read as the not-found member.
+    /// problem as <c>application/json</c> to a request with no <c>Accept</c>, still writes it as a problem. It replaces any
+    /// <c>Accept</c> the caller sets through <see cref="CallOptions.ModifyRequest"/>, which would otherwise let a negotiating
+    /// host's 404 problem be read as the not-found member.
     /// </para>
     /// <para>
     /// A forwarded resource arrives without the inner service's <c>$links</c>: <see cref="ApiResource.Links"/> is get-only and
@@ -312,17 +312,16 @@ public class BlueprintHttpClient
     }
 
     /// <summary>
-    /// Asks a forward's errors to be written as <c>application/problem+json</c>, unless the caller set an <c>Accept</c> of its
-    /// own; see <see cref="ForwardAsync{TInner, TResult}"/>. A Blueprint host reads <c>Accept</c> for nothing but an error's
-    /// content type, so a success is written as it would be without it.
+    /// Asks a forward's errors to be written as <c>application/problem+json</c>, replacing any <c>Accept</c> the caller set; see
+    /// <see cref="ForwardAsync{TInner, TResult}"/>. A Blueprint host reads <c>Accept</c> for nothing but an error's content
+    /// type, so a success is written as it would be without it, and a caller's own <c>Accept</c> could only make a thrown 404
+    /// look like a not-found result.
     /// </summary>
-    /// <param name="request">The forward's request.</param>
+    /// <param name="request">The forward's request, after <see cref="CallOptions.ModifyRequest"/> has run.</param>
     private static void AcceptProblemJson(HttpRequestMessage request)
     {
-        if (request.Headers.Accept.Count == 0)
-        {
-            request.Headers.TryAddWithoutValidation("Accept", "application/problem+json");
-        }
+        request.Headers.Accept.Clear();
+        request.Headers.TryAddWithoutValidation("Accept", "application/problem+json");
     }
 
     /// <summary>

@@ -200,8 +200,9 @@ public class BlueprintHttpClientForwardTests
     }
 
     [Fact]
-    public async Task When_the_caller_sets_its_own_accept_then_the_forward_keeps_it()
+    public async Task When_the_caller_sets_its_own_accept_then_the_forward_still_asks_for_errors_as_problem_json()
     {
+        // A caller's Accept once survived, and with it a negotiating host's thrown 404 came back as plain JSON.
         HttpRequestMessage? sent = null;
         var client = CreateClient(request =>
         {
@@ -214,7 +215,24 @@ public class BlueprintHttpClientForwardTests
             new GetTemplateQuery { Id = "t-1" },
             new CallOptions { ModifyRequest = static request => request.Headers.Accept.ParseAdd("application/json") });
 
-        sent!.Headers.Accept.Select(static a => a.ToString()).Should().Equal("application/json");
+        sent!.Headers.Accept.Select(static a => a.ToString()).Should().Equal("application/problem+json");
+    }
+
+    [Fact]
+    public async Task When_the_caller_asks_for_plain_json_then_a_negotiating_upstreams_thrown_404_still_escapes_as_the_upstream_problem()
+    {
+        var client = CreateClient(static request => NegotiatedError(
+            request,
+            HttpStatusCode.NotFound,
+            """{"type":"not_found","title":"The requested resource could not be found","status":404,"detail":"Template 'missing' not found."}"""));
+
+        var act = () => client.ForwardAsync<GetTemplateQuery, Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>(
+            new GetTemplateQuery { Id = "missing" },
+            new CallOptions { ModifyRequest = static request => request.Headers.Accept.ParseAdd("application/json") });
+
+        var exception = (await act.Should().ThrowAsync<BlueprintApiException>()).Which;
+        exception.Type.Should().Be("not_found");
+        exception.Detail.Should().Be("Template 'missing' not found.");
     }
 
     [Fact]
