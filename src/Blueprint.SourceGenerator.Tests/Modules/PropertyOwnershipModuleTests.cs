@@ -2201,6 +2201,99 @@ public class PropertyOwnershipModuleTests
         pipelineSource.Should().NotContain("ReadJsonBodyAsync");
     }
 
+    [Fact]
+    public void When_a_GET_and_POST_operation_has_a_property_named_another_plus_OnGet_then_its_pipeline_compiles()
+    {
+        // The GET-only query read used to name its locals after the property plus "OnGet", so Name's collided with the
+        // explicit query read of NameOnGet in the enclosing block (CS0136).
+        var result = CompileMultiMethodPipeline(
+            """
+            [RootLink("/names")]
+            [HttpGet]
+            [HttpPost]
+            public partial class FindNamesQuery : IQuery<string>
+            {
+                public string Name { get; set; }
+
+                [FromQuery]
+                public string NameOnGet { get; set; }
+
+                public static Task<string> HandleAsync(FindNamesQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_a_GET_and_POST_operation_has_body_query_and_partial_route_properties_then_pipeline_snapshot_matches()
+    {
+        var result = CompileMultiMethodPipeline(
+            """
+            public sealed class Paging
+            {
+                public int Size { get; set; }
+            }
+
+            [RootLink("/reports/{Code}")]
+            [RootLink("/reports", Rel = "reports")]
+            [HttpGet]
+            [HttpPost]
+            public partial class FindReportsQuery : IQuery<string>
+            {
+                public string Code { get; set; }
+
+                public string Name { get; set; }
+
+                public int Count { get; set; }
+
+                [FromQuery]
+                public string Filter { get; set; }
+
+                [FromBody]
+                public string Note { get; set; }
+
+                public Paging Paging { get; set; }
+
+                public static Task<string> HandleAsync(FindReportsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+
+        var outputText = new StringBuilder();
+        foreach (var s in result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)))
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText.ToString());
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
+    }
+
+    private static MultiGeneratorGenerationResult CompileMultiMethodPipeline(string operations)
+    {
+        var source = "using Blueprint;\nusing Blueprint.Model;\nusing Blueprint.Model.Attributes;\nusing System.Threading.Tasks;\n\n"
+            + "namespace TestNamespace;\n\n[BlueprintAppScan]\npublic partial class TestApp : BlueprintApp { }\n\n" + operations;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        return TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(
