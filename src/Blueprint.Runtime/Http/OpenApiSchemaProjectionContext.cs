@@ -828,7 +828,7 @@ public sealed record OpenApiSchemaProjectionContext(
             SchemaName: referencedSchemaName)
         {
             AllowsAdditionalProperties = valuesAreAnyValue,
-            IsSerializerRequired = property.IsRequired,
+            IsDeserialized = property.Set is not null || property.AssociatedParameter is not null,
             AdditionalPropertiesAreNullable = valuesAreNullable,
             AdditionalPropertiesItemsAreNullable = additionalPropertiesKind == OpenApiSchemaKind.Array
                 && OpenApiNullability.AreValueItemsNullable(dictValueType),
@@ -1769,11 +1769,11 @@ public sealed record OpenApiSchemaPropertyModel(
     public bool AllowsAdditionalProperties { get; init; }
 
     /// <summary>
-    /// Gets a value indicating whether System.Text.Json requires the property when it reads the type (a C# <c>required</c>
-    /// member or <c>[JsonRequired]</c>), whichever <see cref="OpenApiRequiredProperties"/> rule the document follows, so
-    /// <see cref="IOperationInputSchemaProvider"/> keeps a read-only property a request body must still carry.
+    /// Gets a value indicating whether System.Text.Json sets the property when it reads the type, by a setter or a
+    /// constructor parameter, though the document marks it read-only (<c>[ReadOnly(true)]</c>), so
+    /// <see cref="IOperationInputSchemaProvider"/> keeps what the serializer or validation requires of a request body.
     /// </summary>
-    internal bool IsSerializerRequired { get; init; }
+    internal bool IsDeserialized { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether the property is a collection of references to a component whose elements may be

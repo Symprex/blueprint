@@ -155,7 +155,7 @@ internal static class OpenApiDocumentEndpoint
         string Json,
         IReadOnlyList<string> Warnings,
         OpenApiDocumentRenderingContext Document,
-        IReadOnlyCollection<(string ComponentKey, string PropertyName, bool IsSerializerRequired)> ReadOnlyProperties) RenderDocument(
+        IReadOnlyCollection<(string ComponentKey, string PropertyName, bool IsDeserialized)> ReadOnlyProperties) RenderDocument(
         BlueprintApp app,
         OpenApiInfoOptions? infoOptions,
         OpenApiSchemaProcessorOptions? schemaProcessorOptions,
@@ -197,7 +197,7 @@ internal static class OpenApiDocumentEndpoint
             pathItemContext,
             infoOptions?.SchemaNaming == OpenApiSchemaNaming.Legacy);
 
-        var readOnlyProperties = new List<(string ComponentKey, string PropertyName, bool IsSerializerRequired)>();
+        var readOnlyProperties = new List<(string ComponentKey, string PropertyName, bool IsDeserialized)>();
         var json = OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions, httpOptions, basePath, readOnlyProperties).Json;
 
         return (json, operationContext.Warnings, documentContext, readOnlyProperties);

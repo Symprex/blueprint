@@ -207,11 +207,64 @@ public sealed class OperationInputSchemaTests
         var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
         var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
 
+        address.GetProperty("properties").GetProperty("district").GetProperty("readOnly").GetBoolean().Should().BeTrue();
+        ConditionallyRequired(address).Should().NotContain("district");
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void A_conditional_requirement_of_a_writable_property_marked_read_only_is_still_asked_of_an_input(OpenApiSchemaNaming naming)
+    {
+        // [ReadOnly(true)] leaves the setter, so the body reader still sets the region and validation still requires it.
+        var schema = CreateProvider(o => o.SchemaNaming = naming).GetSchema(NoteOperationName)!.Schema;
+        var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
+        var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
+
         address.GetProperty("properties").GetProperty("region").GetProperty("readOnly").GetBoolean().Should().BeTrue();
-        (address.TryGetProperty("allOf", out var conditionals) ? conditionals.EnumerateArray() : [])
-            .SelectMany(static c => c.TryGetProperty("then", out var then) && then.TryGetProperty("required", out var required) ? required.EnumerateArray() : [])
-            .Select(static e => e.GetString())
-            .Should().NotContain("region");
+        ConditionallyRequired(address).Should().Contain("region");
+    }
+
+    [Fact]
+    public async Task A_request_body_without_a_writable_property_validation_requires_is_refused_however_it_is_documented()
+    {
+        // What the schema above requires when the post code is SW1A 1AA is what validation requires of the request.
+        await using var host = await KestrelTestHost.StartAsync();
+
+        using var without = new StringContent("""{"text":"abc","address":{"postCode":"SW1A 1AA","previous":null}}""", System.Text.Encoding.UTF8, "application/json");
+        using var refused = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", without);
+        using var with = new StringContent("""{"text":"abc","address":{"postCode":"SW1A 1AA","previous":null,"region":"London"}}""", System.Text.Encoding.UTF8, "application/json");
+        using var accepted = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", with);
+
+        ((int)refused.StatusCode).Should().BeInRange(400, 499);
+        accepted.IsSuccessStatusCode.Should().BeTrue(await accepted.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task An_operation_answering_GET_and_POST_is_described_at_the_method_that_reads_its_inputs()
+    {
+        // Its unannotated properties are bound from the body, which a GET is not read for, so the schema's operationId must
+        // name the POST, and a request made from the schema at that slot must reach the handler with both values.
+        var schema = CreateProvider().GetSchema(MultiMethodOperationName)!;
+
+        schema.Properties.Should().Equal(
+            new OperationInputProperty("name", OperationInputLocation.Body),
+            new OperationInputProperty("count", OperationInputLocation.Body));
+
+        await using var host = await KestrelTestHost.StartAsync();
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync("api/.blueprint/openapi.json"));
+        var slot = document.RootElement.GetProperty("paths").EnumerateObject()
+            .SelectMany(static path => path.Value.EnumerateObject().Select(method => (Path: path.Name, Method: method.Name, Operation: method.Value)))
+            .Single(s => s.Operation.ValueKind == JsonValueKind.Object
+                && s.Operation.TryGetProperty("operationId", out var id)
+                && id.GetString() == schema.OperationId);
+
+        slot.Method.Should().Be("post");
+
+        using var body = new StringContent("""{"name":"echo","count":2}""", System.Text.Encoding.UTF8, "application/json");
+        using var response = await host.Client.PostAsync("api" + slot.Path, body);
+
+        (await response.Content.ReadAsStringAsync()).Should().Contain("echo:2");
     }
 
     [Fact]
@@ -332,6 +385,16 @@ public sealed class OperationInputSchemaTests
 
     private const string DuplicateBodyNameOperationName = "DuplicateBodyNameOperationInputSchema";
 
+    private const string MultiMethodOperationName = "MultiMethodEchoOperationInputSchema";
+
+    private static IEnumerable<string?> ConditionallyRequired(JsonElement schema)
+    {
+        return (schema.TryGetProperty("allOf", out var conditionals) ? conditionals.EnumerateArray() : [])
+            .SelectMany(static c => c.TryGetProperty("then", out var then) && then.TryGetProperty("required", out var required) ? required.EnumerateArray() : [])
+            .Select(static e => e.GetString())
+            .ToList();
+    }
+
     private static OperationInputSchema GetSchema(string operationName)
     {
         var schema = CreateProvider().GetSchema(operationName);
@@ -449,10 +512,17 @@ public sealed class OperationInputSchemaAddress
     [ReadOnly(true)]
     public OperationInputSchemaAddress? Previous { get; set; }
 
-    /// <summary>Gets or sets the region the server finds for a post code, which a request does not carry either.</summary>
+    /// <summary>
+    /// Gets or sets the region of a post code, which the document marks read-only, though a request can still set it and
+    /// validation still requires it.
+    /// </summary>
     [RequiredIf(nameof(PostCode), "SW1A 1AA")]
     [ReadOnly(true)]
     public string? Region { get; set; }
+
+    /// <summary>Gets the district the server finds for a post code, which a request cannot carry.</summary>
+    [RequiredIf(nameof(PostCode), "SW1A 1AA")]
+    public string? District => this.PostCode is null ? null : "Westminster";
 }
 
 /// <summary>A command taking a property from every source the caller sends, and two it does not.</summary>
@@ -519,6 +589,23 @@ public partial class AliasedTokenOperationInputSchemaQuery : IQuery<string>
     public static string Handle(AliasedTokenOperationInputSchemaQuery query)
     {
         return "validated";
+    }
+}
+
+/// <summary>A query answering GET and POST, whose unannotated properties are bound from the body.</summary>
+[AllowAnonymous]
+[RootLink("/operation-input-schema/multi-method")]
+[HttpGet]
+[HttpPost]
+public partial class MultiMethodEchoOperationInputSchemaQuery : IQuery<string>
+{
+    public string? Name { get; set; }
+
+    public int Count { get; set; }
+
+    public static string Handle(MultiMethodEchoOperationInputSchemaQuery query)
+    {
+        return $"{query.Name}:{query.Count}";
     }
 }
 

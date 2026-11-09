@@ -29,8 +29,8 @@ internal sealed class OperationInputSchemaSet
     private const string ComponentReferencePrefix = "#/components/schemas/";
     private const string DefinitionReferencePrefix = "#/$defs/";
 
-    // Marks a read-only property the serializer requires, until conversion drops it with every other vendor extension.
-    private const string SerializerRequiredKeyword = "x-blueprint-serializer-required";
+    // Marks a read-only property a request body still sets, until conversion drops it with every other vendor extension.
+    private const string DeserializedKeyword = "x-blueprint-deserialized";
 
     private readonly FrozenDictionary<string, Entry> _entriesByName;
     private readonly FrozenDictionary<string, ImmutableArray<Entry>> _entriesByNameIgnoringCase;
@@ -54,14 +54,14 @@ internal sealed class OperationInputSchemaSet
     /// <param name="documentJson">The JSON the document was rendered as.</param>
     /// <param name="readOnlyProperties">
     /// Every read-only property of a component, by the component's key and its name, which the document does not mark under
-    /// <see cref="OpenApiSchemaNaming.Legacy"/>, and whether the serializer requires it all the same.
+    /// <see cref="OpenApiSchemaNaming.Legacy"/>, and whether the serializer sets it from a request body all the same.
     /// </param>
     /// <returns>The schemas.</returns>
     public static OperationInputSchemaSet Create(
         BlueprintApp app,
         OpenApiDocumentRenderingContext document,
         string documentJson,
-        IReadOnlyCollection<(string ComponentKey, string PropertyName, bool IsSerializerRequired)> readOnlyProperties)
+        IReadOnlyCollection<(string ComponentKey, string PropertyName, bool IsDeserialized)> readOnlyProperties)
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(document);
@@ -72,9 +72,10 @@ internal sealed class OperationInputSchemaSet
         var paths = root["paths"]?.AsObject();
         var components = root["components"]?["schemas"]?.AsObject();
 
-        // A request does not send a read-only property, so the schema must know one the document left unmarked; unless the
-        // serializer requires it, as the body reader then rejects a request without it.
-        foreach (var (componentKey, propertyName, isSerializerRequired) in readOnlyProperties)
+        // A request does not send a read-only property, so the schema must know one the document left unmarked. The serializer
+        // still sets one with a setter, such as a [ReadOnly(true)] property, so what the serializer or validation requires of
+        // that one is still required of a request.
+        foreach (var (componentKey, propertyName, isDeserialized) in readOnlyProperties)
         {
             try
             {
@@ -82,9 +83,9 @@ internal sealed class OperationInputSchemaSet
                 {
                     property["readOnly"] = true;
 
-                    if (isSerializerRequired)
+                    if (isDeserialized)
                     {
-                        property[SerializerRequiredKeyword] = true;
+                        property[DeserializedKeyword] = true;
                     }
                 }
             }
@@ -196,7 +197,8 @@ internal sealed class OperationInputSchemaSet
     /// <summary>
     /// Finds the slot whose <c>operationId</c> names the operation: the first URL it declares, as legacy's document gave
     /// that URL its unnumbered id (<see cref="LegacyOperationIds"/>), at the first of its methods, where the document writes
-    /// it rather than another operation sharing the slot.
+    /// it rather than another operation sharing the slot. An operation with a body is found at a method whose body is read,
+    /// which a GET's is not, so that a request made from the schema at that slot carries every input.
     /// </summary>
     private static (string UrlFormat, string Method) FindFirstDeclaredSlot(
         OpenApiOperationModel operation,
@@ -206,10 +208,14 @@ internal sealed class OperationInputSchemaSet
         var urlFormats = descriptor is null
             ? operation.UrlFormats
             : [.. descriptor.Urls.Select(static url => OpenApiOperationRenderingContext.ToPathKey(url.UrlFormat))];
+        var methods = operation.HttpMethods
+            .OrderBy(method => operation.RequestBody is not null && string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase))
+            .ThenBy(static method => method, StringComparer.Ordinal)
+            .ToList();
 
         foreach (var urlFormat in urlFormats)
         {
-            foreach (var method in operation.HttpMethods.Order(StringComparer.Ordinal))
+            foreach (var method in methods)
             {
                 var slot = (urlFormat, method.ToUpperInvariant());
 
@@ -550,11 +556,11 @@ internal sealed class OperationInputSchemaSet
         }
 
         // OpenAPI 3.0 requires a read-only property of a response only; JSON Schema's required would ask a request for it,
-        // whether always or when a conditional's if holds. One the serializer requires, a request must carry all the same.
+        // whether always or when a conditional's if holds. One the serializer sets all the same keeps its requirements.
         // They are found before the properties are converted, which drops the marker.
         var readOnlyNames = (schema["properties"] as JsonObject ?? [])
             .Where(static p => p.Value?["readOnly"]?.GetValueKind() == JsonValueKind.True
-                && p.Value?[SerializerRequiredKeyword]?.GetValueKind() != JsonValueKind.True)
+                && p.Value?[DeserializedKeyword]?.GetValueKind() != JsonValueKind.True)
             .Select(static p => p.Key)
             .ToHashSet(StringComparer.Ordinal);
 
