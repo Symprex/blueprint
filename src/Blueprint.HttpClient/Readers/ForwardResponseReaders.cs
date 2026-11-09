@@ -163,7 +163,7 @@ internal sealed class NotFoundForwardResponseReader<T1, T2, TContent> : Response
 
     /// <summary>
     /// Whether a 404's media type is a not-found result's content: JSON, but not <c>application/problem+json</c>, which a
-    /// forward asks a host's errors to be written as (<see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}"/>).
+    /// forward asks a host's errors to be written as (<see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}(TInner, CallOptions, CancellationToken)"/>).
     /// </summary>
     private static bool IsResourceJson(string? mediaType)
     {
