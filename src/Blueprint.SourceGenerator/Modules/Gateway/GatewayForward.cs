@@ -142,6 +142,22 @@ public static class GatewayForward
         // D11: the bindings come from the property model's builder, which is what left them out of the public shape. The
         // map hook's parameters after the inner operation are the handler's, so they are resolved as a handler's are.
         var bindings = OperationPropertyModelBuilder.GetBindings(operationType);
+        var copied = GetCopiedProperties(operationType, exposedType, bindings);
+
+        // A required inner member the forward does not set would fail to compile (CS9035): one the gateway redeclares with
+        // another type, or a required field, which is never contributed. A bound one is set in the initialiser; hiding a
+        // required one is BPGW009.
+        var unset = GetRequiredMemberNames(exposedType)
+            .Where(name => !copied.Contains(name) && !bindings.Any(b => b.PropertyName == name))
+            .ToList();
+        if (unset.Count > 0)
+        {
+            return Result<OperationHandlerModel>.Failure(new DiagnosticInfo(
+                GatewayDiagnosticDescriptors.RequiredInnerMemberNotSupplied,
+                location,
+                [operationType.Name, exposedType.Name, string.Join(", ", unset)]));
+        }
+
         var mapHook = GatewayMapHook.Find(operationType, exposedType, diagnostics: null);
         var mapHookParameters = mapHook is null
             ? EquatableList<HandlerParameter>.Empty
@@ -164,10 +180,25 @@ public static class GatewayForward
                 innerTypeName,
                 clients[0],
                 resultTypeName,
-                GetCopiedProperties(operationType, exposedType, bindings),
+                copied,
                 bindings,
                 mapHook?.Name,
                 mapHook?.Name == GatewayMapHook.AsyncName)));
+    }
+
+    private static IEnumerable<string> GetRequiredMemberNames(INamedTypeSymbol type)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers())
+            {
+                if (member is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true } && seen.Add(member.Name))
+                {
+                    yield return member.Name;
+                }
+            }
+        }
     }
 
     /// <summary>
