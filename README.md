@@ -191,11 +191,11 @@ using Greetings;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddBlueprintApi<GreetingsApp, GreetingsAppExecutor>();
+builder.Services.AddBlueprintApi<GreetingsApp, GreetingsAppExecutor>(blueprint => blueprint.UseBasePath("api/"));
 
 var app = builder.Build();
 
-app.MapBlueprintApi<GreetingsApp, GreetingsAppExecutor>("api/");
+app.MapBlueprintApi<GreetingsApp, GreetingsAppExecutor>();
 
 app.Run();
 ```
@@ -264,10 +264,11 @@ To see the generated code, set `EmitCompilerGeneratedFiles` to `true` in your pr
 
 ### At runtime
 
-`AddBlueprintApi<TApp, TExec>()` registers the app (the registry of descriptors) and the generated executor.
-`MapBlueprintApi<TApp, TExec>(basePath)` then adds an ASP.NET Core endpoint for every route on every HTTP-exposed
-operation. It also adds the root document at `basePath`, and the OpenAPI document at
-`basePath/.blueprint/openapi.json`, which is rendered once at start-up.
+`AddBlueprintApi<TApp, TExec>()` registers the app (the registry of descriptors) and the generated executor, and
+declares where the API is mapped (`UseBasePath`) and how it is described. `MapBlueprintApi<TApp, TExec>()` then adds an
+ASP.NET Core endpoint for every route on every HTTP-exposed operation, under that base path. It also adds the root
+document at the base path, and the OpenAPI document at `<basePath>/.blueprint/openapi.json`, which is rendered once at
+start-up.
 
 A request then runs through that operation's generated pipeline:
 
@@ -484,16 +485,25 @@ generated descriptors, so it includes:
 - `[Description]` text and `[OpenApiExample]` values.
 
 ```csharp
-app.MapBlueprintApi<MyApp, MyAppExecutor>(
-    "api/",
-    configureOpenApi: info =>
+builder.Services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
+{
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info =>
     {
         info.Title = "Template Management API";
         info.Version = "1.0.0";
     });
+});
+
+app.MapBlueprintApi<MyApp, MyAppExecutor>();
 ```
 
-`MapBlueprintApi` also accepts ordered schema and operation processors, for adjustments the model cannot express.
+`ConfigureOpenApiSchemas` and `ConfigureOpenApiOperations` add ordered schema and operation processors, for adjustments
+the model cannot express. Declared there, the document is the one `BlueprintEmitOpenApi` writes to `Spec/openapi.json` at
+build time without starting the app (see [docs/openapi-migration.md](docs/openapi-migration.md)).
+
+The older form, `MapBlueprintApi<MyApp, MyAppExecutor>("api/", configureOpenApi: ...)`, still works, but cannot be
+combined with `BlueprintEmitOpenApi`, which never reaches `MapBlueprintApi`.
 
 ## Cross-cutting services
 

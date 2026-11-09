@@ -97,6 +97,11 @@ public static class ServiceCollectionExtensions
         // Per-operation input schemas (MCP tools, Code Mode) — given the app's operations at endpoint mapping time
         services.TryAddSingleton<IOperationInputSchemaProvider, OperationInputSchemaProvider>();
 
+        // What configure declares about where the API is mapped and how it is described, for MapBlueprintApi and for the
+        // BlueprintEmitOpenApi build target, which runs the app only until its host is built, to write that document.
+        services.AddKeyedSingleton<BlueprintApiMapping>(typeof(TApp), builder.Mapping);
+        BlueprintOpenApiDocumentMode.EnableIfRequested<TApp>(services);
+
         configure?.Invoke(builder);
 
         return services;
@@ -727,6 +732,77 @@ public sealed class BlueprintServiceBuilder
         this.Services.Configure(configure);
         return this;
     }
+
+    /// <summary>
+    /// Declares the base path the API is mapped under, for <c>MapBlueprintApi&lt;TApp, TExec&gt;()</c> called without one.
+    /// </summary>
+    /// <remarks>
+    /// The <c>BlueprintEmitOpenApi</c> build target writes the app's OpenAPI document from what is declared here and with
+    /// the <c>ConfigureOpenApi</c> methods. It stops the app as soon as its host is built, before <c>MapBlueprintApi</c>
+    /// is reached, so an app that emits its document declares these here rather than passing them to
+    /// <c>MapBlueprintApi</c>, and <c>MapBlueprintApi</c> may then not be given its own.
+    /// </remarks>
+    /// <param name="basePath">The base path, such as <c>api/</c>; an empty one maps the API at the root.</param>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder UseBasePath(string basePath)
+    {
+        ArgumentNullException.ThrowIfNull(basePath);
+
+        this.Mapping.BasePath = basePath;
+
+        return this;
+    }
+
+    /// <summary>
+    /// Customises the OpenAPI document's <c>info</c> block (title, version, description), after any delegate already given
+    /// here. See <see cref="UseBasePath" /> for why it is declared here rather than passed to <c>MapBlueprintApi</c>.
+    /// </summary>
+    /// <param name="configure">A delegate that customises the <c>info</c> block.</param>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder ConfigureOpenApi(Action<OpenApiInfoOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+
+        this.Mapping.ConfigureOpenApi += configure;
+
+        return this;
+    }
+
+    /// <summary>
+    /// Registers ordered schema processors for the OpenAPI document's <c>components/schemas</c>, after any delegate already
+    /// given here. See <see cref="UseBasePath" /> for why it is declared here rather than passed to <c>MapBlueprintApi</c>.
+    /// </summary>
+    /// <param name="configure">A delegate that registers the processors.</param>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder ConfigureOpenApiSchemas(Action<OpenApiSchemaProcessorOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+
+        this.Mapping.ConfigureOpenApiSchemas += configure;
+
+        return this;
+    }
+
+    /// <summary>
+    /// Registers ordered per-operation processors for the OpenAPI document's operations, after any delegate already given
+    /// here. See <see cref="UseBasePath" /> for why it is declared here rather than passed to <c>MapBlueprintApi</c>.
+    /// </summary>
+    /// <param name="configure">A delegate that registers the processors.</param>
+    /// <returns>This builder for chaining.</returns>
+    public BlueprintServiceBuilder ConfigureOpenApiOperations(Action<OpenApiOperationProcessorOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+
+        this.Mapping.ConfigureOpenApiOperations += configure;
+
+        return this;
+    }
+
+    /// <summary>
+    /// Gets what <see cref="UseBasePath" /> and the <c>ConfigureOpenApi</c> methods declared, which <c>AddBlueprintApi</c>
+    /// registers for the app.
+    /// </summary>
+    internal BlueprintApiMapping Mapping { get; } = new();
 
     /// <summary>
     /// Registers a resource expander that populates <c>Expandable&lt;T&gt;</c> properties

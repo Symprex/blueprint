@@ -32,4 +32,8 @@
     <ProjectReference Include="..\Blueprint.Mcp\Blueprint.Mcp.csproj" />
   </ItemGroup>
 
+  <!-- The BlueprintEmitOpenApi target, which a package consumer gets from Blueprint.Runtime's buildTransitive folder:
+       dotnet build -p:BlueprintEmitOpenApi=true writes Spec/openapi.json. -->
+  <Import Project="..\Blueprint.Runtime\buildTransitive\Blueprint.Runtime.targets" />
+
 </Project>

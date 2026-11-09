@@ -55,7 +55,7 @@ public sealed class OpenApiDocumentRenderTimingTests
     [Fact]
     public void When_rendering_on_first_request_then_reading_the_held_document_renders_it()
     {
-        // OutputOpenApi reads the holder to write the committed spec, so it must get the document whether or not a
+        // The build-time document-only mode reads the holder to write the committed spec, so it must get the document whether or not a
         // request has rendered it.
         var renders = 0;
 
