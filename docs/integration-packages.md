@@ -513,13 +513,16 @@ public partial class RenameGatewayTemplateCommand : ICommand<GatewayTemplateReso
 public async Task<GatewayTemplateResource> Handle(RenameGatewayTemplateCommand command, ApiOperationContext context, CancellationToken ct)
 {
     var updated = await upstream.ForwardAsync<UpdateTemplateCommand, ResourceEventResult<TemplateApiResource>>(
-        context, new UpdateTemplateCommand { Id = command.Id, Name = command.Name, HtmlSource = command.HtmlSource }, cancellationToken: ct);
+        context,
+        new UpdateTemplateCommand { Id = command.Id, Name = command.Name, HtmlSource = command.HtmlSource, PlainTextSource = command.PlainTextSource },
+        cancellationToken: ct);
     // ...
 }
 ```
 
 - **The caller's credential by default (D7).** The forward is authenticated, last, with the `Authorization` header of the request the gateway is serving (`CallerAuthorizationCredential`), captured per call. Nothing is set on the shared `HttpClient`, so this replaces `HttpClientTokenForwarding.ForwardAuthorizationHeader` for forwards. A caller with no `Authorization` header gets none forwarded.
-- **`[UpstreamCredential<TStrategy>]` replaces it per operation.** `TStrategy` is an `IUpstreamCredentialStrategy` registered in the gateway's services; for each forward it is given the context and the attribute, and returns the `IUpstreamCredential` to apply. A strategy that takes arguments, such as which property holds a tenant id, declares its own attribute deriving from `UpstreamCredentialAttribute<TStrategy>` with them as properties. An unregistered strategy fails the forward with an `InvalidOperationException` before anything is sent. Because the attribute names the strategy type, an operation that uses one is declared in the gateway's own assembly, not a contract assembly.
+- **`[UpstreamCredential<TStrategy>]` replaces it per operation.** `TStrategy` is an `IUpstreamCredentialStrategy` registered in the gateway's services; for each forward it is given the context and the attribute, and returns the `IUpstreamCredential` to apply. A strategy that takes arguments, such as which property holds a tenant id, declares its own attribute deriving from `UpstreamCredentialAttribute<TStrategy>` with them as properties. An unregistered strategy fails the forward with an `InvalidOperationException` before anything is sent. Because the attribute names the strategy type, an operation that uses one is declared in the gateway's own assembly, not a contract assembly. A strategy that authenticates as the gateway's own service identity means the upstream no longer checks the caller, so give that operation its own `[Resource(noun, verb)]` and register an `IResourceAuthorizationProvider` in the gateway: the sample's `GetServiceTemplateQuery` refuses a caller without `template:read` before it forwards.
+- **Only the context-taking overload applies this policy.** `ForwardAsync<TInner, TResult>(inner, …)`, without the context, adds no per-call credential (only what the `HttpClient` itself is configured to send) and translates nothing.
 - **`[TranslateError(fromType, to)]` answers an upstream problem as a local one (D8).** On the gateway operation or on its `BlueprintApp`, it maps a `BlueprintApiException` whose problem `type` is `fromType` to the static `ApiExceptionFactory` member named `to` on the attributed class. The operation's translation of a type wins over the app's. The translated problem keeps the upstream detail and has the upstream failure as its inner exception; its upstream extensions are not carried. Untranslated failures escape unchanged.
 - **Read once.** A hand-written forward reads these attributes the first time its operation forwards and caches them. Generated forwards (#69) wire the same choices at compile time.
 
