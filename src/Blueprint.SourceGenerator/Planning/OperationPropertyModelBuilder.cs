@@ -73,7 +73,7 @@ internal static class OperationPropertyModelBuilder
 
             var location = member.Locations.FirstOrDefault(static l => l.IsInSource);
             result.Add(new ResolvedOperationProperty(
-                CreateInfo(member, OperationPropertyOrigin.Declared, location is null ? null : LocationInfo.CreateFrom(location)),
+                CreateInfo(member, OperationPropertyOrigin.Declared, location is null ? null : LocationInfo.CreateFrom(location), operationType.ContainingAssembly),
                 member));
         }
 
@@ -88,7 +88,7 @@ internal static class OperationPropertyModelBuilder
                 ? LocationInfo.CreateFrom(reference.GetSyntax())
                 : null;
 
-            result.Add(new ResolvedOperationProperty(CreateInfo(member, OperationPropertyOrigin.Contributed, exposeLocation), member));
+            result.Add(new ResolvedOperationProperty(CreateInfo(member, OperationPropertyOrigin.Contributed, exposeLocation, operationType.ContainingAssembly), member));
         }
 
         return result;
@@ -165,14 +165,18 @@ internal static class OperationPropertyModelBuilder
         source.Append("partial class ").AppendLine(typeName);
         source.AppendLine("{");
 
-        var readsDefaults = exposed.CanCreateDefaults && model.Properties.Any(static p => p is { Origin: OperationPropertyOrigin.Contributed, IsRequired: false });
-        var newInner = "new " + exposed.TypeName + (exposed.RequiredMemberNames.Count > 0
-            ? " { " + string.Join(", ", exposed.RequiredMemberNames.Select(static name => name + " = default!")) + " }"
-            : "()");
+        var readsDefaults = exposed.CanCreateDefaults && model.Properties.Any(static p => p.Origin == OperationPropertyOrigin.Contributed);
+
+        // An inner operation with required members is made as its own pipeline makes it, with Activator, which runs every
+        // initialiser and sets no member; an object initialiser would have to overwrite each required one.
+        var newInner = exposed.RequiredMemberNames.Count > 0
+            ? "(" + exposed.TypeName + ")global::System.Activator.CreateInstance(typeof(" + exposed.TypeName + "))!"
+            : "new " + exposed.TypeName + "()";
+        var ownInner = exposed.RequiredMemberNames.Count > 0 ? "(" + newInner + ")" : newInner;
 
         // A value-type or string default is read from one shared inner instance. Any other reference-type default, such as a
         // list, could be mutated through one operation and seen by the next, so each instance creates an inner of its own.
-        if (readsDefaults && model.Properties.Any(static p => p is { Origin: OperationPropertyOrigin.Contributed, IsRequired: false, CanShareDefault: true }))
+        if (readsDefaults && model.Properties.Any(static p => p is { Origin: OperationPropertyOrigin.Contributed, CanShareDefault: true }))
         {
             source.Append("    private static readonly ").Append(exposed.TypeName).Append(' ').Append(DefaultsFieldName)
                 .Append(" = ").Append(newInner).AppendLine(";");
@@ -201,17 +205,11 @@ internal static class OperationPropertyModelBuilder
             source.Append(property.TypeName).Append(' ').Append(property.Name)
                 .Append(property.IsInitOnly ? " { get; init; }" : " { get; set; }");
 
-            if (property.IsRequired)
-            {
-                source.AppendLine();
-                continue;
-            }
-
             if (readsDefaults)
             {
-                source.Append(" = ").Append(property.CanShareDefault ? DefaultsFieldName : newInner).Append('.').Append(property.Name).Append(';');
+                source.Append(" = ").Append(property.CanShareDefault ? DefaultsFieldName : ownInner).Append('.').Append(property.Name).Append(';');
             }
-            else if (!property.TypeName.EndsWith("?", StringComparison.Ordinal))
+            else if (!property.IsRequired && !property.TypeName.EndsWith("?", StringComparison.Ordinal))
             {
                 // No instance to read from: left for the binder to fill, as the inner operation leaves it for its own.
                 source.Append(" = default!;");
@@ -276,12 +274,57 @@ internal static class OperationPropertyModelBuilder
         return member.GetAttributes().Any(static a => a.AttributeClass?.ToFullMetadataName() == "System.ObsoleteAttribute");
     }
 
-    private static OperationPropertyInfo CreateInfo(IPropertySymbol member, OperationPropertyOrigin origin, LocationInfo? location)
+    /// <summary>
+    /// Gets the attributes of a contributed property that the exposing operation's partial cannot carry because its assembly
+    /// cannot access their types: the ones whose rules would be lost.
+    /// </summary>
+    /// <param name="member">The inner operation's property.</param>
+    /// <param name="within">The exposing operation's assembly.</param>
+    /// <returns>The inaccessible validation attributes' classes.</returns>
+    public static IEnumerable<INamedTypeSymbol> GetInaccessibleValidationAttributes(IPropertySymbol member, IAssemblySymbol within)
+    {
+        foreach (var attribute in member.GetAttributes())
+        {
+            if (attribute.AttributeClass is { TypeKind: not TypeKind.Error } attributeClass
+                && !IsAccessibleFrom(attributeClass, within)
+                && attributeClass.InheritsFrom("System.ComponentModel.DataAnnotations.ValidationAttribute"))
+            {
+                yield return attributeClass;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether code in <paramref name="within"/> can name <paramref name="type"/>: it and each type containing it are public,
+    /// or internal to an assembly that gives <paramref name="within"/> access to its internals.
+    /// </summary>
+    private static bool IsAccessibleFrom(INamedTypeSymbol type, IAssemblySymbol within)
+    {
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            var accessible = current.DeclaredAccessibility switch
+            {
+                Accessibility.Public => true,
+                Accessibility.Internal or Accessibility.ProtectedOrInternal => SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, within)
+                    || current.ContainingAssembly.GivesAccessTo(within),
+                _ => false,
+            };
+
+            if (!accessible)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static OperationPropertyInfo CreateInfo(IPropertySymbol member, OperationPropertyOrigin origin, LocationInfo? location, IAssemblySymbol within)
     {
         var attributes = new List<string>();
         foreach (var attribute in member.GetAttributes())
         {
-            if (RenderAttribute(attribute) is { } rendered)
+            if (RenderAttribute(attribute, within) is { } rendered)
             {
                 attributes.Add(rendered);
             }
@@ -303,10 +346,10 @@ internal static class OperationPropertyModelBuilder
             member.Type.IsValueType || member.Type.SpecialType == SpecialType.System_String);
     }
 
-    private static string? RenderAttribute(AttributeData attribute)
+    private static string? RenderAttribute(AttributeData attribute, IAssemblySymbol within)
     {
         if (attribute.AttributeClass is not { TypeKind: not TypeKind.Error } attributeClass
-            || attributeClass.DeclaredAccessibility != Accessibility.Public
+            || !IsAccessibleFrom(attributeClass, within)
             || attributeClass.IsInNamespace("System", "Runtime", "CompilerServices")
             || attributeClass.ToFullMetadataName() == "System.ObsoleteAttribute")
         {

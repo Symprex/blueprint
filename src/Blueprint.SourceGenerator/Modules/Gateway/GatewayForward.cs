@@ -20,6 +20,7 @@ public static class GatewayForward
 {
     private const string BlueprintClientAttributeMetadataName = "Blueprint.HttpClient.BlueprintClientAttribute";
     private const string BlueprintClientIncludeAttributeMetadataName = "Blueprint.HttpClient.BlueprintClientIncludeAttribute";
+    private const string BlueprintClientIncludedAttributeMetadataName = "Blueprint.HttpClient.BlueprintClientIncludedAttribute";
     private const string BlueprintClientInterfaceMetadataName = "Blueprint.HttpClient.IBlueprintClient`1";
 
     /// <summary>
@@ -29,8 +30,8 @@ public static class GatewayForward
 
     /// <summary>
     /// Finds which <c>[BlueprintClient]</c> classes include each operation: the ones declared in the compilation, by their
-    /// attributes, and generated ones in referenced assemblies, whose attributes are not compiled in, by the method their
-    /// generated half declares for each include.
+    /// include attributes, and generated ones in referenced assemblies, whose include attributes are conditional and so not
+    /// compiled in, by the <c>[BlueprintClientIncluded]</c> their generated half carries for each include.
     /// </summary>
     /// <param name="compilation">The compilation to search.</param>
     /// <returns>The client types, <c>global::</c>-qualified, by the metadata name of each included operation.</returns>
@@ -39,6 +40,7 @@ public static class GatewayForward
         var index = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var clientAttribute = compilation.GetTypeByMetadataName(BlueprintClientAttributeMetadataName);
         var includeAttribute = compilation.GetTypeByMetadataName(BlueprintClientIncludeAttributeMetadataName);
+        var includedAttribute = compilation.GetTypeByMetadataName(BlueprintClientIncludedAttributeMetadataName);
         var clientInterface = compilation.GetTypeByMetadataName(BlueprintClientInterfaceMetadataName);
         if (clientAttribute is null || clientInterface is null)
         {
@@ -78,13 +80,12 @@ public static class GatewayForward
                     continue;
                 }
 
-                foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
+                foreach (var included in type.GetAttributes())
                 {
-                    if (method is { DeclaredAccessibility: Accessibility.Public, IsStatic: false, Parameters: [{ Type: INamedTypeSymbol included }, ..] }
-                        && method.Name.EndsWith("Async", StringComparison.Ordinal)
-                        && included.ImplementsInterface("Blueprint.Model.IOperation"))
+                    if (SymbolEqualityComparer.Default.Equals(included.AttributeClass, includedAttribute)
+                        && included.ConstructorArguments is [{ Value: INamedTypeSymbol operation }])
                     {
-                        Add(index, included, type);
+                        Add(index, operation, type);
                     }
                 }
             }
