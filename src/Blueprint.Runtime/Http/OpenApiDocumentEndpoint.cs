@@ -12,6 +12,77 @@ namespace Blueprint.Runtime.Http;
 internal static class OpenApiDocumentEndpoint
 {
     /// <summary>
+    /// Creates the app's OpenAPI document and the delegate that serves it from the delegates an app configures it with, as
+    /// <c>MapBlueprintApi</c> serves it and the <c>BlueprintEmitOpenApi</c> build target writes it.
+    /// </summary>
+    /// <param name="app">The app.</param>
+    /// <param name="services">The app's services.</param>
+    /// <param name="httpOptions">The app's HTTP options.</param>
+    /// <param name="basePath">The base path, as <see cref="BlueprintApiMapping.NormaliseBasePath" /> returns it.</param>
+    /// <param name="configureOpenApi">Customises the document's <c>info</c> block, if given.</param>
+    /// <param name="configureOpenApiSchemas">Registers schema processors, if given.</param>
+    /// <param name="configureOpenApiOperations">Registers operation processors, if given.</param>
+    /// <param name="renderOnFirstRequest">Whether to render the document when it is first needed rather than now.</param>
+    /// <returns>The delegate, the document and the document's title.</returns>
+    public static (RequestDelegate Delegate, Lazy<PreRenderedOpenApiDocument> Document, string Title) CreateConfigured(
+        BlueprintApp app,
+        IServiceProvider services,
+        BlueprintHttpOptions httpOptions,
+        string basePath,
+        Action<OpenApiInfoOptions>? configureOpenApi,
+        Action<OpenApiSchemaProcessorOptions>? configureOpenApiSchemas,
+        Action<OpenApiOperationProcessorOptions>? configureOpenApiOperations,
+        bool renderOnFirstRequest)
+    {
+        OpenApiInfoOptions? infoOptions = null;
+        if (configureOpenApi is not null)
+        {
+            infoOptions = new OpenApiInfoOptions();
+            configureOpenApi(infoOptions);
+        }
+
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions = null;
+        if (configureOpenApiSchemas is not null)
+        {
+            schemaProcessorOptions = new OpenApiSchemaProcessorOptions();
+            configureOpenApiSchemas(schemaProcessorOptions);
+        }
+
+        OpenApiOperationProcessorOptions? operationProcessorOptions = null;
+        if (configureOpenApiOperations is not null)
+        {
+            operationProcessorOptions = new OpenApiOperationProcessorOptions();
+            configureOpenApiOperations(operationProcessorOptions);
+        }
+
+        // What the document could not describe is named once, when the document is rendered, for the consumer to act on.
+        var openApiLogger = services.GetService<ILoggerFactory>()?.CreateLogger("Blueprint.OpenApi");
+
+        var (handler, document) = CreateDeferrable(
+            app,
+            infoOptions,
+            schemaProcessorOptions,
+            operationProcessorOptions,
+            httpOptions,
+            basePath,
+            renderOnFirstRequest,
+            rendered =>
+            {
+                if (openApiLogger is null)
+                {
+                    return;
+                }
+
+                foreach (var warning in rendered.Warnings)
+                {
+                    openApiLogger.LogWarning("{OpenApiWarning}", warning);
+                }
+            });
+
+        return (handler, document, infoOptions?.Title ?? "Blueprint API");
+    }
+
+    /// <summary>
     /// Creates the request delegate that renders and serves the OpenAPI 3.x JSON document for the given Blueprint app.
     /// The document is assembled once at registration time from the app's generated descriptor and serializer metadata,
     /// so each request receives a pre-rendered response without repeating the rendering chain per call.
