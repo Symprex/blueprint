@@ -232,7 +232,7 @@ Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attr
 
 ## Gateway operations (BPGW)
 
-Reported for an operation marked `[Expose<TInner>]`. BPGW001, BPGW006, BPGW010 and BPGW018 are reported at the `[Expose<TInner>]` attribute, BPGW007, BPGW008, BPGW009, BPGW011, BPGW012 and BPGW013 at the binding attribute, BPGW014 at the hook, and the others at the operation's name. An operation with BPGW003, BPGW004 or BPGW005 gets no pipeline. An invalid binding is ignored by the generated forward, so its property stays in the public shape until it is fixed.
+Reported for an operation marked `[Expose<TInner>]`. BPGW001, BPGW006, BPGW010 and BPGW018 are reported at the `[Expose<TInner>]` attribute, BPGW007, BPGW008, BPGW009, BPGW011, BPGW012 and BPGW013 at the binding attribute, BPGW014 at the hook, and the others at the operation's name. An operation with BPGW003, BPGW004, BPGW005 or BPGW019 gets no pipeline. An invalid binding is ignored by the generated forward, so its property stays in the public shape until it is fixed.
 
 | ID | Severity | Title |
 |----|----------|-------|
@@ -250,7 +250,8 @@ Reported for an operation marked `[Expose<TInner>]`. BPGW001, BPGW006, BPGW010 a
 | BPGW012 | Error | `[Bind(FromRoute)]` names a placeholder the gateway's own route lacks or that binds no property it declares, or `[Bind(FromProperty)]` names a property it does not declare |
 | BPGW013 | Error | The same inner property is bound or hidden more than once on one operation |
 | BPGW014 | Error | `OnMap` or `OnMapAsync` cannot be called by the generated forward: it has to be a single `internal` or `public` instance method whose first parameter is `TInner`, `OnMap` returning `void` and `OnMapAsync` returning `ValueTask` or `Task` |
-| BPGW018 | Error | A contributed property's validation attribute is a type the gateway's assembly cannot access (not public, and not internal to an assembly with `InternalsVisibleTo` the gateway), so the emitted property cannot carry it and the gateway would forward without applying the rule. BPGW007 to BPGW017 belong to the binding tiers and forward credentials |
+| BPGW018 | Error | A contributed property's attribute names a type the gateway's assembly cannot access, the attribute's own or one in its arguments (`typeof`, an enum value, an array). It is not public, nor internal to an assembly with `InternalsVisibleTo` the gateway, so the emitted property cannot carry it, and the gateway would bind, serialize or validate the property otherwise than the inner operation. BPGW007 to BPGW017 belong to the binding tiers and forward credentials |
+| BPGW019 | Error | The inner operation has a `required` member the generated forward cannot set: the gateway declares that property with another type, or it is a required field. The operation gets no pipeline |
 
 ## Module system (BPMOD)
 

@@ -14,7 +14,7 @@ namespace Blueprint.SourceGenerator.Modules.Gateway;
 /// <param name="AttributeLocation">The <c>[Expose&lt;TInner&gt;]</c> attribute, where the diagnostics are reported.</param>
 /// <param name="MissingInterface">BPGW006, when the class declares no operation interface.</param>
 /// <param name="BindingDiagnostics">BPGW007 to BPGW014, D11's binding and map hook diagnostics.</param>
-/// <param name="InaccessibleValidation">BPGW018, for each validation attribute the emitted properties cannot carry.</param>
+/// <param name="InaccessibleValidation">BPGW018, for each attribute the emitted properties cannot carry.</param>
 internal sealed record ExposedOperationAnalysis(
     OperationPropertyModel Model,
     string OperationName,
@@ -53,7 +53,8 @@ internal sealed record ExposedOperationAnalysis(
                 [type.Name, inner.Name, SuggestInterface(inner)]);
         }
 
-        // An attribute the gateway's assembly cannot name is not emitted; a validation one would leave its rule unapplied.
+        // An attribute naming a type the gateway's assembly cannot access is not emitted, which would leave the gateway
+        // binding, serializing or validating the property otherwise than the inner operation does.
         var inaccessibleValidation = new List<DiagnosticInfo>();
         foreach (var property in OperationPropertyModelBuilder.GetProperties(type))
         {
@@ -62,7 +63,7 @@ internal sealed record ExposedOperationAnalysis(
                 continue;
             }
 
-            foreach (var attributeClass in OperationPropertyModelBuilder.GetInaccessibleValidationAttributes(property.Member, type.ContainingAssembly))
+            foreach (var attributeClass in OperationPropertyModelBuilder.GetUncarriedAttributes(property.Member, type.ContainingAssembly))
             {
                 inaccessibleValidation.Add(new DiagnosticInfo(
                     GatewayDiagnosticDescriptors.InaccessibleValidationAttribute,

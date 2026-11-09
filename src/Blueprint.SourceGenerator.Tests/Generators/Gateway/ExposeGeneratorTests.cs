@@ -276,6 +276,76 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
+    public void When_a_declared_property_of_another_type_leaves_a_required_inner_member_unset_then_BPGW019_is_reported()
+    {
+        // The forward used to leave the required member out of its initialiser, which did not compile (CS9035).
+        var inner = InnerSource.Replace("public int Revisions { get; set; } = 1;", "public required int Revisions { get; set; } = 1;", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+        var gateway = GatewaySource.Replace(
+            "public partial class GetGatewayWidgetQuery : IQuery<Inner.WidgetResult>;",
+            "public partial class GetGatewayWidgetQuery : IQuery<Inner.WidgetResult> { public string Revisions { get; set; } = \"1\"; }",
+            StringComparison.Ordinal);
+
+        var run = RunAllGenerators([ClientSource, gateway, AppSource], contract);
+
+        var diagnostic = run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW019").Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("Revisions");
+        run.EmitErrors.Should().NotContain(static e => e.Contains("CS9035", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_contributed_cross_property_rule_whose_dependency_the_gateway_redeclares_compiles()
+    {
+        // The rule's dependency used to be resolved on the inner operation (bool Enabled), so the generated comparison
+        // read the gateway's string Enabled as a bool and did not compile.
+        var inner = InnerSource.Replace(
+            "public string ComputedOnly",
+            "public bool Enabled { get; set; }\n\n            [Blueprint.Validation.RequiredIf(nameof(Enabled), true)]\n            public string? Name { get; set; }\n\n            public string ComputedOnly",
+            StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+        var gateway = GatewaySource.Replace(
+            "public partial class GetGatewayWidgetQuery : IQuery<Inner.WidgetResult>;",
+            "public partial class GetGatewayWidgetQuery : IQuery<Inner.WidgetResult> { public string Enabled { get; set; } = \"\"; }",
+            StringComparison.Ordinal);
+
+        var run = RunAllGenerators([ClientSource, gateway, AppSource], contract);
+
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_an_inner_attribute_names_a_type_the_gateway_cannot_access_then_BPGW018_is_reported_and_it_is_not_emitted()
+    {
+        // The attribute class was the only thing checked, so [JsonConverter(typeof(InternalConverter))] was emitted and
+        // the partial failed with CS0122.
+        var inner = InnerSource.Replace(
+            "[FromHeader(\"X-Region\")]",
+            "[FromHeader(\"X-Region\")]\n        [System.Text.Json.Serialization.JsonConverter(typeof(RegionConverter))]",
+            StringComparison.Ordinal) + """
+
+            namespace Inner
+            {
+                internal sealed class RegionConverter : System.Text.Json.Serialization.JsonConverter<string>
+                {
+                    public override string? Read(ref System.Text.Json.Utf8JsonReader reader, System.Type typeToConvert, System.Text.Json.JsonSerializerOptions options) => reader.GetString();
+
+                    public override void Write(System.Text.Json.Utf8JsonWriter writer, string value, System.Text.Json.JsonSerializerOptions options) => writer.WriteStringValue(value);
+                }
+            }
+            """;
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
+
+        var diagnostic = run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW018").Which;
+        diagnostic.GetMessage().Should().Contain("JsonConverterAttribute").And.Contain("Region");
+        run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs").Should().NotContain("RegionConverter");
+        run.EmitErrors.Should().NotContain(static e => e.Contains("CS0122", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void A_self_link_placeholder_binds_a_contributed_property()
     {
         var gateway = GatewaySource.Replace(
