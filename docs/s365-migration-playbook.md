@@ -405,19 +405,25 @@ services.AddBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(b
     blueprint.AddUserAuthorisationContextFactory<S365UserContextFactory>();
     blueprint.AddBackgroundTaskScheduler<HangfireTaskScheduler>();
     blueprint.AddUnitOfWork<MartenUnitOfWork>(); // if applicable
+
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info =>
+    {
+        info.Title = "Analytics API";
+        info.Version = "1.0";
+    });
 });
 
 app.UseEndpoints(endpoints =>
 {
-    endpoints.MapBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(
-        "api/",
-        configureOpenApi: info =>
-        {
-            info.Title = "Analytics API";
-            info.Version = "1.0";
-        });
+    endpoints.MapBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>();
 });
 ```
+
+The base path and the OpenAPI description are declared in `AddBlueprintApi`, so that `BlueprintEmitOpenApi` can write
+`Spec/openapi.json` at build time without starting the service (see [openapi-migration.md](openapi-migration.md)). The
+older form, `MapBlueprintApi<TApp, TExec>("api/", configureOpenApi: ...)`, still works, but cannot be combined with
+`BlueprintEmitOpenApi`, which never reaches `MapBlueprintApi`.
 
 #### 5. Update Project References
 
@@ -623,6 +629,13 @@ services.AddBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(b
     {
         json.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
     });
+
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info =>
+    {
+        info.Title = AppDefinition.Instance.OpenApiTitle;
+        info.Version = "1.0";
+    });
 });
 
 services.AddBlueprintRebus(rebus =>
@@ -635,13 +648,7 @@ services.AddBlueprintRebus(rebus =>
 // In Configure:
 app.UseEndpoints(endpoints =>
 {
-    endpoints.MapBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(
-        "api/",
-        configureOpenApi: info =>
-        {
-            info.Title = AppDefinition.Instance.OpenApiTitle;
-            info.Version = "1.0";
-        });
+    endpoints.MapBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>();
 });
 ```
 
@@ -718,10 +725,12 @@ public partial class GetApiEventQuery : IQuery<ApiEventApiResource>
 services.AddBlueprintApi<EventStoreBlueprintApp, EventStoreBlueprintAppExecutor>(blueprint =>
 {
     blueprint.AddResourceAuthorizationProvider<S365ResourceAuthorizationProvider>();
+
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info => { info.Title = "EventStore API"; info.Version = "1.0"; });
 });
 
-app.MapBlueprintApi<EventStoreBlueprintApp, EventStoreBlueprintAppExecutor>("api/",
-    configureOpenApi: info => { info.Title = "EventStore API"; info.Version = "1.0"; });
+app.MapBlueprintApi<EventStoreBlueprintApp, EventStoreBlueprintAppExecutor>();
 ```
 
 #### D. Verify
@@ -779,10 +788,12 @@ services.AddBlueprintApi<TemplatesBlueprintApp, TemplatesBlueprintAppExecutor>(b
     {
         json.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
     });
+
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info => { info.Title = "Templates API"; info.Version = "1.0"; });
 });
 
-app.MapBlueprintApi<TemplatesBlueprintApp, TemplatesBlueprintAppExecutor>("api/",
-    configureOpenApi: info => { info.Title = "Templates API"; info.Version = "1.0"; });
+app.MapBlueprintApi<TemplatesBlueprintApp, TemplatesBlueprintAppExecutor>();
 ```
 
 #### D. Verify
@@ -876,6 +887,9 @@ services.AddBlueprintApi<GenerationBlueprintApp, GenerationBlueprintAppExecutor>
     {
         json.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
     });
+
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info => { info.Title = "Generation API"; info.Version = "1.0"; });
 });
 
 services.AddBlueprintRebus(rebus =>
@@ -883,8 +897,7 @@ services.AddBlueprintRebus(rebus =>
     rebus.Subscribe<EnableVerboseGenerationLogging>();
 });
 
-app.MapBlueprintApi<GenerationBlueprintApp, GenerationBlueprintAppExecutor>("api/",
-    configureOpenApi: info => { info.Title = "Generation API"; info.Version = "1.0"; });
+app.MapBlueprintApi<GenerationBlueprintApp, GenerationBlueprintAppExecutor>();
 ```
 
 #### D. Verify
@@ -974,13 +987,13 @@ In addition to standard checks, Generation requires:
    (e.g., `Symprex_Signature365_Portal_Contract_Api_TemplateApiResource`). Legacy Blueprint
    used shorter names. Configure via `SchemaNameFormatter`:
    ```csharp
-   configureOpenApi: options =>
+   blueprint.ConfigureOpenApi(options =>
    {
        options.SchemaNameFormatter = clrName => clrName
            .Replace("Symprex.Signature365.", "")
            .Replace("ApiResource", "")
            .Replace(".", "");
-   }
+   });
    ```
 
 ### Action Items
@@ -2276,6 +2289,13 @@ services.AddBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(b
     {
         json.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
     });
+
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info =>
+    {
+        info.Title = AppDefinition.Instance.OpenApiTitle;
+        info.Version = "1.0";
+    });
 });
 
 // Rebus subscriptions remain S365-owned — registered separately
@@ -2296,13 +2316,7 @@ app.UseEndpoints(endpoints =>
 app.UseEndpoints(endpoints =>
 {
     endpoints.MapSig365HealthChecks(this._configuration);
-    endpoints.MapBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>(
-        "api/",
-        configureOpenApi: info =>
-        {
-            info.Title = AppDefinition.Instance.OpenApiTitle;
-            info.Version = "1.0";
-        });
+    endpoints.MapBlueprintApi<AnalyticsBlueprintApp, AnalyticsBlueprintAppExecutor>();
 });
 ```
 

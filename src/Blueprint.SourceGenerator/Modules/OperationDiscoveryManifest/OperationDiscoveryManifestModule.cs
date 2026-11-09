@@ -93,7 +93,7 @@ public sealed class OperationDiscoveryManifestModule : IBlueprintSourceGenerator
     {
         return new(
             GetOperationKind(typeSymbol),
-            typeSymbol.ContainingNamespace.ToDisplayString(),
+            GeneratedNamespace.Of(typeSymbol),
             typeSymbol.Name);
     }
 
