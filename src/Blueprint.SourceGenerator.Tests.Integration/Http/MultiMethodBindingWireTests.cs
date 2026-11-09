@@ -60,6 +60,81 @@ public sealed class MultiMethodBindingWireTests
     }
 
     [Fact]
+    public async Task A_GET_does_not_bind_a_property_it_reads_from_the_query_string_from_its_body()
+    {
+        // Legacy read the body of every request but a GET. The body read used to still run on a GET and set Count.
+        await using var host = await MultiMethodHost.StartAsync();
+
+        var (status, body) = await host.SendAsync(HttpMethod.Get, "multi-method/echo?name=from-query", """{"count":7}""");
+
+        status.Should().Be(200, body);
+        body.Should().Be("\"name=from-query;count=0\"");
+    }
+
+    [Fact]
+    public async Task A_GET_with_a_malformed_body_still_binds_from_the_query_string()
+    {
+        // With nothing left for a GET to read from the body, the body is not read at all, so it cannot fail the binding.
+        await using var host = await MultiMethodHost.StartAsync();
+
+        var (status, body) = await host.SendAsync(HttpMethod.Get, "multi-method/echo?name=from-query&count=3", "{not json");
+
+        status.Should().Be(200, body);
+        body.Should().Be("\"name=from-query;count=3\"");
+    }
+
+    [Fact]
+    public async Task A_GET_with_an_invalid_integer_in_the_query_string_fails_binding_without_running_the_handler()
+    {
+        await using var host = await MultiMethodHost.StartAsync();
+
+        var (status, body) = await host.SendAsync(HttpMethod.Get, "multi-method/echo?name=from-query&count=not-a-number");
+
+        status.Should().Be(400, body);
+        body.Should().NotContain("name=", "the handler must not have run");
+    }
+
+    [Fact]
+    public async Task A_POST_ignores_an_invalid_integer_in_the_query_string()
+    {
+        await using var host = await MultiMethodHost.StartAsync();
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "multi-method/echo?count=not-a-number", """{"name":"from-body"}""");
+
+        status.Should().Be(200, body);
+        body.Should().Be("\"name=from-body;count=0\"");
+    }
+
+    [Fact]
+    public async Task A_GET_still_binds_explicit_and_body_only_properties_from_its_body()
+    {
+        // [FromBody] and a type no query string can carry stay body-owned whatever the method, so a GET still reads them.
+        await using var host = await MultiMethodHost.StartAsync();
+
+        var (status, body) = await host.SendAsync(
+            HttpMethod.Get,
+            "multi-method/mixed?name=from-query",
+            """{"note":"from-body","payload":{"value":"nested"},"name":"from-body"}""");
+
+        status.Should().Be(200, body);
+        body.Should().Be("\"name=from-query;note=from-body;payload=nested\"");
+    }
+
+    [Fact]
+    public async Task A_POST_binds_explicit_body_only_and_unannotated_properties_from_its_body()
+    {
+        await using var host = await MultiMethodHost.StartAsync();
+
+        var (status, body) = await host.SendAsync(
+            HttpMethod.Post,
+            "multi-method/mixed?name=from-query",
+            """{"note":"from-body","payload":{"value":"nested"},"name":"from-body"}""");
+
+        status.Should().Be(200, body);
+        body.Should().Be("\"name=from-body;note=from-body;payload=nested\"");
+    }
+
+    [Fact]
     public async Task The_typed_client_sends_every_unannotated_property_and_the_handler_sees_them()
     {
         await using var host = await MultiMethodHost.StartAsync();
@@ -181,6 +256,31 @@ public partial class MultiMethodEchoQuery : IQuery<string>
     public static string Handle(MultiMethodEchoQuery query)
     {
         return $"name={query.Name ?? "(unset)"};count={query.Count}";
+    }
+}
+
+/// <summary>
+/// An operation answering both GET and POST with an explicit <c>[FromBody]</c> property and one whose type no query string can
+/// carry, beside an unannotated one.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/multi-method/mixed")]
+[HttpGet]
+[HttpPost]
+public partial class MultiMethodMixedQuery : IQuery<string>
+{
+    public string? Name { get; set; }
+
+    [FromBody]
+    public string? Note { get; set; }
+
+    public Dictionary<string, string>? Payload { get; set; }
+
+    public static string Handle(MultiMethodMixedQuery query)
+    {
+        var payload = query.Payload is { } values && values.TryGetValue("value", out var value) ? value : "(unset)";
+
+        return $"name={query.Name ?? "(unset)"};note={query.Note ?? "(unset)"};payload={payload}";
     }
 }
 
