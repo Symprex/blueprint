@@ -26,14 +26,17 @@ public class OperationDescriptorSourceGeneratorTestsProducesContentTypeTests
         var result = OperationDescriptorSourceGeneratorTests.Compile($$"""
             [RootLink("/produces-content-type/invalid")]
             [ProducesContentType({{arguments}})]
-            public partial class InvalidContentTypeQuery : IQuery<Blueprint.Http.FileStreamResult> {}
+            public partial class InvalidContentTypeQuery : IQuery<Blueprint.Runtime.Exec.FileStreamResult> {}
             """);
 
-        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPOA003").Subject;
+        // BPOA003 alone: the fixture otherwise compiles, and the declaration it rejects is not carried into the descriptor.
+        var diagnostic = result.Diagnostics.Should().ContainSingle().Which;
 
+        diagnostic.Id.Should().Be("BPOA003");
         diagnostic.GetMessage().Should().Contain("InvalidContentTypeQuery");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan)
             .Should().StartWith("ProducesContentType(");
+        string.Concat(result.Output.Select(static tree => tree.ToString())).Should().NotContain("ContentTypes:");
     }
 
     [Theory]
@@ -46,9 +49,10 @@ public class OperationDescriptorSourceGeneratorTestsProducesContentTypeTests
         var result = OperationDescriptorSourceGeneratorTests.Compile($$"""
             [RootLink("/produces-content-type/valid")]
             [ProducesContentType({{arguments}})]
-            public partial class ValidContentTypeQuery : IQuery<Blueprint.Http.FileStreamResult> {}
+            public partial class ValidContentTypeQuery : IQuery<Blueprint.Runtime.Exec.FileStreamResult> {}
             """);
 
-        result.Diagnostics.Select(static d => d.Id).Should().NotContain("BPOA003");
+        result.Diagnostics.Should().BeEmpty();
+        string.Concat(result.Output.Select(static tree => tree.ToString())).Should().Contain("ContentTypes:");
     }
 }
