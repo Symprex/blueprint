@@ -643,16 +643,12 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
     /// </para>
     /// <para>
     /// A derived operation is checked for builders of its own, never a base operation's, which would build the base's URL.
-    /// An unexposed operation has them, but is left out of every published surface, this one included.
+    /// An unexposed operation has them, and is called like any other: it is hidden from the published contract, but still
+    /// routed, so that other services can reach it.
     /// </para>
     /// </remarks>
     private static string? FindMissingRequestBuildersReason(INamedTypeSymbol operationType, Compilation compilation, bool appendsQueryString, CancellationToken cancellationToken)
     {
-        if (operationType.GetAttributes().Any(static a => a.AttributeClass is { Name: "UnexposedOperationAttribute" } c && c.IsInRootNamespace("Blueprint")))
-        {
-            return "it is marked [UnexposedOperation], which leaves it out of every published surface";
-        }
-
         if (SymbolEqualityComparer.Default.Equals(operationType.ContainingAssembly, compilation.Assembly))
         {
             if (operationType.ContainingType is not null)
@@ -1153,6 +1149,10 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
         sb.AppendLine($"{indent}/// </summary>");
         sb.AppendLine($"{indent}/// <param name=\"operation\">The operation being sent.</param>");
         sb.AppendLine($"{indent}/// <param name=\"options\">The call's options, which the hook may replace; its modifier runs first of those that shape the request.</param>");
+
+        // A hook that reads no instance state cannot be static, as it implements this; the parts' attributes merge, so this
+        // exempts the hand-written one from CA1822.
+        sb.AppendLine($"{indent}[global::System.Diagnostics.CodeAnalysis.SuppressMessage(\"Performance\", \"CA1822:Mark members as static\", Justification = \"Implements an instance partial method.\")]");
         sb.AppendLine($"{indent}partial void OnConfigure({operation.OperationFqn} operation, ref global::Blueprint.HttpClient.CallOptions? options);");
         sb.AppendLine();
         sb.AppendLine($"{indent}/// <inheritdoc />");

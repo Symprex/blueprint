@@ -358,7 +358,7 @@ A typed client is a hand-written `partial` class that the source generator compl
 | Attribute | Placement | Purpose |
 |---|---|---|
 | `[BlueprintClient]` | A `partial`, top-level, non-generic, non-static class, `public` or `internal` | Marks the class for completion. Optional `SerializerContext` property, see below |
-| `[BlueprintClientInclude(typeof(Op))]` | The same class; repeatable | Adds one operation to the client. `Op` must be a concrete, non-generic class implementing `IOperation` that declares a result (`IReturn<T>`) |
+| `[BlueprintClientInclude(typeof(Op))]` | The same class; repeatable | Adds one operation to the client. `Op` must be a concrete, non-generic class implementing `IOperation` that declares a result (`IReturn<T>`). An `[UnexposedOperation]` may be included: it is hidden from the published contract but still routed, so another service can call it |
 
 Both attributes are `[Conditional("CODE_ANALYSIS")]`, so they leave no trace in the compiled assembly. An operation from a referenced contract assembly is included the same way as one in the same project, provided that assembly was built with Blueprint's source generator (it carries the request builders as metadata).
 
