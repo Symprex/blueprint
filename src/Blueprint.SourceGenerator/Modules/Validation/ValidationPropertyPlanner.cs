@@ -114,6 +114,14 @@ internal static class ValidationPropertyPlanner
                 continue;
             }
 
+            if (!SymbolEqualityComparer.Default.Equals(property.ContainingType, operationType)
+                && ReferencesAnotherPropertyThanTheOperations(property, validationAttributeList, operationType))
+            {
+                properties.Add(new RuntimeFallbackPropertyValidationPlan(property.Name, propertyAccess));
+                AppendChildValidationIfApplicable(properties, property, propertyAccess);
+                continue;
+            }
+
             if (TryCreateFastPathPlan(property, propertyAccess, validationAttributeList, out var fastPathPlan))
             {
                 properties.Add(fastPathPlan);
@@ -126,6 +134,40 @@ internal static class ValidationPropertyPlanner
         }
 
         return new ValidationPipelinePlan(RequiresWholeObjectFallback: false, ImplementsIValidatableObject: implementsIValidatableObject, Properties: properties);
+    }
+
+    /// <summary>
+    /// Whether a rule of a property declared on another type than the operation (an inner operation's, for a property
+    /// contributed by <c>[Expose&lt;TInner&gt;]</c>) names a property that is a different one on the operation. The fast-path
+    /// strategies resolve the named property on the declaring type, but the generated code reads the operation's, which a
+    /// gateway may redeclare with another type. The runtime path reads the operation's own.
+    /// </summary>
+    private static bool ReferencesAnotherPropertyThanTheOperations(
+        IPropertySymbol property,
+        List<AttributeData> validationAttributes,
+        INamedTypeSymbol operationType)
+    {
+        foreach (var attribute in validationAttributes)
+        {
+            if (ValidationSymbolHelpers.GetReferencedPropertyName(attribute) is not { Length: > 0 } name)
+            {
+                continue;
+            }
+
+            var declared = ValidationSymbolHelpers.GetPublicInstanceProperties(property.ContainingType).FirstOrDefault(candidate => candidate.Name == name);
+            if (declared is null)
+            {
+                continue;
+            }
+
+            var effective = ValidationSymbolHelpers.GetPublicInstanceProperties(operationType).FirstOrDefault(candidate => candidate.Name == name);
+            if (!SymbolEqualityComparer.Default.Equals(declared, effective))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

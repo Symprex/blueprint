@@ -276,18 +276,18 @@ internal static class OperationPropertyModelBuilder
 
     /// <summary>
     /// Gets the attributes of a contributed property that the exposing operation's partial cannot carry because its assembly
-    /// cannot access their types: the ones whose rules would be lost.
+    /// cannot access a type the attribute names, its own or one in its arguments: the ones whose effect would be lost.
     /// </summary>
     /// <param name="member">The inner operation's property.</param>
     /// <param name="within">The exposing operation's assembly.</param>
-    /// <returns>The inaccessible validation attributes' classes.</returns>
-    public static IEnumerable<INamedTypeSymbol> GetInaccessibleValidationAttributes(IPropertySymbol member, IAssemblySymbol within)
+    /// <returns>The classes of the attributes that cannot be carried.</returns>
+    public static IEnumerable<INamedTypeSymbol> GetUncarriedAttributes(IPropertySymbol member, IAssemblySymbol within)
     {
         foreach (var attribute in member.GetAttributes())
         {
             if (attribute.AttributeClass is { TypeKind: not TypeKind.Error } attributeClass
-                && !IsAccessibleFrom(attributeClass, within)
-                && attributeClass.InheritsFrom("System.ComponentModel.DataAnnotations.ValidationAttribute"))
+                && !IsNeverCarried(attributeClass)
+                && !CanCarry(attribute, attributeClass, within))
             {
                 yield return attributeClass;
             }
@@ -295,12 +295,60 @@ internal static class OperationPropertyModelBuilder
     }
 
     /// <summary>
-    /// Whether code in <paramref name="within"/> can name <paramref name="type"/>: it and each type containing it are public,
-    /// or internal to an assembly that gives <paramref name="within"/> access to its internals.
+    /// Attributes no emitted property carries: the compiler's own, and <c>[Obsolete]</c>, whose properties are not contributed.
     /// </summary>
-    private static bool IsAccessibleFrom(INamedTypeSymbol type, IAssemblySymbol within)
+    private static bool IsNeverCarried(INamedTypeSymbol attributeClass)
     {
-        for (var current = type; current is not null; current = current.ContainingType)
+        return attributeClass.IsInNamespace("System", "Runtime", "CompilerServices")
+            || attributeClass.ToFullMetadataName() == "System.ObsoleteAttribute";
+    }
+
+    private static bool CanCarry(AttributeData attribute, INamedTypeSymbol attributeClass, IAssemblySymbol within)
+    {
+        return IsAccessibleFrom(attributeClass, within)
+            && attribute.ConstructorArguments.All(argument => IsAccessibleFrom(argument, within))
+            && attribute.NamedArguments.All(argument => IsAccessibleFrom(argument.Value, within));
+    }
+
+    /// <summary>
+    /// Whether every type an attribute argument renders is accessible: a <c>typeof</c>'s type, an enum value's type, and an
+    /// array's element type and elements.
+    /// </summary>
+    private static bool IsAccessibleFrom(TypedConstant constant, IAssemblySymbol within)
+    {
+        if (constant.Type is { } type && !IsAccessibleFrom(type, within))
+        {
+            return false;
+        }
+
+        return constant.Kind switch
+        {
+            TypedConstantKind.Type => constant.Value is not ITypeSymbol value || IsAccessibleFrom(value, within),
+            TypedConstantKind.Array => constant.IsNull || constant.Values.All(element => IsAccessibleFrom(element, within)),
+            _ => true,
+        };
+    }
+
+    /// <summary>
+    /// Whether code in <paramref name="within"/> can name a type: an array's element type, a pointer's, and each type
+    /// argument, and a named type and each type containing it public, or internal to an assembly that gives
+    /// <paramref name="within"/> access to its internals.
+    /// </summary>
+    private static bool IsAccessibleFrom(ITypeSymbol type, IAssemblySymbol within)
+    {
+        switch (type)
+        {
+            case IArrayTypeSymbol array:
+                return IsAccessibleFrom(array.ElementType, within);
+            case IPointerTypeSymbol pointer:
+                return IsAccessibleFrom(pointer.PointedAtType, within);
+            case ITypeParameterSymbol:
+                return true;
+            case INamedTypeSymbol named when named.TypeArguments.Any(argument => !IsAccessibleFrom(argument, within)):
+                return false;
+        }
+
+        for (var current = type as INamedTypeSymbol; current is not null; current = current.ContainingType)
         {
             var accessible = current.DeclaredAccessibility switch
             {
@@ -349,9 +397,8 @@ internal static class OperationPropertyModelBuilder
     private static string? RenderAttribute(AttributeData attribute, IAssemblySymbol within)
     {
         if (attribute.AttributeClass is not { TypeKind: not TypeKind.Error } attributeClass
-            || !IsAccessibleFrom(attributeClass, within)
-            || attributeClass.IsInNamespace("System", "Runtime", "CompilerServices")
-            || attributeClass.ToFullMetadataName() == "System.ObsoleteAttribute")
+            || IsNeverCarried(attributeClass)
+            || !CanCarry(attribute, attributeClass, within))
         {
             return null;
         }

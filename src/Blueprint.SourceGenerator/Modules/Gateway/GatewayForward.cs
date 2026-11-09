@@ -136,6 +136,18 @@ public static class GatewayForward
         }
 
         var resultTypeName = resultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var copied = GetCopiedProperties(operationType, exposedType);
+
+        // A required inner member the forward does not set would fail to compile (CS9035): one the gateway redeclares with
+        // another type, or a required field, which is never contributed.
+        var unset = GetRequiredMemberNames(exposedType).Where(name => !copied.Contains(name)).ToList();
+        if (unset.Count > 0)
+        {
+            return Result<OperationHandlerModel>.Failure(new DiagnosticInfo(
+                GatewayDiagnosticDescriptors.RequiredInnerMemberNotSupplied,
+                location,
+                [operationType.Name, exposedType.Name, string.Join(", ", unset)]));
+        }
 
         return Result.Success(new OperationHandlerModel(
             OperationTypeName: operationType.Name,
@@ -150,7 +162,22 @@ public static class GatewayForward
             HandlerClassFullName: null,
             HandlerClassNamespace: null,
             Parameters: EquatableList<HandlerParameter>.Empty,
-            Forward: new GatewayForwardModel(innerTypeName, clients[0], resultTypeName, GetCopiedProperties(operationType, exposedType))));
+            Forward: new GatewayForwardModel(innerTypeName, clients[0], resultTypeName, copied)));
+    }
+
+    private static IEnumerable<string> GetRequiredMemberNames(INamedTypeSymbol type)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers())
+            {
+                if (member is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true } && seen.Add(member.Name))
+                {
+                    yield return member.Name;
+                }
+            }
+        }
     }
 
     /// <summary>
