@@ -191,6 +191,20 @@ public sealed class HttpResultWriterWireTests
         (await Task.WhenAny(disposed, Task.Delay(TimeSpan.FromSeconds(10)))).Should().BeSameAs(disposed, "the upstream response is disposed with the request");
     }
 
+    [Fact]
+    public async Task A_proxy_result_whose_save_fails_still_has_its_upstream_response_disposed()
+    {
+        // The failed save replaces the handler's ProxyResult with an exception result, so neither the result nor the host's
+        // dispatch ever sees the response the handler was handed.
+        await using var host = await ResultWriterHost.StartAsync(static b => b.Services.AddScoped<Blueprint.Persistence.IUnitOfWork, FailingSaveUnitOfWork>());
+        var disposed = ResultWriterProxyQuery.Track("save-fails");
+
+        var response = await host.GetAsync("result-writer/proxy?key=save-fails");
+
+        response.Status.Should().Be(500, response.Body);
+        (await Task.WhenAny(disposed, Task.Delay(TimeSpan.FromSeconds(10)))).Should().BeSameAs(disposed, "the upstream response is disposed with the request");
+    }
+
     [Theory]
     [InlineData("throws")]
     [InlineData("faulted")]
@@ -461,6 +475,20 @@ public sealed class HttpResultWriterWireTests
             return query["failure"] == "throws"
                 ? throw exception
                 : ValueTask.FromException<OperationResult>(exception);
+        }
+    }
+
+    /// <summary>A unit of work whose save always fails.</summary>
+    private sealed class FailingSaveUnitOfWork : Blueprint.Persistence.IUnitOfWork
+    {
+        public ValueTask BeginAsync(object operation, Blueprint.Model.ApiOperationDescriptor descriptor, CancellationToken cancellationToken = default)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            throw new TimeoutException("The save failed");
         }
     }
 

@@ -24,9 +24,10 @@ namespace Blueprint.Http;
 /// <see cref="HttpResponseMessage.Content"/> separately to ensure the ASP.NET Core response is well-formed.
 /// </para>
 /// <para>
-/// A result Blueprint's HTTP host serves never goes undisposed: the host also disposes the response with the request, so
-/// an <c>IHttpResultWriter</c> or an operation result executor that answers in this result's place, or fails on it,
-/// without executing it does not leave the downstream connection open.
+/// A result Blueprint's HTTP host serves never goes undisposed: the response is also disposed with the request, registered
+/// as soon as the handler returns. So a failure after the handler (a unit of work's save) that replaces the result, or an
+/// <c>IHttpResultWriter</c> or operation result executor that answers in this result's place, or fails on it, without
+/// executing it, does not leave the downstream connection open.
 /// </para>
 /// </remarks>
 /// <example>

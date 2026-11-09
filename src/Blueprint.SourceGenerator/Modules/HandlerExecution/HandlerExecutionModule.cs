@@ -25,6 +25,8 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
     /// </summary>
     public const string HandlerResultTypeName = "Blueprint.OperationResult";
 
+    private const string ProxyResultTypeName = "Blueprint.Http.ProxyResult";
+
     /// <inheritdoc />
     public string ModuleId => nameof(HandlerExecutionModule);
 
@@ -197,6 +199,12 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             default:
                 throw new InvalidOperationException($"Unsupported handler normalization kind '{normalization.Kind}'.");
         }
+
+        // Before any later stage can fail and replace the result, leaving no one to dispose the response it owns.
+        if (normalization.CanReturnProxyResult)
+        {
+            context.WriteStatement("Blueprint.Runtime.Exec.PipelineHelpers.DisposeWithRequest(context, handlerResult);");
+        }
     }
 
     private static HandlerReturnNormalization? CreateReturnNormalization(PipelineContributorContext context, OperationHandlerModel handler)
@@ -251,7 +259,8 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             return new HandlerReturnNormalization(
                 HandlerReturnNormalizationKind.ResultsUnion,
                 effectiveHandlerReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                null);
+                null,
+                CanReturnProxyResult(effectiveHandlerReturnType));
         }
 
         if (OperationResultContractHelper.IsOperationResultType(effectiveHandlerReturnType, operationResultType))
@@ -264,7 +273,8 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             return new HandlerReturnNormalization(
                 HandlerReturnNormalizationKind.OperationResult,
                 effectiveHandlerReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                null);
+                null,
+                CanReturnProxyResult(effectiveHandlerReturnType));
         }
 
         if (IsNullablePlainValue(effectiveHandlerReturnType))
@@ -495,7 +505,31 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
     private sealed record HandlerReturnNormalization(
         HandlerReturnNormalizationKind Kind,
         string ProducedTypeName,
-        string? PlainValueTypeName);
+        string? PlainValueTypeName,
+        bool CanReturnProxyResult = false);
+
+    /// <summary>
+    /// Whether a handler returning <paramref name="type"/> can hand over an upstream response in a <c>ProxyResult</c>:
+    /// the type is one, derives from one, or is a <c>Results</c> union with such a member.
+    /// </summary>
+    private static bool CanReturnProxyResult(ITypeSymbol type)
+    {
+        return IsProxyResult(type)
+               || (type is INamedTypeSymbol { IsGenericType: true } union && union.TypeArguments.Any(IsProxyResult));
+
+        static bool IsProxyResult(ITypeSymbol type)
+        {
+            for (var current = type; current is not null; current = current.BaseType)
+            {
+                if (current.ToDisplayString() == ProxyResultTypeName)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
 
     private enum HandlerReturnNormalizationKind
     {
