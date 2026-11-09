@@ -145,6 +145,29 @@ public class GatewayBindingGeneratorTests
     }
 
     [Fact]
+    public void A_GET_and_POST_operation_reads_neither_a_bound_nor_a_hidden_property_from_a_GETs_query_string_or_a_body()
+    {
+        // Symprex/blueprint#149's rule reads an unannotated property from a GET's query string and any other method's body.
+        // It reads the property model, so a property D11 binds or hides is in neither, and only its binding sets it.
+        var gateway = WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]")
+            .Replace("[HttpPost]", "[HttpGet]\n    [HttpPost]", StringComparison.Ordinal);
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().Contain("BindQueryValue(httpContext.Request.Query, \"priority\"")
+            .And.Contain("reader.ValueTextEquals(\"priority\"u8)")
+            .And.NotContainEquivalentOf("\"tenantId\"")
+            .And.NotContainEquivalentOf("\"internalNote\"")
+            .And.NotContain("operation.TenantId")
+            .And.NotContain("InternalNote")
+            .And.Contain("TenantId = _bound_TenantId");
+    }
+
+    [Fact]
     public void The_forward_fills_an_app_bound_property_from_the_callers_claim()
     {
         var run = RunAllGenerators([ClientSource, AppBindingSource, GatewaySource, AppSource], _innerContract.Value);
