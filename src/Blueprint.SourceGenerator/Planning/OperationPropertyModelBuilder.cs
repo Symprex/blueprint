@@ -166,20 +166,16 @@ internal static class OperationPropertyModelBuilder
         source.AppendLine("{");
 
         var readsDefaults = exposed.CanCreateDefaults && model.Properties.Any(static p => p is { Origin: OperationPropertyOrigin.Contributed, IsRequired: false });
-        if (readsDefaults)
+        var newInner = "new " + exposed.TypeName + (exposed.RequiredMemberNames.Count > 0
+            ? " { " + string.Join(", ", exposed.RequiredMemberNames.Select(static name => name + " = default!")) + " }"
+            : "()");
+
+        // A value-type or string default is read from one shared inner instance. Any other reference-type default, such as a
+        // list, could be mutated through one operation and seen by the next, so each instance creates an inner of its own.
+        if (readsDefaults && model.Properties.Any(static p => p is { Origin: OperationPropertyOrigin.Contributed, IsRequired: false, CanShareDefault: true }))
         {
             source.Append("    private static readonly ").Append(exposed.TypeName).Append(' ').Append(DefaultsFieldName)
-                .Append(" = new ").Append(exposed.TypeName);
-            if (exposed.RequiredMemberNames.Count > 0)
-            {
-                source.Append(" { ").Append(string.Join(", ", exposed.RequiredMemberNames.Select(static name => name + " = default!"))).Append(" }");
-            }
-            else
-            {
-                source.Append("()");
-            }
-
-            source.AppendLine(";");
+                .Append(" = ").Append(newInner).AppendLine(";");
         }
 
         foreach (var property in model.Properties)
@@ -213,7 +209,7 @@ internal static class OperationPropertyModelBuilder
 
             if (readsDefaults)
             {
-                source.Append(" = ").Append(DefaultsFieldName).Append('.').Append(property.Name).Append(';');
+                source.Append(" = ").Append(property.CanShareDefault ? DefaultsFieldName : newInner).Append('.').Append(property.Name).Append(';');
             }
             else if (!property.TypeName.EndsWith("?", StringComparison.Ordinal))
             {
@@ -303,7 +299,8 @@ internal static class OperationPropertyModelBuilder
             member.IsRequired,
             EquatableList<string>.TakeOwnership(attributes),
             string.IsNullOrWhiteSpace(documentation) ? null : documentation,
-            location);
+            location,
+            member.Type.IsValueType || member.Type.SpecialType == SpecialType.System_String);
     }
 
     private static string? RenderAttribute(AttributeData attribute)

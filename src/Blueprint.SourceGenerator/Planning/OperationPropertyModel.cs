@@ -94,6 +94,11 @@ public sealed record ExposedOperationInfo(
 /// Where to report a diagnostic about the property: the declaration for a declared one, the <c>[Expose&lt;TInner&gt;]</c>
 /// attribute for a contributed one.
 /// </param>
+/// <param name="CanShareDefault">
+/// Whether one instance's default can safely be shared by every instance: a value type or a <see cref="string"/>. Any other
+/// reference type, such as a list, may be mutated through one instance, so a contributed property of that type starts from
+/// a default of its own (#152).
+/// </param>
 public sealed record OperationPropertyInfo(
     string Name,
     string TypeName,
@@ -104,4 +109,5 @@ public sealed record OperationPropertyInfo(
     bool IsRequired,
     EquatableList<string> Attributes,
     string? DocumentationCommentXml,
-    LocationInfo? Location);
+    LocationInfo? Location,
+    bool CanShareDefault);

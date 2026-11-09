@@ -2976,6 +2976,11 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "recipient": {
+            "type": "object",
+            "nullable": true,
+            "description": "The recipient to render the preview for."
           }
         },
         "additionalProperties": false

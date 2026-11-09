@@ -64,6 +64,73 @@ public sealed class GatewayExposeTests(SampleSystemFixture system)
     }
 
     [Fact]
+    public async Task An_exposed_command_reads_every_contributed_property_from_a_json_body_the_apps_context_cannot_describe()
+    {
+        // The gateway binds JSON through GatewayBlueprintAppJsonContext, which is source-generated, and so has no metadata for
+        // MergeFields or Recipient: Blueprint emits both into the gateway operation, where STJ's generator cannot see them, and
+        // the context lists neither the dictionary nor the nested recipient type.
+        var context = Blueprint.SourceGenerator.Sample.Gateway.GatewayBlueprintAppJsonContext.Default;
+        context.GetTypeInfo(typeof(Blueprint.SourceGenerator.Sample.Contract.Api.TemplatePreviewRecipient)).Should().BeNull();
+        context.GetTypeInfo(typeof(Dictionary<string, string>)).Should().BeNull();
+
+        var id = await this.SeedTemplateAsync("Preview {{FirstName}} {{LastName}} for {{Recipient.Name}} at {{Recipient.Email}}");
+        using var caller = system.Gateway.CreateClient(system.CreateCallerToken());
+        using var pipelines = new PipelineRecorder();
+
+        var response = await caller.PostAsync(
+            $"gateway/templates/{id}/preview",
+            JsonBody("""
+                {
+                    "mergeFields": { "FirstName": "Ada", "LastName": "Lovelace" },
+                    "recipient": { "name": "Charles Babbage", "email": "charles@example.com" }
+                }
+                """));
+
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, text);
+        using var body = JsonDocument.Parse(text);
+        body.RootElement.GetProperty("templateId").GetString().Should().Be(id);
+        body.RootElement.GetProperty("renderedHtml").GetString()
+            .Should().Be("<p>Preview Ada Lovelace for Charles Babbage at charles@example.com</p>");
+        body.RootElement.GetProperty("renderedPlainText").GetString()
+            .Should().Be("Preview Ada Lovelace for Charles Babbage at charles@example.com");
+
+        // The control for the refusal test below: a forwarded request runs the inner pipeline.
+        pipelines.Count("PreviewGatewayTemplateCommandPipeline").Should().Be(1);
+        pipelines.Count("PreviewTemplateCommandPipeline").Should().Be(1);
+    }
+
+    [Fact]
+    public async Task An_exposed_command_whose_json_body_does_not_bind_is_refused_before_it_is_forwarded()
+    {
+        var id = await this.SeedTemplateAsync("Malformed Preview");
+        using var caller = system.Gateway.CreateClient(system.CreateCallerToken());
+        using var pipelines = new PipelineRecorder();
+
+        var response = await caller.PostAsync(
+            $"gateway/templates/{id}/preview",
+            JsonBody("""{ "recipient": "not an object" }"""));
+
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest, text);
+        text.Should().Contain("TemplatePreviewRecipient");
+        pipelines.Count("PreviewGatewayTemplateCommandPipeline").Should().Be(1);
+        pipelines.Count("PreviewTemplateCommandPipeline").Should().Be(0);
+    }
+
+    [Fact]
+    public void Each_exposed_op_instance_starts_from_its_own_copy_of_a_mutable_inner_default()
+    {
+        var first = new Blueprint.SourceGenerator.Sample.Gateway.Api.PreviewGatewayTemplateCommand();
+        var second = new Blueprint.SourceGenerator.Sample.Gateway.Api.PreviewGatewayTemplateCommand();
+
+        first.MergeFields["FirstName"] = "Ada";
+
+        second.MergeFields.Should().BeEmpty();
+        second.MergeFields.Should().NotBeSameAs(first.MergeFields);
+    }
+
+    [Fact]
     public async Task An_exposed_ops_OpenAPI_parameters_equal_the_inner_ops()
     {
         using var gateway = system.Gateway.CreateClient(system.CreateCallerToken());
@@ -74,6 +141,44 @@ public sealed class GatewayExposeTests(SampleSystemFixture system)
 
         exposed.Should().NotBeEmpty();
         exposed.Should().Equal(original);
+    }
+
+    /// <summary>
+    /// Records the Blueprint pipelines both in-process apps start while it is open, so a test can tell whether the gateway
+    /// forwarded a request to the inner app. Every test that uses the sample system is in one collection, which xUnit runs
+    /// serially, so no other test's pipeline starts meanwhile.
+    /// </summary>
+    private sealed class PipelineRecorder : IDisposable
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _started = new();
+        private readonly System.Diagnostics.ActivityListener _listener;
+
+        public PipelineRecorder()
+        {
+            this._listener = new System.Diagnostics.ActivityListener
+            {
+                ShouldListenTo = static source => source.Name == "Blueprint",
+                Sample = static (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _) =>
+                    System.Diagnostics.ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStarted = activity => this._started.Enqueue(activity.OperationName),
+            };
+            System.Diagnostics.ActivitySource.AddActivityListener(this._listener);
+        }
+
+        public int Count(string pipeline)
+        {
+            return this._started.Count(started => started == pipeline);
+        }
+
+        public void Dispose()
+        {
+            this._listener.Dispose();
+        }
+    }
+
+    private static StringContent JsonBody(string json)
+    {
+        return new StringContent(json, System.Text.Encoding.UTF8, "application/json");
     }
 
     private static async Task<List<string>> FindParametersAsync(System.Net.Http.HttpClient client, string documentPath, string path)

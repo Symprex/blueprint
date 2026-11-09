@@ -90,6 +90,60 @@ public class ExposeGeneratorTests
         }
         """;
 
+    private const string CommandInnerSource = """
+        namespace Inner
+        {
+            using System.Collections.Generic;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            public class WidgetResult : ApiResource
+            {
+                public string Id { get; set; } = "";
+            }
+
+            [RootLink("/widgets/{Id}/tags")]
+            [HttpPost]
+            public partial class TagWidgetCommand : ICommand<WidgetResult>
+            {
+                public string Id { get; set; } = "";
+
+                public string Name { get; set; } = "untitled";
+
+                public int Weight { get; set; } = 1;
+
+                public List<string> Tags { get; set; } = new();
+
+                public Dictionary<string, string>? Labels { get; set; } = new();
+            }
+        }
+        """;
+
+    private const string CommandClientSource = """
+        namespace Gateway
+        {
+            using Blueprint.HttpClient;
+
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(Inner.TagWidgetCommand))]
+            public partial class WidgetApi;
+        }
+        """;
+
+    private const string CommandGatewaySource = """
+        namespace Gateway
+        {
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            [Expose<Inner.TagWidgetCommand>]
+            [AllowAnonymous]
+            [RootLink("/gateway/widgets/{Id}/tags")]
+            [HttpPost]
+            public partial class TagGatewayWidgetCommand : ICommand<Inner.WidgetResult>;
+        }
+        """;
+
     private static readonly Lazy<MetadataReference> _innerContract = new(
         static () => TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(InnerSource, "InnerContract"));
 
@@ -228,6 +282,38 @@ public class ExposeGeneratorTests
         var properties = run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs");
         properties.Should().Contain("public required string Id { get; set; }")
             .And.Contain("new global::Inner.GetWidgetQuery { Id = default! }");
+    }
+
+    [Fact]
+    public async Task An_exposed_commands_json_body_reads_and_per_instance_defaults_match_the_snapshot()
+    {
+        // Symprex/blueprint#152: the contributed properties are read from the body by Blueprint's own generated population,
+        // never through the app's serializer context, and a mutable default is created for each instance.
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(CommandInnerSource, "InnerContract");
+
+        var run = RunAllGenerators([CommandClientSource, CommandGatewaySource, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        await Verify(string.Join(
+                "\n",
+                new[] { "Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs", "Gateway.TagGatewayWidgetCommandExecutorPipeline.g.cs" }
+                    .Select(hint => hint + ":\n\n" + run.Source(hint))))
+            .UseDirectory("Snapshots");
+    }
+
+    [Fact]
+    public void A_mutable_inner_default_is_created_for_each_instance_and_an_immutable_one_is_read_from_the_shared_defaults()
+    {
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(CommandInnerSource, "InnerContract");
+
+        var run = RunAllGenerators([CommandClientSource, CommandGatewaySource, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
+        properties.Should().Contain("Tags { get; set; } = new global::Inner.TagWidgetCommand().Tags;")
+            .And.Contain("Labels { get; set; } = new global::Inner.TagWidgetCommand().Labels;")
+            .And.Contain("public string Name { get; set; } = __blueprintExposedDefaults.Name;")
+            .And.Contain("public int Weight { get; set; } = __blueprintExposedDefaults.Weight;");
     }
 
     [Fact]
