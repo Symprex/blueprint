@@ -246,6 +246,24 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
+    public void A_GET_and_POST_exposed_operation_reads_an_unannotated_contributed_property_from_a_GETs_query_string_and_not_its_body()
+    {
+        // Symprex/blueprint#149's rule: a GET+POST operation's unannotated property is read from a GET's query string and
+        // from any other method's body, and a GET reads no body when nothing is left there.
+        var gateway = GatewaySource.Replace("[HttpGet]", "[HttpGet]\n    [HttpPost]", StringComparison.Ordinal);
+
+        var run = RunAllGenerators([ClientSource, gateway, AppSource]);
+
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+
+        var pipeline = run.Source("Gateway.GetGatewayWidgetQueryExecutorPipeline.g.cs");
+        pipeline.Should().Contain("BindQueryValue(httpContext.Request.Query, \"revisions\"")
+            .And.Contain("reader.ValueTextEquals(\"revisions\"u8)")
+            .And.Contain("if (!global::Microsoft.AspNetCore.Http.HttpMethods.IsGet(httpContext.Request.Method))");
+    }
+
+    [Fact]
     public void When_the_gateway_disallows_expose_then_BPGW001_is_reported_at_the_attribute()
     {
         var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>(

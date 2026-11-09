@@ -14,6 +14,13 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, IDescriptorContributor, IPipelineContributor
 {
+    private const string BodyPopulateMethodName = "PopulateFromJsonBody";
+
+    // What a GET still reads from its body when the operation also reads properties from a GET's query string.
+    private const string GetBodyPopulateMethodName = "PopulateFromJsonBodyOnGet";
+
+    private const string IsGetRequestExpression = "global::Microsoft.AspNetCore.Http.HttpMethods.IsGet(httpContext.Request.Method)";
+
     private static readonly Regex PlaceholderRegex = RoutePlaceholderSyntax.Placeholder;
 
     private sealed record RouteTemplateInfo(string Template, LocationInfo? Location);
@@ -180,8 +187,32 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var operationTypeFull = operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             context.AddDeferredClassMember(pipelineClass =>
-                WritePopulateFromJsonBodyMethod(pipelineClass, operationTypeFull, bodyEntries));
+                WritePopulateFromJsonBodyMethod(pipelineClass, BodyPopulateMethodName, operationTypeFull, bodyEntries));
+
+            // What a GET still reads from its body when the operation also reads properties from a GET's query string
+            // (RenderPopulation's body read).
+            if (bodyEntries.Any(static e => e.QueryOnGet) && bodyEntries.Any(static e => !e.QueryOnGet))
+            {
+                var getBodyEntries = bodyEntries.Where(static e => !e.QueryOnGet).ToList();
+
+                context.AddDeferredClassMember(pipelineClass =>
+                    WritePopulateFromJsonBodyMethod(pipelineClass, GetBodyPopulateMethodName, operationTypeFull, getBodyEntries));
+            }
         }
+    }
+
+    private static string ReadJsonBodyCall(string operationExpr, string populateMethodName)
+    {
+        return $"ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, {populateMethodName}, this.BodyJsonOptions).ConfigureAwait(false)";
+    }
+
+    private static void WriteBodyRead(PipelineRenderContext context, string resultExpression)
+    {
+        context.WriteStatement($"var _bodyResult = {resultExpression};");
+        context.If("_bodyResult != null", earlyReturnCtx =>
+        {
+            earlyReturnCtx.Return("_bodyResult");
+        });
     }
 
     private static List<string> ExtractRoutePlaceholders(IEnumerable<RouteTemplateInfo> routeTemplates)
@@ -414,9 +445,17 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// answers GET as well as another method, and the property's type can be read from a query string. One whose type
     /// cannot is read from the body alone, as before.
     /// </summary>
+    /// <remarks>
+    /// An array of nullable values (<c>int?[]</c>) stays body-only too. The query string's array reader parses its elements
+    /// as the underlying type and builds an <c>int[]</c>, which cannot be assigned to the property, so reading it from a
+    /// GET's query string would stop a body-bound property compiling.
+    /// </remarks>
     private static bool IsQueryOnGet(string[] httpMethods, ITypeSymbol type)
     {
-        return IsBodyMethod(httpMethods) && IsQueryMethod(httpMethods) && IsSupportedQueryType(type);
+        return IsBodyMethod(httpMethods)
+            && IsQueryMethod(httpMethods)
+            && IsSupportedQueryType(type)
+            && type is not IArrayTypeSymbol { ElementType.OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
     }
 
     /// <summary>
@@ -1093,6 +1132,12 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// Projects an entry's <see cref="PropertyOwnershipEntry.QueryOnGet"/> into a synthetic query entry, rendered to run only
     /// when the request is a GET, and read exactly as any other query property is — camel-case key included.
     /// </summary>
+    /// <remarks>
+    /// Its locals are named after the property alone, as any query property's are. No other entry reads that property from
+    /// the query string, so no other query local shares the name, and a route read of the same property keeps its locals in
+    /// a block of its own. A suffix such as <c>OnGet</c> could name another property's locals instead: an unannotated
+    /// <c>Name</c> beside a <c>[FromQuery] NameOnGet</c> used to fail to compile (CS0136).
+    /// </remarks>
     private static PropertyOwnershipEntry ToGetQueryEntry(PropertyOwnershipEntry entry)
     {
         return entry with
@@ -1101,7 +1146,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             BindingName = GetCamelCaseName(entry.PropertyName),
             FallbackSource = null,
             QueryOnGet = false,
-            VariableSuffix = entry.PropertyName + "OnGet",
+            VariableSuffix = null,
         };
     }
 
@@ -1333,14 +1378,33 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             // Body binding: delegate stream buffering, content-type check, and exception handling
             // to the shared PipelineHelpers.ReadJsonBodyAsync runtime method. The generated pipeline
             // only provides the operation-specific PopulateFromJsonBody call as a static delegate.
+            //
+            // A property read from the query string of a GET (QueryOnGet) is not read from that GET's body, as legacy read the
+            // body of every request but a GET (IsBodyMethod's remarks). A GET reads the body only for what it still owns there
+            // (an explicit [FromBody], or a type no query string can carry), through PopulateFromJsonBodyOnGet, and not at
+            // all when nothing is left, so a body it would ignore cannot fail its binding.
             if (bodyEntries is { Count: > 0 })
             {
-                bindingBranch.WriteStatement(
-                    $"var _bodyResult = await ReadJsonBodyAsync(httpContext, context.OperationCancelled, {operationExpr}, PopulateFromJsonBody, this.BodyJsonOptions).ConfigureAwait(false);");
-                bindingBranch.If("_bodyResult != null", earlyReturnCtx =>
+                var hasQueryOnGetBody = bodyEntries.Any(static e => e.QueryOnGet);
+                var hasGetBody = bodyEntries.Any(static e => !e.QueryOnGet);
+
+                if (!hasQueryOnGetBody)
                 {
-                    earlyReturnCtx.Return("_bodyResult");
-                });
+                    WriteBodyRead(bindingBranch, $"await {ReadJsonBodyCall(operationExpr, BodyPopulateMethodName)}");
+                }
+                else if (hasGetBody)
+                {
+                    WriteBodyRead(
+                        bindingBranch,
+                        $"{IsGetRequestExpression} ? await {ReadJsonBodyCall(operationExpr, GetBodyPopulateMethodName)} : await {ReadJsonBodyCall(operationExpr, BodyPopulateMethodName)}");
+                }
+                else
+                {
+                    bindingBranch.If($"!{IsGetRequestExpression}", notGetBranch =>
+                    {
+                        WriteBodyRead(notGetBranch, $"await {ReadJsonBodyCall(operationExpr, BodyPopulateMethodName)}");
+                    });
+                }
 
                 bindingBranch.WriteBlankLine();
             }
@@ -1364,7 +1428,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             // the route for the reason above.
             if (getQueryEntries is not null)
             {
-                bindingBranch.If("global::Microsoft.AspNetCore.Http.HttpMethods.IsGet(httpContext.Request.Method)", getBranch =>
+                bindingBranch.If(IsGetRequestExpression, getBranch =>
                 {
                     foreach (var entry in getQueryEntries)
                     {
@@ -1446,10 +1510,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
     private static void WritePopulateFromJsonBodyMethod(
         ClassBuilder pipelineClass,
+        string methodName,
         string operationTypeFull,
         List<PropertyOwnershipEntry> bodyEntries)
     {
-        var method = pipelineClass.AddMethod("PopulateFromJsonBody")
+        var method = pipelineClass.AddMethod(methodName)
             .MakePrivateMethod()
             .MakeStaticMethod()
             .WithReturnType("void")
