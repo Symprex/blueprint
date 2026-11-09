@@ -312,6 +312,12 @@ namespace Blueprint.SourceGenerator.CodeWriter
         {
             this._interfaces.Add(interfaceName);
 
+            // A `global::`-qualified name needs no import, and one with type arguments has no namespace to take from its text.
+            if (interfaceName.StartsWith("global::", StringComparison.Ordinal))
+            {
+                return this;
+            }
+
             if (interfaceName.Contains('.'))
             {
                 var name = interfaceName.Split('.').Last();

@@ -99,4 +99,17 @@ public abstract class ResponseReader<T>
     {
         return default;
     }
+
+    /// <summary>
+    /// Reads a response that is not a success as this reader's type, when the declared result has a member the host writes
+    /// at that status; called by the transport before it maps the failure, and only a reader made for a forward
+    /// (<see cref="ForwardResponseReaders"/>) claims one. A reader that does not claim the response must not read its body.
+    /// </summary>
+    /// <param name="context">The failure response and what it is read with.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Whether this reader claims the response, and what it read; otherwise the transport maps the failure as always.</returns>
+    internal virtual ValueTask<(bool Read, T Value)> ReadFailureAsync(ResponseReadContext context, CancellationToken cancellationToken)
+    {
+        return default;
+    }
 }

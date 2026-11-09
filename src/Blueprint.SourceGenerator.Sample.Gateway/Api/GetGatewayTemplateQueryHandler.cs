@@ -2,15 +2,15 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Api;
 
 /// <summary>
 /// Gateway handler that fetches a single template from the upstream service by identifier.
-/// Demonstrates parameterized route placeholder substitution in the HTTP client — the
-/// <see cref="GetTemplateQuery.Id"/> property is automatically URL-encoded and substituted
-/// into the <c>/templates/{Id}</c> route template by the source-generated URL builder.
+/// Demonstrates <see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}"/> from a hand-written handler: the inner
+/// <see cref="GetTemplateQuery"/> is sent through its own generated request builders, and the upstream's
+/// <see cref="NotFoundResult{T}"/> comes back as that member of the declared result rather than as an exception.
 /// </summary>
 public class GetGatewayTemplateQueryHandler(BlueprintHttpClient<SampleBlueprintApp> upstreamClient)
 {
     /// <summary>
-    /// Sends <see cref="GetTemplateQuery"/> to the upstream service and returns the mapped result,
-    /// or <see cref="NotFoundResult{T}"/> when the upstream returns 404.
+    /// Forwards a fresh <see cref="GetTemplateQuery"/> to the upstream service and maps the result to the gateway's own
+    /// resource, or to <see cref="NotFoundResult{T}"/> when the upstream returns its not-found result.
     /// </summary>
     /// <param name="query">The gateway query containing the template identifier.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -19,29 +19,23 @@ public class GetGatewayTemplateQueryHandler(BlueprintHttpClient<SampleBlueprintA
         GetGatewayTemplateQuery query,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var upstream = await upstreamClient.SendAsync<TemplateApiResource>(
-                new GetTemplateQuery { Id = query.Id },
-                cancellationToken);
+        var upstream = await upstreamClient.ForwardAsync<GetTemplateQuery, Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>(
+            new GetTemplateQuery { Id = query.Id },
+            cancellationToken: cancellationToken);
 
-            if (upstream is null)
-            {
-                return new NotFoundResult<GatewayTemplateResource>(
-                    new GatewayTemplateResource { Id = query.Id, Name = string.Empty });
-            }
-
-            return new OkResult<GatewayTemplateResource>(new GatewayTemplateResource
-            {
-                Id = upstream.Id,
-                Name = upstream.Name,
-                IsArchived = upstream.IsArchived,
-            });
-        }
-        catch (BlueprintApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        if (upstream.IsT2)
         {
             return new NotFoundResult<GatewayTemplateResource>(
                 new GatewayTemplateResource { Id = query.Id, Name = string.Empty });
         }
+
+        var template = upstream.AsT1.Content;
+
+        return new OkResult<GatewayTemplateResource>(new GatewayTemplateResource
+        {
+            Id = template.Id,
+            Name = template.Name,
+            IsArchived = template.IsArchived,
+        });
     }
 }

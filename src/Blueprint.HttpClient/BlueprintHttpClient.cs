@@ -208,9 +208,22 @@ public class BlueprintHttpClient
         try
         {
             using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
+            var context = new ResponseReadContext(request, response, operationName, this._jsonOptions);
 
-            return await reader.ReadAsync(new ResponseReadContext(request, response, operationName, this._jsonOptions), cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                // Only a forward's reader claims a failure (a declared NotFoundResult the host wrote); any other is mapped.
+                var (claimed, value) = await reader.ReadFailureAsync(context, cancellationToken).ConfigureAwait(false);
+
+                if (claimed)
+                {
+                    return value;
+                }
+
+                await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
+            }
+
+            return await reader.ReadAsync(context, cancellationToken).ConfigureAwait(false);
         }
         catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
         {
@@ -226,6 +239,89 @@ public class BlueprintHttpClient
             // wraps in an HttpRequestException.
             throw CreateUnreachableException(e);
         }
+    }
+
+    /// <summary>
+    /// Forwards an inner operation to the remote Blueprint API that owns it, as a gateway's handler does, and reads the upstream
+    /// outcome as the result the caller declares.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The operation is sent with its own generated request builders, through <see cref="IHttpRequestBuilder{TSelf}"/>: the
+    /// HTTP method and URL a generated typed client of it sends, with no app, descriptor or lookup. A GET carries its other
+    /// properties in its query string; any other method sends the operation as its JSON body.
+    /// </para>
+    /// <para>
+    /// <typeparamref name="TResult"/> is the type the response is read as: the inner operation's declared result, or a
+    /// <see cref="Results{T1, T2}"/> of it, read exactly as a typed client reads it. When it is a <see cref="Results{T1, T2}"/>
+    /// with a <see cref="Blueprint.Runtime.Exec.NotFoundResult{T}"/> member, an upstream 404 the host wrote as that result (its
+    /// content, as JSON) becomes that member. Every other failure, a 404 problem document included, escapes as the
+    /// <see cref="BlueprintApiException"/> (or the <see cref="ValidationException"/> of a 422) <see cref="SendAsync{TOperation, TResult}"/>
+    /// raises, so a gateway answers the upstream problem unchanged.
+    /// </para>
+    /// <para>
+    /// The two are told apart by content type: a host writes a <see cref="Blueprint.Runtime.Exec.NotFoundResult{T}"/> as
+    /// <c>application/json</c> and a problem as <c>application/problem+json</c>. A forward asks for its errors as
+    /// <c>Accept: application/problem+json</c>, so a host with <c>NegotiateErrorContentType</c> on, which otherwise writes a
+    /// problem as <c>application/json</c> to a request with no <c>Accept</c>, still writes it as a problem. It replaces any
+    /// <c>Accept</c> the caller sets through <see cref="CallOptions.ModifyRequest"/>, which would otherwise let a negotiating
+    /// host's 404 problem be read as the not-found member.
+    /// </para>
+    /// <para>
+    /// A forwarded resource arrives without the inner service's <c>$links</c>: <see cref="ApiResource.Links"/> is get-only and
+    /// never read from JSON, and a gateway generates its own from its own routes.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TInner">The inner operation's type, exactly: a forward sends a fresh instance of it and nothing else.</typeparam>
+    /// <typeparam name="TResult">The type the response is read as.</typeparam>
+    /// <param name="inner">
+    /// The inner operation to send, constructed for this forward. An instance of a type derived from
+    /// <typeparamref name="TInner"/>, such as the gateway's own operation, is refused, as it would be written as its run-time
+    /// type with every property of its own.
+    /// </param>
+    /// <param name="options">Optional per-call request customisation.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The upstream outcome, as <typeparamref name="TResult"/>.</returns>
+    /// <exception cref="ArgumentException"><paramref name="inner"/> is an instance of a type derived from <typeparamref name="TInner"/>.</exception>
+    /// <exception cref="BlueprintApiException">The request could not be sent or timed out, or the response was a failure no declared member claims.</exception>
+    /// <exception cref="ValidationException">The response was a 422 Unprocessable Entity.</exception>
+    /// <exception cref="InvalidOperationException">A route placeholder has no value, or the response could not be read as <typeparamref name="TResult"/>.</exception>
+    public Task<TResult> ForwardAsync<TInner, TResult>(TInner inner, CallOptions? options = null, CancellationToken cancellationToken = default)
+        where TInner : class, IOperation, IHttpRequestBuilder<TInner>
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+
+        if (inner.GetType() != typeof(TInner))
+        {
+            throw new ArgumentException(
+                $"A forward sends a fresh {typeof(TInner).Name} and nothing else, but was given a {inner.GetType().Name}, which would be sent with every property of its own. Construct a new {typeof(TInner).Name} from it.",
+                nameof(inner));
+        }
+
+        return this.SendAsync(
+            TInner.GetHttpMethod(),
+            TInner.BuildRequestUrl(inner),
+            inner,
+            operationTypeInfo: null,
+            ForwardResponseReaders.For<TResult>(),
+            typeof(TInner).Name,
+            options,
+            AcceptProblemJson,
+            credential: null,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Asks a forward's errors to be written as <c>application/problem+json</c>, replacing any <c>Accept</c> the caller set; see
+    /// <see cref="ForwardAsync{TInner, TResult}"/>. A Blueprint host reads <c>Accept</c> for nothing but an error's content
+    /// type, so a success is written as it would be without it, and a caller's own <c>Accept</c> could only make a thrown 404
+    /// look like a not-found result.
+    /// </summary>
+    /// <param name="request">The forward's request, after <see cref="CallOptions.ModifyRequest"/> has run.</param>
+    private static void AcceptProblemJson(HttpRequestMessage request)
+    {
+        request.Headers.Accept.Clear();
+        request.Headers.TryAddWithoutValidation("Accept", "application/problem+json");
     }
 
     /// <summary>
