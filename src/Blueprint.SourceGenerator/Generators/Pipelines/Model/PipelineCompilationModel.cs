@@ -7,7 +7,7 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines;
 /// Model representing all the operations found in a BlueprintApp and their handlers.
 /// </summary>
 /// <param name="AppTypeName">The simple name of the BlueprintApp type.</param>
-/// <param name="AppNamespace">The namespace of the BlueprintApp.</param>
+/// <param name="AppNamespace">The namespace of the BlueprintApp, empty for the global namespace.</param>
 /// <param name="Handlers">All discovered operation handlers.</param>
 public sealed record PipelineCompilationModel(
     string AppTypeName,

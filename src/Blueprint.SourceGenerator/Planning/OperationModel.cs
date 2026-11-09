@@ -1,3 +1,4 @@
+using Blueprint.SourceGenerator.Helpers;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Planning;
@@ -7,7 +8,7 @@ namespace Blueprint.SourceGenerator.Planning;
 /// </summary>
 /// <param name="TypeSymbol">The Roslyn symbol for the operation.</param>
 /// <param name="TypeName">The operation type name.</param>
-/// <param name="Namespace">The containing namespace.</param>
+/// <param name="Namespace">The containing namespace, empty for the global namespace.</param>
 public sealed record OperationModel(
     INamedTypeSymbol TypeSymbol,
     string TypeName,
@@ -27,6 +28,6 @@ public sealed record OperationModel(
     /// <returns>The operation model.</returns>
     public static OperationModel Create(INamedTypeSymbol typeSymbol)
     {
-        return new(typeSymbol, typeSymbol.Name, typeSymbol.ContainingNamespace.ToDisplayString());
+        return new(typeSymbol, typeSymbol.Name, GeneratedNamespace.Of(typeSymbol));
     }
 }
