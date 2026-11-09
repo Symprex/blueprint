@@ -1050,7 +1050,7 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
         sb.AppendLine($"{indent}{{");
         sb.AppendLine($"{indent}    private static readonly global::System.Runtime.CompilerServices.ConditionalWeakTable<global::System.Text.Json.JsonSerializerOptions, {PlanClassName}> _plans = new();");
 
-        foreach (var operation in client.Operations.Where(static o => HttpMethodExpression(o.HttpMethod) is null))
+        foreach (var operation in client.Operations.Where(static o => OperationHttpMethodResolver.StandardHttpMethodExpression(o.HttpMethod) is null))
         {
             sb.AppendLine();
             sb.AppendLine($"{indent}    internal static readonly global::System.Net.Http.HttpMethod {PlanMethodName(operation)} = new global::System.Net.Http.HttpMethod({SymbolDisplay.FormatLiteral(operation.HttpMethod, quote: true)});");
@@ -1165,7 +1165,7 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
         sb.AppendLine($"{indent}    var url = {builders}.BuildUrl(operation);");
         sb.AppendLine();
         sb.AppendLine($"{indent}    return this.{ClientFieldName}.SendAsync<{operation.OperationFqn}, {operation.ResultTypeFqn}>(");
-        sb.AppendLine($"{indent}        {HttpMethodExpression(operation.HttpMethod) ?? (PlanClassName + "." + PlanMethodName(operation))},");
+        sb.AppendLine($"{indent}        {OperationHttpMethodResolver.StandardHttpMethodExpression(operation.HttpMethod) ?? (PlanClassName + "." + PlanMethodName(operation))},");
 
         // A null URL (a route placeholder with no value) is passed on as null, which the transport refuses before sending.
         sb.AppendLine(operation.AppendsQueryString
@@ -1189,22 +1189,6 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
     private static string MethodSignature(TypedClientOperationModel operation)
     {
         return $"global::System.Threading.Tasks.Task<{operation.ResultTypeFqn}> {operation.MethodName}({operation.OperationFqn} operation, global::Blueprint.HttpClient.CallOptions? options = null, global::System.Threading.CancellationToken cancellationToken = default)";
-    }
-
-    private static string? HttpMethodExpression(string httpMethod)
-    {
-        return httpMethod switch
-        {
-            "GET" => "global::System.Net.Http.HttpMethod.Get",
-            "POST" => "global::System.Net.Http.HttpMethod.Post",
-            "PUT" => "global::System.Net.Http.HttpMethod.Put",
-            "PATCH" => "global::System.Net.Http.HttpMethod.Patch",
-            "DELETE" => "global::System.Net.Http.HttpMethod.Delete",
-            "HEAD" => "global::System.Net.Http.HttpMethod.Head",
-            "OPTIONS" => "global::System.Net.Http.HttpMethod.Options",
-            "TRACE" => "global::System.Net.Http.HttpMethod.Trace",
-            _ => null,
-        };
     }
 
     // The plan's members are named for the operation's type, which is unique among a client's includes (BPCL005), and live in

@@ -38,7 +38,7 @@ public partial class OperationExecutorPipelineSourceGenerator
 
         var appInfo = new AppInfo(
             classSymbol.Name,
-            classSymbol.ContainingNamespace.ToDisplayString(),
+            GeneratedNamespace.Of(classSymbol),
             classSymbol,
             GetTenantIdTypeName(classSymbol));
 

@@ -190,7 +190,9 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
     /// <returns>The generated registration companion source.</returns>
     private static string GenerateRegistrations(BlueprintAppDataModelCompilationModel compilationModel)
     {
-        var codeBuilder = CodeBuilder.Create(compilationModel.Class.Namespace!);
+        var codeBuilder = compilationModel.Class.Namespace is { } appNamespace
+            ? CodeBuilder.Create(appNamespace)
+            : CodeBuilder.CreateInGlobalNamespace();
         var classBuilder = codeBuilder.AddClass(compilationModel.Class.Name)
             .WithAccessModifier(Accessibility.Public);
 
