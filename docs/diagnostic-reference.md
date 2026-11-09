@@ -232,7 +232,7 @@ Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attr
 
 ## Gateway operations (BPGW)
 
-Reported for an operation marked `[Expose<TInner>]`. BPGW001 and BPGW006 are reported at the attribute; the others at the operation's name. An operation with BPGW003, BPGW004 or BPGW005 gets no pipeline.
+Reported for an operation marked `[Expose<TInner>]`. BPGW001, BPGW006 and BPGW018 are reported at the attribute; the others at the operation's name. An operation with BPGW003, BPGW004 or BPGW005 gets no pipeline.
 
 | ID | Severity | Title |
 |----|----------|-------|
@@ -242,6 +242,7 @@ Reported for an operation marked `[Expose<TInner>]`. BPGW001 and BPGW006 are rep
 | BPGW004 | Error | More than one `[BlueprintClient]` includes the inner operation, so the upstream to forward to is ambiguous |
 | BPGW005 | Error | Gateway operation has a hand-written handler, inline or external, but `[Expose<TInner>]` generates its handler |
 | BPGW006 | Error | `[Expose<TInner>]` class declares no operation interface, or one with no result. Declare the inner operation's own, for example `partial class X : IQuery<R>`, since no generator can see an interface another generator emits |
+| BPGW018 | Error | A contributed property's validation attribute is a type the gateway's assembly cannot access (not public, and not internal to an assembly with `InternalsVisibleTo` the gateway), so the emitted property cannot carry it and the gateway would forward without applying the rule. BPGW007 to BPGW017 belong to the binding tiers and forward credentials |
 
 ## Module system (BPMOD)
 

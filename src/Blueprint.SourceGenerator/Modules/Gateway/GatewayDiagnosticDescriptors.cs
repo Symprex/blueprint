@@ -75,4 +75,19 @@ internal static class GatewayDiagnosticDescriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW018: a validation attribute of a contributed property that the gateway's assembly cannot access, so the emitted
+    /// property cannot carry it (D9).
+    /// </summary>
+    /// <remarks>
+    /// BPGW007 to BPGW017 are taken by the binding tiers (#66) and forward credentials (#69).
+    /// </remarks>
+    public static readonly DiagnosticDescriptor InaccessibleValidationAttribute = new(
+        id: "BPGW018",
+        title: "An exposed property's validation attribute must be accessible to the gateway",
+        messageFormat: "Gateway operation '{0}' cannot carry [{1}] from {2}.{3}, because its assembly cannot access that attribute, so the gateway would forward without applying it. Make the attribute public or visible to the gateway's assembly, or declare {3} on '{0}' with validation the gateway can apply.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
