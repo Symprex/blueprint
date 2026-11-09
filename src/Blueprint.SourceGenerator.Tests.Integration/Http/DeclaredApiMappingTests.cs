@@ -45,6 +45,19 @@ public sealed class DeclaredApiMappingTests
     }
 
     [Fact]
+    public void When_openapi_is_declared_without_a_base_path_then_MapBlueprintApi_without_one_names_only_UseBasePath()
+    {
+        // The message used to offer passing the base path to MapBlueprintApi as well, which throws once anything is
+        // declared with AddBlueprintApi.
+        using var app = CreateApp(static blueprint => blueprint.ConfigureOpenApi(static info => info.Title = "Declared API"));
+
+        var map = () => app.MapBlueprintApi<IntegrationTestBlueprintApp, IntegrationTestBlueprintAppExecutor>();
+
+        map.Should().Throw<InvalidOperationException>()
+            .Which.Message.Should().Contain("UseBasePath").And.NotContain("pass the base path to MapBlueprintApi");
+    }
+
+    [Fact]
     public void When_the_api_is_declared_and_MapBlueprintApi_is_given_its_own_base_path_then_it_fails()
     {
         // Two places to configure one document would let the document written at build time differ from the one served.

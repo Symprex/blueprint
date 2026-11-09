@@ -43,9 +43,15 @@ public static class EndpointRouteBuilderExtensions
 
         if (mapping?.BasePath is null)
         {
+            // Passing the base path to MapBlueprintApi is a remedy only while AddBlueprintApi declares nothing: that
+            // overload throws once anything is declared.
+            var remedy = mapping?.IsDeclared == true
+                ? "call UseBasePath in AddBlueprintApi, beside the OpenAPI description it already declares."
+                : "call UseBasePath in AddBlueprintApi, or pass the base path to MapBlueprintApi.";
+
             throw new InvalidOperationException(
                 $"MapBlueprintApi<{typeof(T).Name}, {typeof(TExec).Name}>() was given no base path, and AddBlueprintApi declared none: " +
-                "call UseBasePath in AddBlueprintApi, or pass the base path to MapBlueprintApi.");
+                remedy);
         }
 
         return MapBlueprintApiCore<T, TExec>(
