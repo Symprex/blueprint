@@ -20,7 +20,13 @@ public class RenameGatewayTemplateCommandHandler(BlueprintHttpClient<SampleBluep
     {
         var upstream = await upstreamClient.ForwardAsync<UpdateTemplateCommand, ResourceEventResult<TemplateApiResource>>(
             context,
-            new UpdateTemplateCommand { Id = command.Id, Name = command.Name, HtmlSource = command.HtmlSource },
+            new UpdateTemplateCommand
+            {
+                Id = command.Id,
+                Name = command.Name,
+                HtmlSource = command.HtmlSource,
+                PlainTextSource = command.PlainTextSource,
+            },
             cancellationToken: cancellationToken);
 
         return new GatewayTemplateResource

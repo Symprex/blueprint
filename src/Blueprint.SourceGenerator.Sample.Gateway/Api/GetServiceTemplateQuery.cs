@@ -9,11 +9,18 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Api;
 /// credential <see cref="ServiceTokenCredentialStrategy"/> creates, in place of the caller's <c>Authorization</c> header.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Declared in the gateway rather than its contract assembly because the attribute names the gateway's strategy type.
+/// </para>
+/// <para>
+/// The upstream authorises the service identity, not the caller, so the gateway must check the caller's own read
+/// permission itself: <c>[Resource("template", "read")]</c> refuses a caller without it before anything is forwarded.
+/// </para>
 /// </remarks>
 [ApiOperations("GatewayTemplates")]
 [RootLink("/service/templates/{Id}")]
 [HttpGet]
+[Resource("template", "read")]
 [UpstreamCredential<ServiceTokenCredentialStrategy>]
 [Description("Retrieve a single template from the upstream template service as the gateway's service identity.")]
 public partial class GetServiceTemplateQuery : IQuery<Results<OkResult<GatewayTemplateResource>, NotFoundResult<GatewayTemplateResource>>>

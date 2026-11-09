@@ -46,4 +46,12 @@ public partial class RenameGatewayTemplateCommand : ICommand<GatewayTemplateReso
     [Required]
     [Description("The HTML source content of the template.")]
     public required string HtmlSource { get; set; }
+
+    /// <summary>
+    /// The template's plain-text source. The upstream update replaces every content field, so the gateway forwards this
+    /// one too: left out, the upstream stores the template with no plain text.
+    /// </summary>
+    [MaxLength(10000)]
+    [Description("The plain text content of the template.")]
+    public string? PlainTextSource { get; set; }
 }
