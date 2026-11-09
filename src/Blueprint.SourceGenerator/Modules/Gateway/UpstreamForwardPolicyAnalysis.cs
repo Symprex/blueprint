@@ -22,7 +22,7 @@ public static class UpstreamForwardPolicyAnalysis
     /// Checks an operation's upstream credential and error translations.
     /// </summary>
     /// <param name="operationType">The operation.</param>
-    /// <returns>BPGW007, BPGW008 and BPGW009, as they apply.</returns>
+    /// <returns>BPGW015, BPGW016 and BPGW017, as they apply.</returns>
     public static IEnumerable<DiagnosticInfo> AnalyseOperation(INamedTypeSymbol operationType)
     {
         var credentials = operationType.GetAttributes()
@@ -59,7 +59,7 @@ public static class UpstreamForwardPolicyAnalysis
     /// Checks the <c>[TranslateError]</c>s applied to an operation or an app.
     /// </summary>
     /// <param name="declaringType">The operation or app the attributes are applied to.</param>
-    /// <returns>BPGW009 for each that names no static <c>ApiExceptionFactory</c> of <paramref name="declaringType"/>.</returns>
+    /// <returns>BPGW017 for each that names no static <c>ApiExceptionFactory</c> of <paramref name="declaringType"/>.</returns>
     public static IEnumerable<DiagnosticInfo> AnalyseTranslations(INamedTypeSymbol declaringType)
     {
         foreach (var attribute in declaringType.GetAttributes())

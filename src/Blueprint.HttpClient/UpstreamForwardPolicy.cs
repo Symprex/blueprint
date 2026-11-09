@@ -13,7 +13,7 @@ namespace Blueprint.HttpClient;
 /// <remarks>
 /// Generated (<c>[Expose&lt;TInner&gt;]</c>) and hand-written forwards both come here through
 /// <c>ForwardAsync(context, …)</c>, so they apply the same choices. The source generator checks the attributes at build
-/// time (BPGW007 to BPGW009), so the exceptions this throws are reached only by code it did not see.
+/// time (BPGW015 to BPGW017), so the exceptions this throws are reached only by code it did not see.
 /// </remarks>
 internal sealed class UpstreamForwardPolicy
 {

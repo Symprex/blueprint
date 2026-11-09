@@ -418,7 +418,7 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
-    public void When_an_operation_carries_two_upstream_credential_attributes_then_BPGW007_is_reported_naming_both()
+    public void When_an_operation_carries_two_upstream_credential_attributes_then_BPGW015_is_reported_naming_both()
     {
         var gateway = CredentialGatewaySource.Replace(
             "[TenantToken(TenantIdProperty = nameof(Inner.GetWidgetQuery.Region))]",
@@ -427,13 +427,13 @@ public class ExposeGeneratorTests
 
         var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([CredentialSource, gateway], additionalReferences: [_innerContract.Value]);
 
-        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW007").Which;
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW015").Which;
         diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
         diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("TenantTokenAttribute").And.Contain("UpstreamCredentialAttribute<TenantTokenStrategy>");
     }
 
     [Fact]
-    public void When_the_credential_type_is_not_an_upstream_credential_strategy_then_BPGW008_is_reported_at_the_attribute()
+    public void When_the_credential_type_is_not_an_upstream_credential_strategy_then_BPGW016_is_reported_at_the_attribute()
     {
         var gateway = CredentialGatewaySource.Replace(
             "[TenantToken(TenantIdProperty = nameof(Inner.GetWidgetQuery.Region))]",
@@ -442,7 +442,7 @@ public class ExposeGeneratorTests
 
         var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([CredentialSource, gateway], additionalReferences: [_innerContract.Value]);
 
-        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW008").Which;
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW016").Which;
         diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
         diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("NotAStrategy").And.Contain("IUpstreamCredentialStrategy");
         Located(diagnostic).Should().StartWith("UpstreamCredential<NotAStrategy>");
@@ -452,20 +452,20 @@ public class ExposeGeneratorTests
     [InlineData("\"NoSuchMember\"", "NoSuchMember")]
     [InlineData("nameof(NotAFactory)", "NotAFactory")]
     [InlineData("nameof(InstanceFactory)", "InstanceFactory")]
-    public void When_an_operations_TranslateError_names_no_static_ApiExceptionFactory_then_BPGW009_is_reported_at_the_attribute(string to, string name)
+    public void When_an_operations_TranslateError_names_no_static_ApiExceptionFactory_then_BPGW017_is_reported_at_the_attribute(string to, string name)
     {
         var gateway = CredentialGatewaySource.Replace("nameof(WidgetMissing)", to, StringComparison.Ordinal);
 
         var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([CredentialSource, gateway], additionalReferences: [_innerContract.Value]);
 
-        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW009").Which;
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW017").Which;
         diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
         diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("widget_gone").And.Contain("'" + name + "'");
         Located(diagnostic).Should().StartWith("TranslateError(");
     }
 
     [Fact]
-    public void When_a_hand_written_forwarding_operations_TranslateError_names_no_factory_then_BPGW009_is_reported()
+    public void When_a_hand_written_forwarding_operations_TranslateError_names_no_factory_then_BPGW017_is_reported()
     {
         // A hand-written ForwardAsync(context, …) reads the same attributes, so it gets the same check.
         var operation = """
@@ -484,17 +484,17 @@ public class ExposeGeneratorTests
 
         var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([operation], additionalReferences: [_innerContract.Value]);
 
-        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW009").Which.GetMessage().Should().Contain("HandWrittenQuery");
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW017").Which.GetMessage().Should().Contain("HandWrittenQuery");
     }
 
     [Fact]
-    public void When_the_apps_TranslateError_names_no_static_ApiExceptionFactory_then_BPGW009_is_reported_on_the_app()
+    public void When_the_apps_TranslateError_names_no_static_ApiExceptionFactory_then_BPGW017_is_reported_on_the_app()
     {
         var app = AppSource.Replace("[BlueprintAppScan]", "[BlueprintAppScan]\n    [Blueprint.Model.Attributes.TranslateError(\"widget_gone\", \"Missing\")]", StringComparison.Ordinal);
 
         var run = RunAllGenerators([ClientSource, GatewaySource, app]);
 
-        var diagnostic = run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW009").Which;
+        var diagnostic = run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW017").Which;
         diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
         diagnostic.GetMessage().Should().Contain("GatewayApp").And.Contain("'Missing'");
         Located(diagnostic).Should().StartWith("Blueprint.Model.Attributes.TranslateError(");
@@ -510,7 +510,7 @@ public class ExposeGeneratorTests
 
         var run = RunAllGenerators([ClientSource, CredentialSource, CredentialGatewaySource, app]);
 
-        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW007" || d.Id == "BPGW008" || d.Id == "BPGW009");
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW015" || d.Id == "BPGW016" || d.Id == "BPGW017");
         run.EmitErrors.Should().BeEmpty();
     }
 

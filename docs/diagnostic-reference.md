@@ -232,7 +232,7 @@ Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attr
 
 ## Gateway operations (BPGW)
 
-BPGW001 to BPGW006 are reported for an operation marked `[Expose<TInner>]`; BPGW007 to BPGW009 for any operation, and BPGW009 also for an app, since hand-written and generated forwards read the same attributes. BPGW001, BPGW006, BPGW008 and BPGW009 are reported at the attribute; the others at the operation's name, except BPGW007, at the second credential attribute. An operation with BPGW003, BPGW004 or BPGW005 gets no pipeline.
+BPGW001 to BPGW006 are reported for an operation marked `[Expose<TInner>]`; BPGW015 to BPGW017 for any operation, and BPGW017 also for an app, since hand-written and generated forwards read the same attributes. BPGW001, BPGW006, BPGW016 and BPGW017 are reported at the attribute; the others at the operation's name, except BPGW015, at the second credential attribute. An operation with BPGW003, BPGW004 or BPGW005 gets no pipeline.
 
 | ID | Severity | Title |
 |----|----------|-------|
@@ -242,9 +242,9 @@ BPGW001 to BPGW006 are reported for an operation marked `[Expose<TInner>]`; BPGW
 | BPGW004 | Error | More than one `[BlueprintClient]` includes the inner operation, so the upstream to forward to is ambiguous |
 | BPGW005 | Error | Gateway operation has a hand-written handler, inline or external, but `[Expose<TInner>]` generates its handler |
 | BPGW006 | Error | `[Expose<TInner>]` class declares no operation interface, or one with no result. Declare the inner operation's own, for example `partial class X : IQuery<R>`, since no generator can see an interface another generator emits |
-| BPGW007 | Error | Gateway operation carries more than one upstream credential attribute (`[UpstreamCredential<T>]` or one deriving from it); its forwards authenticate with one strategy |
-| BPGW008 | Error | An upstream credential attribute selects a type that does not implement `Blueprint.HttpClient.IUpstreamCredentialStrategy` |
-| BPGW009 | Error | `[TranslateError(fromType, to)]` on an operation or app names no static `ApiExceptionFactory` field or property of that class called `to`. Members inherited from a base class do not count, as the forward does not read them |
+| BPGW015 | Error | Gateway operation carries more than one upstream credential attribute (`[UpstreamCredential<T>]` or one deriving from it); its forwards authenticate with one strategy |
+| BPGW016 | Error | An upstream credential attribute selects a type that does not implement `Blueprint.HttpClient.IUpstreamCredentialStrategy` |
+| BPGW017 | Error | `[TranslateError(fromType, to)]` on an operation or app names no static `ApiExceptionFactory` field or property of that class called `to`. Members inherited from a base class do not count, as the forward does not read them |
 
 ## Module system (BPMOD)
 

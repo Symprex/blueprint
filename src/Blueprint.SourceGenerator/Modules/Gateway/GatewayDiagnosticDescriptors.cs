@@ -77,10 +77,10 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPGW007: an operation carries more than one upstream credential attribute (D7).
+    /// BPGW015: an operation carries more than one upstream credential attribute (D7).
     /// </summary>
     public static readonly DiagnosticDescriptor SeveralUpstreamCredentials = new(
-        id: "BPGW007",
+        id: "BPGW015",
         title: "A gateway operation selects one upstream credential",
         messageFormat: "Gateway operation '{0}' carries {1} upstream credential attributes ({2}), but its forwards authenticate with one strategy. Keep one.",
         category: Category,
@@ -88,10 +88,10 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPGW008: an upstream credential attribute selects a type that is not an <c>IUpstreamCredentialStrategy</c> (D7).
+    /// BPGW016: an upstream credential attribute selects a type that is not an <c>IUpstreamCredentialStrategy</c> (D7).
     /// </summary>
     public static readonly DiagnosticDescriptor CredentialTypeIsNotAStrategy = new(
-        id: "BPGW008",
+        id: "BPGW016",
         title: "The upstream credential type must be a strategy",
         messageFormat: "Gateway operation '{0}' selects '{1}' as its upstream credential strategy, but '{1}' does not implement Blueprint.HttpClient.IUpstreamCredentialStrategy",
         category: Category,
@@ -99,10 +99,10 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPGW009: a <c>[TranslateError]</c> names no static <c>ApiExceptionFactory</c> of the class it is applied to (D8).
+    /// BPGW017: a <c>[TranslateError]</c> names no static <c>ApiExceptionFactory</c> of the class it is applied to (D8).
     /// </summary>
     public static readonly DiagnosticDescriptor TranslateErrorTargetIsNotAFactory = new(
-        id: "BPGW009",
+        id: "BPGW017",
         title: "[TranslateError] must name a static ApiExceptionFactory",
         messageFormat: "[TranslateError(\"{0}\", \"{1}\")] on '{2}' names no static ApiExceptionFactory field or property of '{2}' called '{1}'",
         category: Category,
