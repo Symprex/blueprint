@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Blueprint.HttpClient;
 using Blueprint.Model;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +10,7 @@ namespace Blueprint.SourceGenerator.Sample;
 /// Sample Blueprint app used to demonstrate scan-based registration against contract-assembly operations.
 /// </summary>
 [BlueprintAppScan(FromAssemblyOf = typeof(GetTemplatesQuery))]
+[BlueprintHttpClientExtensions]
 [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(SampleBlueprintAppJsonContext))]
 public partial class SampleBlueprintApp : BlueprintApp;
 

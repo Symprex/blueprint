@@ -19,8 +19,13 @@ internal sealed record PropertyBindingEntriesMetadata(
     /// The external name used for binding (e.g. camelCase query name, route placeholder name, header name).
     /// Null when the CLR name is used directly.
     /// </param>
+    /// <param name="FallbackSource">
+    /// The source a route placeholder that is not in every one of the operation's links is also bound from, through a link
+    /// that leaves it out (legacy's every-link rule); <see langword="null"/> for any other property.
+    /// </param>
     internal sealed record Entry(
         string PropertyName,
         PropertyOwnershipModule.PropertyOwnershipSource Source,
-        string? BindingName);
+        string? BindingName,
+        PropertyOwnershipModule.PropertyOwnershipSource? FallbackSource = null);
 }

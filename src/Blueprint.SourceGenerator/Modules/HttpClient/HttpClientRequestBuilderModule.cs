@@ -4,6 +4,8 @@ using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Modules.LinkGeneration;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Blueprint.SourceGenerator.Modules.HttpClient;
 
@@ -17,6 +19,17 @@ namespace Blueprint.SourceGenerator.Modules.HttpClient;
 /// </summary>
 public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
+    private const string HttpClassName = "Http";
+
+    private const string GeneratedCodeTool = "Blueprint.SourceGenerator";
+
+    // No version: the build's version would change the generated text, and every snapshot of it, with each release.
+    private const string GeneratedCodeMarkerAttribute = "global::System.CodeDom.Compiler.GeneratedCode(\"" + GeneratedCodeTool + "\", null)";
+
+    // Generated files have no nullable annotation context, so a `string?` return would not compile (CS8669); the attribute
+    // gives a nullable-enabled caller the same "may be null" signal.
+    private const string MaybeNullReturnAttribute = "return: global::System.Diagnostics.CodeAnalysis.MaybeNull";
+
     // Route-owned (RoutePlaceholderSyntax, R97/R111): the bound name is whatever is before a `:` (alternate resource
     // property) or `(` (legacy format specifier) — either, or both, or neither. The old regex here only excluded `:`, so
     // a `{Name(format)}` placeholder's whole "Name(format)" was taken as the property name and never matched, leaving the
@@ -86,6 +99,10 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // URL placeholder properties are excluded even if the ownership module classified them as
         // Query — the URL builder already handles them as path parameters.
         var queryBindingNames = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // The route placeholders in only some links, which the host also reads from the query string through a link without
+        // them (legacy's every-link rule): with nothing query-owned, the only properties a GET's query string carries.
+        var queryFallbackNames = new HashSet<string>(StringComparer.Ordinal);
         if (bindingEntries != null)
         {
             foreach (var entry in bindingEntries.Entries)
@@ -94,6 +111,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                     && !placeholders.Contains(entry.PropertyName))
                 {
                     queryBindingNames[entry.PropertyName] = entry.BindingName ?? entry.PropertyName;
+                }
+
+                if (entry.FallbackSource == PropertyOwnershipModule.PropertyOwnershipSource.Query)
+                {
+                    queryFallbackNames.Add(entry.PropertyName);
                 }
             }
         }
@@ -104,40 +126,253 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         var isQueryMethod = context.GetMetadata<OperationHttpMethodMetadataRegistration>()
             .Any(static m => m.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase));
 
+        // The builders are real static methods on a nested `Http` class of the operation's own partial, so a typed client can
+        // call them without a descriptor lookup or a cast. The descriptor's delegates are thin wrappers over them, so both
+        // build the same URL. An operation that cannot take the class (CanDeclareHttpClass) keeps the inline delegates only.
+        var urlBuilderBody = BuildUrlBuilderBody(urlTemplate, placeholders, properties);
+
+        // A GET carries its non-URL properties as a query string rather than a body. The typed appender exists for every
+        // GET; the delegate stays null when no property is query-eligible, as the runtime reads that as "append nothing".
+        var queryStringBody = isQueryMethod
+            ? BuildQueryStringBody(placeholders, properties, queryBindingNames, queryFallbackNames)
+            : null;
+
+        var emitHttpClass = CanDeclareHttpClass(operationSymbol, context.GetSemanticModel);
+
+        if (emitHttpClass)
+        {
+            context.AddOperationMemberStep(operationClass =>
+            {
+                // A base operation's own generated `Http` is the one inherited member this class hides on purpose. The marker is
+                // how a derived operation in another assembly tells this class from a hand-written one (IsGeneratedHttpClass).
+                var httpClass = operationClass.AddNestedClass(HttpClassName, Accessibility.Public)
+                    .MakeStaticClass()
+                    .AddAttribute(GeneratedCodeMarkerAttribute)
+                    .DisableWarning("CS0108");
+
+                httpClass.AddMethod("BuildUrl")
+                    .MakePublicMethod()
+                    .MakeStaticMethod()
+                    .AddAttribute(MaybeNullReturnAttribute)
+                    .WithReturnType("string")
+                    .AddParameter(operationFqn, "operation")
+                    .WithBody(codeWriter => codeWriter.AppendLine(urlBuilderBody));
+
+                if (isQueryMethod)
+                {
+                    httpClass.AddMethod("AppendQueryString")
+                        .MakePublicMethod()
+                        .MakeStaticMethod()
+                        .WithReturnType("string")
+                        .AddParameter(operationFqn, "operation")
+                        .AddParameter("string", "url")
+                        .WithBody(codeWriter => codeWriter.AppendLine(queryStringBody ?? "return url;"));
+                }
+            });
+        }
+
         context.AddRenderStep(codeWriter =>
         {
-            RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlTemplate, placeholders, properties, isQueryMethod, queryBindingNames);
+            RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlBuilderBody, queryStringBody, emitHttpClass);
         });
+    }
+
+    /// <summary>
+    /// Whether the operation's generated partial can declare the nested <c>Http</c> builder class without changing the
+    /// meaning of a name the operation can already see. Where it cannot, the descriptor's delegates carry the builders
+    /// inline, as they did before the class existed, and the operation has no <c>Http</c> class.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It cannot when the operation is itself named <c>Http</c> (CS0542), when any of its partial declarations declares a
+    /// member of that name (CS0102), or when it inherits one it can see: the class would hide it, so an inherited
+    /// <c>Http</c> property the builders read as <c>typed.Http</c> would name the class instead (CS0572).
+    /// </para>
+    /// <para>
+    /// A base operation's own generated <c>Http</c> class does not count. The derived operation declares its own and hides
+    /// it, with CS0108 suppressed. That class is a symbol only once the base is compiled into another assembly, where it is
+    /// recognised by the <c>[GeneratedCode("Blueprint.SourceGenerator", …)]</c> marker this module emits on it, never by its
+    /// shape; from the same compilation it is not visible at all, so an <c>Http</c> class declared in source is the user's.
+    /// </para>
+    /// <para>
+    /// Nor can it when the operation's own code uses the simple name <c>Http</c> for anything else: an alias, a type or a
+    /// namespace. Inside the operation, its nested types included, a simple name finds the operation's members first, so
+    /// the class would shadow it (CS0117). A name that binds to nothing yet is the class being generated, and a local,
+    /// parameter or method type parameter is nearer than any member, so neither counts.
+    /// </para>
+    /// <para>
+    /// Only the operation's own declarations are read. The class is public and inherited, so inside a type deriving from
+    /// the operation, in this assembly or another, a simple name <c>Http</c> finds it too, before a <c>using Http = …</c>
+    /// alias or a namespace of that name, and such code fails with CS0117. Qualify the name there (for example
+    /// <c>global::System.Net.Http.HttpMethod</c>), or alias it under another name. A derived operation declares its own class and is subject to the same limit.
+    /// </para>
+    /// <para>
+    /// The answer turns on every partial declaration and base type of the operation, and on what its names bind to, so
+    /// <c>OperationDescriptorSourceGenerator</c> carries it in the incremental model it keys each descriptor on: a colliding
+    /// member or alias added to or removed from another file then re-plans the descriptor instead of replaying a cached plan.
+    /// </para>
+    /// </remarks>
+    /// <param name="operation">The operation.</param>
+    /// <param name="compilation">The compilation the operation is declared in, which binds its uses of <c>Http</c>.</param>
+    /// <returns><see langword="true"/> when the nested class can be declared.</returns>
+    internal static bool CanDeclareHttpClass(INamedTypeSymbol operation, Compilation compilation)
+    {
+        return CanDeclareHttpClass(operation, tree => compilation.GetSemanticModel(tree));
+    }
+
+    /// <summary>
+    /// Whether the operation's generated partial can declare the nested <c>Http</c> builder class; see
+    /// <see cref="CanDeclareHttpClass(INamedTypeSymbol, Compilation)"/>.
+    /// </summary>
+    /// <param name="operation">The operation.</param>
+    /// <param name="semanticModelOf">
+    /// The semantic model of one of the operation's syntax trees, or <see langword="null"/> when there is none, in which case
+    /// any use of the simple name <c>Http</c> in that tree is taken to collide.
+    /// </param>
+    /// <returns><see langword="true"/> when the nested class can be declared.</returns>
+    internal static bool CanDeclareHttpClass(INamedTypeSymbol operation, Func<SyntaxTree, SemanticModel?> semanticModelOf)
+    {
+        if (operation.Name == HttpClassName || !operation.GetMembers(HttpClassName).IsEmpty)
+        {
+            return false;
+        }
+
+        for (var baseType = operation.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            foreach (var member in baseType.GetMembers(HttpClassName))
+            {
+                if (IsVisibleToDerivedType(member, operation) && !IsGeneratedHttpClass(member))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return !UsesAnotherHttp(operation, semanticModelOf);
+    }
+
+    private static bool UsesAnotherHttp(INamedTypeSymbol operation, Func<SyntaxTree, SemanticModel?> semanticModelOf)
+    {
+        // Only the operation's own declarations are read, never the rest of the compilation, and only a name spelt Http is
+        // bound, so the cost is one token scan of each declaration.
+        foreach (var reference in operation.DeclaringSyntaxReferences)
+        {
+            SemanticModel? semanticModel = null;
+            var boundModel = false;
+
+            foreach (var token in reference.GetSyntax().DescendantTokens())
+            {
+                if (!token.IsKind(SyntaxKind.IdentifierToken)
+                    || token.ValueText != HttpClassName
+                    || token.Parent is not IdentifierNameSyntax name
+                    || !IsLookedUpBySimpleName(name))
+                {
+                    continue;
+                }
+
+                if (!boundModel)
+                {
+                    semanticModel = semanticModelOf(reference.SyntaxTree);
+                    boundModel = true;
+                }
+
+                if (semanticModel is null)
+                {
+                    return true;
+                }
+
+                var symbolInfo = semanticModel.GetSymbolInfo(name);
+                if (WouldBeShadowed(symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault()))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsLookedUpBySimpleName(IdentifierNameSyntax name)
+    {
+        // Only a name looked up from the operation's scope can find the nested class: not a member named after a dot, an
+        // argument or initialiser name, or an alias-qualified name, which looks up aliases alone.
+        return name.Parent switch
+        {
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Expression == name,
+            QualifiedNameSyntax qualifiedName => qualifiedName.Left == name,
+            MemberBindingExpressionSyntax or NameColonSyntax or NameEqualsSyntax or AliasQualifiedNameSyntax => false,
+            AssignmentExpressionSyntax { Parent: InitializerExpressionSyntax } assignment => assignment.Left != name,
+            _ => true,
+        };
+    }
+
+    private static bool WouldBeShadowed(ISymbol? symbol)
+    {
+        return symbol switch
+        {
+            null => false,
+            ILocalSymbol or IParameterSymbol or IRangeVariableSymbol or ILabelSymbol => false,
+            ITypeParameterSymbol { DeclaringMethod: not null } => false,
+            _ => !IsGeneratedHttpClass(symbol),
+        };
+    }
+
+    private static bool IsVisibleToDerivedType(ISymbol member, INamedTypeSymbol derivedType)
+    {
+        return member.DeclaredAccessibility switch
+        {
+            Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal => true,
+            Accessibility.Internal or Accessibility.ProtectedAndInternal => member.ContainingAssembly.GivesAccessTo(derivedType.ContainingAssembly),
+            _ => false,
+        };
+    }
+
+    private static bool IsGeneratedHttpClass(ISymbol member)
+    {
+        // Positively identified, never by shape: this generator's class is never visible from the compilation it is
+        // generated into, so one declared in source is the user's, and one from metadata is Blueprint's only when it carries
+        // the marker the generator emits. A lookalike, with members of its own a derived Http would hide, is the user's.
+        return member is INamedTypeSymbol { TypeKind: TypeKind.Class, IsStatic: true, DeclaringSyntaxReferences.IsEmpty: true, ContainingType: { } operation } httpClass
+            && operation.ImplementsInterface("Blueprint.Model.IOperation")
+            && httpClass.GetAttributes().Any(static attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "System.CodeDom.Compiler.GeneratedCodeAttribute"
+                && attribute.ConstructorArguments is [{ Value: GeneratedCodeTool }, ..]);
     }
 
     private static void RenderCompiledHttpRequestFeatureData(
         ICodeWriter codeWriter,
         string operationFqn,
-        string urlTemplate,
-        HashSet<string> placeholders,
-        List<IPropertySymbol> properties,
-        bool isQueryMethod,
-        Dictionary<string, string> queryBindingNames)
+        string urlBuilderBody,
+        string? queryStringBody,
+        bool callHttpClass)
     {
-        // Build the URL builder lambda
-        var urlBuilderLambda = BuildUrlBuilderLambda(operationFqn, urlTemplate, placeholders, properties);
+        string buildUrl;
+        string appendQueryString;
 
-        // Build the query string builder lambda for a GET, which carries its non-URL properties
-        // as a query string rather than a body
-        var queryStringLambda = isQueryMethod
-            ? BuildQueryStringLambda(operationFqn, placeholders, properties, queryBindingNames)
-            : null;
+        if (callHttpClass)
+        {
+            buildUrl = $"static (op) => {operationFqn}.{HttpClassName}.BuildUrl(({operationFqn})op)";
+            appendQueryString = queryStringBody is not null
+                ? $"static (op, url) => {operationFqn}.{HttpClassName}.AppendQueryString(({operationFqn})op, url)"
+                : "null";
+        }
+        else
+        {
+            buildUrl = $"static (op) => {{ var operation = ({operationFqn})op; {urlBuilderBody} }}";
+            appendQueryString = queryStringBody is not null
+                ? $"static (op, url) => {{ var operation = ({operationFqn})op; {queryStringBody} }}"
+                : "null";
+        }
 
         codeWriter.AppendLine(
-            $"this.SetFeatureData(new global::Blueprint.Model.CompiledHttpRequestFeatureData("
-            + urlBuilderLambda
+            "this.SetFeatureData(new global::Blueprint.Model.CompiledHttpRequestFeatureData("
+            + buildUrl
             + ", "
-            + (queryStringLambda ?? "null")
+            + appendQueryString
             + "));");
     }
 
-    private static string BuildUrlBuilderLambda(
-        string operationFqn,
+    private static string BuildUrlBuilderBody(
         string urlTemplate,
         HashSet<string> placeholders,
         List<IPropertySymbol> properties)
@@ -243,18 +478,22 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             ? $"if ({string.Join(" || ", nullChecks)}) return null; "
             : string.Empty;
 
-        return $"static (op) => {{ var typed = ({operationFqn})op; {nullCheckExpr}return {urlExpr}; }}";
+        return $"var typed = operation; {nullCheckExpr}return {urlExpr};";
     }
 
-    private static string? BuildQueryStringLambda(
-        string operationFqn,
+    private static string? BuildQueryStringBody(
         HashSet<string> placeholders,
         List<IPropertySymbol> properties,
-        Dictionary<string, string> queryBindingNames)
+        Dictionary<string, string> queryBindingNames,
+        HashSet<string> queryFallbackNames)
     {
-        // When ownership metadata is available, use it as the source of truth for which
-        // properties are query params. When not available (e.g. no HTTP exposure analysis),
-        // fall back to the previous heuristic: non-placeholder properties on a GET.
+        // The query string carries only what the host reads from one: the query-owned properties, or with none of those a
+        // route placeholder in only some links that the built URL leaves out. A property ownership gave no entry (getter-only,
+        // a system property such as a CancellationToken) is bound from nothing, so it is never sent; nor is anything of an
+        // operation with no ownership metadata, which for one with a link means one with no bindable property, or one whose
+        // ownership analysis reported an error (BPPO003, BPPO006, BPPO009). Those fail the build unless a consumer downgrades
+        // their severity, in which case the host still binds the valid query properties but the client sends none of them.
+        // The non-placeholder-property heuristic this replaced used to send them all.
         List<IPropertySymbol> queryProperties;
         if (queryBindingNames.Count > 0)
         {
@@ -265,7 +504,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         else
         {
             queryProperties = properties
-                .Where(p => !placeholders.Contains(p.Name))
+                .Where(p => queryFallbackNames.Contains(p.Name) && !placeholders.Contains(p.Name))
                 .ToList();
         }
 
@@ -280,16 +519,15 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         var hasCollections = queryProperties.Any(p => IsEnumerableType(p.Type, out _));
 
         return hasCollections
-            ? BuildQueryStringLambdaWithList(operationFqn, queryProperties, queryBindingNames)
-            : BuildQueryStringLambdaScalarOnly(operationFqn, queryProperties, queryBindingNames);
+            ? BuildQueryStringBodyWithList(queryProperties, queryBindingNames)
+            : BuildQueryStringBodyScalarOnly(queryProperties, queryBindingNames);
     }
 
     /// <summary>
-    /// Generates a query string lambda for operations where ALL query parameters are scalar
+    /// Generates a query string builder body for operations where ALL query parameters are scalar
     /// (no collections). Uses a zero-allocation separator-tracking pattern instead of List.
     /// </summary>
-    private static string BuildQueryStringLambdaScalarOnly(
-        string operationFqn,
+    private static string BuildQueryStringBodyScalarOnly(
         List<IPropertySymbol> queryProperties,
         Dictionary<string, string> queryBindingNames)
     {
@@ -301,7 +539,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         //   return qs;
         var parts = new List<string>
         {
-            $"static (op, url) => {{ var typed = ({operationFqn})op;",
+            "var typed = operation;",
             "var sep = url.Contains('?') ? '&' : '?';",
             "var qs = url;",
         };
@@ -318,7 +556,15 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             }
             else if (prop.Type.IsValueType && prop.Type.NullableAnnotation != NullableAnnotation.Annotated)
             {
-                parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!); sep = '&';");
+                if (HasNonEmptyToString(prop.Type))
+                {
+                    parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!); sep = '&';");
+                }
+                else
+                {
+                    // A struct's ToString() may be null or empty when default (e.g. Signature365's ApiId): skip the key.
+                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
+                }
             }
             else
             {
@@ -331,7 +577,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 }
                 else if (prop.Type.IsValueType)
                 {
-                    parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.Value.ToString()!); sep = '&';");
+                    parts.Add($"{{ var s = {propAccess}.Value.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
                 }
                 else
                 {
@@ -342,23 +588,22 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             }
         }
 
-        parts.Add("return qs == url ? url : qs; }");
+        parts.Add("return qs == url ? url : qs;");
 
         return string.Join(" ", parts);
     }
 
     /// <summary>
-    /// Generates a query string lambda for operations that have collection parameters.
+    /// Generates a query string builder body for operations that have collection parameters.
     /// Uses List&lt;string&gt; for repeated-key expansion (e.g. ?ids=1&amp;ids=2).
     /// </summary>
-    private static string BuildQueryStringLambdaWithList(
-        string operationFqn,
+    private static string BuildQueryStringBodyWithList(
         List<IPropertySymbol> queryProperties,
         Dictionary<string, string> queryBindingNames)
     {
         var parts = new List<string>
         {
-            $"static (op, url) => {{ var typed = ({operationFqn})op;",
+            "var typed = operation;",
             "var parts = new global::System.Collections.Generic.List<string>();",
         };
 
@@ -378,7 +623,14 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             }
             else if (prop.Type.IsValueType && prop.Type.NullableAnnotation != NullableAnnotation.Annotated)
             {
-                parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!));");
+                if (HasNonEmptyToString(prop.Type))
+                {
+                    parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!));");
+                }
+                else
+                {
+                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+                }
             }
             else
             {
@@ -391,7 +643,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 }
                 else if (prop.Type.IsValueType)
                 {
-                    parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.Value.ToString()!));");
+                    parts.Add($"{{ var s = {propAccess}.Value.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
                 }
                 else
                 {
@@ -404,7 +656,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
         parts.Add("if (parts.Count == 0) return url;");
         parts.Add("var sep = url.Contains('?') ? \"&\" : \"?\";");
-        parts.Add("return url + sep + string.Join(\"&\", parts); }");
+        parts.Add("return url + sep + string.Join(\"&\", parts);");
 
         return string.Join(" ", parts);
     }
@@ -477,19 +729,31 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         {
             parts.Add($"parts.Add(\"{escapedName}=\" + (_item ? \"true\" : \"false\"));");
         }
-        else if (elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated })
+        else if (elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated } && HasNonEmptyToString(elementType))
         {
-            // Non-nullable value types (int, Guid, etc.) — ToString() is always safe
+            // Built-in value types (int, enums, etc.) — ToString() is never null or empty
             parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(_item.ToString()!));");
         }
         else
         {
-            // Reference types or nullable value types — null-check required
-            parts.Add($"{{ var s = _item?.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+            // Reference types, nullable value types and structs whose ToString() may be null or empty — skip those.
+            // A non-nullable struct has no null to propagate, so `?.` is only valid on the others.
+            var access = elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated } ? "_item" : "_item?";
+            parts.Add($"{{ var s = {access}.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
         }
 
         parts.Add("}");
         parts.Add("}");
+    }
+
+    /// <summary>
+    /// Whether <c>ToString()</c> on <paramref name="type"/> can never be null or empty: the built-in
+    /// primitives and enums. Any other struct (e.g. an id whose <c>ToString()</c> returns null when default)
+    /// has its value checked before the key is emitted.
+    /// </summary>
+    private static bool HasNonEmptyToString(ITypeSymbol type)
+    {
+        return type.TypeKind == TypeKind.Enum || type.SpecialType != SpecialType.None;
     }
 
     /// <summary>

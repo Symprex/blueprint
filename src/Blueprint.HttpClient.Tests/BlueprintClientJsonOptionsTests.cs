@@ -4,8 +4,8 @@ using Blueprint.Http;
 using Blueprint.SourceGenerator.Sample;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
 using FluentAssertions;
-using NodaTime;
 using Microsoft.Extensions.Options;
+using NodaTime;
 using NodaTime.Serialization.SystemTextJson;
 
 namespace Blueprint.HttpClient.Tests;
@@ -31,11 +31,10 @@ public sealed class BlueprintClientJsonOptionsTests
         services.AddOptions<BlueprintJsonOptions>()
             .Configure(static options => options.SerializerOptions.ConfigureForNodaTime(DateTimeZoneProviders.Tzdb));
 
-        services.AddBlueprintClient<ITemplateSearchClient, TemplateSearchClient>(
-            static (_, client) => client.BaseAddress = new Uri("https://localhost/api/"),
-            typeof(SearchTemplatesQuery).Assembly);
+        services.AddBlueprintClient<ISampleContractApi, SampleContractApi>(
+            static (_, client) => client.BaseAddress = new Uri("https://localhost/api/"));
 
-        services.AddHttpClient(nameof(TemplateSearchClient))
+        services.AddHttpClient(nameof(SampleContractApi))
             .ConfigurePrimaryHttpMessageHandler(static () => new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(
@@ -48,7 +47,7 @@ public sealed class BlueprintClientJsonOptionsTests
 
         await using var provider = services.BuildServiceProvider();
 
-        var result = await provider.GetRequiredService<ITemplateSearchClient>().SearchAsync("template");
+        var result = await provider.GetRequiredService<ISampleContractApi>().SearchTemplatesAsync(new SearchTemplatesQuery { Q = "template", Page = 1, PageSize = 5 });
 
         result.Should().ContainSingle().Which.CreatedAt.Should().Be(Instant.FromUtc(2024, 1, 2, 3, 4, 5));
     }
@@ -69,7 +68,7 @@ public sealed class BlueprintClientJsonOptionsTests
 
         await using var provider = services.BuildServiceProvider();
 
-        var names = await provider.GetRequiredService<ITemplateSearchClient>().SearchAsync("template");
+        var names = await provider.GetRequiredService<ISampleContractApi>().SearchTemplatesAsync(new SearchTemplatesQuery { Q = "template", Page = 1, PageSize = 5 });
 
         names.Should().BeEmpty();
 
@@ -136,11 +135,10 @@ public sealed class BlueprintClientJsonOptionsTests
     {
         var services = new ServiceCollection();
 
-        services.AddBlueprintClient<ITemplateSearchClient, TemplateSearchClient>(
-            static (_, client) => client.BaseAddress = new Uri("https://localhost/api/"),
-            typeof(SearchTemplatesQuery).Assembly);
+        services.AddBlueprintClient<ISampleContractApi, SampleContractApi>(
+            static (_, client) => client.BaseAddress = new Uri("https://localhost/api/"));
 
-        services.AddHttpClient(nameof(TemplateSearchClient))
+        services.AddHttpClient(nameof(SampleContractApi))
             .ConfigurePrimaryHttpMessageHandler(static () => new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(
@@ -153,7 +151,7 @@ public sealed class BlueprintClientJsonOptionsTests
 
         await using var provider = services.BuildServiceProvider();
 
-        var result = await provider.GetRequiredService<ITemplateSearchClient>().SearchAsync("template");
+        var result = await provider.GetRequiredService<ISampleContractApi>().SearchTemplatesAsync(new SearchTemplatesQuery { Q = "template", Page = 1, PageSize = 5 });
 
         result.Should().ContainSingle().Which.Id.Should().Be("t-2");
     }
@@ -165,42 +163,13 @@ public sealed class BlueprintClientJsonOptionsTests
 
     private static void AddClientRespondingWithAnEmptyList(IServiceCollection services)
     {
-        services.AddBlueprintClient<ITemplateSearchClient, TemplateSearchClient>(
-            static (_, client) => client.BaseAddress = new Uri("https://localhost/api/"),
-            typeof(SearchTemplatesQuery).Assembly);
+        services.AddBlueprintClient<ISampleContractApi, SampleContractApi>(
+            static (_, client) => client.BaseAddress = new Uri("https://localhost/api/"));
 
-        services.AddHttpClient(nameof(TemplateSearchClient))
+        services.AddHttpClient(nameof(SampleContractApi))
             .ConfigurePrimaryHttpMessageHandler(static () => new FakeHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("[]", Encoding.UTF8, "application/json"),
             }));
-    }
-}
-
-/// <summary>A typed client over the sample contract, as a consumer writes one.</summary>
-public interface ITemplateSearchClient
-{
-    /// <summary>Searches templates by name.</summary>
-    /// <param name="term">The search term.</param>
-    /// <returns>The templates found.</returns>
-    Task<TemplateApiResource[]> SearchAsync(string term);
-}
-
-/// <summary>The implementation <see cref="ITemplateSearchClient"/> is registered against.</summary>
-public sealed class TemplateSearchClient : ITemplateSearchClient
-{
-    private readonly BlueprintHttpClient _client;
-
-    /// <summary>Initialises a new instance of the <see cref="TemplateSearchClient"/> class.</summary>
-    /// <param name="client">The client the registration injects.</param>
-    public TemplateSearchClient(BlueprintHttpClient client)
-    {
-        this._client = client;
-    }
-
-    /// <inheritdoc />
-    public Task<TemplateApiResource[]> SearchAsync(string term)
-    {
-        return this._client.CallAsync<TemplateApiResource[]>(new SearchTemplatesQuery { Q = term, Page = 1, PageSize = 5 });
     }
 }

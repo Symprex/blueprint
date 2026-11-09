@@ -68,9 +68,8 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
     private readonly bool _allowUnauthenticated;
     private readonly StringComparison _scopeComparison;
 
-    // Inverse mapping: required verb → list of parent verbs that also satisfy it.
-    // e.g. "Create" → ["Manage"] means a "Manage" claim also satisfies a "Create" requirement.
-    private readonly FrozenDictionary<string, string[]> _verbIncludedIn;
+    // Which parent verbs also satisfy a required verb, e.g. a "Manage" claim also satisfies a "Create" requirement.
+    private readonly VerbHierarchy _verbHierarchy;
 
     /// <summary>
     /// The standard verb hierarchy where <c>Manage</c> includes all CRUD verbs.
@@ -230,9 +229,64 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
         this._ignoredScopes = ignoredScopes is not null
             ? ignoredScopes.ToFrozenSet(scopeComparer)
             : FrozenSet<string>.Empty;
-        this._verbIncludedIn = BuildInverseVerbMap(verbInclusions, scopeComparer);
+        this._verbHierarchy = new VerbHierarchy(verbInclusions ?? new Dictionary<string, string[]>(), scopeComparison);
         this._legacyScopeMapper = legacyScopeMapper;
         this._allowWhenNoScopeClaims = allowWhenNoScopeClaims;
+    }
+
+    /// <summary>
+    /// Initialises a new instance of the <see cref="ScopePairClaimAuthorizationProvider"/> class that applies an app's
+    /// <see cref="VerbHierarchy"/>: the same instance a <see cref="ScopePairOperationIndex"/> is given, so the two agree on
+    /// which scope pairs satisfy an operation.
+    /// </summary>
+    /// <param name="verbHierarchy">
+    /// The verb hierarchy: a claim carrying a verb also satisfies a requirement for any verb it includes. Its
+    /// <see cref="VerbHierarchy.Comparison"/> is how all scope text is compared, as <c>scopeComparison</c> is for the other
+    /// constructor, so it must be <see cref="StringComparison.Ordinal"/> or <see cref="StringComparison.OrdinalIgnoreCase"/>.
+    /// </param>
+    /// <param name="scopeClaimType">The claim type that carries scope-pair values.</param>
+    /// <param name="separator">
+    /// The separator between noun and verb in scope claim values (e.g. <c>"::"</c> for <c>"Template::Read"</c>).
+    /// </param>
+    /// <param name="ignoredScopes">
+    /// Scope values to ignore during authorization, used exactly as given: none of the OAuth2 defaults is added.
+    /// </param>
+    /// <param name="legacyScopeMapper">
+    /// Optional function that maps legacy scope claim values to replacement values, tried when a claim matches no required
+    /// pair directly.
+    /// </param>
+    /// <param name="allowWhenNoScopeClaims">
+    /// When <see langword="true"/>, authenticated identities that carry no API scope claims (after filtering ignored scopes)
+    /// are granted access. Defaults to <see langword="false"/> (deny).
+    /// </param>
+    /// <param name="allowUnauthenticated">
+    /// When <see langword="true"/>, an unauthenticated caller is allowed by this provider, which then judges only the scopes
+    /// of authenticated callers. Defaults to <see langword="false"/> (deny).
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="verbHierarchy"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The hierarchy's comparison is neither <see cref="StringComparison.Ordinal"/> nor
+    /// <see cref="StringComparison.OrdinalIgnoreCase"/>.
+    /// </exception>
+    public ScopePairClaimAuthorizationProvider(
+        VerbHierarchy verbHierarchy,
+        string scopeClaimType,
+        string separator,
+        IEnumerable<string>? ignoredScopes = null,
+        LegacyScopeMapperFunc? legacyScopeMapper = null,
+        bool allowWhenNoScopeClaims = false,
+        bool allowUnauthenticated = false)
+        : this(
+            scopeClaimType,
+            separator,
+            ignoredScopes,
+            verbInclusions: null,
+            legacyScopeMapper,
+            allowWhenNoScopeClaims,
+            allowUnauthenticated,
+            (verbHierarchy ?? throw new ArgumentNullException(nameof(verbHierarchy))).Comparison)
+    {
+        this._verbHierarchy = verbHierarchy;
     }
 
     /// <inheritdoc />
@@ -369,14 +423,11 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
                 return true;
             }
 
-            if (this._verbIncludedIn.TryGetValue(required.Verb, out var parentVerbs))
+            foreach (var parentVerb in this._verbHierarchy.IncludedIn(required.Verb))
             {
-                foreach (var parentVerb in parentVerbs)
+                if (MatchesScopePair(scopeValue, required.Noun, this._separator, parentVerb, this._scopeComparison))
                 {
-                    if (MatchesScopePair(scopeValue, required.Noun, this._separator, parentVerb, this._scopeComparison))
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
@@ -408,72 +459,5 @@ public class ScopePairClaimAuthorizationProvider : IResourceAuthorizationProvide
         return span[..noun.Length].Equals(noun.AsSpan(), comparison)
             && span.Slice(noun.Length, separator.Length).Equals(separator.AsSpan(), comparison)
             && span[(noun.Length + separator.Length)..].Equals(verb.AsSpan(), comparison);
-    }
-
-    /// <summary>
-    /// Builds the inverse verb mapping from <c>verbInclusions</c>. The input maps parent verbs
-    /// to their children (e.g. <c>Manage → [Create, Read, Update, Delete]</c>). The output
-    /// maps each child verb to the parent verbs that include it (e.g. <c>Create → [Manage]</c>),
-    /// enabling O(1) lookup during authorization: "which parent verbs would also satisfy this
-    /// required verb?"
-    /// </summary>
-    private static FrozenDictionary<string, string[]> BuildInverseVerbMap(
-        IDictionary<string, string[]>? verbInclusions,
-        StringComparer verbComparer)
-    {
-        if (verbInclusions is null || verbInclusions.Count == 0)
-        {
-            return FrozenDictionary<string, string[]>.Empty;
-        }
-
-        // Inclusion is transitive (Admin → Manage → Read means Admin includes Read), so each parent is mapped from every verb
-        // it reaches, not only those it lists. Computed once here, so authorization stays a single lookup per verb; the
-        // visited set ends a walk that meets a cycle.
-        var children = new Dictionary<string, string[]>(verbComparer);
-
-        foreach (var (parentVerb, childVerbs) in verbInclusions)
-        {
-            // Keys differing only in case were accepted before inclusion became transitive, so merge them, not throw.
-            children[parentVerb] = children.TryGetValue(parentVerb, out var existing) ? [.. existing, .. childVerbs] : childVerbs;
-        }
-
-        var inverse = new Dictionary<string, HashSet<string>>(verbComparer);
-
-        foreach (var parentVerb in children.Keys)
-        {
-            var visited = new HashSet<string>(verbComparer) { parentVerb };
-            var pending = new Stack<string>(children[parentVerb]);
-
-            while (pending.Count > 0)
-            {
-                var includedVerb = pending.Pop();
-
-                if (!visited.Add(includedVerb))
-                {
-                    continue;
-                }
-
-                if (!inverse.TryGetValue(includedVerb, out var parents))
-                {
-                    parents = new HashSet<string>(verbComparer);
-                    inverse[includedVerb] = parents;
-                }
-
-                parents.Add(parentVerb);
-
-                if (children.TryGetValue(includedVerb, out var grandchildren))
-                {
-                    foreach (var grandchild in grandchildren)
-                    {
-                        pending.Push(grandchild);
-                    }
-                }
-            }
-        }
-
-        return inverse.ToFrozenDictionary(
-            static kvp => kvp.Key,
-            static kvp => kvp.Value.ToArray(),
-            verbComparer);
     }
 }

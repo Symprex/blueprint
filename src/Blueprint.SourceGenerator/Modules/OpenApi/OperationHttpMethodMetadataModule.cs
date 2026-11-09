@@ -12,13 +12,6 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </summary>
 public sealed class OperationHttpMethodMetadataModule : IBlueprintSourceGeneratorModule, IDescriptorContributor
 {
-    private const string HttpMethodAttributeMetadataName = "Blueprint.Model.Attributes.HttpMethodAttribute";
-    private const string HttpGetAttributeMetadataName = "Blueprint.Model.Attributes.HttpGetAttribute";
-    private const string HttpPostAttributeMetadataName = "Blueprint.Model.Attributes.HttpPostAttribute";
-    private const string HttpPutAttributeMetadataName = "Blueprint.Model.Attributes.HttpPutAttribute";
-    private const string HttpPatchAttributeMetadataName = "Blueprint.Model.Attributes.HttpPatchAttribute";
-    private const string HttpDeleteAttributeMetadataName = "Blueprint.Model.Attributes.HttpDeleteAttribute";
-
     /// <inheritdoc />
     public string ModuleId => nameof(OperationHttpMethodMetadataModule);
 
@@ -62,105 +55,31 @@ public sealed class OperationHttpMethodMetadataModule : IBlueprintSourceGenerato
     private static bool TryResolveHttpMethods(DescriptorContributorContext context, out string[] httpMethods)
     {
         var operationType = context.GetOperationTypeSymbol();
-        var explicitMethods = GetExplicitHttpMethods(operationType);
+        var resolved = OperationHttpMethodResolver.Resolve(operationType);
 
-        if (explicitMethods.Length > 0)
+        if (resolved.InvalidAttribute is { } invalidAttribute)
         {
-            foreach (var explicitMethod in explicitMethods)
-            {
-                if (NormalizeHttpMethod(explicitMethod.HttpMethod) is not null)
-                {
-                    continue;
-                }
-
-                context.AddDiagnostic(
-                    new DiagnosticInfo(
-                        OperationHttpMethodMetadataDiagnosticDescriptors.InvalidExplicitHttpMethod,
-                        GetExplicitHttpMethodLocation(explicitMethod.Attribute, operationType),
-                        [operationType.Name]));
-                httpMethods = [];
-                return false;
-            }
-
-            httpMethods = explicitMethods
-                .Select(static explicitMethod => NormalizeHttpMethod(explicitMethod.HttpMethod)!)
-                .Distinct(StringComparer.Ordinal)
-                .OrderBy(static httpMethod => httpMethod, StringComparer.Ordinal)
-                .ToArray();
-
-            if (httpMethods.Length > 1)
-            {
-                context.AddDiagnostic(
-                    new DiagnosticInfo(
-                        OperationHttpMethodMetadataDiagnosticDescriptors.ConflictingHttpMethods,
-                        GetExplicitHttpMethodLocation(explicitMethods[0].Attribute, operationType),
-                        [operationType.Name, string.Join(", ", httpMethods)]));
-            }
-
-            return true;
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    OperationHttpMethodMetadataDiagnosticDescriptors.InvalidExplicitHttpMethod,
+                    GetExplicitHttpMethodLocation(invalidAttribute, operationType),
+                    [operationType.Name]));
+            httpMethods = [];
+            return false;
         }
 
-        httpMethods = IsCommand(operationType)
-            ? ["POST"]
-            : ["GET"];
+        httpMethods = resolved.Methods;
+
+        if (httpMethods.Length > 1 && resolved.FirstExplicitAttribute is { } firstExplicitAttribute)
+        {
+            context.AddDiagnostic(
+                new DiagnosticInfo(
+                    OperationHttpMethodMetadataDiagnosticDescriptors.ConflictingHttpMethods,
+                    GetExplicitHttpMethodLocation(firstExplicitAttribute, operationType),
+                    [operationType.Name, string.Join(", ", httpMethods)]));
+        }
+
         return true;
-    }
-
-    private static (AttributeData Attribute, string? HttpMethod)[] GetExplicitHttpMethods(INamedTypeSymbol operationType)
-    {
-        return operationType.GetAttributes()
-            .Where(static attribute => IsExplicitHttpMethodAttribute(attribute))
-            .Select(static attribute => (Attribute: attribute, HttpMethod: GetExplicitHttpMethodValue(attribute)))
-            .ToArray();
-    }
-
-    private static bool IsExplicitHttpMethodAttribute(AttributeData attribute)
-    {
-        return attribute.AttributeClass is { } attributeClass
-            && IsOrInheritsFromHttpMethodAttribute(attributeClass);
-    }
-
-    private static string? NormalizeHttpMethod(string? httpMethod)
-    {
-        if (httpMethod is null || string.IsNullOrWhiteSpace(httpMethod))
-        {
-            return null;
-        }
-
-        return httpMethod.Trim().ToUpperInvariant();
-    }
-
-    private static string? GetExplicitHttpMethodValue(AttributeData attribute)
-    {
-        return attribute.AttributeClass?.ToFullMetadataName() switch
-        {
-            HttpGetAttributeMetadataName => "GET",
-            HttpPostAttributeMetadataName => "POST",
-            HttpPutAttributeMetadataName => "PUT",
-            HttpPatchAttributeMetadataName => "PATCH",
-            HttpDeleteAttributeMetadataName => "DELETE",
-            _ => attribute.ConstructorArguments.FirstOrDefault().Value as string,
-        };
-    }
-
-    private static bool IsOrInheritsFromHttpMethodAttribute(INamedTypeSymbol attributeClass)
-    {
-        for (var current = attributeClass; current is not null; current = current.BaseType)
-        {
-            if (string.Equals(current.ToFullMetadataName(), HttpMethodAttributeMetadataName, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool IsCommand(INamedTypeSymbol operationType)
-    {
-        return operationType.AllInterfaces.Any(static candidate =>
-            candidate.IsInNamespace("Blueprint", "Model")
-            && candidate.Name == "ICommand");
     }
 
     private static LocationInfo? GetExplicitHttpMethodLocation(AttributeData attribute, INamedTypeSymbol operationType)
