@@ -1,0 +1,103 @@
+<Project>
+  <!--
+    BlueprintEmitOpenApi: writes the app's OpenAPI document on build.
+
+      <BlueprintEmitOpenApi>true</BlueprintEmitOpenApi>
+      <BlueprintOpenApiPath>Spec/openapi.json</BlueprintOpenApiPath>          (the default; relative to the project)
+      <BlueprintOpenApiEnvironment>Development</BlueprintOpenApiEnvironment>  (the default)
+      <BlueprintOpenApiTargetFramework>net10.0</BlueprintOpenApiTargetFramework>  (with TargetFrameworks; the first by default)
+
+    After the build, the built app is run in Blueprint's document-only mode: it runs only until its host is built, then
+    writes the document AddBlueprintApi declared (only if it has changed, so an unchanged API leaves the file and its
+    timestamp alone) and exits. No hosted service, middleware or later start-up code runs. See docs/openapi-migration.md.
+
+    A package consumer gets this file from Blueprint.Runtime's buildTransitive folder. A project in this repository
+    references Blueprint.Runtime as a project, which imports nothing, so it imports this file itself.
+  -->
+  <PropertyGroup>
+    <BlueprintEmitOpenApi Condition="'$(BlueprintEmitOpenApi)' == ''">false</BlueprintEmitOpenApi>
+    <BlueprintOpenApiPath Condition="'$(BlueprintOpenApiPath)' == ''">Spec/openapi.json</BlueprintOpenApiPath>
+    <BlueprintOpenApiEnvironment Condition="'$(BlueprintOpenApiEnvironment)' == ''">Development</BlueprintOpenApiEnvironment>
+    <!-- Milliseconds. An app that never calls AddBlueprintApi never stops on its own; this ends it and fails the build. -->
+    <BlueprintOpenApiTimeout Condition="'$(BlueprintOpenApiTimeout)' == ''">120000</BlueprintOpenApiTimeout>
+    <!-- An app with TargetFrameworks writes its one document from one framework's build, the first it lists unless this
+         names another. Framework builds may run in parallel, so each writing the file would race, and the last to finish
+         would decide what it held. -->
+    <BlueprintOpenApiTargetFramework Condition="'$(BlueprintOpenApiTargetFramework)' == ''">$([System.Text.RegularExpressions.Regex]::Match('$(TargetFrameworks)', '[^;\s]+').Value)</BlueprintOpenApiTargetFramework>
+  </PropertyGroup>
+
+  <!-- The spec is the repository's, not the app's: the web SDK would publish it as content, and an app that references
+       another app would then publish both at one relative path (NETSDK1152). Excluded whether or not this build writes
+       it, since a committed spec is there either way. -->
+  <ItemGroup>
+    <Content Remove="$(BlueprintOpenApiPath)" />
+  </ItemGroup>
+
+  <!-- Apps only: a library has nothing to start, and a test project's entry point runs its tests. Both ignore the
+       property, so it can be passed to a whole solution's build. It runs in a framework's build, not in the outer build
+       of an app with TargetFrameworks, which has no TargetPath to run. -->
+  <Target Name="BlueprintEmitOpenApi"
+          AfterTargets="Build"
+          Condition="'$(BlueprintEmitOpenApi)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and ('$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe') and '$(IsTestProject)' != 'true'"
+          DependsOnTargets="_BlueprintCheckOpenApiTargetFramework;_BlueprintWriteOpenApiDocument;_BlueprintBuildOpenApiTargetFramework" />
+
+  <!-- A framework the app is never built for would never write the document, and the build would leave an earlier spec in
+       place for a CI check to accept. -->
+  <Target Name="_BlueprintCheckOpenApiTargetFramework">
+    <PropertyGroup>
+      <!-- Every space and line break removed, so that a list laid out over several lines still matches. -->
+      <_BlueprintOpenApiFrameworks>;$([System.Text.RegularExpressions.Regex]::Replace('$(TargetFrameworks)', '\s', ''));</_BlueprintOpenApiFrameworks>
+    </PropertyGroup>
+
+    <Error Condition="'$(TargetFrameworks)' != '' and !$(_BlueprintOpenApiFrameworks.Contains(';$(BlueprintOpenApiTargetFramework);'))"
+           Text="$(MSBuildProjectName) targets $(_BlueprintOpenApiFrameworks.Trim(`;`)), but BlueprintOpenApiTargetFramework names $(BlueprintOpenApiTargetFramework), so its OpenAPI document would never be written. Name one of the frameworks it targets." />
+
+    <Error Condition="'$(TargetFrameworks)' == '' and '$(BlueprintOpenApiTargetFramework)' != '' and '$(BlueprintOpenApiTargetFramework)' != '$(TargetFramework)'"
+           Text="$(MSBuildProjectName) targets $(TargetFramework) only, but BlueprintOpenApiTargetFramework names $(BlueprintOpenApiTargetFramework), so its OpenAPI document would never be written. Remove it, or name $(TargetFramework)." />
+  </Target>
+
+  <!-- Any other framework's build builds the named framework, which writes the document. MSBuild builds a project for a
+       framework once in a build, so where that framework's build has run, or is running, this waits for it and writes
+       nothing more; where it has not, as in `dotnet build -f` naming another framework, this builds it. -->
+  <Target Name="_BlueprintBuildOpenApiTargetFramework"
+          Condition="'$(TargetFrameworks)' != '' and '$(TargetFramework)' != '$(BlueprintOpenApiTargetFramework)'">
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Build" Properties="TargetFramework=$(BlueprintOpenApiTargetFramework)" />
+  </Target>
+
+  <Target Name="_BlueprintWriteOpenApiDocument"
+          Condition="'$(TargetFrameworks)' == '' or '$(TargetFramework)' == '$(BlueprintOpenApiTargetFramework)'">
+    <PropertyGroup>
+      <_BlueprintOpenApiFullPath>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildProjectDirectory)', '$(BlueprintOpenApiPath)'))))</_BlueprintOpenApiFullPath>
+      <_BlueprintOpenApiDotnet>$(DOTNET_HOST_PATH)</_BlueprintOpenApiDotnet>
+      <_BlueprintOpenApiDotnet Condition="'$(_BlueprintOpenApiDotnet)' == ''">dotnet</_BlueprintOpenApiDotnet>
+      <!-- Written by the app once the document is written or found unchanged. The exit code alone cannot say so: an app
+           that returns before starting its host exits with 0 and writes nothing, leaving any earlier spec in place. -->
+      <_BlueprintOpenApiCompletionPath>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'blueprint-openapi.completed'))))</_BlueprintOpenApiCompletionPath>
+    </PropertyGroup>
+
+    <Delete Files="$(_BlueprintOpenApiCompletionPath)" />
+
+    <!-- The app runs from the project directory, as `dotnet run` runs it. ASPNETCORE_URLS only matters for an app that
+         starts after all, such as one that never calls AddBlueprintApi: it then listens on a free loopback port, not
+         one in use, until the timeout ends it. -->
+    <Exec Command="&quot;$(_BlueprintOpenApiDotnet)&quot; exec &quot;$(TargetPath)&quot;"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          EnvironmentVariables="BLUEPRINT_OPENAPI_OUTPUT_PATH=$(_BlueprintOpenApiFullPath);BLUEPRINT_OPENAPI_COMPLETION_PATH=$(_BlueprintOpenApiCompletionPath);DOTNET_ENVIRONMENT=$(BlueprintOpenApiEnvironment);ASPNETCORE_ENVIRONMENT=$(BlueprintOpenApiEnvironment);ASPNETCORE_URLS=http://127.0.0.1:0"
+          StandardOutputImportance="low"
+          StandardErrorImportance="high"
+          Timeout="$(BlueprintOpenApiTimeout)"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_BlueprintOpenApiExitCode" />
+    </Exec>
+
+    <Error Condition="'$(_BlueprintOpenApiExitCode)' != '0'"
+           Text="$(MSBuildProjectName) could not write its OpenAPI document to $(_BlueprintOpenApiFullPath): the app exited with code $(_BlueprintOpenApiExitCode). Its error output is above." />
+
+    <Error Condition="'$(_BlueprintOpenApiExitCode)' == '0' and !Exists('$(_BlueprintOpenApiCompletionPath)')"
+           Text="$(MSBuildProjectName) exited without writing its OpenAPI document to $(_BlueprintOpenApiFullPath). The app must build its host (WebApplication.CreateBuilder, Host.CreateDefaultBuilder or Host.CreateApplicationBuilder) with AddBlueprintApi among its services." />
+
+    <Delete Files="$(_BlueprintOpenApiCompletionPath)" />
+
+    <Message Importance="high" Text="$(MSBuildProjectName) -> $(_BlueprintOpenApiFullPath)" />
+  </Target>
+</Project>

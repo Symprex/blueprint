@@ -20,5 +20,8 @@
     <ProjectReference Include="..\Blueprint.HttpClient\Blueprint.HttpClient.csproj" />
   </ItemGroup>
 
+  <!-- The BlueprintEmitOpenApi target, which a package consumer gets from Blueprint.Runtime's buildTransitive folder. -->
+  <Import Project="..\Blueprint.Runtime\buildTransitive\Blueprint.Runtime.targets" />
+
 </Project>
 

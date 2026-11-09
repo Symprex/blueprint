@@ -186,14 +186,16 @@ Blueprint delegates standard ASP.NET Core concerns to the consumer:
 
 ## OpenAPI customisation
 
-Blueprint's OpenAPI document is pre-rendered at startup. Use hooks on `MapBlueprintApi` to customise
-the document:
+Blueprint's OpenAPI document is pre-rendered at startup. Customise it with `AddBlueprintApi`, where the
+`BlueprintEmitOpenApi` build target reads it, and call `MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>()`
+without arguments:
 
 ```csharp
-endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(
-    "api/",
-    configureOpenApi: info => { info.Title = "My API"; info.Version = "1.0.0"; },
-    configureOpenApiOperations: ops =>
+services.AddBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(blueprint =>
+{
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info => { info.Title = "My API"; info.Version = "1.0.0"; });
+    blueprint.ConfigureOpenApiOperations(ops =>
     {
         // Remove auto-populated TenantId parameters from the public spec
         ops.Processors.Add(static (operation, descriptor) =>
@@ -206,4 +208,5 @@ endpoints.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(
                 : operation;
         });
     });
+});
 ```

@@ -6,8 +6,5 @@ var host = Host.CreateDefaultBuilder(args)
         webBuilder.UseStartup<Startup>();
     }).Build();
 
-// Development helper: writes Spec/openapi.json to disk when running locally.
-// Compiled out in Release builds and only runs in the Development environment.
-host.OutputOpenApi();
-
+// Spec/openapi.json is written at build time instead: dotnet build -p:BlueprintEmitOpenApi=true.
 host.Run();
