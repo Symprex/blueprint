@@ -13,12 +13,14 @@ namespace Blueprint.SourceGenerator.Modules.Gateway;
 /// <param name="InnerName">The inner operation's name, for messages.</param>
 /// <param name="AttributeLocation">The <c>[Expose&lt;TInner&gt;]</c> attribute, where the diagnostics are reported.</param>
 /// <param name="MissingInterface">BPGW006, when the class declares no operation interface.</param>
+/// <param name="BindingDiagnostics">BPGW007 to BPGW014, D11's binding and map hook diagnostics.</param>
 internal sealed record ExposedOperationAnalysis(
     OperationPropertyModel Model,
     string OperationName,
     string InnerName,
     LocationInfo? AttributeLocation,
-    DiagnosticInfo? MissingInterface)
+    DiagnosticInfo? MissingInterface,
+    EquatableList<DiagnosticInfo> BindingDiagnostics)
 {
     private const string OperationInterfaceMetadataName = "Blueprint.Model.IOperation";
 
@@ -49,7 +51,13 @@ internal sealed record ExposedOperationAnalysis(
                 [type.Name, inner.Name, SuggestInterface(inner)]);
         }
 
-        return new ExposedOperationAnalysis(OperationPropertyModelBuilder.Build(type), type.Name, inner.Name, location, missingInterface);
+        return new ExposedOperationAnalysis(
+            OperationPropertyModelBuilder.Build(type),
+            type.Name,
+            inner.Name,
+            location,
+            missingInterface,
+            EquatableList<DiagnosticInfo>.TakeOwnership(GatewayBindings.Analyse(type, inner, location)));
     }
 
     /// <summary>
@@ -69,6 +77,8 @@ internal sealed record ExposedOperationAnalysis(
         {
             diagnostics.Add(this.MissingInterface);
         }
+
+        diagnostics.AddRange(this.BindingDiagnostics);
 
         return EquatableList<DiagnosticInfo>.TakeOwnership(diagnostics);
     }

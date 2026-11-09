@@ -358,7 +358,7 @@ public class ExposeGeneratorTests
         diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("IQuery<global::Inner.WidgetResult>");
     }
 
-    private static string Located(Diagnostic diagnostic)
+    internal static string Located(Diagnostic diagnostic)
     {
         var tree = diagnostic.Location.SourceTree!;
         return tree.GetText().ToString(diagnostic.Location.SourceSpan);
@@ -370,7 +370,7 @@ public class ExposeGeneratorTests
             .Single(s => s.HintName == hintName).SourceText;
     }
 
-    private static AllGeneratorsRun RunAllGenerators(string[] sources, MetadataReference? innerContract = null)
+    internal static AllGeneratorsRun RunAllGenerators(string[] sources, MetadataReference? innerContract = null)
     {
         var generators = new IIncrementalGenerator[]
         {
@@ -411,7 +411,7 @@ public class ExposeGeneratorTests
             cached);
     }
 
-    private static CSharpCompilation CreateCompilation(string[] sources, MetadataReference? innerContract = null)
+    internal static CSharpCompilation CreateCompilation(string[] sources, MetadataReference? innerContract = null)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Diagnose);
         var references = TestHelpers.CreateMetadataReferences().Append(innerContract ?? _innerContract.Value);
@@ -423,7 +423,7 @@ public class ExposeGeneratorTests
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
     }
 
-    private sealed record AllGeneratorsRun(
+    internal sealed record AllGeneratorsRun(
         ImmutableArray<Diagnostic> GeneratorDiagnostics,
         IReadOnlyList<string> EmitErrors,
         IReadOnlyDictionary<string, string> Sources,

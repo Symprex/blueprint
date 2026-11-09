@@ -1,6 +1,9 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 
+// D11: every exposed operation whose inner operation has a TenantId takes it from the caller's claim, never from the request.
+[assembly: Blueprint.Model.Attributes.GatewayBind("TenantId", FromClaim = "tenant_id")]
+
 namespace Blueprint.SourceGenerator.Sample.Gateway;
 
 /// <summary>
@@ -21,6 +24,7 @@ public partial class GatewayBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(GatewayTemplateResource[]))]
 [JsonSerializable(typeof(TemplateApiResource))]
 [JsonSerializable(typeof(TemplateApiResource[]))]
+[JsonSerializable(typeof(TenantNoteApiResource))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(ValidationProblemDetails))]
 public partial class GatewayBlueprintAppJsonContext : JsonSerializerContext;

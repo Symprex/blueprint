@@ -232,7 +232,7 @@ Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attr
 
 ## Gateway operations (BPGW)
 
-Reported for an operation marked `[Expose<TInner>]`. BPGW001 and BPGW006 are reported at the attribute; the others at the operation's name. An operation with BPGW003, BPGW004 or BPGW005 gets no pipeline.
+Reported for an operation marked `[Expose<TInner>]`. BPGW001, BPGW006 and BPGW010 are reported at the `[Expose<TInner>]` attribute, BPGW007, BPGW008, BPGW009, BPGW011, BPGW012 and BPGW013 at the binding attribute, BPGW014 at the hook, and the others at the operation's name. An operation with BPGW003, BPGW004 or BPGW005 gets no pipeline. An invalid binding is ignored by the generated forward, so its property stays in the public shape until it is fixed.
 
 | ID | Severity | Title |
 |----|----------|-------|
@@ -242,6 +242,14 @@ Reported for an operation marked `[Expose<TInner>]`. BPGW001 and BPGW006 are rep
 | BPGW004 | Error | More than one `[BlueprintClient]` includes the inner operation, so the upstream to forward to is ambiguous |
 | BPGW005 | Error | Gateway operation has a hand-written handler, inline or external, but `[Expose<TInner>]` generates its handler |
 | BPGW006 | Error | `[Expose<TInner>]` class declares no operation interface, or one with no result. Declare the inner operation's own, for example `partial class X : IQuery<R>`, since no generator can see an interface another generator emits |
+| BPGW007 | Error | `[Bind]` or `[Hide]` names a property the inner operation has no public settable property of |
+| BPGW008 | Error | `[Bind]` sets none, or more than one, of `FromClaim`, `FromRoute`, `FromProperty` and `Value`; or `[assembly: GatewayBind]` sets no `FromClaim` |
+| BPGW009 | Error | `[Hide]` on a property the inner operation requires (`required`). Bind it instead |
+| BPGW010 | Error | The inner operation's route has a placeholder the gateway's route lacks, and the property is neither bound nor hidden, so the inner request builder would have no value for it |
+| BPGW011 | Error | A binding's source does not convert to the inner property's type: a claim bound to a type route binding cannot read, or a `FromRoute`, `FromProperty` or `Value` of another type |
+| BPGW012 | Error | `[Bind(FromRoute)]` names a placeholder the gateway's own route lacks or that binds no property it declares, or `[Bind(FromProperty)]` names a property it does not declare |
+| BPGW013 | Error | The same inner property is bound or hidden more than once on one operation |
+| BPGW014 | Error | `OnMap` or `OnMapAsync` cannot be called by the generated forward: it has to be a single `internal` or `public` instance method whose first parameter is `TInner`, `OnMap` returning `void` and `OnMapAsync` returning `ValueTask` or `Task` |
 
 ## Module system (BPMOD)
 

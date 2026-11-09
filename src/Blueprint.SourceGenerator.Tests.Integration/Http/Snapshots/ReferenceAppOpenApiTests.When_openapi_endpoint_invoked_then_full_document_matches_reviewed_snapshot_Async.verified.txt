@@ -2293,6 +2293,114 @@
         ]
       }
     },
+    "/tenants/{TenantId}/notes": {
+      "post": {
+        "operationId": "AddTenantNote",
+        "summary": "Add a note within a tenant.",
+        "description": "The inner service\u0027s TenantIsolationApiAuthoriser refuses a TenantId that is not the caller\u0027s account.",
+        "tags": [
+          "TenantNotes"
+        ],
+        "parameters": [
+          {
+            "name": "TenantId",
+            "in": "path",
+            "required": true,
+            "description": "The tenant the note belongs to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddTenantNote"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantNoteApiResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/tenants/{TenantId}/templates/{Id}/settings": {
       "put": {
         "operationId": "UpdateTemplateSettings",
@@ -2405,6 +2513,32 @@
   },
   "components": {
     "schemas": {
+      "AddTenantNote": {
+        "title": "AddTenantNote",
+        "description": "Add a note within a tenant.",
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The note.",
+            "minLength": 1
+          },
+          "source": {
+            "type": "string",
+            "nullable": true,
+            "description": "Where the note came from."
+          },
+          "internalNote": {
+            "type": "string",
+            "nullable": true,
+            "description": "A note for staff only."
+          }
+        },
+        "additionalProperties": false
+      },
       "AuthManifestApiResource": {
         "title": "AuthManifestApiResource",
         "description": "Resource representing the authorization manifest \u2014 which operations the current user can access.",
@@ -3363,6 +3497,49 @@
         },
         "additionalProperties": false
       },
+      "TenantNoteApiResource": {
+        "title": "TenantNoteApiResource",
+        "description": "A note within a tenant, as AddTenantNoteCommand received it.",
+        "type": "object",
+        "properties": {
+          "$links": {
+            "type": "object",
+            "description": "The links for this resource, other endpoints that apply to this resource\nin it\u0027s current state.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Link"
+            },
+            "readOnly": true
+          },
+          "$object": {
+            "type": "string",
+            "description": "The object type of this resource, used to indicate to clients what they\nare dealing with (i.e. \u0027user\u0027, \u0027account\u0027, \u0027group\u0027).",
+            "readOnly": true
+          },
+          "$partial": {
+            "type": "boolean",
+            "description": "Gets or sets a value indicating whether or not this resource is \u0027partial\u0027, an indication that not all properties have been\npopulated for performance reasons and a client should reload from the \u0027self\u0027 link to retrieve all values."
+          },
+          "InternalNote": {
+            "type": "string",
+            "nullable": true,
+            "description": "A note for staff only."
+          },
+          "Source": {
+            "type": "string",
+            "nullable": true,
+            "description": "Where the note came from."
+          },
+          "TenantId": {
+            "type": "string",
+            "description": "The tenant the note belongs to."
+          },
+          "Text": {
+            "type": "string",
+            "description": "The note."
+          }
+        },
+        "additionalProperties": false
+      },
       "UpdateTemplate": {
         "title": "UpdateTemplate",
         "description": "Update an existing template\u0027s name and content.",
@@ -3514,6 +3691,9 @@
     {
       "name": "Templates",
       "description": "Email template management including CRUD, publishing, and previewing."
+    },
+    {
+      "name": "TenantNotes"
     }
   ]
 }

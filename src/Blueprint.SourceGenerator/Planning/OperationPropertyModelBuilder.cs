@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Modules.Gateway;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Planning;
@@ -49,7 +50,8 @@ internal static class OperationPropertyModelBuilder
         return new OperationPropertyModel(
             operationType.ToFullMetadataName(),
             exposed is null ? null : CreateExposedInfo(exposed),
-            new EquatableList<OperationPropertyInfo>(infos));
+            new EquatableList<OperationPropertyInfo>(infos),
+            GetBindings(operationType));
     }
 
     /// <summary>
@@ -114,6 +116,19 @@ internal static class OperationPropertyModelBuilder
                 yield return property.Member;
             }
         }
+    }
+
+    /// <summary>
+    /// Gets the D11 bindings of an operation marked <c>[Expose&lt;TInner&gt;]</c>: the inner properties it binds or hides,
+    /// which are left out of its contributed properties and filled by the generated forward instead.
+    /// </summary>
+    /// <param name="operationType">The operation.</param>
+    /// <returns>The valid bindings, empty when the operation exposes nothing or binds nothing.</returns>
+    public static EquatableList<GatewayPropertyBinding> GetBindings(INamedTypeSymbol operationType)
+    {
+        return FindExposedType(operationType, out _) is { } exposed
+            ? GatewayBindings.Resolve(operationType, exposed)
+            : EquatableList<GatewayPropertyBinding>.Empty;
     }
 
     /// <summary>
@@ -237,12 +252,19 @@ internal static class OperationPropertyModelBuilder
         }
 
         // D9: each public settable inner property that is not obsolete is contributed. D11's bound and hidden properties
-        // (#66) are left out here too, so that every site and the emitted partial agree on them.
+        // are left out here, so that every site and the emitted partial agree that none is in the public shape.
+        var bound = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var binding in GatewayBindings.Resolve(operationType, exposedType))
+        {
+            bound.Add(binding.PropertyName);
+        }
+
         return exposedType.GetAllMembers()
             .OfType<IPropertySymbol>()
-            .Where(static member => IsPublicInstanceProperty(member)
+            .Where(member => IsPublicInstanceProperty(member)
                 && member.SetMethod is { DeclaredAccessibility: Accessibility.Public }
-                && !IsObsolete(member));
+                && !IsObsolete(member)
+                && !bound.Contains(member.Name));
     }
 
     private static ExposedOperationInfo CreateExposedInfo(INamedTypeSymbol exposed)
@@ -331,7 +353,12 @@ internal static class OperationPropertyModelBuilder
         return arguments.Count == 0 ? name : name + "(" + string.Join(", ", arguments) + ")";
     }
 
-    private static string RenderConstant(TypedConstant constant)
+    /// <summary>
+    /// Renders an attribute argument as C# source.
+    /// </summary>
+    /// <param name="constant">The argument.</param>
+    /// <returns>The C# expression.</returns>
+    internal static string RenderConstant(TypedConstant constant)
     {
         if (constant.IsNull)
         {
