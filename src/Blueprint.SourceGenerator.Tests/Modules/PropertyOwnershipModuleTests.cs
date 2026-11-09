@@ -2229,6 +2229,36 @@ public class PropertyOwnershipModuleTests
     }
 
     [Fact]
+    public void When_a_GET_and_POST_operation_has_an_array_of_nullable_values_then_its_pipeline_compiles_and_reads_it_from_the_body_only()
+    {
+        // The query string's array reader parses an int?[]'s elements as int and builds an int[], which cannot be assigned to
+        // the property. Such a property used to be read from a GET's query string too, so the operation stopped compiling;
+        // it stays body-only until that reader supports nullable elements.
+        var result = CompileMultiMethodPipeline(
+            """
+            [RootLink("/scores")]
+            [HttpGet]
+            [HttpPost]
+            public partial class FindScoresQuery : IQuery<string>
+            {
+                public int?[] Scores { get; set; }
+
+                public static Task<string> HandleAsync(FindScoresQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+
+        var pipelineSource = string.Concat(result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText.ToString()));
+
+        pipelineSource.Should().Contain("reader.ValueTextEquals(\"scores\"u8)");
+        pipelineSource.Should().NotContain("Request.Query[\"scores\"]");
+    }
+
+    [Fact]
     public async Task When_a_GET_and_POST_operation_has_body_query_and_partial_route_properties_then_pipeline_snapshot_matches()
     {
         var result = CompileMultiMethodPipeline(

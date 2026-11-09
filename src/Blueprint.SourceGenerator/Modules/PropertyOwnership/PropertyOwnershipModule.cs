@@ -445,9 +445,17 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// answers GET as well as another method, and the property's type can be read from a query string. One whose type
     /// cannot is read from the body alone, as before.
     /// </summary>
+    /// <remarks>
+    /// An array of nullable values (<c>int?[]</c>) stays body-only too. The query string's array reader parses its elements
+    /// as the underlying type and builds an <c>int[]</c>, which cannot be assigned to the property, so reading it from a
+    /// GET's query string would stop a body-bound property compiling.
+    /// </remarks>
     private static bool IsQueryOnGet(string[] httpMethods, ITypeSymbol type)
     {
-        return IsBodyMethod(httpMethods) && IsQueryMethod(httpMethods) && IsSupportedQueryType(type);
+        return IsBodyMethod(httpMethods)
+            && IsQueryMethod(httpMethods)
+            && IsSupportedQueryType(type)
+            && type is not IArrayTypeSymbol { ElementType.OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
     }
 
     /// <summary>
