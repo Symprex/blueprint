@@ -21,6 +21,10 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 {
     private const string HttpClassName = "Http";
 
+    // Private to the generated partial, so a derived operation's own does not collide with it; the prefix keeps it clear of
+    // a hand-written member's name.
+    private const string CustomHttpMethodFieldName = "__blueprintHttpMethod";
+
     private const string GeneratedCodeTool = "Blueprint.SourceGenerator";
 
     // No version: the build's version would change the generated text, and every snapshot of it, with each release.
@@ -404,12 +408,24 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
         operationClass.AddInterface(builderInterface);
 
-        // HttpMethod.Parse returns the shared instance of a standard method, so a forward allocates none for one.
+        // A standard method is HttpMethod's own shared instance, as a typed client sends it. Any other is made once, into a
+        // private field, so a forward neither parses nor allocates a method per call.
+        var methodExpression = OperationHttpMethodResolver.StandardHttpMethodExpression(httpMethod);
+
+        if (methodExpression is null)
+        {
+            methodExpression = CustomHttpMethodFieldName;
+
+            operationClass.AddProperty(CustomHttpMethodFieldName, Accessibility.Private)
+                .SetType("global::System.Net.Http.HttpMethod")
+                .MakeStatic()
+                .WithReadonlyValue($"new global::System.Net.Http.HttpMethod({SymbolDisplay.FormatLiteral(httpMethod, quote: true)})");
+        }
+
         operationClass.AddMethod(builderInterface + ".GetHttpMethod")
             .MakeStaticMethod()
             .WithReturnType("global::System.Net.Http.HttpMethod")
-            .WithBody(codeWriter => codeWriter.AppendLine(
-                $"return global::System.Net.Http.HttpMethod.Parse({SymbolDisplay.FormatLiteral(httpMethod, quote: true)});"));
+            .WithBody(codeWriter => codeWriter.AppendLine($"return {methodExpression};"));
 
         operationClass.AddMethod(builderInterface + ".BuildRequestUrl")
             .MakeStaticMethod()

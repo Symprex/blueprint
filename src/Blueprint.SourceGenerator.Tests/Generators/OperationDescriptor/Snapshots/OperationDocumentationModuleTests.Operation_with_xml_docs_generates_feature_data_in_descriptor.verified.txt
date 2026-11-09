@@ -29,7 +29,7 @@ namespace TestNamespace
 
         static global::System.Net.Http.HttpMethod global::Blueprint.Model.IHttpRequestBuilder<global::TestNamespace.GetDocumentedWidgetQuery>.GetHttpMethod()
         {
-            return global::System.Net.Http.HttpMethod.Parse("GET");
+            return global::System.Net.Http.HttpMethod.Get;
         }
 
 #pragma warning disable CS0108

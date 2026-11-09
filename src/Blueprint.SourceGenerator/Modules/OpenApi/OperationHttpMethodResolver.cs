@@ -88,6 +88,28 @@ internal static class OperationHttpMethodResolver
         return false;
     }
 
+    /// <summary>
+    /// The expression naming the shared <see cref="System.Net.Http.HttpMethod"/> instance of a standard method, so generated
+    /// code that sends an operation references it rather than making or parsing one per call.
+    /// </summary>
+    /// <param name="httpMethod">A method <see cref="Resolve"/> returned, upper-cased.</param>
+    /// <returns>The expression, or <see langword="null"/> for a method <see cref="System.Net.Http.HttpMethod"/> has no instance of.</returns>
+    internal static string? StandardHttpMethodExpression(string httpMethod)
+    {
+        return httpMethod switch
+        {
+            "GET" => "global::System.Net.Http.HttpMethod.Get",
+            "POST" => "global::System.Net.Http.HttpMethod.Post",
+            "PUT" => "global::System.Net.Http.HttpMethod.Put",
+            "PATCH" => "global::System.Net.Http.HttpMethod.Patch",
+            "DELETE" => "global::System.Net.Http.HttpMethod.Delete",
+            "HEAD" => "global::System.Net.Http.HttpMethod.Head",
+            "OPTIONS" => "global::System.Net.Http.HttpMethod.Options",
+            "TRACE" => "global::System.Net.Http.HttpMethod.Trace",
+            _ => null,
+        };
+    }
+
     private static bool IsCommand(INamedTypeSymbol operationType)
     {
         return operationType.AllInterfaces.Any(static candidate =>

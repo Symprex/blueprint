@@ -107,6 +107,90 @@ public class HttpRequestBuilderInterfaceTests
         ImplementsBuilderOfItself(output, "Contract.UnroutedQuery").Should().BeFalse();
     }
 
+    [Fact]
+    public void When_an_operation_uses_a_standard_method_then_it_returns_the_shared_static_instance_without_parsing()
+    {
+        var output = CompileContract(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            namespace Contract;
+
+            [HttpDelete]
+            [RootLink("/widgets/{Id}")]
+            public partial class DeleteWidgetCommand : ICommand
+            {
+                public string Id { get; set; }
+            }
+            """);
+
+        // The method once came from HttpMethod.Parse on every call, which looks the name up each time.
+        GeneratedSources(output).Should().NotContain(static source => source.Contains("HttpMethod.Parse"));
+        GetHttpMethod(output, "Contract.DeleteWidgetCommand").Should().BeSameAs(HttpMethod.Delete);
+    }
+
+    [Fact]
+    public void When_an_operation_uses_a_custom_method_then_every_call_returns_one_cached_instance()
+    {
+        var output = CompileContract(
+            """
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            namespace Contract;
+
+            [HttpMethod("PURGE")]
+            [RootLink("/widgets/{Id}")]
+            public partial class PurgeWidgetCommand : ICommand
+            {
+                public string Id { get; set; }
+            }
+            """);
+
+        var first = GetHttpMethod(output, "Contract.PurgeWidgetCommand");
+
+        first.Method.Should().Be("PURGE");
+        GetHttpMethod(output, "Contract.PurgeWidgetCommand").Should().BeSameAs(first, "a custom method is made once, not on every forward");
+    }
+
+    private static IEnumerable<string> GeneratedSources(Compilation output)
+    {
+        return output.SyntaxTrees.Skip(1).Select(static tree => tree.ToString());
+    }
+
+    /// <summary>
+    /// Loads the compiled contract and calls the operation's <c>IHttpRequestBuilder&lt;TSelf&gt;.GetHttpMethod</c>, as
+    /// <c>ForwardAsync</c> does through its constraint.
+    /// </summary>
+    private static HttpMethod GetHttpMethod(Compilation output, string operationMetadataName)
+    {
+        var assembly = Load(output);
+        var operation = assembly.GetType(operationMetadataName, throwOnError: true)!;
+        var builder = typeof(Blueprint.Model.IHttpRequestBuilder<>).MakeGenericType(operation);
+        var map = operation.GetInterfaceMap(builder);
+        var index = Array.FindIndex(map.InterfaceMethods, static method => method.Name == "GetHttpMethod");
+
+        return (HttpMethod)map.TargetMethods[index].Invoke(null, null)!;
+    }
+
+    private static readonly Dictionary<Compilation, System.Reflection.Assembly> _loaded = new();
+
+    private static System.Reflection.Assembly Load(Compilation output)
+    {
+        if (!_loaded.TryGetValue(output, out var assembly))
+        {
+            using var stream = new MemoryStream();
+            var emitted = output.Emit(stream);
+            emitted.Success.Should().BeTrue(string.Join(Environment.NewLine, emitted.Diagnostics));
+
+            assembly = new System.Runtime.Loader.AssemblyLoadContext(name: null, isCollectible: true).LoadFromStream(new MemoryStream(stream.ToArray()));
+            _loaded[output] = assembly;
+        }
+
+        return assembly;
+    }
+
     private static bool ImplementsBuilderOfItself(Compilation output, string operationMetadataName)
     {
         var operation = output.GetTypeByMetadataName(operationMetadataName);
