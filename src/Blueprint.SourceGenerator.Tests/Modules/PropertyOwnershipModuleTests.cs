@@ -2152,6 +2152,178 @@ public class PropertyOwnershipModuleTests
             .Should().BeEmpty();
     }
 
+    [Fact]
+    public void When_a_command_is_declared_GET_by_an_HttpMethodAttribute_subclass_then_its_pipeline_binds_from_the_query_string()
+    {
+        // The pipeline used to resolve methods by matching attribute simple names, so it missed a subclass and bound this
+        // command from the body, while its descriptor, and so every client, sent it as a GET (Symprex/blueprint#142).
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [System.AttributeUsage(System.AttributeTargets.Class)]
+                public sealed class HttpFetchAttribute(string httpMethod) : HttpMethodAttribute(httpMethod);
+
+                [RootLink("/reports/refresh")]
+                [HttpFetch("GET")]
+                public partial class RefreshReportCommand : ICommand<string>
+                {
+                    public string Name { get; set; }
+
+                    public static Task<string> HandleAsync(RefreshReportCommand operation)
+                    {
+                        return Task.FromResult("ok");
+                    }
+                }
+            }
+            """;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        var result = TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var pipelineSource = string.Concat(result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText.ToString()));
+
+        pipelineSource.Should().Contain("httpContext.Request.Query[\"name\"]");
+        pipelineSource.Should().NotContain("ReadJsonBodyAsync");
+    }
+
+    [Fact]
+    public void When_a_GET_and_POST_operation_has_a_property_named_another_plus_OnGet_then_its_pipeline_compiles()
+    {
+        // The GET-only query read used to name its locals after the property plus "OnGet", so Name's collided with the
+        // explicit query read of NameOnGet in the enclosing block (CS0136).
+        var result = CompileMultiMethodPipeline(
+            """
+            [RootLink("/names")]
+            [HttpGet]
+            [HttpPost]
+            public partial class FindNamesQuery : IQuery<string>
+            {
+                public string Name { get; set; }
+
+                [FromQuery]
+                public string NameOnGet { get; set; }
+
+                public static Task<string> HandleAsync(FindNamesQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_a_GET_and_POST_operation_has_an_array_of_nullable_values_then_its_pipeline_compiles_and_reads_it_from_the_body_only()
+    {
+        // The query string's array reader parses an int?[]'s elements as int and builds an int[], which cannot be assigned to
+        // the property. Such a property used to be read from a GET's query string too, so the operation stopped compiling;
+        // it stays body-only until that reader supports nullable elements.
+        var result = CompileMultiMethodPipeline(
+            """
+            [RootLink("/scores")]
+            [HttpGet]
+            [HttpPost]
+            public partial class FindScoresQuery : IQuery<string>
+            {
+                public int?[] Scores { get; set; }
+
+                public static Task<string> HandleAsync(FindScoresQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+
+        var pipelineSource = string.Concat(result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).Select(static s => s.SourceText.ToString()));
+
+        pipelineSource.Should().Contain("reader.ValueTextEquals(\"scores\"u8)");
+        pipelineSource.Should().NotContain("Request.Query[\"scores\"]");
+    }
+
+    [Fact]
+    public async Task When_a_GET_and_POST_operation_has_body_query_and_partial_route_properties_then_pipeline_snapshot_matches()
+    {
+        var result = CompileMultiMethodPipeline(
+            """
+            public sealed class Paging
+            {
+                public int Size { get; set; }
+            }
+
+            [RootLink("/reports/{Code}")]
+            [RootLink("/reports", Rel = "reports")]
+            [HttpGet]
+            [HttpPost]
+            public partial class FindReportsQuery : IQuery<string>
+            {
+                public string Code { get; set; }
+
+                public string Name { get; set; }
+
+                public int Count { get; set; }
+
+                [FromQuery]
+                public string Filter { get; set; }
+
+                [FromBody]
+                public string Note { get; set; }
+
+                public Paging Paging { get; set; }
+
+                public static Task<string> HandleAsync(FindReportsQuery operation)
+                {
+                    return Task.FromResult("ok");
+                }
+            }
+            """);
+
+        result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+
+        var outputText = new StringBuilder();
+        foreach (var s in result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)))
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText.ToString());
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
+    }
+
+    private static MultiGeneratorGenerationResult CompileMultiMethodPipeline(string operations)
+    {
+        var source = "using Blueprint;\nusing Blueprint.Model;\nusing Blueprint.Model.Attributes;\nusing System.Threading.Tasks;\n\n"
+            + "namespace TestNamespace;\n\n[BlueprintAppScan]\npublic partial class TestApp : BlueprintApp { }\n\n" + operations;
+
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        return TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         return TestHelpers.Compile<OperationDescriptorSourceGenerator>(

@@ -1,4 +1,5 @@
 using Blueprint.SourceGenerator.CodeWriter;
+using Blueprint.SourceGenerator.Helpers;
 
 namespace Blueprint.SourceGenerator.Generators.Pipelines;
 
@@ -14,7 +15,9 @@ internal static class ExecutorCodeGenerator
     /// <returns>The generated executor source for the Blueprint app.</returns>
     public static string GenerateExecutor(PipelineCompilationModel model)
     {
-        var codeBuilder = CodeBuilder.Create(model.AppNamespace);
+        var codeBuilder = model.AppNamespace.Length == 0
+            ? CodeBuilder.CreateInGlobalNamespace()
+            : CodeBuilder.Create(model.AppNamespace);
 
         var classBuilder = codeBuilder.AddClass($"{model.AppTypeName}Executor")
             .MakePublicClass()
@@ -23,7 +26,7 @@ internal static class ExecutorCodeGenerator
 
         classBuilder.AddConstructor()
             .AddParameter("Microsoft.Extensions.Logging.ILoggerFactory", "loggerFactory")
-            .AddParameter($"{model.AppNamespace}.{model.AppTypeName}", "app")
+            .AddParameter(GeneratedNamespace.Qualify(model.AppNamespace, model.AppTypeName), "app")
             .AddParameter("System.IServiceProvider", "serviceProvider")
             .WithBaseCallArguments("app")
             .WithBody(
