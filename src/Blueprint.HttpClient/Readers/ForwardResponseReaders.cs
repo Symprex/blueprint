@@ -144,11 +144,6 @@ internal sealed class NotFoundForwardResponseReader<T1, T2, TContent> : Response
 
         try
         {
-            if (IsProblemDocument(body))
-            {
-                return default;
-            }
-
             content = JsonSerializer.Deserialize<TContent>(body, context.JsonOptions);
         }
         catch (JsonException)
@@ -167,26 +162,9 @@ internal sealed class NotFoundForwardResponseReader<T1, T2, TContent> : Response
     }
 
     /// <summary>
-    /// Whether a 404's JSON body is a problem document rather than a not-found result's content: an object whose
-    /// <c>type</c> and <c>title</c> are strings and whose <c>status</c> is 404, the members every problem a Blueprint host
-    /// writes carries. A host with <c>NegotiateErrorContentType</c> on writes its problems as <c>application/json</c> to a
-    /// request with no <c>Accept</c>, as a forward's is, so the media type alone does not tell them apart.
+    /// Whether a 404's media type is a not-found result's content: JSON, but not <c>application/problem+json</c>, which a
+    /// forward asks a host's errors to be written as (<see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}"/>).
     /// </summary>
-    /// <param name="body">The response body.</param>
-    /// <returns><see langword="true"/> when the body is a problem document.</returns>
-    /// <exception cref="JsonException">The body is not JSON.</exception>
-    private static bool IsProblemDocument(byte[] body)
-    {
-        using var document = JsonDocument.Parse(body);
-        var root = document.RootElement;
-
-        return root.ValueKind == JsonValueKind.Object
-               && root.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String
-               && root.TryGetProperty("title", out var title) && title.ValueKind == JsonValueKind.String
-               && root.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.Number
-               && status.TryGetInt32(out var statusCode) && statusCode == (int)HttpStatusCode.NotFound;
-    }
-
     private static bool IsResourceJson(string? mediaType)
     {
         return mediaType is not null
