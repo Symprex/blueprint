@@ -101,7 +101,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
                 // diagnostics only consider operations owned by this app, not transitively-referenced ones.
                 var sharedOperationLookup = CompilationOperationLookup.CreateForApp(
                     compilation,
-                    $"{compilationModel.AppNamespace}.{compilationModel.AppTypeName}");
+                    GeneratedNamespace.Qualify(compilationModel.AppNamespace, compilationModel.AppTypeName));
 
                 // Generate a pipeline for each handler
                 foreach (var handler in compilationModel.Handlers)
@@ -124,7 +124,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
 
                     var pipelineSource = PipelineCodeGenerator.GeneratePipeline(handler, pipelinePlanResult.Value);
                     spc.AddSource(
-                        $"{handler.OperationNamespace}.{handler.OperationTypeName}ExecutorPipeline.g.cs",
+                        GeneratedNamespace.Qualify(handler.OperationNamespace, $"{handler.OperationTypeName}ExecutorPipeline.g.cs"),
                         SourceText.From(pipelineSource, Encoding.UTF8));
                 }
 
@@ -192,7 +192,7 @@ public partial class OperationExecutorPipelineSourceGenerator : IIncrementalGene
     /// Model representing basic info about a BlueprintApp.
     /// </summary>
     /// <param name="AppTypeName">The simple name of the BlueprintApp type.</param>
-    /// <param name="AppNamespace">The namespace of the BlueprintApp.</param>
+    /// <param name="AppNamespace">The namespace of the BlueprintApp, empty for the global namespace.</param>
     /// <param name="AppType">The BlueprintApp type.</param>
     /// <param name="TenantIdTypeName">
     /// The fully qualified name of the app's <c>[BlueprintAppTenancy(TenantIdType = ...)]</c>, or <see langword="null"/>.
