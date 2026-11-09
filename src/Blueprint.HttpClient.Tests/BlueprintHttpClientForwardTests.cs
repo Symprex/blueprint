@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
@@ -151,6 +152,53 @@ public class BlueprintHttpClientForwardTests
     }
 
     [Fact]
+    public async Task When_the_options_populate_read_only_members_then_a_forwarded_resource_still_arrives_without_inner_links()
+    {
+        // Populate fills a get-only collection in place, which once kept the inner $links that D6 drops.
+        var client = CreateClient(
+            static _ => Json(HttpStatusCode.OK, LinkedTemplateJson("t-1", "Linked")),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web) { PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate });
+
+        var result = await client.ForwardAsync<GetTemplateQuery, Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>(
+            new GetTemplateQuery { Id = "t-1" });
+
+        result.AsT1.Content.Name.Should().Be("Linked");
+        result.AsT1.Content.Links.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_the_options_populate_read_only_members_then_a_not_found_resource_still_arrives_without_inner_links()
+    {
+        var client = CreateClient(
+            static _ => Json(HttpStatusCode.NotFound, LinkedTemplateJson("missing", string.Empty)),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web) { PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate });
+
+        var result = await client.ForwardAsync<GetTemplateQuery, Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>(
+            new GetTemplateQuery { Id = "missing" });
+
+        result.AsT2.Content.Id.Should().Be("missing");
+        result.AsT2.Content.Links.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task When_the_upstream_negotiates_a_thrown_404_as_plain_json_then_it_still_escapes_as_the_upstream_problem()
+    {
+        // With NegotiateErrorContentType on, a forward sending no Accept gets its problem as application/json, which was
+        // once read as a default-valued resource and turned into a NotFoundResult, losing the problem's type and detail.
+        var client = CreateClient(static _ => Json(
+            HttpStatusCode.NotFound,
+            """{"type":"not_found","title":"The requested resource could not be found","status":404,"detail":"Template 'missing' not found."}"""));
+
+        var act = () => client.ForwardAsync<GetTemplateQuery, Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>(
+            new GetTemplateQuery { Id = "missing" });
+
+        var exception = (await act.Should().ThrowAsync<BlueprintApiException>()).Which;
+        exception.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        exception.Type.Should().Be("not_found");
+        exception.Detail.Should().Be("Template 'missing' not found.");
+    }
+
+    [Fact]
     public async Task When_given_an_instance_of_a_derived_operation_then_it_refuses_to_send_it()
     {
         // D4: a derived instance would be written as its run-time type, leaking the gateway's own properties upstream.
@@ -169,12 +217,19 @@ public class BlueprintHttpClientForwardTests
         sent.Should().BeFalse();
     }
 
-    private static BlueprintHttpClient CreateClient(Func<HttpRequestMessage, HttpResponseMessage> handler)
+    private static BlueprintHttpClient CreateClient(Func<HttpRequestMessage, HttpResponseMessage> handler, JsonSerializerOptions? jsonOptions = null)
     {
-        return new BlueprintHttpClient(new System.Net.Http.HttpClient(new FakeHttpHandler(handler))
-        {
-            BaseAddress = new Uri("https://upstream.example/api/"),
-        });
+        return new BlueprintHttpClient(
+            new System.Net.Http.HttpClient(new FakeHttpHandler(handler))
+            {
+                BaseAddress = new Uri("https://upstream.example/api/"),
+            },
+            jsonOptions);
+    }
+
+    private static string LinkedTemplateJson(string id, string name)
+    {
+        return $$$"""{"$object":"template","$links":{"self":{"href":"https://inner.internal/api/templates/{{{id}}}","type":"template"}},"id":"{{{id}}}","name":"{{{name}}}","htmlSource":"","plainTextSource":""}""";
     }
 
     private static HttpResponseMessage Json(HttpStatusCode status, string json)
