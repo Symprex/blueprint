@@ -50,6 +50,16 @@ public class Startup
             {
                 http.ExposeExceptionDetailsInErrorResponses = true;
             });
+
+            // Declared here, not passed to MapBlueprintApi, so that the BlueprintEmitOpenApi build target, which stops
+            // the app once its host is built, writes the document the gateway serves.
+            blueprint.UseBasePath("gateway/");
+            blueprint.ConfigureOpenApi(info =>
+            {
+                info.Title = "Template Gateway API";
+                info.Version = "1.0.0";
+                info.Description = "Gateway service that proxies template operations to the upstream template service.";
+            });
         });
     }
 
@@ -63,14 +73,7 @@ public class Startup
 
         app.UseEndpoints(endpoints =>
         {
-            endpoints.MapBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>(
-                "gateway/",
-                configureOpenApi: info =>
-                {
-                    info.Title = "Template Gateway API";
-                    info.Version = "1.0.0";
-                    info.Description = "Gateway service that proxies template operations to the upstream template service.";
-                });
+            endpoints.MapBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>();
         });
     }
 }

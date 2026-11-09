@@ -33,7 +33,7 @@ Do not use this skill to change Blueprint internals in `Symprex/blueprint`; use 
 | Serializer context | If the app maps Blueprint through the HTTP host (`MapBlueprintApi<...>()`) and any scanned operation can produce a body-bearing HTTP response contract, declare `[BlueprintAppSerializerContext(JsonSerializerContextType = typeof(AppJsonContext))]` on the `BlueprintApp` root so the build can prove the app-owned `JsonSerializerContext` covers those generated HTTP contracts; missing declaration now fails with `BP007`, incomplete declared coverage fails with `BP006`, and the generated app now persists both the declared serializer-context type and the declared `JsonSerializable(...)` body-type inventory (`BlueprintApp.AppOwnedSerializerContextType` / `AppOwnedSerializerContextBodyTypeNames`) as the compile-time/OpenAPI ownership seam rather than a runtime serializer switch |
 | Operation names | Descriptor names are legacy Blueprint's: `Query` and then `Command` are removed wherever they occur in the type name, and the result is PascalCased with acronyms folded, so `GetSentEmailQuery` is `GetSentEmail` but `GenerateVCardQuery` is `GeneratevCard` and `GetHTMLPreviewQuery` is `GethtmlPreview` — expect those `operationId`s, and `BP009` when two operations end up with the same one. When an app prefixes its operations (for example `PortalResetActiveUsersCommand`) but its API should expose `ResetActiveUsers`, declare `[BlueprintAppOperationNames(Remove = "Portal")]` on the `BlueprintApp` root rather than renaming the OpenAPI output: it renames the operations for every reader of `ApiOperationDescriptor.Name` in that app (`operationId`, request-body schema keys, `x-links`, and code reading `link.OperationDescriptor.Name` such as an auth-manifest query, but not the compile-time manifest artifacts, which are keyed by type), removes every occurrence from that cased name, leaves resource schema names alone, and fails with `BP011` if two operations end up with the same name or one ends up with none |
 | Generator wiring | Reference Blueprint's generator as an analyzer so compile-time generation runs; in this repo the sample uses `ProjectReference` with `OutputItemType="Analyzer"` and `ReferenceOutputAssembly="false"` |
-| HTTP host | Map the generated surface with `MapBlueprintApi<TApp, TExec>()` |
+| HTTP host | Declare the base path and OpenAPI description in `AddBlueprintApi` (`UseBasePath`, `ConfigureOpenApi`, `ConfigureOpenApiSchemas`, `ConfigureOpenApiOperations`), then map the generated surface with `MapBlueprintApi<TApp, TExec>()`. The older `MapBlueprintApi<TApp, TExec>(basePath, configureOpenApi: ...)` still works, but cannot be combined with `BlueprintEmitOpenApi`, which writes `Spec/openapi.json` at build time without reaching `MapBlueprintApi` |
 | Authorization | `[Resource("noun", "verb")]` for scope-pair auth; `[FromResource(typeof(X))]` for scope inheritance; `[AllowAnonymous]` for public access; `[MustBeAuthenticated]` for identity-only checks without scopes |
 | Sensitive data | `[Sensitive]` on properties signals audit sinks to redact/mask that data |
 | Audit opt-out | `[DoNotAudit]` on a class opts out of automatic audit recording |
@@ -373,10 +373,16 @@ services.AddBlueprintApi<MyApp, MyAppExecutor>(blueprint =>
     blueprint.AddUnitOfWork<MyUnitOfWork>();
     blueprint.AddHttpResultExecutor<MyCustomExecutor>();
     blueprint.ConfigureHttp(options => options.PublicHost = "https://api.example.com");
+    blueprint.UseBasePath("api/");
+    blueprint.ConfigureOpenApi(info => { info.Title = "My API"; info.Version = "1.0.0"; });
 });
+
+// Then, where endpoints are mapped:
+endpoints.MapBlueprintApi<MyApp, MyAppExecutor>();
 ```
 
 - `AddBlueprintApi<TApp, TExec>()` registers the app and executor singletons
+- `UseBasePath` and the `ConfigureOpenApi` methods declare where the API is mapped and how it is described; `MapBlueprintApi<TApp, TExec>()` reads them, and so does `BlueprintEmitOpenApi`, which writes the same document to `Spec/openapi.json` at build time (`docs/openapi-migration.md`). Passing a base path to `MapBlueprintApi` as well throws once anything is declared
 - `BlueprintServiceBuilder` exposes typed methods for all Blueprint infrastructure contracts
 - Scoped services (UoW, task scheduler) are registered scoped; singletons (audit, auth) as singletons
 - `AddResourceEventAuditRepository<T>()` registers legacy's `IResourceEventAuditRepository` (scoped). The generated pipeline hands it every legacy `ResourceEvent` a command without `[DoNotAudit]` raises (a query's is passed on untouched, as legacy did), last of the post-execution steps (stamped, with its href, data expanded), beside any resource-event audit sink and best-effort (a repository that throws or cannot be constructed is logged at Error by the operation's pipeline logger; the operation still succeeds)
@@ -455,7 +461,7 @@ The `Blueprint.Migration.Analyzers` package flags legacy patterns at build time:
 | BPMIG001 | Redundant `AddOpenApi()` (parameterless) | Auto-fix: safe removal |
 | BPMIG002 | Redundant `AddHateoasLinks()` (parameterless) | Auto-fix: safe removal (links are on by default). An app that never called it generated no links: add `DisableHateoasLinks()` by hand — no diagnostic sees an absent call |
 | BPMIG003 | Redundant `AddAuthorisation()` (parameterless) | Auto-fix: safe removal |
-| BPMIG100 | Configured `AddOpenApi(Action<OpenApiOptions>)` | Config-required: migrate to `MapBlueprintApi(configureOpenApi: ...)` |
+| BPMIG100 | Configured `AddOpenApi(Action<OpenApiOptions>)` | Config-required: migrate to `ConfigureOpenApi(...)` in `AddBlueprintApi` |
 | BPMIG101 | Configured `AddAuthentication(...)` | Config-required: migrate to ASP.NET Core auth middleware |
 | BPMIG200 | Legacy `[FromResource(...)]` attribute | Consumer rewrite: implement `IResourceAuthorizationProvider` |
 | BPMIG201 | Legacy `{Auth:...}` placeholder in URL template | Consumer rewrite: implement template expansion in auth provider |
@@ -468,7 +474,7 @@ The `Blueprint.Migration.Analyzers` package flags legacy patterns at build time:
 | `BlueprintApiBuilder.AddHateoasLinks()` | Built-in — remove call |
 | No `AddHateoasLinks()` call (the app wrote `"$links":{}`) | `AddBlueprintApi<TApp, TExec>(b => b.DisableHateoasLinks())` |
 | `BlueprintApiBuilder.AddAuthorisation()` | Built-in — remove call |
-| `AddOpenApi(opts => ...)` | `MapBlueprintApi(..., configureOpenApi: info => ...)` |
+| `AddOpenApi(opts => ...)` | `AddBlueprintApi<TApp, TExec>(b => b.ConfigureOpenApi(info => ...))` |
 | `AddAuthentication(...)` | ASP.NET Core `UseAuthentication()` middleware |
 | `ScopeApiAuthoriser` | `IResourceAuthorizationProvider` implementation |
 | `[FromResource(...)]` | `[Resource("noun", "verb")]` / `[FromResource(typeof(X))]` |
