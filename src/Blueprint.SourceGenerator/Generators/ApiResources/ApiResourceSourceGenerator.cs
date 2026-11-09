@@ -49,7 +49,7 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
                 }
 
                 spc.AddSource(
-                    $"{classToGenerate.Namespace}.{classToGenerate.ClassName}_ObjectProperty.g.cs",
+                    GeneratedNamespace.Qualify(classToGenerate.Namespace, $"{classToGenerate.ClassName}_ObjectProperty.g.cs"),
                     SourceText.From(GenerateObjectProperty(classToGenerate), Encoding.UTF8));
             });
     }
@@ -89,7 +89,7 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
         return Result.Success(
             new ClassToGenerate(
                 model.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                model.ContainingNamespace.ToDisplayString(),
+                GeneratedNamespace.Of(model),
                 model.Name,
                 model.ImplementsInterface(apiResourceCollectionSymbol),
                 explicitName));
@@ -147,11 +147,16 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
             objectType = $"list.{objectType}";
         }
 
+        // A global-namespace resource has no namespace block; its body keeps the indentation, which C# ignores.
+        var (namespaceLine, openBrace, closeBrace) = namespaceName.Length == 0
+            ? (string.Empty, string.Empty, string.Empty)
+            : ($"namespace {namespaceName}", "{", "}");
+
         return $$"""
                  #nullable enable
 
-                 namespace {{namespaceName}}
-                 {
+                 {{namespaceLine}}
+                 {{openBrace}}
                      /// <remarks>
                      /// The object type of this resource is "{{objectType}}".
                      /// </remarks>
@@ -161,7 +166,7 @@ public sealed class ApiResourceSourceGenerator : IIncrementalGenerator, ITracked
                          [global::System.Text.Json.Serialization.JsonPropertyName("$object")]
                          public override string Object => "{{objectType}}";
                      }
-                 }
+                 {{closeBrace}}
                  """;
     }
 

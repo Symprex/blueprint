@@ -23,9 +23,15 @@ internal sealed record PropertyBindingEntriesMetadata(
     /// The source a route placeholder that is not in every one of the operation's links is also bound from, through a link
     /// that leaves it out (legacy's every-link rule); <see langword="null"/> for any other property.
     /// </param>
+    /// <param name="QueryOnGetBindingName">
+    /// The query-string name a property of an operation answering GET as well as another method is read from when the
+    /// request is a GET, besides its <paramref name="Source"/> or <paramref name="FallbackSource"/> of body; legacy decided
+    /// the source per request. <see langword="null"/> for any other property.
+    /// </param>
     internal sealed record Entry(
         string PropertyName,
         PropertyOwnershipModule.PropertyOwnershipSource Source,
         string? BindingName,
-        PropertyOwnershipModule.PropertyOwnershipSource? FallbackSource = null);
+        PropertyOwnershipModule.PropertyOwnershipSource? FallbackSource = null,
+        string? QueryOnGetBindingName = null);
 }

@@ -156,7 +156,7 @@ public static class HandlerDiscovery
         var model = new OperationHandlerModel(
             OperationTypeName: operationType.Name,
             OperationTypeFullName: operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-            OperationNamespace: operationType.ContainingNamespace.ToDisplayString(),
+            OperationNamespace: GeneratedNamespace.Of(operationType),
             HandlerType: HandlerType.Inline,
             HandlerMethodName: handlerMethod.Name,
             IsHandlerStatic: handlerMethod.IsStatic,
@@ -211,7 +211,7 @@ public static class HandlerDiscovery
         var model = new OperationHandlerModel(
             OperationTypeName: operationType.Name,
             OperationTypeFullName: operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-            OperationNamespace: operationType.ContainingNamespace.ToDisplayString(),
+            OperationNamespace: GeneratedNamespace.Of(operationType),
             HandlerType: HandlerType.External,
             HandlerMethodName: handlerMethod.Name,
             IsHandlerStatic: handlerMethod.IsStatic,
