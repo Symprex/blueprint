@@ -498,6 +498,31 @@ public async Task<Results<OkResult<GatewayTemplateResource>, NotFoundResult<Gate
 - **An upstream 404 becomes the declared `NotFoundResult<T>`** when `TResult` is a `Results<…>` with one, and the upstream wrote it as that result (its content as JSON). Every other failure, a thrown not-found's problem document included, escapes as the `BlueprintApiException` the transport raises (or `ValidationException` for a 422), so the gateway answers the upstream problem unchanged. A typed client's own calls do not do this: there, a 404 always fails.
 - **Inner `$links` are never forwarded.** `ApiResource.Links` is get-only, so deserialising a forwarded resource drops the inner service's `$links`, which name the inner host. The gateway generates its own links from its own route attributes.
 
+#### Credentials and error translation
+
+Pass the gateway operation's `ApiOperationContext` (a handler parameter) to forward as that operation declares:
+
+```csharp
+[TranslateError("not_found", nameof(TemplateMissing))]
+public partial class RenameGatewayTemplateCommand : ICommand<GatewayTemplateResource>
+{
+    public static readonly ApiExceptionFactory TemplateMissing = new("Gateway template missing", "gateway_template_missing", HttpStatusCode.NotFound);
+    // ...
+}
+
+public async Task<GatewayTemplateResource> Handle(RenameGatewayTemplateCommand command, ApiOperationContext context, CancellationToken ct)
+{
+    var updated = await upstream.ForwardAsync<UpdateTemplateCommand, ResourceEventResult<TemplateApiResource>>(
+        context, new UpdateTemplateCommand { Id = command.Id, Name = command.Name, HtmlSource = command.HtmlSource }, cancellationToken: ct);
+    // ...
+}
+```
+
+- **The caller's credential by default (D7).** The forward is authenticated, last, with the `Authorization` header of the request the gateway is serving (`CallerAuthorizationCredential`), captured per call. Nothing is set on the shared `HttpClient`, so this replaces `HttpClientTokenForwarding.ForwardAuthorizationHeader` for forwards. A caller with no `Authorization` header gets none forwarded.
+- **`[UpstreamCredential<TStrategy>]` replaces it per operation.** `TStrategy` is an `IUpstreamCredentialStrategy` registered in the gateway's services; for each forward it is given the context and the attribute, and returns the `IUpstreamCredential` to apply. A strategy that takes arguments, such as which property holds a tenant id, declares its own attribute deriving from `UpstreamCredentialAttribute<TStrategy>` with them as properties. An unregistered strategy fails the forward with an `InvalidOperationException` before anything is sent. Because the attribute names the strategy type, an operation that uses one is declared in the gateway's own assembly, not a contract assembly.
+- **`[TranslateError(fromType, to)]` answers an upstream problem as a local one (D8).** On the gateway operation or on its `BlueprintApp`, it maps a `BlueprintApiException` whose problem `type` is `fromType` to the static `ApiExceptionFactory` member named `to` on the attributed class. The operation's translation of a type wins over the app's. The translated problem keeps the upstream detail and has the upstream failure as its inner exception; its upstream extensions are not carried. Untranslated failures escape unchanged.
+- **Read once.** A hand-written forward reads these attributes the first time its operation forwards and caches them. Generated forwards (#69) wire the same choices at compile time.
+
 ### Exposing an Operation
 
 A gateway operation that only forwards an inner operation is declared with `[Expose<TInner>]` (in `Blueprint.Model.Attributes`), and needs no properties or handler:

@@ -7,7 +7,7 @@ using Blueprint.Runtime.Exec;
 namespace Blueprint.HttpClient.Readers;
 
 /// <summary>
-/// Chooses the reader <see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}"/> reads a forward's declared result with:
+/// Chooses the reader <see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}(TInner, CallOptions, CancellationToken)"/> reads a forward's declared result with:
 /// the reader <see cref="AppResponseReaders"/> chooses, made once per result type, except that a
 /// <see cref="Results{T1, T2}"/> with a <see cref="NotFoundResult{T}"/> member also claims the 404 the host writes for that
 /// member.

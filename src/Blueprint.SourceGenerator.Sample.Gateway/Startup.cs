@@ -14,6 +14,12 @@ public class Startup
     /// </summary>
     public const string TemplateServiceAddressKey = "Upstreams:TemplateService";
 
+    /// <summary>
+    /// The configuration key holding the bearer token <see cref="ServiceTokenCredentialStrategy"/> authenticates the
+    /// gateway's own service-identity forwards with.
+    /// </summary>
+    public const string ServiceTokenKey = "Upstreams:ServiceToken";
+
     private const string DefaultTemplateServiceAddress = "http://localhost:5000/api/";
 
     private readonly IConfiguration _configuration;
@@ -43,6 +49,9 @@ public class Startup
 
         // The typed client the [Expose<TInner>] reads forward through: their generated handlers use its named HTTP client.
         services.AddBlueprintClient<Api.ITemplateServiceApi, Api.TemplateServiceApi>((_, client) => client.BaseAddress = templateServiceAddress);
+
+        // The strategy GetServiceTemplateQuery's [UpstreamCredential<T>] selects, resolved per forward.
+        services.AddSingleton<ServiceTokenCredentialStrategy>();
 
         services.AddBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>(blueprint =>
         {
