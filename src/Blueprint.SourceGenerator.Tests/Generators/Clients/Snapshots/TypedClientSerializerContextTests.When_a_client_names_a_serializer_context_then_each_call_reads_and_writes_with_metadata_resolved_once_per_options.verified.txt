@@ -74,6 +74,11 @@ namespace Client
         IItemsApi WithCredential(global::Blueprint.HttpClient.IUpstreamCredential credential);
     }
 
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.FindItemsQuery))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.SearchItemsCommand))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.CreateItemCommand))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.ExportItemsCommand))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.UpdateItemCommand))]
     partial class ItemsApi : IItemsApi, global::Blueprint.HttpClient.IBlueprintClient<ItemsApi>
     {
         private readonly global::Blueprint.HttpClient.BlueprintHttpClient _client;
@@ -97,6 +102,12 @@ namespace Client
             global::System.ArgumentNullException.ThrowIfNull(services);
 
             return new ItemsApi(client);
+        }
+
+        /// <inheritdoc />
+        static global::Blueprint.HttpClient.BlueprintHttpClient global::Blueprint.HttpClient.IBlueprintClient<ItemsApi>.ConfigureTransport(global::Blueprint.HttpClient.BlueprintHttpClient client)
+        {
+            return (client ?? throw new global::System.ArgumentNullException(nameof(client))).WithSerializerContext(global::Client.ItemsContext.Default);
         }
 
         private ItemsApi(ItemsApi source, global::Blueprint.HttpClient.IUpstreamCredential? credential, global::System.Action<global::System.Net.Http.HttpRequestMessage>? requestModifier)

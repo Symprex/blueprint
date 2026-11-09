@@ -217,7 +217,7 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
-    public void A_required_inner_property_is_emitted_required_and_set_when_reading_the_inner_defaults()
+    public void A_required_inner_property_is_emitted_required_and_the_inner_defaults_are_made_without_setting_it()
     {
         var inner = InnerSource.Replace("public string Id { get; set; } = \"\";", "public required string Id { get; set; }", StringComparison.Ordinal);
         var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
@@ -226,8 +226,53 @@ public class ExposeGeneratorTests
 
         run.EmitErrors.Should().BeEmpty();
         var properties = run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs");
-        properties.Should().Contain("public required string Id { get; set; }")
-            .And.Contain("new global::Inner.GetWidgetQuery { Id = default! }");
+        properties.Should().Contain("public required string Id { get; set; } = __blueprintExposedDefaults.Id;")
+            .And.Contain("global::System.Activator.CreateInstance(typeof(global::Inner.GetWidgetQuery))");
+    }
+
+    [Fact]
+    public void A_required_inner_property_with_an_initialiser_starts_from_that_initialiser()
+    {
+        // The inner pipeline makes such an operation with Activator.CreateInstance, so its initialiser runs and an omitted
+        // value stays 1. The exposed property used to have no initialiser, and the defaults instance set every required
+        // member to default, so an omitted value was forwarded as 0.
+        var inner = InnerSource.Replace("public int Revisions { get; set; } = 1;", "public required int Revisions { get; set; } = 1;", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        var properties = run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs");
+        properties.Should().Contain("public required int Revisions { get; set; } = __blueprintExposedDefaults.Revisions;")
+            .And.Contain("(global::Inner.GetWidgetQuery)global::System.Activator.CreateInstance(typeof(global::Inner.GetWidgetQuery))!")
+            .And.NotContain("Revisions = default!");
+    }
+
+    [Fact]
+    public void An_internal_validation_attribute_the_gateway_can_access_is_carried_onto_the_contributed_property()
+    {
+        // Only public attributes used to be copied, so an internal one was dropped even where InternalsVisibleTo lets the
+        // gateway use it, and the gateway never ran that rule before forwarding.
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(WithInternalValidation(InnerSource, visibleToGateway: true), "InnerContract");
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
+
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs").Should().Contain("[global::Inner.EvenAttribute]");
+    }
+
+    [Fact]
+    public void When_an_inner_validation_attribute_is_inaccessible_to_the_gateway_then_BPGW018_is_reported()
+    {
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(WithInternalValidation(InnerSource, visibleToGateway: false), "InnerContract");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([GatewaySource], additionalReferences: [contract]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW018").Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("EvenAttribute").And.Contain("Revisions");
+        Located(diagnostic).Should().Be("Expose<Inner.GetWidgetQuery>");
     }
 
     [Fact]
@@ -345,6 +390,43 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
+    public void A_referenced_clients_hand_written_method_taking_the_inner_operation_is_not_an_include()
+    {
+        // Clients in a referenced assembly used to be indexed by any public XAsync method whose first parameter is an
+        // operation, so AuditApi's own LogAsync counted as an include and the forward reported BPGW004 beside WidgetApi.
+        var referenced = InnerSource + "\n" + ClientSource + "\n" + """
+            namespace Inner
+            {
+                using Blueprint.Model;
+                using Blueprint.Model.Attributes;
+
+                [RootLink("/pings")]
+                [HttpGet]
+                public partial class PingQuery : IQuery<WidgetResult>;
+            }
+
+            namespace Gateway
+            {
+                using Blueprint.HttpClient;
+
+                [BlueprintClient]
+                [BlueprintClientInclude(typeof(Inner.PingQuery))]
+                public partial class AuditApi
+                {
+                    public System.Threading.Tasks.Task LogAsync(Inner.GetWidgetQuery operation) => System.Threading.Tasks.Task.CompletedTask;
+                }
+            }
+            """;
+
+        var run = RunAllGenerators([GatewaySource, AppSource], CreateReferenceWithClients(referenced));
+
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.GetGatewayWidgetQueryExecutorPipeline.g.cs")
+            .Should().Contain("global::Blueprint.HttpClient.BlueprintClientTransport.Create<global::Gateway.WidgetApi>");
+    }
+
+    [Fact]
     public void When_an_exposed_operation_has_a_hand_written_handler_then_BPGW005_is_reported()
     {
         var handler = """
@@ -374,6 +456,25 @@ public class ExposeGeneratorTests
         var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW006").Which;
         diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
         diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("IQuery<global::Inner.WidgetResult>");
+    }
+
+    /// <summary>
+    /// Adds an internal validation attribute to the inner operation's <c>Revisions</c>, visible to the gateway's assembly or not.
+    /// </summary>
+    private static string WithInternalValidation(string innerSource, bool visibleToGateway)
+    {
+        var attribute = """
+            namespace Inner
+            {
+                internal sealed class EvenAttribute : System.ComponentModel.DataAnnotations.ValidationAttribute
+                {
+                    public override bool IsValid(object? value) => value is int i && i % 2 == 0;
+                }
+            }
+            """;
+
+        var source = innerSource.Replace("[Range(1, 10)]", "[Range(1, 10)]\n        [Even]", StringComparison.Ordinal) + "\n" + attribute;
+        return visibleToGateway ? "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"Gateway\")]\n" + source : source;
     }
 
     internal static string Located(Diagnostic diagnostic)
@@ -427,6 +528,32 @@ public class ExposeGeneratorTests
             emitErrors,
             first.GeneratedTrees.ToDictionary(static t => Path.GetFileName(t.FilePath), static t => t.ToString(), StringComparer.Ordinal),
             cached);
+    }
+
+    /// <summary>
+    /// Builds a referenced assembly as a consumer's is built, with its operations' request builders and its typed clients'
+    /// generated halves, which another assembly's generators see only as metadata.
+    /// </summary>
+    private static MetadataReference CreateReferenceWithClients(string source)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var compilation = CSharpCompilation.Create(
+            "InnerContract",
+            [CSharpSyntaxTree.ParseText(source, parseOptions)],
+            TestHelpers.CreateMetadataReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        CSharpGeneratorDriver.Create(
+                [new OperationDescriptorSourceGenerator().AsSourceGenerator(), new TypedClientGenerator().AsSourceGenerator()],
+                parseOptions: parseOptions)
+            .RunGeneratorsAndUpdateCompilation(compilation, out var generated, out var diagnostics);
+        diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty(string.Join(Environment.NewLine, diagnostics));
+
+        using var stream = new MemoryStream();
+        var emit = generated.Emit(stream);
+        emit.Success.Should().BeTrue(string.Join(Environment.NewLine, emit.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error)));
+
+        return MetadataReference.CreateFromImage(stream.ToArray());
     }
 
     internal static CSharpCompilation CreateCompilation(string[] sources, MetadataReference? innerContract = null)
