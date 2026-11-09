@@ -59,6 +59,10 @@ public class Startup
 
         services.AddBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>(blueprint =>
         {
+            // Decides the [Resource] scope pairs of operations the upstream cannot authorise for the caller, such as
+            // GetServiceTemplateQuery, whose forward authenticates as the gateway's own service identity.
+            blueprint.AddResourceAuthorizationProvider(new Blueprint.Authorization.ScopePairClaimAuthorizationProvider("scope", ":"));
+
             blueprint.ConfigureHttp(http =>
             {
                 http.ExposeExceptionDetailsInErrorResponses = true;

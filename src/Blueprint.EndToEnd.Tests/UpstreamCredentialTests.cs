@@ -36,4 +36,18 @@ public sealed class UpstreamCredentialTests(SampleSystemFixture system)
         response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         system.InnerRequests.LatestAuthorizationFor($"/api/templates/{id}").Should().Be($"Bearer {system.ServiceToken}");
     }
+
+    [Fact]
+    public async Task An_UpstreamCredential_operation_refuses_a_caller_without_its_own_read_permission()
+    {
+        var id = await system.SeedTemplateAsync("Service Credential Refusal Template");
+        using var caller = system.NativeGateway.CreateClient(system.CreateCallerToken("template:write"));
+
+        var response = await caller.GetAsync($"gateway/service/templates/{id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+        system.InnerRequests.Requests.Should().NotContain(
+            r => r.Path == $"/api/templates/{id}",
+            "the gateway refuses the caller before it forwards as its own service identity");
+    }
 }

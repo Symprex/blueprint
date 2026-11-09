@@ -27,4 +27,22 @@ public sealed class TranslateErrorTests(SampleSystemFixture system)
         problem.RootElement.GetProperty("title").GetString().Should().Be("Gateway template missing");
         problem.RootElement.GetProperty("detail").GetString().Should().Be("Template 'no-such-template' not found.");
     }
+
+    [Fact]
+    public async Task A_gateway_rename_forwards_every_content_field_so_the_plain_text_survives()
+    {
+        var id = await system.SeedTemplateAsync("Rename Source Template");
+        using var caller = system.NativeGateway.CreateClient(system.CreateCallerToken());
+
+        var response = await caller.PutAsJsonAsync(
+            $"gateway/templates/{id}",
+            new { name = "Renamed Template", htmlSource = "<p>Renamed</p>", plainTextSource = "Renamed plain text" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        using var inner = system.Inner.CreateClient(system.CreateCallerToken());
+        using var stored = JsonDocument.Parse(await inner.GetStringAsync($"api/templates/{id}"));
+        var template = stored.RootElement;
+        template.GetProperty("name").GetString().Should().Be("Renamed Template");
+        template.GetProperty("plainTextSource").GetString().Should().Be("Renamed plain text");
+    }
 }
