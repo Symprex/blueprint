@@ -39,7 +39,9 @@ public static class UpstreamForwardPolicyAnalysis
 
         foreach (var credential in credentials)
         {
+            // The strategy is resolved from the gateway's services, where the interface itself can be registered.
             if (FindStrategyType(credential.AttributeClass!) is { TypeKind: not TypeKind.Error } strategy
+                && strategy.ToFullMetadataName() != StrategyInterfaceName
                 && !strategy.ImplementsInterface(StrategyInterfaceName))
             {
                 yield return new DiagnosticInfo(
@@ -71,11 +73,12 @@ public static class UpstreamForwardPolicyAnalysis
                 continue;
             }
 
-            // The runtime looks only at the attributed class's own static members, as reflection without FlattenHierarchy does.
+            // The runtime looks only at the attributed class's own static members, as reflection without FlattenHierarchy does,
+            // and reads a property through its getter.
             var isFactory = declaringType.GetMembers(to).Any(static m => m.IsStatic && m switch
             {
                 IFieldSymbol field => IsFactory(field.Type),
-                IPropertySymbol property => IsFactory(property.Type),
+                IPropertySymbol property => property.GetMethod is not null && IsFactory(property.Type),
                 _ => false,
             });
 

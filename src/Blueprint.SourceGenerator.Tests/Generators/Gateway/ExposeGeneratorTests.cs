@@ -132,6 +132,8 @@ public class ExposeGeneratorTests
                 public static readonly string NotAFactory = "";
 
                 public Blueprint.ApiExceptionFactory InstanceFactory => WidgetMissing;
+
+                public static Blueprint.ApiExceptionFactory SetterOnlyFactory { set { } }
             }
         }
         """;
@@ -810,10 +812,26 @@ public class ExposeGeneratorTests
         Located(diagnostic).Should().StartWith("UpstreamCredential<NotAStrategy>");
     }
 
+    [Fact]
+    public void When_the_credential_type_is_the_strategy_interface_itself_then_BPGW016_is_not_reported()
+    {
+        // The runtime resolves the strategy type from the gateway's services, where the interface can be registered with
+        // an implementation, so naming the interface is valid.
+        var gateway = CredentialGatewaySource.Replace(
+            "[TenantToken(TenantIdProperty = nameof(Inner.GetWidgetQuery.Region))]",
+            "[UpstreamCredential<Blueprint.HttpClient.IUpstreamCredentialStrategy>]",
+            StringComparison.Ordinal);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([CredentialSource, gateway], additionalReferences: [_innerContract.Value]);
+
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW016");
+    }
+
     [Theory]
     [InlineData("\"NoSuchMember\"", "NoSuchMember")]
     [InlineData("nameof(NotAFactory)", "NotAFactory")]
     [InlineData("nameof(InstanceFactory)", "InstanceFactory")]
+    [InlineData("nameof(SetterOnlyFactory)", "SetterOnlyFactory")]
     public void When_an_operations_TranslateError_names_no_static_ApiExceptionFactory_then_BPGW017_is_reported_at_the_attribute(string to, string name)
     {
         var gateway = CredentialGatewaySource.Replace("nameof(WidgetMissing)", to, StringComparison.Ordinal);
