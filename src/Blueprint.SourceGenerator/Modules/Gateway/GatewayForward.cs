@@ -141,7 +141,18 @@ public static class GatewayForward
         // D11: the bindings come from the property model's builder, which is what left them out of the public shape. The
         // map hook's parameters after the inner operation are the handler's, so they are resolved as a handler's are.
         var bindings = OperationPropertyModelBuilder.GetBindings(operationType);
-        var copied = GetCopiedProperties(operationType, exposedType, bindings);
+        var copied = GetCopiedProperties(operationType, exposedType, bindings, out var unreadable);
+
+        // The pipeline reads each copied property from outside the operation, which a declared one with a getter that is
+        // not public, or none, does not allow (CS0271, CS0154). A contributed one is emitted with a public getter, but
+        // without one on the inner property its default cannot be read, and the forward would send the type's instead.
+        if (unreadable.Count > 0)
+        {
+            return Result<OperationHandlerModel>.Failure(new DiagnosticInfo(
+                GatewayDiagnosticDescriptors.ForwardedPropertyNotReadable,
+                location,
+                [operationType.Name, string.Join(", ", unreadable), exposedType.Name]));
+        }
 
         // A required inner member the forward does not set would fail to compile (CS9035): one the gateway redeclares with
         // another type, or a required field, which is never contributed. A bound one is set from its binding.
@@ -271,8 +282,10 @@ public static class GatewayForward
     private static EquatableList<string> GetCopiedProperties(
         INamedTypeSymbol operationType,
         INamedTypeSymbol exposedType,
-        EquatableList<GatewayPropertyBinding> bindings)
+        EquatableList<GatewayPropertyBinding> bindings,
+        out List<string> unreadable)
     {
+        unreadable = [];
         var innerSettable = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
         foreach (var member in exposedType.GetAllMembers().OfType<IPropertySymbol>())
         {
@@ -300,6 +313,14 @@ public static class GatewayForward
                 || SymbolEqualityComparer.Default.Equals(property.Member.Type, innerProperty.Type))
             {
                 copied.Add(property.Info.Name);
+
+                // A declared property the pipeline cannot read; or an inner one whose default the emitted property cannot
+                // start from, so forwarding it would replace the inner operation's default whenever the caller omits it.
+                if (!property.Info.HasPublicGetter
+                    || (property.Info.Origin == OperationPropertyOrigin.Contributed && innerProperty.GetMethod is not { DeclaredAccessibility: Accessibility.Public }))
+                {
+                    unreadable.Add(property.Info.Name);
+                }
             }
         }
 

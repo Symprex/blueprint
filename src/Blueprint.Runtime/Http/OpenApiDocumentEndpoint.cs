@@ -166,8 +166,16 @@ internal static class OpenApiDocumentEndpoint
         var rendered = new Lazy<RenderedOpenApiDocument>(
             () =>
             {
-                var (json, warnings) = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions, basePath);
-                var document = new PreRenderedOpenApiDocument(json) { Warnings = warnings };
+                var (json, warnings, documentContext, readOnlyProperties) = RenderDocument(app, infoOptions, schemaProcessorOptions, operationProcessorOptions, httpOptions, basePath);
+                var document = new PreRenderedOpenApiDocument(json)
+                {
+                    Warnings = warnings,
+
+                    // Made only when asked for, so an operation whose properties collide fails only the caller that needs it.
+                    InputSchemas = new Lazy<OperationInputSchemaSet>(
+                        () => OperationInputSchemaSet.Create(app, documentContext, json, readOnlyProperties),
+                        LazyThreadSafetyMode.ExecutionAndPublication),
+                };
 
                 // Compute a stable ETag from the document content so clients can use If-None-Match
                 // to avoid redundant downloads of the static spec.
@@ -214,7 +222,11 @@ internal static class OpenApiDocumentEndpoint
         return (handler, new Lazy<PreRenderedOpenApiDocument>(() => rendered.Value.Document, LazyThreadSafetyMode.ExecutionAndPublication));
     }
 
-    private static (string Json, IReadOnlyList<string> Warnings) RenderDocument(
+    private static (
+        string Json,
+        IReadOnlyList<string> Warnings,
+        OpenApiDocumentRenderingContext Document,
+        IReadOnlyCollection<(string ComponentKey, string PropertyName, bool IsDeserialized)> ReadOnlyProperties) RenderDocument(
         BlueprintApp app,
         OpenApiInfoOptions? infoOptions,
         OpenApiSchemaProcessorOptions? schemaProcessorOptions,
@@ -256,7 +268,10 @@ internal static class OpenApiDocumentEndpoint
             pathItemContext,
             infoOptions?.SchemaNaming == OpenApiSchemaNaming.Legacy);
 
-        return (OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions, httpOptions, basePath).Json, operationContext.Warnings);
+        var readOnlyProperties = new List<(string ComponentKey, string PropertyName, bool IsDeserialized)>();
+        var json = OpenApiOutputRenderingContext.Create(documentContext, infoOptions, schemaProcessorOptions, httpOptions, basePath, readOnlyProperties).Json;
+
+        return (json, operationContext.Warnings, documentContext, readOnlyProperties);
     }
 
     /// <summary>The one rendering a delegate and its document share: the document and the ETag made from it.</summary>

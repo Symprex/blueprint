@@ -189,4 +189,17 @@ internal static class GatewayDiagnosticDescriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW020: a property the generated forward copies to the inner operation with no public getter: one the gateway
+    /// declares, which the pipeline cannot read, or the inner one, whose default the contributed property cannot start
+    /// from (D9, D12).
+    /// </summary>
+    public static readonly DiagnosticDescriptor ForwardedPropertyNotReadable = new(
+        id: "BPGW020",
+        title: "A property a forward copies must have a public getter",
+        messageFormat: "Gateway operation '{0}' cannot forward {1} to '{2}', because the property has no public getter, on '{0}' or on '{2}', so the generated code cannot read its value or the inner default to start from. Give it a public getter, or declare it on '{0}' with one.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

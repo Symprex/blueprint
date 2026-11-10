@@ -346,6 +346,68 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
+    public void When_an_inner_property_has_no_public_getter_then_BPGW020_is_reported_and_the_partial_still_compiles()
+    {
+        // The emitted property used to start from __blueprintExposedDefaults.X whatever the inner getter, which does not
+        // compile for a private getter (CS0271) or none (CS0154). Its default cannot be read at all, so forwarding it would
+        // replace the inner operation's own ("west") with the type's default whenever the caller omits it.
+        var inner = InnerSource.Replace(
+            "public string ComputedOnly",
+            "public string Secret { private get; set; } = \"west\";\n\n            public string WriteOnly { set { } }\n\n            public string ComputedOnly",
+            StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
+
+        var diagnostic = run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW020").Which;
+        diagnostic.GetMessage().Should().Contain("Secret").And.Contain("WriteOnly").And.Contain("GetWidgetQuery");
+        run.EmitErrors.Should().NotContain(static e => e.Contains("CS0271", StringComparison.Ordinal) || e.Contains("CS0154", StringComparison.Ordinal));
+        var properties = run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs");
+        properties.Should().Contain("public string Secret { get; set; } = default!;")
+            .And.Contain("public string WriteOnly { get; set; } = default!;")
+            .And.NotContain("__blueprintExposedDefaults.Secret")
+            .And.NotContain("__blueprintExposedDefaults.WriteOnly");
+    }
+
+    [Fact]
+    public void When_a_declared_property_the_forward_copies_has_no_public_getter_then_BPGW020_is_reported()
+    {
+        // The forward used to read operation.Region from the pipeline whatever its getter, which does not compile (CS0271).
+        var gateway = GatewaySource.Replace(
+            "public partial class GetGatewayWidgetQuery : IQuery<Inner.WidgetResult>;",
+            "public partial class GetGatewayWidgetQuery : IQuery<Inner.WidgetResult> { public string? Region { private get; set; } }",
+            StringComparison.Ordinal);
+
+        var run = RunAllGenerators([ClientSource, gateway, AppSource]);
+
+        var diagnostic = run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW020").Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("Region");
+        run.EmitErrors.Should().NotContain(static e => e.Contains("CS0271", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_narrow_numeric_attribute_argument_keeps_its_type_on_the_contributed_property()
+    {
+        // A short, byte, sbyte, ushort or double constant used to be rendered as a bare literal, which an object[] or object
+        // parameter boxes as an int, so [DeniedValues((short)1)] no longer denied a short 1.
+        var inner = InnerSource.Replace(
+            "public string ComputedOnly",
+            "[DeniedValues((short)1, (byte)2, (sbyte)3, (ushort)4, 5.0)]\n            public short Level { get; set; }\n\n            public string ComputedOnly",
+            StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+
+        // What the compiler makes of the emitted attribute is what the runtime reads.
+        var level = (IPropertySymbol)run.Output.GetTypeByMetadataName("Gateway.GetGatewayWidgetQuery")!.GetMembers("Level").Single();
+        var denied = level.GetAttributes().Single(static a => a.AttributeClass!.Name == "DeniedValuesAttribute").ConstructorArguments.Single();
+        denied.Values.Select(static v => v.Value!.GetType()).Should().Equal(typeof(short), typeof(byte), typeof(sbyte), typeof(ushort), typeof(double));
+    }
+
+    [Fact]
     public void A_self_link_placeholder_binds_a_contributed_property()
     {
         var gateway = GatewaySource.Replace(
@@ -597,7 +659,8 @@ public class ExposeGeneratorTests
             first.Diagnostics,
             emitErrors,
             first.GeneratedTrees.ToDictionary(static t => Path.GetFileName(t.FilePath), static t => t.ToString(), StringComparer.Ordinal),
-            cached);
+            cached,
+            output);
     }
 
     /// <summary>
@@ -642,7 +705,8 @@ public class ExposeGeneratorTests
         ImmutableArray<Diagnostic> GeneratorDiagnostics,
         IReadOnlyList<string> EmitErrors,
         IReadOnlyDictionary<string, string> Sources,
-        bool DescriptorAndAppReplayedFromCache)
+        bool DescriptorAndAppReplayedFromCache,
+        Compilation Output)
     {
         // BP007 asks the app for a serializer context, which the STJ generator would complete; it does not run here.
         public IEnumerable<Diagnostic> GeneratorErrors => this.GeneratorDiagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error && d.Id != "BP007");
