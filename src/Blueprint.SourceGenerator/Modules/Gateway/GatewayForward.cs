@@ -156,10 +156,9 @@ public static class GatewayForward
         }
 
         // A required inner member the forward does not set would fail to compile (CS9035): one the gateway redeclares with
-        // another type, or a required field, which is never contributed. A bound one is set in the initialiser; hiding a
-        // required one is BPGW009.
+        // another type, or a required field, which is never contributed. A bound one is set from its binding.
         var unset = GetRequiredMemberNames(exposedType)
-            .Where(name => !copied.Contains(name) && !bindings.Any(b => b.PropertyName == name))
+            .Where(name => !copied.Contains(name) && !bindings.Any(b => b.PropertyName == name && b.Source != GatewayBindingSource.Hidden))
             .ToList();
         if (unset.Count > 0)
         {

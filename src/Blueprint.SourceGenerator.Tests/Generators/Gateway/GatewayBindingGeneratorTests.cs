@@ -335,6 +335,22 @@ public class GatewayBindingGeneratorTests
     }
 
     [Fact]
+    public void A_required_inner_property_the_forward_sets_from_a_binding_is_not_BPGW019()
+    {
+        // The command's TenantId, not the result's, which comes first.
+        const string tenantId = "public string TenantId { get; set; } = \"\";";
+        var index = InnerSource.IndexOf(tenantId, InnerSource.IndexOf("The tenant the note belongs to", StringComparison.Ordinal), StringComparison.Ordinal);
+        var inner = InnerSource[..index] + "public required string TenantId { get; set; }" + InnerSource[(index + tenantId.Length)..];
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, GatewaySource, AppSource], contract);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW019");
+        run.EmitErrors.Should().BeEmpty();
+        run.Sources.Values.Should().Contain(static s => s.Contains("TenantId = _bound_TenantId", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void When_an_inner_route_placeholder_the_gateway_route_lacks_is_neither_bound_nor_hidden_then_BPGW010_is_reported()
     {
         var diagnostic = SingleDescriptorDiagnostic([GatewaySource], "BPGW010");
