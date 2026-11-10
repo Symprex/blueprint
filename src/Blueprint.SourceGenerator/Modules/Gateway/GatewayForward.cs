@@ -136,7 +136,18 @@ public static class GatewayForward
         }
 
         var resultTypeName = resultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var copied = GetCopiedProperties(operationType, exposedType);
+        var copied = GetCopiedProperties(operationType, exposedType, out var unreadable);
+
+        // The pipeline reads each copied property from outside the operation, which a declared one with a getter that is
+        // not public, or none, does not allow (CS0271, CS0154). A contributed one is emitted with a public getter, but
+        // without one on the inner property its default cannot be read, and the forward would send the type's instead.
+        if (unreadable.Count > 0)
+        {
+            return Result<OperationHandlerModel>.Failure(new DiagnosticInfo(
+                GatewayDiagnosticDescriptors.ForwardedPropertyNotReadable,
+                location,
+                [operationType.Name, string.Join(", ", unreadable), exposedType.Name]));
+        }
 
         // A required inner member the forward does not set would fail to compile (CS9035): one the gateway redeclares with
         // another type, or a required field, which is never contributed.
@@ -222,8 +233,9 @@ public static class GatewayForward
             + context.GetContextPropertyExpression("OperationCancelled") + ")";
     }
 
-    private static EquatableList<string> GetCopiedProperties(INamedTypeSymbol operationType, INamedTypeSymbol exposedType)
+    private static EquatableList<string> GetCopiedProperties(INamedTypeSymbol operationType, INamedTypeSymbol exposedType, out List<string> unreadable)
     {
+        unreadable = [];
         var innerSettable = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
         foreach (var member in exposedType.GetAllMembers().OfType<IPropertySymbol>())
         {
@@ -249,6 +261,14 @@ public static class GatewayForward
                 || SymbolEqualityComparer.Default.Equals(property.Member.Type, innerProperty.Type))
             {
                 copied.Add(property.Info.Name);
+
+                // A declared property the pipeline cannot read; or an inner one whose default the emitted property cannot
+                // start from, so forwarding it would replace the inner operation's default whenever the caller omits it.
+                if (!property.Info.HasPublicGetter
+                    || (property.Info.Origin == OperationPropertyOrigin.Contributed && innerProperty.GetMethod is not { DeclaredAccessibility: Accessibility.Public }))
+                {
+                    unreadable.Add(property.Info.Name);
+                }
             }
         }
 

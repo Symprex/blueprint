@@ -94,6 +94,9 @@ public static class ServiceCollectionExtensions
         // Pre-rendered OpenAPI document holder — populated at endpoint mapping time
         services.TryAddSingleton<PreRenderedOpenApiDocumentHolder>();
 
+        // Per-operation input schemas (MCP tools, Code Mode) — given the app's operations at endpoint mapping time
+        services.TryAddSingleton<IOperationInputSchemaProvider, OperationInputSchemaProvider>();
+
         // What configure declares about where the API is mapped and how it is described, for MapBlueprintApi and for the
         // BlueprintEmitOpenApi build target, which runs the app only until its host is built, to write that document.
         services.AddKeyedSingleton<BlueprintApiMapping>(typeof(TApp), builder.Mapping);
