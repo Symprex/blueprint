@@ -13,6 +13,7 @@ internal sealed class ToolResponseBody : Stream
     private readonly Func<string?> _contentType;
     private readonly int _maxTextBytes;
     private readonly Func<CancellationToken, Task>? _start;
+    private readonly bool _discard;
     private MemoryStream? _text;
     private bool _decided;
 
@@ -22,11 +23,13 @@ internal sealed class ToolResponseBody : Stream
     /// <param name="contentType">Gives the response's content type.</param>
     /// <param name="maxTextBytes">The most bytes of a text body kept.</param>
     /// <param name="start">Starts the response, as a server does before it writes the first byte of its body.</param>
-    public ToolResponseBody(Func<string?> contentType, int maxTextBytes, Func<CancellationToken, Task>? start = null)
+    /// <param name="discard">Whether every byte written is discarded uncounted, as a server discards a HEAD response's body.</param>
+    public ToolResponseBody(Func<string?> contentType, int maxTextBytes, Func<CancellationToken, Task>? start = null, bool discard = false)
     {
         this._contentType = contentType;
         this._maxTextBytes = maxTextBytes;
         this._start = start;
+        this._discard = discard;
     }
 
     /// <summary>Gets the number of bytes written, kept or not.</summary>
@@ -120,6 +123,11 @@ internal sealed class ToolResponseBody : Stream
 
     private void Keep(ReadOnlySpan<byte> buffer)
     {
+        if (this._discard)
+        {
+            return;
+        }
+
         this.BytesWritten += buffer.Length;
 
         if (this._text is not null && this._text.Length < this._maxTextBytes)

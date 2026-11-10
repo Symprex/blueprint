@@ -89,33 +89,43 @@ internal sealed class BlueprintOperationTool : McpServerTool
 
         // Its own service scope, as an HTTP request has: scoped services such as the authentication handlers serve the
         // request they were first asked for, so the MCP request's would challenge the MCP request, not the operation's.
-        await using var scope = caller.RequestServices.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
+        var scope = caller.RequestServices.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<BlueprintOperationTool>>();
 
-        using var response = new ToolResponse(OperationToolResult.MaxTextBytes);
+        // A server sends no body in answer to HEAD, whatever the endpoint writes.
+        using var response = new ToolResponse(OperationToolResult.MaxTextBytes, discardBody: HttpMethods.IsHead(method));
         var context = CreateContext(caller, scope.ServiceProvider, endpoint, method, toolRequest, response, cancellationToken);
+
+        // A service reading the request from IHttpContextAccessor, as one may over HTTP, is given the operation's, not the
+        // MCP request's, until the operation's request has ended: its OnCompleted callbacks run and its scope is
+        // disposed. The MCP server itself does not read the accessor.
+        accessor.HttpContext = context;
 
         try
         {
-            // A service reading the request from IHttpContextAccessor, as one may over HTTP, is given the operation's,
-            // not the MCP request's. The MCP server itself does not read the accessor.
-            accessor.HttpContext = context;
-
             try
             {
                 await RunAsync(endpoint, context).ConfigureAwait(false);
                 await context.Response.CompleteAsync().ConfigureAwait(false);
+
+                return OperationToolResult.Create(context.Response.StatusCode, context.Response.ContentType, response.Captured);
+            }
+            finally
+            {
+                // As a server does once it has sent the response, which disposes what the request registered for disposal.
+                await response.RunCompletedCallbacksAsync(logger).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            try
+            {
+                await scope.DisposeAsync().ConfigureAwait(false);
             }
             finally
             {
                 accessor.HttpContext = caller;
             }
-
-            return OperationToolResult.Create(context.Response.StatusCode, context.Response.ContentType, response.Captured);
-        }
-        finally
-        {
-            // As a server does once it has sent the response, which disposes what the request registered for disposal.
-            await response.RunCompletedCallbacksAsync(scope.ServiceProvider.GetRequiredService<ILogger<BlueprintOperationTool>>()).ConfigureAwait(false);
         }
     }
 
@@ -162,7 +172,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
             policy = policy is null ? requirements.Build() : AuthorizationPolicy.Combine(policy, requirements.Build());
         }
 
-        if (policy is null || metadata.GetMetadata<IAllowAnonymous>() is not null)
+        if (policy is null)
         {
             await endpoint.RequestDelegate!(context).ConfigureAwait(false);
             return;
@@ -171,7 +181,15 @@ internal sealed class BlueprintOperationTool : McpServerTool
         var policyEvaluator = services.GetRequiredService<IPolicyEvaluator>();
         var resultHandler = services.GetRequiredService<IAuthorizationMiddlewareResultHandler>();
 
+        // The policy's schemes authenticate the caller even where anyone is allowed, which skips only the authorisation.
         var authenticateResult = await policyEvaluator.AuthenticateAsync(policy, context).ConfigureAwait(false);
+
+        if (metadata.GetMetadata<IAllowAnonymous>() is not null)
+        {
+            await endpoint.RequestDelegate!(context).ConfigureAwait(false);
+            return;
+        }
+
         var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, context).ConfigureAwait(false);
 
         await resultHandler.HandleAsync(endpoint.RequestDelegate!, context, policy, authorizeResult).ConfigureAwait(false);
@@ -228,7 +246,9 @@ internal sealed class BlueprintOperationTool : McpServerTool
             Method = method,
             Protocol = caller.Request.Protocol,
             Scheme = caller.Request.Scheme,
-            PathBase = caller.Request.PathBase,
+
+            // Decoded, as the feature holds it; PathString's conversion to a string would escape it.
+            PathBase = caller.Request.PathBase.Value ?? string.Empty,
             Path = toolRequest.Path,
             QueryString = toolRequest.QueryString.Value ?? string.Empty,
             Headers = headers,

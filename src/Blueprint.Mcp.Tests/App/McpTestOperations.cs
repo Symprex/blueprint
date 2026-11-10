@@ -123,6 +123,11 @@ public class CallbacksMcpQueryHandler(IHttpContextAccessor accessor, ResponseCal
             return Task.CompletedTask;
         });
         response.RegisterForDispose(probe.CreateResource());
+        response.OnCompleted(() =>
+        {
+            probe.CompletedPath = accessor.HttpContext?.Request.Path.Value;
+            return Task.CompletedTask;
+        });
 
         return "called back";
     }
@@ -135,6 +140,9 @@ public sealed class ResponseCallbackProbe
 
     /// <summary>Gets the number of resources disposed.</summary>
     public int Disposed => Volatile.Read(ref this._disposed);
+
+    /// <summary>Gets or sets the request path the accessor gave the last <c>OnCompleted</c> callback.</summary>
+    public string? CompletedPath { get; set; }
 
     /// <summary>Makes a resource that counts itself when disposed.</summary>
     /// <returns>The resource.</returns>
@@ -149,5 +157,44 @@ public sealed class ResponseCallbackProbe
         {
             Interlocked.Increment(ref probe._disposed);
         }
+    }
+}
+
+/// <summary>A query answering HEAD only, whose handler still gives a body, which a server does not send.</summary>
+[AllowAnonymous]
+[RootLink("/head")]
+[HttpMethod("HEAD")]
+public partial class HeadMcpQuery : IQuery<string>
+{
+    /// <summary>Gives a body a HEAD response does not carry.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>A fixed answer.</returns>
+    public static string Handle(HeadMcpQuery query)
+    {
+        return "a body HEAD does not carry";
+    }
+}
+
+/// <summary>A query answering with the roles of the user its request is authenticated as.</summary>
+[AllowAnonymous]
+[RootLink("/who-am-i")]
+public partial class WhoAmIMcpQuery : IQuery<string>
+{
+}
+
+/// <summary>Handles <see cref="WhoAmIMcpQuery"/> from the ambient request's user.</summary>
+/// <param name="accessor">The accessor the handler reads the user from.</param>
+public class WhoAmIMcpQueryHandler(IHttpContextAccessor accessor)
+{
+    /// <summary>Answers with the user's roles.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The roles, comma-separated, or <c>anonymous</c>.</returns>
+    public string Handle(WhoAmIMcpQuery query)
+    {
+        var user = accessor.HttpContext?.User;
+
+        return user?.Identity?.IsAuthenticated == true
+            ? string.Join(',', user.FindAll(System.Security.Claims.ClaimTypes.Role).Select(static c => c.Value))
+            : "anonymous";
     }
 }

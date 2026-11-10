@@ -596,13 +596,14 @@ calls it there with the SDK's own MCP client.
   (its policies, `[Authorize]` data and requirements, or the fallback policy when it has none), binding, validation,
   authentication and authorisation are those of HTTP. It is the MCP request's caller that runs it: its
   `HttpContext.User`, its `Authorization` header, its scheme, host and path base (so links point at the HTTP API). It
-  has its own service scope, as an HTTP request has; `IHttpContextAccessor` gives its handler the operation's request,
-  not the MCP request; and its response's `OnStarting` and `OnCompleted` callbacks run, so what it registered for
-  disposal is disposed.
+  has its own service scope, as an HTTP request has; `IHttpContextAccessor` gives its handler, its callbacks and its
+  scope's disposals the operation's request, not the MCP request; and its response's `OnStarting` and `OnCompleted`
+  callbacks run, so what it registered for disposal is disposed. An API mapped in a route group is called with the
+  group's prefix and conventions, and a HEAD operation's result has its status and no body, as HTTP gives it.
 - **One mapping per tool set.** The tools run through the endpoints of the `MapBlueprintApi` call mapped last before
   `MapBlueprintMcp`, so an app mapped under two base paths, each with its own conventions, can have tools for each.
-- **Results are the HTTP response.** The body is the tool result's text, and its structured content when it is a JSON
-  object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
+- **Results are the HTTP response.** The body is the tool result's text, read in the charset its content type
+  declares (UTF-8 when it declares none), and its structured content when it is a JSON object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
   problem body an HTTP caller gets, a call that fails validation the same 422.
 - **Stateless.** Every MCP request is answered within its own HTTP request, so a tool call always runs as the caller
   that request authenticated. A stateful session would answer later calls as whoever opened it.

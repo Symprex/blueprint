@@ -107,6 +107,36 @@ public sealed class OperationToolResultTests
         result.StructuredContent.Should().BeNull();
     }
 
+    [Fact]
+    public void A_text_body_is_decoded_by_the_charset_its_content_type_declares()
+    {
+        const string contentType = "text/plain; charset=utf-16";
+
+        var result = OperationToolResult.Create(200, contentType, Body(contentType, Encoding.Unicode.GetBytes("café")));
+
+        result.Content.OfType<TextContentBlock>().Single().Text.Should().Be("café");
+    }
+
+    [Fact]
+    public void A_JSON_body_in_another_charset_is_still_its_structured_content()
+    {
+        const string contentType = "application/json; charset=utf-16";
+
+        var result = OperationToolResult.Create(200, contentType, Body(contentType, Encoding.Unicode.GetBytes("""{"name":"café"}""")));
+
+        result.StructuredContent!.Value.GetProperty("name").GetString().Should().Be("café");
+    }
+
+    [Fact]
+    public void A_body_whose_charset_is_unknown_is_read_as_UTF8()
+    {
+        const string contentType = "text/plain; charset=no-such-charset";
+
+        var result = OperationToolResult.Create(200, contentType, Body(contentType, Encoding.UTF8.GetBytes("café")));
+
+        result.Content.OfType<TextContentBlock>().Single().Text.Should().Be("café");
+    }
+
     private static ToolResponseBody Body(string? contentType, byte[] bytes)
     {
         var body = new ToolResponseBody(() => contentType, OperationToolResult.MaxTextBytes);

@@ -72,7 +72,7 @@ public static class McpEndpointRouteBuilderExtensions
             schemaProvider = mappedSchemas.Snapshot();
         }
 
-        var toolSet = new BlueprintMcpToolSet(app, schemaProvider, endpoints.DataSources);
+        var toolSet = new BlueprintMcpToolSet(app, schemaProvider, services);
 
         if (!httpOptions.RenderOpenApiDocumentOnFirstRequest)
         {

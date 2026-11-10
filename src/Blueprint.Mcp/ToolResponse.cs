@@ -20,9 +20,10 @@ internal sealed class ToolResponse : IHttpResponseFeature, IHttpResponseBodyFeat
     /// Initializes a new instance of the <see cref="ToolResponse"/> class.
     /// </summary>
     /// <param name="maxTextBytes">The most bytes of a text body kept.</param>
-    public ToolResponse(int maxTextBytes)
+    /// <param name="discardBody">Whether the body is discarded, as a server discards it in answer to HEAD.</param>
+    public ToolResponse(int maxTextBytes, bool discardBody = false)
     {
-        this.Captured = new ToolResponseBody(() => this.Headers.ContentType, maxTextBytes, this.StartAsync);
+        this.Captured = new ToolResponseBody(() => this.Headers.ContentType, maxTextBytes, this.StartAsync, discardBody);
     }
 
     /// <summary>Gets the body as it was written.</summary>

@@ -17,7 +17,7 @@ internal sealed class BlueprintMcpToolSet
 {
     private readonly BlueprintApp _app;
     private readonly IOperationInputSchemaProvider _schemaProvider;
-    private readonly ICollection<EndpointDataSource> _dataSources;
+    private readonly IServiceProvider _services;
     private readonly MappedBlueprintApi? _mappedApi;
     private readonly Lazy<IReadOnlyList<BlueprintOperationTool>> _tools;
 
@@ -26,12 +26,12 @@ internal sealed class BlueprintMcpToolSet
     /// </summary>
     /// <param name="app">The app whose operations become tools.</param>
     /// <param name="schemaProvider">The input schemas <c>MapBlueprintApi</c> made for the app.</param>
-    /// <param name="dataSources">The endpoint data sources the app's API is mapped into.</param>
-    public BlueprintMcpToolSet(BlueprintApp app, IOperationInputSchemaProvider schemaProvider, ICollection<EndpointDataSource> dataSources)
+    /// <param name="services">The host's services, whose <see cref="EndpointDataSource"/> composes every endpoint mapped.</param>
+    public BlueprintMcpToolSet(BlueprintApp app, IOperationInputSchemaProvider schemaProvider, IServiceProvider services)
     {
         this._app = app;
         this._schemaProvider = schemaProvider;
-        this._dataSources = dataSources;
+        this._services = services;
 
         // The MapBlueprintApi call the schemas were made by, whose endpoints the tools run through: one app may be mapped
         // under two base paths, each with its own conventions.
@@ -76,29 +76,28 @@ internal sealed class BlueprintMcpToolSet
         RouteEndpoint? best = null;
         var bestRank = int.MaxValue;
 
-        foreach (var dataSource in this._dataSources)
+        // The host's composed endpoints, as routing matches them: an API mapped in a route group has the group's prefix
+        // and conventions, which the group's own data sources do not apply.
+        foreach (var endpoint in this._services.GetRequiredService<EndpointDataSource>().Endpoints)
         {
-            foreach (var endpoint in dataSource.Endpoints)
+            if (endpoint is not RouteEndpoint routeEndpoint
+                || endpoint.Metadata.GetMetadata<ApiOperationDescriptor>() is not { } mapped
+                || (!ReferenceEquals(mapped, operation) && mapped.OperationType != operation.OperationType)
+                || (this._mappedApi is not null && !ReferenceEquals(endpoint.Metadata.GetMetadata<MappedBlueprintApi>(), this._mappedApi)))
             {
-                if (endpoint is not RouteEndpoint routeEndpoint
-                    || endpoint.Metadata.GetMetadata<ApiOperationDescriptor>() is not { } mapped
-                    || (!ReferenceEquals(mapped, operation) && mapped.OperationType != operation.OperationType)
-                    || (this._mappedApi is not null && !ReferenceEquals(endpoint.Metadata.GetMetadata<MappedBlueprintApi>(), this._mappedApi)))
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                // The app's own descriptor before another's of the same type, as two apps mapped on one host may share
-                // an operation type, and the schema's URL before the first one mapped.
-                var isAtSchemaUrl = schema.UrlFormat is null
-                                    || string.Equals(endpoint.Metadata.GetMetadata<ApiOperationUrl>()?.UrlFormat, schema.UrlFormat, StringComparison.Ordinal);
-                var rank = (ReferenceEquals(mapped, operation) ? 0 : 2) + (isAtSchemaUrl ? 0 : 1);
+            // The app's own descriptor before another's of the same type, as two apps mapped on one host may share an
+            // operation type, and the schema's URL before the first one mapped.
+            var isAtSchemaUrl = schema.UrlFormat is null
+                                || string.Equals(endpoint.Metadata.GetMetadata<ApiOperationUrl>()?.UrlFormat, schema.UrlFormat, StringComparison.Ordinal);
+            var rank = (ReferenceEquals(mapped, operation) ? 0 : 2) + (isAtSchemaUrl ? 0 : 1);
 
-                if (rank < bestRank)
-                {
-                    best = routeEndpoint;
-                    bestRank = rank;
-                }
+            if (rank < bestRank)
+            {
+                best = routeEndpoint;
+                bestRank = rank;
             }
         }
 

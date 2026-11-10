@@ -33,7 +33,10 @@ internal sealed class OperationToolRequest
         this.Body = body;
     }
 
-    /// <summary>Gets the request path, under the route pattern's own base path, with every route value written in.</summary>
+    /// <summary>
+    /// Gets the request path, under the route pattern's own base path, with every route value written in, decoded as a
+    /// server gives <c>HttpRequest.Path</c>.
+    /// </summary>
     public string Path { get; }
 
     /// <summary>Gets the route values, unescaped, as routing would have matched them from <see cref="Path"/>.</summary>
@@ -178,10 +181,9 @@ internal sealed class OperationToolRequest
                             return null;
                         }
 
-                        // Routing matches a catch-all's slashes as part of its value, and every other value unescaped.
-                        path.Append(parameter.IsCatchAll
-                            ? string.Join('/', value.Split('/').Select(Uri.EscapeDataString))
-                            : Uri.EscapeDataString(value));
+                        // As a server gives the path, decoded but for an escaped slash, which it leaves escaped: a
+                        // catch-all's slashes separate its segments, and any other value's are part of it.
+                        path.Append(parameter.IsCatchAll ? value : value.Replace("/", "%2F", StringComparison.Ordinal));
                         break;
                 }
             }

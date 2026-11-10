@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Net.Http.Headers;
 using ModelContextProtocol.Protocol;
 
 namespace Blueprint.Mcp;
@@ -52,22 +53,22 @@ internal static class OperationToolResult
         if (!body.IsComplete)
         {
             var described = contentType ?? "unknown content";
-            var text = body.IsText
+            var description = body.IsText
                 ? $"The operation returned {body.BytesWritten} bytes of {described}, more than the {body.MaxTextBytes} bytes of text a tool result carries."
                 : $"The operation returned {body.BytesWritten} bytes of {described}, which a tool result does not carry.";
 
-            result.Content = [new TextContentBlock { Text = text }];
+            result.Content = [new TextContentBlock { Text = description }];
             return result;
         }
 
-        var bytes = body.GetText();
-        result.Content = [new TextContentBlock { Text = Encoding.UTF8.GetString(bytes.Span) }];
+        var text = GetEncoding(contentType).GetString(body.GetText().Span);
+        result.Content = [new TextContentBlock { Text = text }];
 
         if (IsJson(contentType))
         {
             try
             {
-                using var document = JsonDocument.Parse(bytes);
+                using var document = JsonDocument.Parse(text);
 
                 if (document.RootElement.ValueKind == JsonValueKind.Object)
                 {
@@ -93,6 +94,21 @@ internal static class OperationToolResult
         return contentType is null
                || contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
                || IsJson(contentType);
+    }
+
+    /// <summary>
+    /// Gets the encoding the content type's charset names, or UTF-8 when it names none, or one this runtime lacks.
+    /// </summary>
+    private static Encoding GetEncoding(string? contentType)
+    {
+        try
+        {
+            return MediaTypeHeaderValue.TryParse(contentType, out var mediaType) ? mediaType.Encoding ?? Encoding.UTF8 : Encoding.UTF8;
+        }
+        catch (ArgumentException)
+        {
+            return Encoding.UTF8;
+        }
     }
 
     private static bool IsJson(string? contentType)

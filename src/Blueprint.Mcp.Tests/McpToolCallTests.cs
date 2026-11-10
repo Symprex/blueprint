@@ -160,14 +160,96 @@ public sealed class McpToolCallTests
         using var http = host.CreateHttpClient();
         await using var client = await host.ConnectAsync();
 
-        using var overHttp = await http.GetAsync("api/callbacks");
-        var disposedBefore = probe.Disposed;
+        // The tool call first: a server disposes the HTTP request's resources after it has sent the response, so they
+        // may still be being disposed when the client has it.
         var result = await client.CallToolAsync(ids[("get", "/callbacks")], new Dictionary<string, object?>());
+        var disposedByToolCall = probe.Disposed;
+        using var overHttp = await http.GetAsync("api/callbacks");
 
+        disposedByToolCall.Should().Be(1);
         ((int)overHttp.StatusCode).Should().Be(203);
         HttpStatus(result).Should().Be(203);
         Text(result).Should().Be(await overHttp.Content.ReadAsStringAsync());
-        probe.Disposed.Should().Be(disposedBefore + 1);
+    }
+
+    [Fact]
+    public async Task An_OnCompleted_callback_reads_the_operations_request_from_IHttpContextAccessor()
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        var probe = host.Services.GetRequiredService<App.ResponseCallbackProbe>();
+        await using var client = await host.ConnectAsync();
+
+        await client.CallToolAsync(ids[("get", "/callbacks")], new Dictionary<string, object?>());
+
+        probe.CompletedPath.Should().Be("/api/callbacks");
+    }
+
+    [Theory]
+    [InlineData("User", 403)]
+    [InlineData("Admin", 200)]
+    public async Task An_app_mapped_in_a_route_group_is_called_with_the_groups_prefix_and_conventions(string roles, int expectedStatus)
+    {
+        await using var host = await McpTestHost.StartAsync(mapGrouped: true);
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient(roles);
+        await using var client = await host.ConnectAsync("grouped/api/mcp", roles: roles);
+
+        using var overHttp = await http.GetAsync("grouped/api/accessor/abc");
+        var result = await client.CallToolAsync(ids[("get", "/accessor/{Id}")], new Dictionary<string, object?> { ["Id"] = "abc" });
+
+        ((int)overHttp.StatusCode).Should().Be(expectedStatus);
+        HttpStatus(result).Should().Be(expectedStatus);
+        (Text(result) ?? string.Empty).Should().Be(await overHttp.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task A_HEAD_operations_tool_result_carries_its_status_and_no_body_as_HTTP_does()
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        using var overHttp = await http.SendAsync(new HttpRequestMessage(HttpMethod.Head, "api/head"));
+        var result = await client.CallToolAsync(ids[("head", "/head")], new Dictionary<string, object?>());
+
+        ((int)overHttp.StatusCode).Should().Be(200);
+        (await overHttp.Content.ReadAsByteArrayAsync()).Should().BeEmpty();
+        HttpStatus(result).Should().Be(200);
+        result.Content.Should().BeEmpty();
+        result.StructuredContent.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task An_anonymous_endpoint_naming_a_scheme_is_given_the_user_that_scheme_authenticates_as_HTTP_gives_it()
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Roles Admin");
+        await using var client = await host.ConnectAsync(authorization: "Roles Admin");
+
+        var overHttp = await http.GetStringAsync("api/who-am-i");
+        var result = await client.CallToolAsync(ids[("get", "/who-am-i")], new Dictionary<string, object?>());
+
+        overHttp.Should().Be("\"Admin\"");
+        Text(result).Should().Be(overHttp);
+    }
+
+    [Fact]
+    public async Task A_path_argument_reaches_the_handler_decoded_as_HTTP_gives_it()
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        var overHttp = await http.GetStringAsync("api/accessor/a%20b");
+        var result = await client.CallToolAsync(ids[("get", "/accessor/{Id}")], new Dictionary<string, object?> { ["Id"] = "a b" });
+
+        overHttp.Should().Be("\"/api/accessor/a b\"");
+        Text(result).Should().Be(overHttp);
     }
 
     [Fact]
