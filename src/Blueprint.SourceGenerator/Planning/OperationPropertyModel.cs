@@ -66,19 +66,14 @@ public sealed record OperationPropertyModel(
 /// </summary>
 /// <param name="MetadataName">The inner operation's fully qualified metadata name.</param>
 /// <param name="TypeName">The inner operation as C# source, <c>global::</c>-qualified.</param>
-/// <param name="RequiredMemberNames">
-/// The names of the inner operation's <c>required</c> members, which an object creation of it has to set, so that the
-/// emitted partial can read the inner defaults from a static instance.
-/// </param>
-/// <param name="CanCreateDefaults">
-/// Whether the exposing assembly can create an instance of the inner operation with a parameterless constructor, to
-/// read the defaults its initialisers give, which metadata does not carry.
+/// <param name="DefaultsCreation">
+/// The C# expression that creates an inner operation to read the defaults its initialisers give, which metadata does not
+/// carry, or <see langword="null"/> when the exposing assembly cannot create one.
 /// </param>
 public sealed record ExposedOperationInfo(
     string MetadataName,
     string TypeName,
-    EquatableList<string> RequiredMemberNames,
-    bool CanCreateDefaults);
+    string? DefaultsCreation);
 
 /// <summary>
 /// One property of an <see cref="OperationPropertyModel"/>.

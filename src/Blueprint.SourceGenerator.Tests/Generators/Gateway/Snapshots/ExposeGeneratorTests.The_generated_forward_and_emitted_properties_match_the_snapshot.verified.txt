@@ -7,19 +7,25 @@ namespace Gateway;
 
 partial class GetGatewayWidgetQuery
 {
-    private static readonly global::Inner.GetWidgetQuery __blueprintExposedDefaults = new global::Inner.GetWidgetQuery();
+    [global::System.ThreadStatic]
+    private static global::Inner.GetWidgetQuery? __blueprintExposedDefaults;
+
+    private static global::Inner.GetWidgetQuery __blueprintReadExposedDefaults(bool first)
+    {
+        return first || __blueprintExposedDefaults is null ? __blueprintExposedDefaults = new global::Inner.GetWidgetQuery() : __blueprintExposedDefaults;
+    }
 
     /// <inheritdoc cref="global::Inner.GetWidgetQuery.Id"/>
     [global::System.ComponentModel.DataAnnotations.RequiredAttribute]
-    public string Id { get; set; } = __blueprintExposedDefaults.Id;
+    public string Id { get; set; } = __blueprintReadExposedDefaults(true).Id;
 
     /// <inheritdoc cref="global::Inner.GetWidgetQuery.Revisions"/>
     [global::System.ComponentModel.DataAnnotations.RangeAttribute(1, 10)]
-    public int Revisions { get; set; } = __blueprintExposedDefaults.Revisions;
+    public int Revisions { get; set; } = __blueprintReadExposedDefaults(false).Revisions;
 
     /// <inheritdoc cref="global::Inner.GetWidgetQuery.Region"/>
     [global::Blueprint.Model.Attributes.FromHeaderAttribute("X-Region")]
-    public string? Region { get; set; } = __blueprintExposedDefaults.Region;
+    public string? Region { get; set; } = __blueprintReadExposedDefaults(false).Region;
 }
 
 Gateway.GetGatewayWidgetQueryExecutorPipeline.g.cs:

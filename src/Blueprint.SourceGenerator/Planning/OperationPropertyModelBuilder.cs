@@ -24,9 +24,14 @@ internal static class OperationPropertyModelBuilder
     public const string ExposeAttributeMetadataName = "Blueprint.Model.Attributes.ExposeAttribute`1";
 
     /// <summary>
-    /// The name of the static inner instance the emitted partial reads its defaults from.
+    /// The name of the thread-static slot holding the inner instance the emitted partial's initialisers read their defaults from.
     /// </summary>
     public const string DefaultsFieldName = "__blueprintExposedDefaults";
+
+    /// <summary>
+    /// The name of the emitted method that makes the inner instance for the first initialiser and gives it to the rest.
+    /// </summary>
+    public const string ReadDefaultsMethodName = "__blueprintReadExposedDefaults";
 
     private static readonly SymbolDisplayFormat TypeFormat = SymbolDisplayFormat.FullyQualifiedFormat
         .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
@@ -164,7 +169,7 @@ internal static class OperationPropertyModelBuilder
 
     /// <summary>
     /// Renders the contributed properties of an operation into its partial, each starting from the inner operation's
-    /// default, read from a static inner instance because initialisers are not in metadata (D9).
+    /// default, read from a fresh inner instance for each exposed one because initialisers are not in metadata (D9).
     /// </summary>
     /// <param name="model">The operation's property model.</param>
     /// <returns>The C# source of the partial.</returns>
@@ -189,17 +194,25 @@ internal static class OperationPropertyModelBuilder
         source.Append("partial class ").AppendLine(typeName);
         source.AppendLine("{");
 
-        var readsDefaults = exposed.CanCreateDefaults && model.Properties.Any(static p => p is { Origin: OperationPropertyOrigin.Contributed, HasPublicGetter: true });
+        var readsDefaults = exposed.DefaultsCreation is not null
+            && model.Properties.Any(static p => p is { Origin: OperationPropertyOrigin.Contributed, HasPublicGetter: true });
         if (readsDefaults)
         {
-            // An inner operation with required members is made as its own pipeline makes it, with Activator, which runs every
-            // initialiser and sets no member; an object initialiser would have to overwrite each required one.
-            source.Append("    private static readonly ").Append(exposed.TypeName).Append(' ').Append(DefaultsFieldName).Append(" = ");
-            source.Append(exposed.RequiredMemberNames.Count > 0
-                ? "(" + exposed.TypeName + ")global::System.Activator.CreateInstance(typeof(" + exposed.TypeName + "))!"
-                : "new " + exposed.TypeName + "()");
-            source.AppendLine(";");
+            // One fresh inner operation for each exposed one, so a default made per construction (a new Guid, the time, a new
+            // list) is made per construction here too. Initialisers cannot read an instance field, so the instance is kept in
+            // a thread-static slot: the first initialiser below makes it, the rest read it, and the initialisers of one part
+            // run in order, one construction at a time on a thread.
+            source.AppendLine("    [global::System.ThreadStatic]");
+            source.Append("    private static ").Append(exposed.TypeName).Append("? ").Append(DefaultsFieldName).AppendLine(";");
+            source.AppendLine();
+            source.Append("    private static ").Append(exposed.TypeName).Append(' ').Append(ReadDefaultsMethodName).AppendLine("(bool first)");
+            source.AppendLine("    {");
+            source.Append("        return first || ").Append(DefaultsFieldName).Append(" is null ? ").Append(DefaultsFieldName).Append(" = ")
+                .Append(exposed.DefaultsCreation).Append(" : ").Append(DefaultsFieldName).AppendLine(";");
+            source.AppendLine("    }");
         }
+
+        var first = true;
 
         foreach (var property in model.Properties)
         {
@@ -227,7 +240,8 @@ internal static class OperationPropertyModelBuilder
             // An inner property the gateway cannot read (a private getter, or none) gives no default to start from.
             if (readsDefaults && property.HasPublicGetter)
             {
-                source.Append(" = ").Append(DefaultsFieldName).Append('.').Append(property.Name).Append(';');
+                source.Append(" = ").Append(ReadDefaultsMethodName).Append(first ? "(true)." : "(false).").Append(property.Name).Append(';');
+                first = false;
             }
             else if (!property.IsRequired && !property.TypeName.EndsWith("?", StringComparison.Ordinal))
             {
@@ -266,29 +280,90 @@ internal static class OperationPropertyModelBuilder
                 && !bound.Contains(member.Name));
     }
 
-    private static ExposedOperationInfo CreateExposedInfo(INamedTypeSymbol exposed)
+    /// <summary>
+    /// Finds the constructor <c>new T()</c> or <c>new T { … }</c> calls from another assembly: the public parameterless
+    /// one, or else a public one whose every parameter is optional.
+    /// </summary>
+    /// <param name="type">The type to create.</param>
+    /// <returns>The constructor, or <see langword="null"/> when the type cannot be created without arguments.</returns>
+    public static IMethodSymbol? FindArgumentlessConstructor(INamedTypeSymbol type)
     {
-        var required = new List<string>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        for (var current = exposed; current is not null; current = current.BaseType)
+        if (type.IsAbstract)
         {
-            foreach (var member in current.GetMembers())
+            return null;
+        }
+
+        IMethodSymbol? allOptional = null;
+        foreach (var constructor in type.InstanceConstructors)
+        {
+            if (constructor.DeclaredAccessibility != Accessibility.Public)
             {
-                if (member is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true } && seen.Add(member.Name))
-                {
-                    required.Add(member.Name);
-                }
+                continue;
+            }
+
+            if (constructor.Parameters.Length == 0)
+            {
+                return constructor;
+            }
+
+            if (constructor.Parameters.All(static p => p.IsOptional || p.IsParams))
+            {
+                allOptional ??= constructor;
             }
         }
 
-        var canCreate = !exposed.IsAbstract
-            && exposed.InstanceConstructors.Any(static c => c.Parameters.Length == 0 && c.DeclaredAccessibility == Accessibility.Public);
+        return allOptional;
+    }
 
-        return new ExposedOperationInfo(
-            exposed.ToFullMetadataName(),
-            exposed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-            EquatableList<string>.TakeOwnership(required),
-            canCreate);
+    /// <summary>
+    /// Whether a constructor is marked <c>[SetsRequiredMembers]</c>, so an object creation through it need set none.
+    /// </summary>
+    /// <param name="constructor">The constructor.</param>
+    /// <returns><see langword="true"/> when it sets every required member.</returns>
+    public static bool SetsRequiredMembers(IMethodSymbol constructor)
+    {
+        return constructor.GetAttributes().Any(static a => a.AttributeClass?.ToFullMetadataName() == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute");
+    }
+
+    /// <summary>
+    /// Whether a type has a <c>required</c> member, which an object creation must set unless its constructor sets them.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <returns><see langword="true"/> when it or a base type declares one.</returns>
+    public static bool HasRequiredMembers(INamedTypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (current.GetMembers().Any(static m => m is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true }))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static ExposedOperationInfo CreateExposedInfo(INamedTypeSymbol exposed)
+    {
+        var typeName = exposed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        // Made as the inner pipeline makes it where an object creation would have to set required members: Activator, which
+        // needs a parameterless constructor, runs every initialiser and sets no member. Otherwise new T(), through any
+        // constructor callable without arguments.
+        string? creation = null;
+        if (FindArgumentlessConstructor(exposed) is { } constructor)
+        {
+            if (!HasRequiredMembers(exposed) || SetsRequiredMembers(constructor))
+            {
+                creation = "new " + typeName + "()";
+            }
+            else if (constructor.Parameters.Length == 0)
+            {
+                creation = "(" + typeName + ")global::System.Activator.CreateInstance(typeof(" + typeName + "))!";
+            }
+        }
+
+        return new ExposedOperationInfo(exposed.ToFullMetadataName(), typeName, creation);
     }
 
     private static bool IsPublicInstanceProperty(IPropertySymbol member)
@@ -332,9 +407,51 @@ internal static class OperationPropertyModelBuilder
 
     private static bool CanCarry(AttributeData attribute, INamedTypeSymbol attributeClass, IAssemblySymbol within)
     {
+        // No constructor is resolved where the one applied is one metadata does not import for this compilation: an internal
+        // one of another assembly.
         return IsAccessibleFrom(attributeClass, within)
+            && attribute.AttributeConstructor is { } constructor
+            && IsMemberAccessibleFrom(constructor, within)
+            && attribute.NamedArguments.All(argument => IsNamedArgumentAccessibleFrom(attributeClass, argument.Key, within))
             && attribute.ConstructorArguments.All(argument => IsAccessibleFrom(argument, within))
             && attribute.NamedArguments.All(argument => IsAccessibleFrom(argument.Value, within));
+    }
+
+    /// <summary>
+    /// Whether code in <paramref name="within"/> can call or set a member: public, or internal to an assembly that gives
+    /// <paramref name="within"/> access to its internals.
+    /// </summary>
+    private static bool IsMemberAccessibleFrom(ISymbol member, IAssemblySymbol within)
+    {
+        return member.DeclaredAccessibility switch
+        {
+            Accessibility.Public => true,
+            Accessibility.Internal or Accessibility.ProtectedOrInternal => SymbolEqualityComparer.Default.Equals(member.ContainingAssembly, within)
+                || member.ContainingAssembly.GivesAccessTo(within),
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// Whether code in <paramref name="within"/> can set an attribute's named argument: the property's setter, or the field.
+    /// </summary>
+    private static bool IsNamedArgumentAccessibleFrom(INamedTypeSymbol attributeClass, string name, IAssemblySymbol within)
+    {
+        for (var current = attributeClass; current is not null; current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers(name))
+            {
+                switch (member)
+                {
+                    case IPropertySymbol { SetMethod: { } setter }:
+                        return IsMemberAccessibleFrom(setter, within);
+                    case IFieldSymbol field:
+                        return IsMemberAccessibleFrom(field, within);
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -452,9 +569,18 @@ internal static class OperationPropertyModelBuilder
     /// <returns>The C# expression.</returns>
     internal static string RenderConstant(TypedConstant constant)
     {
+        // Typed, so that the copy selects the constructor overload the original did: a bare null is ambiguous between a
+        // string and a Type parameter. A reference type is cast to its nullable form, as (string)null raises CS8600 under
+        // #nullable enable; a nullable value type already is one.
         if (constant.IsNull)
         {
-            return "null";
+            if (constant.Type is not { } nullType)
+            {
+                return "null";
+            }
+
+            var nullTypeName = nullType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return "(" + nullTypeName + (nullType.IsReferenceType ? "?" : string.Empty) + ")null";
         }
 
         return constant.Kind switch
