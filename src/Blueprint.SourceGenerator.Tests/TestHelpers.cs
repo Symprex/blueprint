@@ -569,7 +569,11 @@ public static class TestHelpers
         return compilation.RemoveAllSyntaxTrees().AddSyntaxTrees(trees);
     }
 
-    private static List<MetadataReference> CreateMetadataReferences()
+    /// <summary>
+    /// Creates the metadata references every harness compilation starts from, for a test that builds its own compilation.
+    /// </summary>
+    /// <returns>A fresh list of the references.</returns>
+    internal static List<MetadataReference> CreateMetadataReferences()
     {
         // Exclude Marten and Rebus assemblies from the default compilation references.
         // Auto-detecting modules (MartenScopeModule, RebusTransactionModule) activate when
@@ -860,9 +864,11 @@ public static class TestHelpers
                 .And.NotBeOfType<ISymbol>(because)
                 .And.NotBeOfType<SyntaxNode>(because);
 
-            // Examine the object
+            // Examine the object. The checks above match the exact type only, so a concrete symbol or compilation passes
+            // them; its Roslyn internals are not walkable (SmallDictionary's enumerator throws once a generic attribute
+            // has been constructed), so stop there.
             var type = node.GetType();
-            if (type.IsEnum)
+            if (type.IsEnum || node is ISymbol or Compilation or SyntaxNode)
             {
                 return;
             }

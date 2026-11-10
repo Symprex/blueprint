@@ -21,14 +21,28 @@ public sealed class ExternalHandlerIndex
         ImmutableArray<(INamedTypeSymbol HandlerClass, IMethodSymbol HandlerMethod)>.Empty;
 
     private readonly Dictionary<INamedTypeSymbol, ImmutableArray<(INamedTypeSymbol HandlerClass, IMethodSymbol HandlerMethod)>> _index;
+    private readonly Lazy<IReadOnlyDictionary<string, List<string>>> _gatewayClients;
+
+    /// <summary>
+    /// Gets the <c>[BlueprintClient]</c> classes that include each operation, by the operation's metadata name, which an
+    /// <c>[Expose&lt;TInner&gt;]</c> operation's generated forward resolves its upstream from. Found once, on first use.
+    /// </summary>
+    public IReadOnlyDictionary<string, List<string>> GatewayClients => this._gatewayClients.Value;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExternalHandlerIndex"/> class with the pre-scanned candidates.
     /// </summary>
     /// <param name="candidates">The pre-scanned candidate handler methods.</param>
+    /// <param name="compilation">The compilation, from which <see cref="GatewayClients"/> is found on first use.</param>
     internal ExternalHandlerIndex(
-        List<(INamedTypeSymbol HandlerClass, IMethodSymbol Method, INamedTypeSymbol OperationType)> candidates)
+        List<(INamedTypeSymbol HandlerClass, IMethodSymbol Method, INamedTypeSymbol OperationType)> candidates,
+        Compilation? compilation = null)
     {
+        this._gatewayClients = new Lazy<IReadOnlyDictionary<string, List<string>>>(
+            () => compilation is null
+                ? new Dictionary<string, List<string>>(StringComparer.Ordinal)
+                : Modules.Gateway.GatewayForward.BuildClientIndex(compilation));
+
         var grouping = new Dictionary<INamedTypeSymbol, List<(INamedTypeSymbol, IMethodSymbol)>>(SymbolEqualityComparer.Default);
 
         foreach (var (handlerClass, method, opType) in candidates)

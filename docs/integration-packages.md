@@ -517,6 +517,26 @@ public Task<ProxyResult> Handle(DownloadGatewayTemplateQuery query, BlueprintHtt
 - **OpenAPI.** `[ProducesContentType(...)]` on the operation documents the success response of a `FileStreamResult` or `ProxyResult` with those media types, each as a binary string. Without the attribute, a `FileStreamResult` is documented as `application/octet-stream` and a `ProxyResult` with no content. A value that is not a `type/subtype` media type fails the build with BPOA003.
 - **Hand-written requests.** `CreateRequest` builds the request a call would send without sending it. `SendRawAsync` sends a request at its headers, failures mapped first, and returns a response the caller owns, ready for `new ProxyResult(response)`.
 
+### Exposing an Operation
+
+A gateway operation that only forwards an inner operation is declared with `[Expose<TInner>]` (in `Blueprint.Model.Attributes`), and needs no properties or handler:
+
+```csharp
+[Expose<GetTemplateQuery>]
+[MustBeAuthenticated]
+[SelfLink(typeof(TemplateApiResource), "/templates/{Id}")]
+[HttpGet]
+public partial class GetGatewayTemplateQuery : IQuery<Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>;
+```
+
+- **Properties.** The source generator gives the class each public settable property of `TInner` that is not obsolete, with its type, attributes (validation and binding included; one naming a type the gateway's assembly cannot access is BPGW018), an `<inheritdoc>` of its documentation, and the default `TInner`'s initialiser gives it, a required property's included. Every generator reads them from one shared property model, so the operation binds, validates, documents and links them as `TInner` does. A property the class declares itself wins over the inner one.
+- **Handler.** The generated handler creates a fresh `TInner` from those properties and forwards it with `ForwardAsync`, reading the response as the class's declared result. It forwards through the one `[BlueprintClient]` that includes `TInner`, using the named client and JSON options `AddBlueprintClient` registered for it and the client's `SerializerContext` (`BlueprintClientTransport.Create<TClient>`), so register that client with its base address. A client in a referenced assembly is found by the `[BlueprintClientIncluded]` its generated half carries for each include. A property bound from a header is not sent upstream yet: no request builder writes headers.
+- **What the class declares.** Its operation interface (the inner operation's, for its result), route, HTTP method and authorisation. Authorisation must be one of `[AllowAnonymous]`, `[MustBeAuthenticated]`, `[Resource]` or `[FromResource]`; the inner operation's is never copied.
+- **Response types.** The gateway reads the upstream response with the JSON options it writes its own with. A type its serializer context covers needs a constructor the source-generated metadata can call: a public one, not a private `[JsonConstructor]`.
+- **Minimal mode is for first-party apps.** A property added to `TInner` becomes settable at the gateway with no change to its source. A public API sets `<BlueprintGatewayAllowExpose>false</BlueprintGatewayAllowExpose>`, which makes every `[Expose<TInner>]` error BPGW001.
+
+The `BPGW` diagnostics are listed in [diagnostic-reference.md](diagnostic-reference.md#gateway-operations-bpgw).
+
 ### S365 Gateway Migration
 
 S365 gateways wrap inter-service calls. With Blueprint.HttpClient:

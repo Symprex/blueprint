@@ -101,4 +101,5 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(ListApiResource<Http.GrantFolderApiResource>))]
 [JsonSerializable(typeof(Http.NestedValidationAddress))]
 [JsonSerializable(typeof(List<Http.NestedValidationItem>))]
+[JsonSerializable(typeof(Http.OperationInputSchemaAddress))]
 public partial class IntegrationTestAppJsonContext : JsonSerializerContext;

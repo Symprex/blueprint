@@ -1,0 +1,9 @@
+<Project>
+  <!-- MSBuild properties the source generator reads, as build_property.<Name>.
+
+       BlueprintGatewayAllowExpose (default true): false makes every [Expose<TInner>] an error (BPGW001), for a public
+       API gateway whose operations must each declare their properties. -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="BlueprintGatewayAllowExpose" />
+  </ItemGroup>
+</Project>

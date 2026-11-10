@@ -118,7 +118,11 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         }
 
         string invocationExpression;
-        if (context.IsInlineHandler())
+        if (context.GetForward() is { } forward)
+        {
+            invocationExpression = Gateway.GatewayForward.RenderInvocation(context, forward);
+        }
+        else if (context.IsInlineHandler())
         {
             invocationExpression = context.IsStaticHandler()
                 ? $"{context.GetOperationTypeFullName()}.{context.GetHandlerMethodName()}({string.Join(", ", parameterList)})"
@@ -209,6 +213,11 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
 
     private static HandlerReturnNormalization? CreateReturnNormalization(PipelineContributorContext context, OperationHandlerModel handler)
     {
+        if (handler.Forward is not null)
+        {
+            return CreateForwardReturnNormalization(context);
+        }
+
         var handlerMethod = ResolveHandlerMethod(context, handler);
         var operationResultType = context.FindTypeByMetadataName("Blueprint.OperationResult")
             ?? throw new InvalidOperationException("The pipeline contributor could not resolve Blueprint.OperationResult from the current compilation.");
@@ -313,6 +322,34 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             HandlerReturnNormalizationKind.PlainValue,
             typedOkResult.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             effectiveHandlerReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+    }
+
+    /// <summary>
+    /// A generated forward reads the upstream response as the operation's declared result, so its result is normalised
+    /// from that contract rather than from a handler method's return type.
+    /// </summary>
+    private static HandlerReturnNormalization CreateForwardReturnNormalization(PipelineContributorContext context)
+    {
+        var operationResultType = context.FindTypeByMetadataName("Blueprint.OperationResult")
+            ?? throw new InvalidOperationException("The pipeline contributor could not resolve Blueprint.OperationResult from the current compilation.");
+        var declaredContractType = OperationResultContractHelper.GetDeclaredOperationResultType(context.Operation.TypeSymbol)
+            ?? throw new InvalidOperationException("A generated forward requires the operation to declare its result.");
+        var declaredName = declaredContractType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out _))
+        {
+            return new HandlerReturnNormalization(HandlerReturnNormalizationKind.ResultsUnion, declaredName, null);
+        }
+
+        if (OperationResultContractHelper.IsOperationResultType(declaredContractType, operationResultType))
+        {
+            return new HandlerReturnNormalization(HandlerReturnNormalizationKind.OperationResult, declaredName, null);
+        }
+
+        return new HandlerReturnNormalization(
+            HandlerReturnNormalizationKind.PlainValue,
+            "global::Blueprint.Runtime.Exec.OkResult<" + declaredName + ">",
+            declaredName);
     }
 
     private static IMethodSymbol ResolveHandlerMethod(PipelineContributorContext context, OperationHandlerModel handler)

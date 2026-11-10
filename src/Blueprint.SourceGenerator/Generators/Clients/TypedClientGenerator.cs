@@ -934,6 +934,13 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
 
     private static void GenerateClass(StringBuilder sb, TypedClientModel client, string indent)
     {
+        // What another assembly's generator reads to find the client that includes an operation, the include attributes
+        // being conditional (GatewayForward.BuildClientIndex).
+        foreach (var operation in client.Operations)
+        {
+            sb.AppendLine($"{indent}[global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof({operation.OperationFqn}))]");
+        }
+
         // No accessibility modifier: the hand-written half declares it, and a generated one could only conflict with it.
         sb.AppendLine($"{indent}partial class {client.ClassName} : {client.InterfaceName}, global::Blueprint.HttpClient.IBlueprintClient<{client.ClassName}>");
         sb.AppendLine($"{indent}{{");
@@ -1013,6 +1020,18 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
         sb.AppendLine($"{indent}    return new {client.ClassName}(client{resolved});");
         sb.AppendLine($"{indent}}}");
         sb.AppendLine();
+
+        // What a gateway's forward through this client reads and writes with (BlueprintClientTransport.Create): the context
+        // the constructor applies, so a forward and the client's own calls resolve the same metadata.
+        if (client.SerializerContextFqn is not null)
+        {
+            sb.AppendLine($"{indent}/// <inheritdoc />");
+            sb.AppendLine($"{indent}static global::Blueprint.HttpClient.BlueprintHttpClient global::Blueprint.HttpClient.IBlueprintClient<{client.ClassName}>.ConfigureTransport(global::Blueprint.HttpClient.BlueprintHttpClient client)");
+            sb.AppendLine($"{indent}{{");
+            sb.AppendLine($"{indent}    return (client ?? throw new global::System.ArgumentNullException(nameof(client))).WithSerializerContext({client.SerializerContextFqn}.Default);");
+            sb.AppendLine($"{indent}}}");
+            sb.AppendLine();
+        }
 
         // A clone shares the client, the plan and the fields, and differs only in what was added to it.
         sb.AppendLine($"{indent}private {client.ClassName}({client.ClassName} source, global::Blueprint.HttpClient.IUpstreamCredential? credential, {RequestAction}? requestModifier)");
