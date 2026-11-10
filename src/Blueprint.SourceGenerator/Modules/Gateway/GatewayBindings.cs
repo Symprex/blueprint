@@ -476,8 +476,9 @@ internal static class GatewayBindings
 
     private static bool HasTryParse(ITypeSymbol type, bool withProvider)
     {
+        // Public only: the generated pipeline calls it from outside the type, and a private one would not compile (CS0122).
         return type.GetMembers("TryParse").OfType<IMethodSymbol>().Any(m =>
-            m is { IsStatic: true, ReturnType.SpecialType: SpecialType.System_Boolean }
+            m is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, ReturnType.SpecialType: SpecialType.System_Boolean }
             && m.Parameters.Length == (withProvider ? 3 : 2)
             && m.Parameters[0].Type.SpecialType == SpecialType.System_String
             && (!withProvider || m.Parameters[1].Type.ToDisplayString().TrimEnd('?') == "System.IFormatProvider")

@@ -559,6 +559,52 @@ public class GatewayBindingGeneratorTests
     }
 
     [Fact]
+    public void A_claim_binding_uses_a_types_converter_when_its_only_TryParse_is_private()
+    {
+        const string region = """
+            namespace Inner
+            {
+                [System.ComponentModel.TypeConverter(typeof(RegionConverter))]
+                public readonly struct Region
+                {
+                    private static bool TryParse(string? s, out Region result)
+                    {
+                        result = default;
+                        return s is not null;
+                    }
+                }
+
+                public sealed class RegionConverter : System.ComponentModel.TypeConverter
+                {
+                }
+            }
+            """;
+        var inner = InnerSource.Replace("public int Priority { get; set; }", "public int Priority { get; set; }\n\n                public Region Region { get; set; }", StringComparison.Ordinal) + "\n" + region;
+        var gateway = WithAttributes(GatewaySource, "[Bind(\"Region\", FromClaim = \"region\")]");
+
+        // In the gateway's own compilation, where a private member is visible; a referenced assembly's is not imported.
+        var run = RunAllGenerators([inner, ClientSource, AppBindingSource, gateway, AppSource], MetadataReference.CreateFromFile(typeof(object).Assembly.Location));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().NotContain("Region.TryParse").And.Contain("TypeDescriptor");
+    }
+
+    [Fact]
+    public void A_contributed_rule_whose_argument_only_spells_a_bound_name_is_kept()
+    {
+        var inner = InnerSource.Replace(
+            "public string? Source { get; set; }",
+            "[RegularExpression(\"TenantId\")]\n                public string? Source { get; set; }",
+            StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, GatewaySource, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommand_ExposedProperties.g.cs").Should().Contain("RegularExpression");
+    }
+
+    [Fact]
     public void A_contributed_rule_that_names_a_bound_property_is_left_to_the_inner_operation()
     {
         var inner = InnerSource

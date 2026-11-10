@@ -174,9 +174,27 @@ internal static class OperationPropertyModelBuilder
     public static bool IsRuleLeftToInner(AttributeData attribute, HashSet<string> boundNames)
     {
         return boundNames.Count > 0
-            && Modules.ValidationSymbolHelpers.IsValidationAttribute(attribute.AttributeClass)
+            && attribute.AttributeClass is { } attributeClass
+            && NamesAnotherProperty(attributeClass)
             && Modules.ValidationSymbolHelpers.GetReferencedPropertyName(attribute) is { } name
             && boundNames.Contains(name);
+    }
+
+    /// <summary>
+    /// Whether a rule's first argument names another property, as the validation module's missing-property checks read it,
+    /// rather than being a literal such as <c>[RegularExpression]</c>'s pattern that may spell a property's name.
+    /// </summary>
+    private static bool NamesAnotherProperty(INamedTypeSymbol attributeClass)
+    {
+        return Modules.ValidationSymbolHelpers.IsCompareAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsLessThanPropertyAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsMustBeGreaterThanOrEqualAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsRequiredIfAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsRequiredIfNotAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsNotAllowedIfAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsRequiredItemsIfAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsRequiredItemsIfNotAttribute(attributeClass);
     }
 
     /// <summary>
