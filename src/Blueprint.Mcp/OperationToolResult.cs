@@ -17,7 +17,8 @@ namespace Blueprint.Mcp;
 /// text only.</item>
 /// <item>The status is <c>_meta.httpStatus</c>, and a 4xx or 5xx status makes the result a tool error, which a model
 /// can read and act on, rather than a protocol error, which it cannot.</item>
-/// <item>A body that is not text (a file, a stream) is not given as text; the result says what it was instead.</item>
+/// <item>A body that is not text (a file, a stream), or text longer than <see cref="MaxTextBytes"/>, is not given; the
+/// result says what it was instead.</item>
 /// </list>
 /// </remarks>
 internal static class OperationToolResult
@@ -25,14 +26,17 @@ internal static class OperationToolResult
     /// <summary>The <c>_meta</c> key the HTTP status is given under.</summary>
     public const string HttpStatusMetaKey = "httpStatus";
 
+    /// <summary>The most bytes of a text body a result gives, which bounds what a tool call holds in memory.</summary>
+    public const int MaxTextBytes = 1024 * 1024;
+
     /// <summary>
     /// Makes a tool call's result from the response the operation's endpoint wrote.
     /// </summary>
     /// <param name="statusCode">The response's status code.</param>
     /// <param name="contentType">The response's content type, or <see langword="null"/> for none.</param>
-    /// <param name="body">The response's body.</param>
+    /// <param name="body">The response's body, as the endpoint wrote it.</param>
     /// <returns>The result.</returns>
-    public static CallToolResult Create(int statusCode, string? contentType, byte[] body)
+    public static CallToolResult Create(int statusCode, string? contentType, ToolResponseBody body)
     {
         var result = new CallToolResult
         {
@@ -40,25 +44,30 @@ internal static class OperationToolResult
             Meta = new JsonObject { [HttpStatusMetaKey] = statusCode },
         };
 
-        if (body.Length == 0)
+        if (body.BytesWritten == 0)
         {
             return result;
         }
 
-        if (!IsText(contentType))
+        if (!body.IsComplete)
         {
-            result.Content = [new TextContentBlock { Text = $"The operation returned {body.Length} bytes of {contentType ?? "unknown content"}, which a tool result does not carry." }];
+            var described = contentType ?? "unknown content";
+            var text = body.IsText
+                ? $"The operation returned {body.BytesWritten} bytes of {described}, more than the {body.MaxTextBytes} bytes of text a tool result carries."
+                : $"The operation returned {body.BytesWritten} bytes of {described}, which a tool result does not carry.";
+
+            result.Content = [new TextContentBlock { Text = text }];
             return result;
         }
 
-        var text = Encoding.UTF8.GetString(body);
-        result.Content = [new TextContentBlock { Text = text }];
+        var bytes = body.GetText();
+        result.Content = [new TextContentBlock { Text = Encoding.UTF8.GetString(bytes.Span) }];
 
         if (IsJson(contentType))
         {
             try
             {
-                using var document = JsonDocument.Parse(body);
+                using var document = JsonDocument.Parse(bytes);
 
                 if (document.RootElement.ValueKind == JsonValueKind.Object)
                 {
@@ -74,7 +83,12 @@ internal static class OperationToolResult
         return result;
     }
 
-    private static bool IsText(string? contentType)
+    /// <summary>
+    /// Gets whether a body of <paramref name="contentType"/> is text, which a result gives as it is.
+    /// </summary>
+    /// <param name="contentType">The response's content type, or <see langword="null"/> for none.</param>
+    /// <returns>Whether the body is text.</returns>
+    public static bool IsText(string? contentType)
     {
         return contentType is null
                || contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)

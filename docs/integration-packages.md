@@ -589,11 +589,14 @@ calls it there with the SDK's own MCP client.
   schema (`IOperationInputSchemaProvider`, D21) as its `inputSchema` and its summary and description as its
   description. A GET-only operation is annotated `readOnlyHint`. An operation whose schema cannot be made fails
   `MapBlueprintMcp`, as it fails the OpenAPI document, unless `RenderOpenApiDocumentOnFirstRequest` defers both.
-- **Calls run through the pipeline.** A call makes the HTTP request the operation's first URL answers: path arguments
-  into the route, query and header arguments as an HTTP caller writes them, and body arguments as the JSON body. The
-  request runs in process through the operation's own endpoint, so binding, validation, authentication and
-  authorisation are those of HTTP. It is the MCP request's caller that runs it: its `HttpContext.User`, its
-  `Authorization` header, its request services, its scheme, host and path base (so links point at the HTTP API).
+- **Calls run through the pipeline.** A call makes the HTTP request the URL and method its `operationId` names answer
+  (of an operation answering GET and POST, the method that reads its body): path arguments into the route, query and
+  header arguments as an HTTP caller writes them, and body arguments as the JSON body. The request runs in process
+  through the operation's own endpoint, so the ASP.NET Core authorisation policies on that endpoint
+  (`MapBlueprintApi(...).RequireAuthorization(...)`), binding, validation, authentication and authorisation are those
+  of HTTP. It is the MCP request's caller that runs it: its `HttpContext.User`, its `Authorization` header, its scheme,
+  host and path base (so links point at the HTTP API). It has its own service scope, as an HTTP request has, and
+  `IHttpContextAccessor` gives its handler the operation's request, not the MCP request.
 - **Results are the HTTP response.** The body is the tool result's text, and its structured content when it is a JSON
   object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
   problem body an HTTP caller gets, a call that fails validation the same 422.
@@ -604,12 +607,11 @@ calls it there with the SDK's own MCP client.
 
 - Listing tools needs no authentication, as reading the OpenAPI document needs none. Add `.RequireAuthorization()` to
   the builder `MapBlueprintMcp` returns to require it.
-- ASP.NET Core authorisation policies attached to the API's own endpoints (`MapBlueprintApi(...).RequireAuthorization(...)`)
-  are not evaluated for a tool call. The operation's generated authorisation is.
 - Only the `Authorization` header is carried from the MCP request; any other header an operation reads must be a tool
   argument.
 - There are no output schemas yet: `IOperationInputSchemaProvider` gives inputs only.
-- A body that is not text (a file or stream result) is described in the result rather than returned.
+- A body that is not text (a file or stream result), or text longer than 1 MiB, is described in the result rather than
+  returned. Its bytes are counted, not kept, so a large download does not fill the server's memory.
 - Blueprint owns the app's MCP server: tools registered with the SDK's own `WithTools` are not served at a
   `MapBlueprintMcp` endpoint.
 

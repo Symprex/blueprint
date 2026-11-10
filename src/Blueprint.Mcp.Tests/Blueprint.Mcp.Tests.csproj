@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- MultiMethodEchoMcpQuery answers GET and POST on purpose: the tool must send the method its schema describes. -->
+    <NoWarn>$(NoWarn);BPOA002</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +24,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Blueprint.Mcp\Blueprint.Mcp.csproj" />
+
+    <!-- The test apps under App/, whose operations the tool tests call over MCP -->
+    <ProjectReference Include="..\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
+    <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
+    <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+
+    <!-- A second app, mapped on the same host as the test app -->
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Sample\Blueprint.SourceGenerator.Sample.csproj" />
   </ItemGroup>
 </Project>

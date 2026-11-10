@@ -271,6 +271,9 @@ public static class EndpointRouteBuilderExtensions
 
                 var builder = endpoints.Map(RoutePatternFactory.Parse(RouteUnder(basePath, url.UrlFormat)), router.CreateRequestDelegate(operation));
                 builder.WithMetadata(operation);
+
+                // The URL it is mapped for, by which a tool call (Blueprint.Mcp) finds the endpoint its schema describes.
+                builder.WithMetadata(url);
                 builder.WithMetadata(new HttpMethodMetadata(httpMethods));
                 builder.WithDisplayName(string.Concat(string.Join('|', httpMethods), " ", operation.Name));
 

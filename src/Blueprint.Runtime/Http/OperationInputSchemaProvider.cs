@@ -31,6 +31,16 @@ internal sealed class OperationInputSchemaProvider : IOperationInputSchemaProvid
         this._schemas = schemas;
     }
 
+    /// <summary>
+    /// Gives a provider of the schemas this one holds now, those of the app <c>MapBlueprintApi</c> mapped last, which
+    /// keeps them when another app's API is mapped after it.
+    /// </summary>
+    /// <returns>The provider.</returns>
+    internal OperationInputSchemaProvider Snapshot()
+    {
+        return new OperationInputSchemaProvider { _schemas = this._schemas };
+    }
+
     private OperationInputSchemaSet Schemas => this._schemas?.Value
         ?? throw new InvalidOperationException(
             "The operation input schemas are not known until the API is mapped. Call MapBlueprintApi before asking "

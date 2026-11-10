@@ -1,5 +1,7 @@
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Net.Http.Headers;
 using ModelContextProtocol.Protocol;
@@ -14,8 +16,9 @@ namespace Blueprint.Mcp;
 /// </summary>
 /// <remarks>
 /// The request is the MCP request's own as far as it can be: its scheme, host and path base (so links in the result
-/// point at the HTTP API), its services, its user, its <c>Authorization</c> header and its cancellation. Its other
-/// headers are not copied: the operation is given only the headers its arguments supply.
+/// point at the HTTP API), its user, its <c>Authorization</c> header and its cancellation. Its other headers are not
+/// copied: the operation is given only the headers its arguments supply. It has its own service scope, as an HTTP
+/// request has.
 /// </remarks>
 internal sealed class BlueprintOperationTool : McpServerTool
 {
@@ -59,11 +62,12 @@ internal sealed class BlueprintOperationTool : McpServerTool
         RequestContext<CallToolRequestParams> request,
         CancellationToken cancellationToken = default)
     {
-        var caller = request.Services?.GetService<IHttpContextAccessor>()?.HttpContext
+        var accessor = request.Services?.GetService<IHttpContextAccessor>();
+        var caller = accessor?.HttpContext
                      ?? throw new InvalidOperationException(
                          "A Blueprint operation tool is called over HTTP only, and no HTTP request is being served.");
 
-        var endpoint = this._endpoint ??= this._toolSet.FindEndpoint(this._operation)
+        var endpoint = this._endpoint ??= this._toolSet.FindEndpoint(this._operation, this._schema)
                                           ?? throw new InvalidOperationException(
                                               $"No endpoint is mapped for the operation {this._operation.Name}. Call MapBlueprintApi for its app.");
 
@@ -78,15 +82,77 @@ internal sealed class BlueprintOperationTool : McpServerTool
             };
         }
 
-        var method = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.FirstOrDefault() ?? HttpMethods.Get;
+        // The method the schema describes: of an operation answering GET and POST, the one that reads its body.
+        var method = this._schema.HttpMethod
+                     ?? endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.FirstOrDefault()
+                     ?? HttpMethods.Get;
 
-        using var responseBody = new MemoryStream();
-        var context = CreateContext(caller, endpoint, method, toolRequest, responseBody, cancellationToken);
+        // Its own service scope, as an HTTP request has: scoped services such as the authentication handlers serve the
+        // request they were first asked for, so the MCP request's would challenge the MCP request, not the operation's.
+        await using var scope = caller.RequestServices.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
 
-        await endpoint.RequestDelegate!(context).ConfigureAwait(false);
-        await context.Response.CompleteAsync().ConfigureAwait(false);
+        var response = new HttpResponseFeature();
+        using var responseBody = new ToolResponseBody(() => response.Headers.ContentType, OperationToolResult.MaxTextBytes);
+        var context = CreateContext(caller, scope.ServiceProvider, endpoint, method, toolRequest, response, responseBody, cancellationToken);
 
-        return OperationToolResult.Create(context.Response.StatusCode, context.Response.ContentType, responseBody.ToArray());
+        // A service reading the request from IHttpContextAccessor, as one may over HTTP, is given the operation's, not
+        // the MCP request's. The MCP server itself does not read the accessor.
+        accessor.HttpContext = context;
+
+        try
+        {
+            await RunAsync(endpoint, context).ConfigureAwait(false);
+            await context.Response.CompleteAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            accessor.HttpContext = caller;
+        }
+
+        return OperationToolResult.Create(context.Response.StatusCode, context.Response.ContentType, responseBody);
+    }
+
+    /// <summary>
+    /// Runs the endpoint as the routing and authorisation middleware would: the ASP.NET Core authorisation policies its
+    /// metadata requires (<c>RequireAuthorization</c>, <c>[Authorize]</c>) decide first, challenging or forbidding the
+    /// caller as they would over HTTP, and the endpoint runs only when they let the caller through.
+    /// </summary>
+    private static async Task RunAsync(RouteEndpoint endpoint, HttpContext context)
+    {
+        var authorizeData = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>();
+        var policies = endpoint.Metadata.GetOrderedMetadata<AuthorizationPolicy>();
+
+        if ((authorizeData.Count == 0 && policies.Count == 0) || endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null)
+        {
+            await endpoint.RequestDelegate!(context).ConfigureAwait(false);
+            return;
+        }
+
+        // An endpoint that asks for a policy nothing can evaluate is refused, as the authorisation middleware refuses it.
+        var services = context.RequestServices;
+        var policyProvider = services.GetService<IAuthorizationPolicyProvider>();
+        var policyEvaluator = services.GetService<IPolicyEvaluator>();
+        var resultHandler = services.GetService<IAuthorizationMiddlewareResultHandler>();
+
+        if (policyProvider is null || policyEvaluator is null || resultHandler is null)
+        {
+            throw new InvalidOperationException(
+                $"The endpoint {endpoint.DisplayName} requires authorisation, but the authorisation services are not "
+                + "registered. Call services.AddAuthorization().");
+        }
+
+        var policy = await AuthorizationPolicy.CombineAsync(policyProvider, authorizeData, policies).ConfigureAwait(false);
+
+        if (policy is null)
+        {
+            await endpoint.RequestDelegate!(context).ConfigureAwait(false);
+            return;
+        }
+
+        var authenticateResult = await policyEvaluator.AuthenticateAsync(policy, context).ConfigureAwait(false);
+        var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, context).ConfigureAwait(false);
+
+        await resultHandler.HandleAsync(endpoint.RequestDelegate!, context, policy, authorizeResult).ConfigureAwait(false);
     }
 
     private static string? Describe(OperationInputSchema schema)
@@ -106,9 +172,11 @@ internal sealed class BlueprintOperationTool : McpServerTool
 
     private static DefaultHttpContext CreateContext(
         HttpContext caller,
+        IServiceProvider services,
         RouteEndpoint endpoint,
         string method,
         OperationToolRequest toolRequest,
+        HttpResponseFeature response,
         Stream responseBody,
         CancellationToken cancellationToken)
     {
@@ -145,7 +213,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
             Headers = headers,
             Body = body,
         });
-        features.Set<IHttpResponseFeature>(new HttpResponseFeature());
+        features.Set<IHttpResponseFeature>(response);
         features.Set<IHttpResponseBodyFeature>(new StreamResponseBodyFeature(responseBody));
         features.Set<IHttpRequestLifetimeFeature>(new HttpRequestLifetimeFeature { RequestAborted = cancellationToken });
         features.Set<IHttpConnectionFeature>(new HttpConnectionFeature
@@ -159,7 +227,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
 
         var context = new DefaultHttpContext(features)
         {
-            RequestServices = caller.RequestServices,
+            RequestServices = services,
             User = caller.User,
             TraceIdentifier = caller.TraceIdentifier,
         };

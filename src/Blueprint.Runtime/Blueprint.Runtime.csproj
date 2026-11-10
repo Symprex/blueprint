@@ -13,6 +13,7 @@
   <ItemGroup>
     <!-- The client reads a resource event as legacy did, setting the properties the host alone sets otherwise. -->
     <InternalsVisibleTo Include="Blueprint.HttpClient" />
+    <InternalsVisibleTo Include="Blueprint.Mcp" />
     <InternalsVisibleTo Include="Blueprint.SourceGenerator.Benchmarks" />
     <InternalsVisibleTo Include="Blueprint.SourceGenerator.Tests.Integration" />
   </ItemGroup>

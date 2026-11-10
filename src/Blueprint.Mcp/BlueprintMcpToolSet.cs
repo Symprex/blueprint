@@ -59,59 +59,64 @@ internal sealed class BlueprintMcpToolSet
     }
 
     /// <summary>
-    /// Finds the endpoint <c>MapBlueprintApi</c> mapped for <paramref name="operation"/>'s first URL: the first it
-    /// mapped for the operation, as it maps an operation's URLs in the order they are declared.
+    /// Finds the endpoint <c>MapBlueprintApi</c> mapped for <paramref name="operation"/> at the URL
+    /// <paramref name="schema"/> describes, or at the first URL it mapped for the operation, as it maps an operation's
+    /// URLs in the order they are declared, when the schema names none.
     /// </summary>
     /// <param name="operation">The operation.</param>
+    /// <param name="schema">The operation's input schema.</param>
     /// <returns>The endpoint, or <see langword="null"/> when none is mapped.</returns>
-    internal RouteEndpoint? FindEndpoint(ApiOperationDescriptor operation)
+    internal RouteEndpoint? FindEndpoint(ApiOperationDescriptor operation, OperationInputSchema schema)
     {
-        RouteEndpoint? sameType = null;
+        RouteEndpoint? best = null;
+        var bestRank = int.MaxValue;
 
         foreach (var dataSource in this._dataSources)
         {
             foreach (var endpoint in dataSource.Endpoints)
             {
                 if (endpoint is not RouteEndpoint routeEndpoint
-                    || endpoint.Metadata.GetMetadata<ApiOperationDescriptor>() is not { } mapped)
+                    || endpoint.Metadata.GetMetadata<ApiOperationDescriptor>() is not { } mapped
+                    || (!ReferenceEquals(mapped, operation) && mapped.OperationType != operation.OperationType))
                 {
                     continue;
                 }
 
-                // The app's own descriptor first: two apps mapped on one host may share an operation type.
-                if (ReferenceEquals(mapped, operation))
-                {
-                    return routeEndpoint;
-                }
+                // The app's own descriptor before another's of the same type, as two apps mapped on one host may share
+                // an operation type, and the schema's URL before the first one mapped.
+                var isAtSchemaUrl = schema.UrlFormat is null
+                                    || string.Equals(endpoint.Metadata.GetMetadata<ApiOperationUrl>()?.UrlFormat, schema.UrlFormat, StringComparison.Ordinal);
+                var rank = (ReferenceEquals(mapped, operation) ? 0 : 2) + (isAtSchemaUrl ? 0 : 1);
 
-                if (sameType is null && mapped.OperationType == operation.OperationType)
+                if (rank < bestRank)
                 {
-                    sameType = routeEndpoint;
+                    best = routeEndpoint;
+                    bestRank = rank;
                 }
             }
         }
 
-        return sameType;
+        return best;
     }
 
     private IReadOnlyList<BlueprintOperationTool> CreateTools()
     {
         var operations = this._app.Operations
             .Where(static o => o.Urls.Count > 0)
-            .ToDictionary(static o => o.Name, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(static o => o.Name, StringComparer.Ordinal);
 
         var tools = this._schemaProvider.GetSchemas()
             .Where(schema => operations.ContainsKey(schema.OperationName))
             .Select(schema => new BlueprintOperationTool(this, operations[schema.OperationName], schema))
             .ToList();
 
-        // The schema provider holds the schemas of the app MapBlueprintApi mapped last, so none of this app's means
-        // this app's API was not mapped, or another's was mapped after it.
+        // The schema provider holds the schemas of the app MapBlueprintApi had mapped last when MapBlueprintMcp was
+        // called, so none of this app's means another app's API was mapped in between.
         if (tools.Count == 0 && operations.Count > 0)
         {
             throw new InvalidOperationException(
                 $"No input schema was found for any operation of {this._app.GetType().Name}. Call MapBlueprintApi for it "
-                + "before MapBlueprintMcp, and map no other app's API after it.");
+                + "before MapBlueprintMcp, with no other app's API mapped in between.");
         }
 
         return tools;

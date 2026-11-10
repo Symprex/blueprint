@@ -73,6 +73,18 @@ public sealed record OperationInputSchema(
 
     /// <summary>Gets the operation's longer description, as the OpenAPI document gives it, or <see langword="null"/> for none.</summary>
     public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets the URL, as the operation declares it, that <see cref="OperationId"/> names and a request made from
+    /// <see cref="Schema"/> is sent to, or <see langword="null"/> when it is not known.
+    /// </summary>
+    internal string? UrlFormat { get; init; }
+
+    /// <summary>
+    /// Gets the HTTP method, upper-case, that <see cref="OperationId"/> names and a request made from
+    /// <see cref="Schema"/> is sent with, or <see langword="null"/> when it is not known.
+    /// </summary>
+    internal string? HttpMethod { get; init; }
 }
 
 /// <summary>
