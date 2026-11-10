@@ -29,6 +29,7 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines.Model;
 /// <c>Identity</c>, <c>Logger</c>, <c>CancellationToken</c>). Empty for inline handlers
 /// or handlers without such properties.
 /// </param>
+/// <param name="Forward">For a generated forward (<see cref="HandlerType.Forward"/>), what it forwards and through which client.</param>
 public sealed record OperationHandlerModel(
     string OperationTypeName,
     string OperationTypeFullName,
@@ -43,7 +44,8 @@ public sealed record OperationHandlerModel(
     string? HandlerClassNamespace,
     EquatableList<HandlerParameter> Parameters,
     EquatableList<ConstructorParameterInfo>? ConstructorParameters = null,
-    EquatableList<HandlerPropertyInjection>? PropertyInjections = null) : IEquatable<OperationHandlerModel>
+    EquatableList<HandlerPropertyInjection>? PropertyInjections = null,
+    GatewayForwardModel? Forward = null) : IEquatable<OperationHandlerModel>
 {
     /// <summary>
     /// Gets the name to use for the generated executor pipeline class.
@@ -59,6 +61,11 @@ public sealed record OperationHandlerModel(
     /// Gets whether this is an external handler (method on a separate handler class).
     /// </summary>
     public bool IsExternal => this.HandlerType == HandlerType.External;
+
+    /// <summary>
+    /// Gets whether this is a generated forward (an operation marked <c>[Expose&lt;TInner&gt;]</c>).
+    /// </summary>
+    public bool IsForward => this.HandlerType == HandlerType.Forward;
 
     /// <inheritdoc />
     public bool Equals(OperationHandlerModel? other)
@@ -80,7 +87,8 @@ public sealed record OperationHandlerModel(
                this.HandlerClassNamespace == other.HandlerClassNamespace &&
                this.Parameters == other.Parameters &&
                this.ConstructorParameters == other.ConstructorParameters &&
-               this.PropertyInjections == other.PropertyInjections;
+               this.PropertyInjections == other.PropertyInjections &&
+               this.Forward == other.Forward;
     }
 
     /// <inheritdoc />
@@ -101,6 +109,7 @@ public sealed record OperationHandlerModel(
         hash.Add(this.Parameters);
         hash.Add(this.ConstructorParameters);
         hash.Add(this.PropertyInjections);
+        hash.Add(this.Forward);
         return hash.ToHashCode();
     }
 }

@@ -128,6 +128,17 @@ namespace Client
         IItemsApi WithCredential(global::Blueprint.HttpClient.IUpstreamCredential credential);
     }
 
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.SearchItemsQuery))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.CreateItemCommand))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.DeleteItemCommand))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.GetItemQuery))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.UpdateItemCommand))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.TouchItemCommand))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.QueueItemsCommand))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.ExportItemsCommand))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.PurgeItemCommand))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.PingQuery))]
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Contract.ListItemsQuery))]
     partial class ItemsApi : IItemsApi, global::Blueprint.HttpClient.IBlueprintClient<ItemsApi>
     {
         private readonly global::Blueprint.HttpClient.BlueprintHttpClient _client;

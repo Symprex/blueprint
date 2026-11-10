@@ -11,8 +11,13 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 [DisplayName("Email Template")]
 public partial class TemplateApiResource : ApiResource
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TemplateApiResource"/> class for a deserializer. Public, because a
+    /// gateway that exposes an operation returning this resource reads it with the source-generated serializer context it
+    /// writes it with, and source-generated metadata can only call an accessible constructor.
+    /// </summary>
     [System.Text.Json.Serialization.JsonConstructor]
-    private TemplateApiResource()
+    public TemplateApiResource()
     {
     }
 
