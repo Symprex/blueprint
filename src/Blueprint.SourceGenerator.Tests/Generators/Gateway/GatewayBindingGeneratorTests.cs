@@ -265,6 +265,29 @@ public class GatewayBindingGeneratorTests
         run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().Contain("operation.OnMap(forwardInner);");
     }
 
+    [Theory]
+    [InlineData("internal partial void OnMap(Inner.AddNoteCommand inner);", "internal partial void OnMap(Inner.AddNoteCommand inner) => inner.Priority = 5;", "operation.OnMap(forwardInner);")]
+    [InlineData("internal partial System.Threading.Tasks.ValueTask OnMapAsync(Inner.AddNoteCommand inner);", "internal partial System.Threading.Tasks.ValueTask OnMapAsync(Inner.AddNoteCommand inner) => default;", "await operation.OnMapAsync(forwardInner)")]
+    public void A_map_hook_split_across_partial_declarations_is_called(string definition, string implementation, string call)
+    {
+        var gateway = WithBody(GatewaySource, definition);
+        const string implementationPart = """
+            namespace Gateway
+            {
+                public partial class AddGatewayNoteCommand
+                {
+                    IMPLEMENTATION
+                }
+            }
+            """;
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, implementationPart.Replace("IMPLEMENTATION", implementation, StringComparison.Ordinal), AppSource], _innerContract.Value);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW014");
+        run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().Contain(call);
+    }
+
     [Fact]
     public async Task The_generated_forward_with_every_binding_tier_matches_the_snapshot()
     {
@@ -430,6 +453,7 @@ public class GatewayBindingGeneratorTests
     [InlineData("private void OnMap(Inner.AddNoteCommand inner) { }")]
     [InlineData("internal int OnMapAsync(Inner.AddNoteCommand inner) => 0;")]
     [InlineData("internal static void OnMap(Inner.AddNoteCommand inner) { }")]
+    [InlineData("internal async void OnMap(Inner.AddNoteCommand inner) { await System.Threading.Tasks.Task.Yield(); }")]
     public void When_the_map_hook_has_the_wrong_shape_then_BPGW014_is_reported(string hook)
     {
         var gateway = GatewaySource.Replace(

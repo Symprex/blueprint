@@ -159,7 +159,7 @@ internal static class GatewayDiagnosticDescriptors
     public static readonly DiagnosticDescriptor InvalidMapHook = new(
         id: "BPGW014",
         title: "A gateway operation's map hook has the wrong shape",
-        messageFormat: "'{0}.{1}' is not a map hook the generated forward can call: it must be a single internal or public instance method whose first parameter is '{2}', and OnMap returns void while OnMapAsync returns ValueTask or Task",
+        messageFormat: "'{0}.{1}' is not a map hook the generated forward can call: it must be a single internal or public instance method whose first parameter is '{2}', and OnMap returns void without being async while OnMapAsync returns ValueTask or Task",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
