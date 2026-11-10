@@ -156,9 +156,14 @@ public static class GatewayForward
 
         // A required inner member the forward does not set would fail to compile (CS9035): one the gateway redeclares with
         // another type, or a required field, which is never contributed. A bound one is set from its binding.
-        var unset = GetRequiredMemberNames(exposedType)
-            .Where(name => !copied.Contains(name) && !bindings.Any(b => b.PropertyName == name && b.Source != GatewayBindingSource.Hidden))
-            .ToList();
+        // None is, where the constructor `new TInner { … }` calls is [SetsRequiredMembers].
+        var constructorSetsRequired = OperationPropertyModelBuilder.FindArgumentlessConstructor(exposedType) is { } constructor
+            && OperationPropertyModelBuilder.SetsRequiredMembers(constructor);
+        var unset = constructorSetsRequired
+            ? []
+            : GetRequiredMemberNames(exposedType)
+                .Where(name => !copied.Contains(name) && !bindings.Any(b => b.PropertyName == name && b.Source != GatewayBindingSource.Hidden))
+                .ToList();
         if (unset.Count > 0)
         {
             return Result<OperationHandlerModel>.Failure(new DiagnosticInfo(
