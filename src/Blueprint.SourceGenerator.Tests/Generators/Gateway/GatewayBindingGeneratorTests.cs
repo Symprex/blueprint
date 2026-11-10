@@ -495,6 +495,84 @@ public class GatewayBindingGeneratorTests
         diagnostic.GetMessage().Should().Contain("AddGatewayNoteCommand").And.Contain("TenantId");
     }
 
+    [Theory]
+    [InlineData("[FromQuery] public string? Origin { get; set; }")]
+    [InlineData("public string? Origin => null;")]
+    public void When_a_route_binding_reads_a_property_the_route_does_not_bind_then_BPGW012_is_reported(string origin)
+    {
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Bind(nameof(Inner.AddNoteCommand.Source), FromRoute = \"Origin\")]")
+                .Replace("/gateway/notes", "/gateway/notes/{Origin}", StringComparison.Ordinal),
+            origin);
+
+        var diagnostic = SingleDescriptorDiagnostic(gateway, "BPGW012");
+
+        diagnostic.GetMessage().Should().Contain("Origin");
+    }
+
+    [Fact]
+    public void When_an_inner_property_with_Required_is_hidden_then_BPGW009_is_reported()
+    {
+        var diagnostic = SingleDescriptorDiagnostic(WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.Text))]"), "BPGW009");
+
+        diagnostic.GetMessage().Should().Contain("Text");
+    }
+
+    [Fact]
+    public void When_the_inner_operations_first_route_has_a_placeholder_its_later_routes_lack_then_BPGW010_is_reported()
+    {
+        // The forward always sends the inner operation's first URL, so a later route without the placeholder is no way out.
+        var inner = InnerSource.Replace("[RootLink(\"/tenants/{TenantId}/notes\")]", "[RootLink(\"/tenants/{TenantId}/notes\")]\n    [RootLink(\"/notes\")]", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([GatewaySource], additionalReferences: [contract]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW010").Which;
+        diagnostic.GetMessage().Should().Contain("TenantId").And.Contain("/tenants/{TenantId}/notes");
+    }
+
+    [Fact]
+    public void A_claim_binds_a_type_whose_only_TryParse_takes_a_format_provider()
+    {
+        const string region = """
+            namespace Inner
+            {
+                public readonly struct Region
+                {
+                    public static bool TryParse(string? s, System.IFormatProvider? provider, out Region result)
+                    {
+                        result = default;
+                        return s is not null;
+                    }
+                }
+            }
+            """;
+        var inner = InnerSource.Replace("public int Priority { get; set; }", "public int Priority { get; set; }\n\n                public Region Region { get; set; }", StringComparison.Ordinal) + "\n" + region;
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = WithAttributes(GatewaySource, "[Bind(\"Region\", FromClaim = \"region\")]");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], contract);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW011");
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().Contain("global::System.Globalization.CultureInfo.InvariantCulture");
+    }
+
+    [Fact]
+    public void A_contributed_rule_that_names_a_bound_property_is_left_to_the_inner_operation()
+    {
+        var inner = InnerSource
+            .Replace("public string? Source { get; set; }", "[Blueprint.Validation.RequiredIf(nameof(Enabled), true)]\n                public string? Source { get; set; }\n\n                public bool Enabled { get; set; }", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = WithAttributes(GatewaySource, "[Bind(\"Enabled\", Value = true)]");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], contract);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id.StartsWith("BPV", StringComparison.Ordinal));
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommand_ExposedProperties.g.cs").Should().NotContain("RequiredIf");
+    }
+
     [Fact]
     public void A_binding_that_reads_the_gateways_own_property_of_the_same_name_is_allowed()
     {

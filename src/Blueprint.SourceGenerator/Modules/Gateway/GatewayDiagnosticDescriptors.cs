@@ -115,7 +115,7 @@ internal static class GatewayDiagnosticDescriptors
     public static readonly DiagnosticDescriptor UnboundInnerRoutePlaceholder = new(
         id: "BPGW010",
         title: "An inner route placeholder must be in the gateway's route, bound or hidden",
-        messageFormat: "Gateway operation '{0}' does not carry '{1}' in its route, but '{2}' routes by it ('{3}'). Add it to the gateway's route, or bind it with [GatewayBind] or [Bind], or hide it with [Hide].",
+        messageFormat: "Gateway operation '{0}' does not carry '{1}' in its route, but '{2}' routes by it ('{3}', the URL the forward sends). Add it to the gateway's route, or bind it with [GatewayBind] or [Bind], or hide it with [Hide].",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -138,7 +138,7 @@ internal static class GatewayDiagnosticDescriptors
     public static readonly DiagnosticDescriptor BindingSourceNotOnOperation = new(
         id: "BPGW012",
         title: "A binding's source is not on the gateway operation",
-        messageFormat: "Gateway operation '{0}' binds '{1}' from {2}, which is not a property it declares with a public getter. A route placeholder has to be in the gateway's own route and bind such a property.",
+        messageFormat: "Gateway operation '{0}' binds '{1}' from {2}, which is not a property it declares with a public getter. A route placeholder has to be in the gateway's own route and bind such a property, one the route fills: settable, with no [FromQuery], [FromBody], [FromHeader], [FromCookie] or [FromAuthContext].",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

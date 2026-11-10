@@ -84,6 +84,7 @@ internal static class OperationPropertyModelBuilder
                 member));
         }
 
+        HashSet<string>? bound = null;
         foreach (var member in GetContributedMembers(operationType, out var exposeAttribute))
         {
             if (!seenNames.Add(member.Name))
@@ -95,7 +96,8 @@ internal static class OperationPropertyModelBuilder
                 ? LocationInfo.CreateFrom(reference.GetSyntax())
                 : null;
 
-            result.Add(new ResolvedOperationProperty(CreateInfo(member, OperationPropertyOrigin.Contributed, exposeLocation, operationType.ContainingAssembly), member));
+            bound ??= GetBoundNames(operationType);
+            result.Add(new ResolvedOperationProperty(CreateInfo(member, OperationPropertyOrigin.Contributed, exposeLocation, operationType.ContainingAssembly, bound), member));
         }
 
         return result;
@@ -143,6 +145,38 @@ internal static class OperationPropertyModelBuilder
         return FindExposedType(operationType, out _) is { } exposed
             ? GatewayBindings.Resolve(operationType, exposed)
             : EquatableList<GatewayPropertyBinding>.Empty;
+    }
+
+    /// <summary>
+    /// Gets the names of the inner properties an operation binds or hides (D11).
+    /// </summary>
+    /// <param name="operationType">The operation.</param>
+    /// <returns>The names, empty when the operation exposes nothing or binds nothing.</returns>
+    public static HashSet<string> GetBoundNames(INamedTypeSymbol operationType)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var binding in GetBindings(operationType))
+        {
+            names.Add(binding.PropertyName);
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// Whether a contributed property's validation rule names a property the operation binds or hides. The gateway has no
+    /// such property to compare against, so the rule is neither emitted nor planned there: the inner operation applies it
+    /// to the forwarded instance, with the bound value in place.
+    /// </summary>
+    /// <param name="attribute">The rule.</param>
+    /// <param name="boundNames">The operation's bound and hidden property names, from <see cref="GetBoundNames"/>.</param>
+    /// <returns><see langword="true"/> when the rule is left to the inner operation.</returns>
+    public static bool IsRuleLeftToInner(AttributeData attribute, HashSet<string> boundNames)
+    {
+        return boundNames.Count > 0
+            && Modules.ValidationSymbolHelpers.IsValidationAttribute(attribute.AttributeClass)
+            && Modules.ValidationSymbolHelpers.GetReferencedPropertyName(attribute) is { } name
+            && boundNames.Contains(name);
     }
 
     /// <summary>
@@ -511,11 +545,21 @@ internal static class OperationPropertyModelBuilder
         return true;
     }
 
-    private static OperationPropertyInfo CreateInfo(IPropertySymbol member, OperationPropertyOrigin origin, LocationInfo? location, IAssemblySymbol within)
+    private static OperationPropertyInfo CreateInfo(
+        IPropertySymbol member,
+        OperationPropertyOrigin origin,
+        LocationInfo? location,
+        IAssemblySymbol within,
+        HashSet<string>? boundNames = null)
     {
         var attributes = new List<string>();
         foreach (var attribute in member.GetAttributes())
         {
+            if (boundNames is not null && IsRuleLeftToInner(attribute, boundNames))
+            {
+                continue;
+            }
+
             if (RenderAttribute(attribute, within) is { } rendered)
             {
                 attributes.Add(rendered);
