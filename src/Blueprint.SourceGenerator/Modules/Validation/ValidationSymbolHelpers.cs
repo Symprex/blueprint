@@ -18,7 +18,7 @@ internal static class ValidationSymbolHelpers
     /// <returns>The public instance properties declared on the operation type.</returns>
     public static IEnumerable<IPropertySymbol> GetPublicInstanceProperties(INamedTypeSymbol operationType)
     {
-        return operationType.GetAllMembers()
+        return Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType)
             .OfType<IPropertySymbol>()
             .Where(static property => property is { IsStatic: false, Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public });
     }
@@ -626,7 +626,8 @@ internal static class ValidationSymbolHelpers
     /// <returns>The referenced property name, if one is present.</returns>
     public static string? GetReferencedPropertyName(AttributeData attribute)
     {
-        return attribute.ConstructorArguments.FirstOrDefault().Value as string;
+        // An array argument ([DeniedValues(1, 2)]'s params) names no property, and its Value throws.
+        return attribute.ConstructorArguments is [{ Kind: not TypedConstantKind.Array } first, ..] ? first.Value as string : null;
     }
 
     /// <summary>

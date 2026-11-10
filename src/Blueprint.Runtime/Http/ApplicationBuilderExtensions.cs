@@ -155,6 +155,14 @@ public static class EndpointRouteBuilderExtensions
         // Register the mapped document in DI, where OutputOpenApi reads it.
         endpoints.ServiceProvider.GetService<PreRenderedOpenApiDocumentHolder>()?.Set(openApiDocument);
 
+        // The per-operation input schemas come from the same rendering, so they agree with the document served.
+        if (endpoints.ServiceProvider.GetService<IOperationInputSchemaProvider>() is OperationInputSchemaProvider inputSchemaProvider)
+        {
+            inputSchemaProvider.Set(new Lazy<OperationInputSchemaSet>(
+                () => openApiDocument.Value.InputSchemas!.Value,
+                LazyThreadSafetyMode.ExecutionAndPublication));
+        }
+
         var openApiBuilder = endpoints.Map(
             RoutePatternFactory.Parse(RouteUnder(basePath, ".blueprint/openapi.json")),
             openApiDelegate);

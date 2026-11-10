@@ -111,6 +111,11 @@
   <ItemGroup>
     <None Include="$(PkgNewtonsoft_Json)\lib\netstandard2.0\Newtonsoft.Json.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
+  <!-- Imported by a consumer of the package, so that the MSBuild properties the generator reads reach it. -->
+  <ItemGroup>
+    <None Include="build\Blueprint.SourceGenerator.props" Pack="true" PackagePath="build;buildTransitive" />
+  </ItemGroup>
+
   <ItemGroup>
     <Folder Include="Generators\" />
   </ItemGroup>

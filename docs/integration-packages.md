@@ -524,7 +524,27 @@ public async Task<GatewayTemplateResource> Handle(RenameGatewayTemplateCommand c
 - **`[UpstreamCredential<TStrategy>]` replaces it per operation.** `TStrategy` is an `IUpstreamCredentialStrategy` registered in the gateway's services; for each forward it is given the context and the attribute, and returns the `IUpstreamCredential` to apply. A strategy that takes arguments, such as which property holds a tenant id, declares its own attribute deriving from `UpstreamCredentialAttribute<TStrategy>` with them as properties. An unregistered strategy fails the forward with an `InvalidOperationException` before anything is sent. Because the attribute names the strategy type, an operation that uses one is declared in the gateway's own assembly, not a contract assembly. A strategy that authenticates as the gateway's own service identity means the upstream no longer checks the caller, so give that operation its own `[Resource(noun, verb)]` and register an `IResourceAuthorizationProvider` in the gateway: the sample's `GetServiceTemplateQuery` refuses a caller without `template:read` before it forwards.
 - **Only the context-taking overload applies this policy.** `ForwardAsync<TInner, TResult>(inner, …)`, without the context, adds no per-call credential (only what the `HttpClient` itself is configured to send) and translates nothing.
 - **`[TranslateError(fromType, to)]` answers an upstream problem as a local one (D8).** On the gateway operation or on its `BlueprintApp`, it maps a `BlueprintApiException` whose problem `type` is `fromType` to the static `ApiExceptionFactory` member named `to` on the attributed class. The operation's translation of a type wins over the app's. The translated problem keeps the upstream detail and has the upstream failure as its inner exception; its upstream extensions are not carried. Untranslated failures escape unchanged.
-- **Read once.** A hand-written forward reads these attributes the first time its operation forwards and caches them. Generated forwards (#69) wire the same choices at compile time.
+- **Read once.** A hand-written forward reads these attributes the first time its operation forwards and caches them. The handler an `[Expose<TInner>]` operation is generated with forwards without the context, so it applies neither yet: it sends no per-call credential and translates nothing. Generated forwards (#69) wire the same choices at compile time.
+
+### Exposing an Operation
+
+A gateway operation that only forwards an inner operation is declared with `[Expose<TInner>]` (in `Blueprint.Model.Attributes`), and needs no properties or handler:
+
+```csharp
+[Expose<GetTemplateQuery>]
+[MustBeAuthenticated]
+[SelfLink(typeof(TemplateApiResource), "/templates/{Id}")]
+[HttpGet]
+public partial class GetGatewayTemplateQuery : IQuery<Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>;
+```
+
+- **Properties.** The source generator gives the class each public settable property of `TInner` that is not obsolete, with its type, attributes (validation and binding included; one naming a type the gateway's assembly cannot access is BPGW018), an `<inheritdoc>` of its documentation, and the default `TInner`'s initialiser gives it, a required property's included. Every generator reads them from one shared property model, so the operation binds, validates, documents and links them as `TInner` does. A property the class declares itself wins over the inner one.
+- **Handler.** The generated handler creates a fresh `TInner` from those properties and forwards it with `ForwardAsync`, reading the response as the class's declared result. It forwards through the one `[BlueprintClient]` that includes `TInner`, using the named client and JSON options `AddBlueprintClient` registered for it and the client's `SerializerContext` (`BlueprintClientTransport.Create<TClient>`), so register that client with its base address. A client in a referenced assembly is found by the `[BlueprintClientIncluded]` its generated half carries for each include. A property bound from a header is not sent upstream yet: no request builder writes headers.
+- **What the class declares.** Its operation interface (the inner operation's, for its result), route, HTTP method and authorisation. Authorisation must be one of `[AllowAnonymous]`, `[MustBeAuthenticated]`, `[Resource]` or `[FromResource]`; the inner operation's is never copied.
+- **Response types.** The gateway reads the upstream response with the JSON options it writes its own with. A type its serializer context covers needs a constructor the source-generated metadata can call: a public one, not a private `[JsonConstructor]`.
+- **Minimal mode is for first-party apps.** A property added to `TInner` becomes settable at the gateway with no change to its source. A public API sets `<BlueprintGatewayAllowExpose>false</BlueprintGatewayAllowExpose>`, which makes every `[Expose<TInner>]` error BPGW001.
+
+The `BPGW` diagnostics are listed in [diagnostic-reference.md](diagnostic-reference.md#gateway-operations-bpgw).
 
 ### S365 Gateway Migration
 

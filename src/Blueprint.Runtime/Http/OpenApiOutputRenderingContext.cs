@@ -202,6 +202,29 @@ public sealed record OpenApiOutputRenderingContext(
         BlueprintHttpOptions? httpOptions,
         string? basePath)
     {
+        return Create(documentRendering, infoOptions, schemaProcessorOptions, httpOptions, basePath, readOnlyProperties: null);
+    }
+
+    /// <summary>
+    /// Renders as <see cref="Create(OpenApiDocumentRenderingContext, OpenApiInfoOptions?, OpenApiSchemaProcessorOptions?, BlueprintHttpOptions?, string?)"/>
+    /// does, adding every read-only property of a component to <paramref name="readOnlyProperties"/>: the document does not
+    /// mark one under <see cref="OpenApiSchemaNaming.Legacy"/>, though an input schema must know it.
+    /// </summary>
+    /// <param name="documentRendering">The assembled document model to render.</param>
+    /// <param name="infoOptions">Optional customisation for the <c>info</c> block.</param>
+    /// <param name="schemaProcessorOptions">Optional ordered schema processors for the <c>components/schemas</c> section.</param>
+    /// <param name="httpOptions">Optional Blueprint HTTP options consulted for the default <c>servers</c> entry.</param>
+    /// <param name="basePath">The base path the API's routes are mapped under.</param>
+    /// <param name="readOnlyProperties">Given each read-only property, by its component's key and its name, if not null.</param>
+    /// <returns>The rendered output context carrying the JSON string.</returns>
+    internal static OpenApiOutputRenderingContext Create(
+        OpenApiDocumentRenderingContext documentRendering,
+        OpenApiInfoOptions? infoOptions,
+        OpenApiSchemaProcessorOptions? schemaProcessorOptions,
+        BlueprintHttpOptions? httpOptions,
+        string? basePath,
+        ICollection<(string ComponentKey, string PropertyName, bool IsDeserialized)>? readOnlyProperties)
+    {
         ArgumentNullException.ThrowIfNull(documentRendering);
 
         var json = RenderJson(
@@ -209,7 +232,8 @@ public sealed record OpenApiOutputRenderingContext(
             infoOptions ?? new OpenApiInfoOptions(),
             schemaProcessorOptions ?? new OpenApiSchemaProcessorOptions(),
             httpOptions,
-            basePath);
+            basePath,
+            readOnlyProperties);
         return new OpenApiOutputRenderingContext(documentRendering, json);
     }
 
@@ -218,12 +242,13 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiInfoOptions infoOptions,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
         BlueprintHttpOptions? httpOptions,
-        string? basePath)
+        string? basePath,
+        ICollection<(string ComponentKey, string PropertyName, bool IsDeserialized)>? readOnlyProperties)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true });
 
-        WriteDocument(writer, document, infoOptions, schemaProcessorOptions, httpOptions, basePath);
+        WriteDocument(writer, document, infoOptions, schemaProcessorOptions, httpOptions, basePath, readOnlyProperties);
         writer.Flush();
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
@@ -235,7 +260,8 @@ public sealed record OpenApiOutputRenderingContext(
         OpenApiInfoOptions infoOptions,
         OpenApiSchemaProcessorOptions schemaProcessorOptions,
         BlueprintHttpOptions? httpOptions,
-        string? basePath)
+        string? basePath,
+        ICollection<(string ComponentKey, string PropertyName, bool IsDeserialized)>? readOnlyProperties)
     {
         writer.WriteStartObject();
 
@@ -302,7 +328,7 @@ public sealed record OpenApiOutputRenderingContext(
         var omitLegacyExtras = infoOptions.SchemaNaming == OpenApiSchemaNaming.Legacy;
 
         WritePaths(writer, document.Paths, LegacyOperationIds.Assign(document), allRequireAuth, effectiveSchemes, ComponentKeyOf, parameterTitleFormatter, omitLegacyExtras);
-        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, ComponentKeyOf, DescribeComponentSources(document), omitLegacyExtras);
+        WriteComponents(writer, document.SchemaComponents, schemaProcessorOptions, effectiveSchemes, ComponentKeyOf, DescribeComponentSources(document), omitLegacyExtras, readOnlyProperties);
         WriteDocumentTags(writer, document.Paths);
 
         if (allRequireAuth && effectiveSchemes.Count > 0)
@@ -1545,7 +1571,8 @@ public sealed record OpenApiOutputRenderingContext(
         List<OpenApiSecurityScheme> securitySchemes,
         Func<string, string>? schemaNameFormatter,
         IReadOnlyDictionary<string, string> componentSources,
-        bool omitLegacyExtras)
+        bool omitLegacyExtras,
+        ICollection<(string ComponentKey, string PropertyName, bool IsDeserialized)>? readOnlyProperties)
     {
         if (schemaComponents.IsEmpty && securitySchemes.Count == 0)
         {
@@ -1581,7 +1608,7 @@ public sealed record OpenApiOutputRenderingContext(
                     sourcesByKey,
                     SanitiseSchemaKey(processed.BodyTypeName, schemaNameFormatter),
                     componentSources.GetValueOrDefault(processed.BodyTypeName, processed.BodyTypeName));
-                WriteSchemaComponent(writer, processed, schemaNameFormatter, omitLegacyExtras);
+                WriteSchemaComponent(writer, processed, schemaNameFormatter, omitLegacyExtras, readOnlyProperties);
             }
 
             // Emit the well-known "Link" schema for HATEOAS $links dictionary values.
@@ -1819,9 +1846,24 @@ public sealed record OpenApiOutputRenderingContext(
         writer.WriteEndObject(); // Link
     }
 
-    private static void WriteSchemaComponent(Utf8JsonWriter writer, OpenApiSchemaComponentModel component, Func<string, string>? schemaNameFormatter, bool omitLegacyExtras)
+    private static void WriteSchemaComponent(
+        Utf8JsonWriter writer,
+        OpenApiSchemaComponentModel component,
+        Func<string, string>? schemaNameFormatter,
+        bool omitLegacyExtras,
+        ICollection<(string ComponentKey, string PropertyName, bool IsDeserialized)>? readOnlyProperties)
     {
-        writer.WritePropertyName(SanitiseSchemaKey(component.BodyTypeName, schemaNameFormatter));
+        var key = SanitiseSchemaKey(component.BodyTypeName, schemaNameFormatter);
+
+        if (readOnlyProperties is not null)
+        {
+            foreach (var property in component.Properties.Where(static p => p.IsReadOnly))
+            {
+                readOnlyProperties.Add((key, property.Name, property.IsDeserialized));
+            }
+        }
+
+        writer.WritePropertyName(key);
         writer.WriteStartObject();
 
         // Enum components are rendered as a flat type: string schema with enum/x-enumNames arrays

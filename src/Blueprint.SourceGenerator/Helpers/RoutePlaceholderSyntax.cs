@@ -81,7 +81,9 @@ internal static class RoutePlaceholderSyntax
             return template;
         }
 
-        var members = operationType.GetAllMembers().ToList();
+        var members = operationType is INamedTypeSymbol namedOperationType
+            ? Planning.OperationPropertyModelBuilder.GetMembersWithContributed(namedOperationType).ToList()
+            : operationType.GetAllMembers().ToList();
 
         return Placeholder.Replace(
             template,

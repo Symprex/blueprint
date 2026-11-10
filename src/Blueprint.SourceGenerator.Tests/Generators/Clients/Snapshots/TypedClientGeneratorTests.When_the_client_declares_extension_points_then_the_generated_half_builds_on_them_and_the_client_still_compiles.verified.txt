@@ -43,6 +43,7 @@ namespace Client
         IItemsApi WithCredential(global::Blueprint.HttpClient.IUpstreamCredential credential);
     }
 
+    [global::Blueprint.HttpClient.BlueprintClientIncludedAttribute(typeof(global::Client.SearchItemsQuery))]
     partial class ItemsApi : IItemsApi, global::Blueprint.HttpClient.IBlueprintClient<ItemsApi>
     {
         private readonly global::Blueprint.HttpClient.BlueprintHttpClient _client;
