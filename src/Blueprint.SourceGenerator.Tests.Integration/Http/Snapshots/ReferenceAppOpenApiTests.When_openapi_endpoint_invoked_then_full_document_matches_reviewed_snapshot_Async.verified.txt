@@ -3110,6 +3110,15 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "recipient": {
+            "nullable": true,
+            "description": "The recipient to render the preview for.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TemplatePreviewRecipient"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -3432,6 +3441,24 @@
             "type": "string",
             "description": "The source template identifier.",
             "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TemplatePreviewRecipient": {
+        "title": "TemplatePreviewRecipient",
+        "description": "The recipient a template preview is rendered for.",
+        "type": "object",
+        "properties": {
+          "Email": {
+            "type": "string",
+            "nullable": true,
+            "description": "The recipient\u0027s email address."
+          },
+          "Name": {
+            "type": "string",
+            "nullable": true,
+            "description": "The recipient\u0027s display name."
           }
         },
         "additionalProperties": false
