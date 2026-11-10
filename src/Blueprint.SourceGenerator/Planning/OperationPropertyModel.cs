@@ -86,6 +86,7 @@ public sealed record ExposedOperationInfo(
 /// its bases for a declared property, the inner operation or one of its bases for a contributed one.
 /// </param>
 /// <param name="HasPublicSetter">Whether the property has a public setter or initialiser.</param>
+/// <param name="HasPublicGetter">Whether the property has a public getter, which code outside its type can read.</param>
 /// <param name="IsInitOnly">Whether the setter is <c>init</c>.</param>
 /// <param name="IsRequired">Whether the property has the <c>required</c> modifier.</param>
 /// <param name="Attributes">The property's attributes as C# attribute source, for example <c>global::X.RangeAttribute(1, 10)</c>.</param>
@@ -100,6 +101,7 @@ public sealed record OperationPropertyInfo(
     OperationPropertyOrigin Origin,
     string OriginTypeName,
     bool HasPublicSetter,
+    bool HasPublicGetter,
     bool IsInitOnly,
     bool IsRequired,
     EquatableList<string> Attributes,

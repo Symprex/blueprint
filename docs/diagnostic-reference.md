@@ -232,7 +232,7 @@ Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attr
 
 ## Gateway operations (BPGW)
 
-Reported for an operation marked `[Expose<TInner>]`. BPGW001, BPGW006 and BPGW018 are reported at the attribute; the others at the operation's name. An operation with BPGW003, BPGW004, BPGW005 or BPGW019 gets no pipeline.
+Reported for an operation marked `[Expose<TInner>]`. BPGW001, BPGW006 and BPGW018 are reported at the attribute; the others at the operation's name. An operation with BPGW003, BPGW004, BPGW005, BPGW019 or BPGW020 gets no pipeline.
 
 | ID | Severity | Title |
 |----|----------|-------|
@@ -244,6 +244,7 @@ Reported for an operation marked `[Expose<TInner>]`. BPGW001, BPGW006 and BPGW01
 | BPGW006 | Error | `[Expose<TInner>]` class declares no operation interface, or one with no result. Declare the inner operation's own, for example `partial class X : IQuery<R>`, since no generator can see an interface another generator emits |
 | BPGW018 | Error | A contributed property's attribute names a type the gateway's assembly cannot access, the attribute's own or one in its arguments (`typeof`, an enum value, an array). It is not public, nor internal to an assembly with `InternalsVisibleTo` the gateway, so the emitted property cannot carry it, and the gateway would bind, serialize or validate the property otherwise than the inner operation. BPGW007 to BPGW017 belong to the binding tiers and forward credentials |
 | BPGW019 | Error | The inner operation has a `required` member the generated forward cannot set: the gateway declares that property with another type, or it is a required field. The operation gets no pipeline |
+| BPGW020 | Error | A property the gateway declares, which the generated forward copies to the inner operation, has no public getter, so the pipeline cannot read it. The operation gets no pipeline |
 
 ## Module system (BPMOD)
 

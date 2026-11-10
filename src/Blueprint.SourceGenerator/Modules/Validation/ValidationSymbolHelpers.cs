@@ -626,7 +626,8 @@ internal static class ValidationSymbolHelpers
     /// <returns>The referenced property name, if one is present.</returns>
     public static string? GetReferencedPropertyName(AttributeData attribute)
     {
-        return attribute.ConstructorArguments.FirstOrDefault().Value as string;
+        // An array argument ([DeniedValues(1, 2)]'s params) names no property, and its Value throws.
+        return attribute.ConstructorArguments is [{ Kind: not TypedConstantKind.Array } first, ..] ? first.Value as string : null;
     }
 
     /// <summary>

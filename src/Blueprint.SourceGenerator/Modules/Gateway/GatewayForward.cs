@@ -136,7 +136,17 @@ public static class GatewayForward
         }
 
         var resultTypeName = resultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var copied = GetCopiedProperties(operationType, exposedType);
+        var copied = GetCopiedProperties(operationType, exposedType, out var unreadable);
+
+        // The pipeline reads each copied property from outside the operation, which a declared one with a getter that is
+        // not public, or none, does not allow (CS0271, CS0154). A contributed one is emitted with a public getter.
+        if (unreadable.Count > 0)
+        {
+            return Result<OperationHandlerModel>.Failure(new DiagnosticInfo(
+                GatewayDiagnosticDescriptors.ForwardedPropertyNotReadable,
+                location,
+                [operationType.Name, string.Join(", ", unreadable), exposedType.Name]));
+        }
 
         // A required inner member the forward does not set would fail to compile (CS9035): one the gateway redeclares with
         // another type, or a required field, which is never contributed.
@@ -222,8 +232,9 @@ public static class GatewayForward
             + context.GetContextPropertyExpression("OperationCancelled") + ")";
     }
 
-    private static EquatableList<string> GetCopiedProperties(INamedTypeSymbol operationType, INamedTypeSymbol exposedType)
+    private static EquatableList<string> GetCopiedProperties(INamedTypeSymbol operationType, INamedTypeSymbol exposedType, out List<string> unreadable)
     {
+        unreadable = [];
         var innerSettable = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
         foreach (var member in exposedType.GetAllMembers().OfType<IPropertySymbol>())
         {
@@ -249,6 +260,11 @@ public static class GatewayForward
                 || SymbolEqualityComparer.Default.Equals(property.Member.Type, innerProperty.Type))
             {
                 copied.Add(property.Info.Name);
+
+                if (property.Info.Origin == OperationPropertyOrigin.Declared && !property.Info.HasPublicGetter)
+                {
+                    unreadable.Add(property.Info.Name);
+                }
             }
         }
 
