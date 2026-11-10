@@ -18,6 +18,7 @@ internal sealed class BlueprintMcpToolSet
     private readonly BlueprintApp _app;
     private readonly IOperationInputSchemaProvider _schemaProvider;
     private readonly ICollection<EndpointDataSource> _dataSources;
+    private readonly MappedBlueprintApi? _mappedApi;
     private readonly Lazy<IReadOnlyList<BlueprintOperationTool>> _tools;
 
     /// <summary>
@@ -31,6 +32,10 @@ internal sealed class BlueprintMcpToolSet
         this._app = app;
         this._schemaProvider = schemaProvider;
         this._dataSources = dataSources;
+
+        // The MapBlueprintApi call the schemas were made by, whose endpoints the tools run through: one app may be mapped
+        // under two base paths, each with its own conventions.
+        this._mappedApi = (schemaProvider as OperationInputSchemaProvider)?.MappedApi;
         this._tools = new Lazy<IReadOnlyList<BlueprintOperationTool>>(this.CreateTools, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
@@ -77,7 +82,8 @@ internal sealed class BlueprintMcpToolSet
             {
                 if (endpoint is not RouteEndpoint routeEndpoint
                     || endpoint.Metadata.GetMetadata<ApiOperationDescriptor>() is not { } mapped
-                    || (!ReferenceEquals(mapped, operation) && mapped.OperationType != operation.OperationType))
+                    || (!ReferenceEquals(mapped, operation) && mapped.OperationType != operation.OperationType)
+                    || (this._mappedApi is not null && !ReferenceEquals(endpoint.Metadata.GetMetadata<MappedBlueprintApi>(), this._mappedApi)))
                 {
                     continue;
                 }

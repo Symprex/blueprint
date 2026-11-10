@@ -80,3 +80,74 @@ public partial class DownloadMcpQuery : IQuery<FileStreamResult>
         return new FileStreamResult(new MemoryStream(new byte[query.Size]), "application/octet-stream");
     }
 }
+
+/// <summary>
+/// A query Blueprint lets anyone run, whose endpoint the tests' host guards with an authorisation requirement an
+/// attribute supplies instead.
+/// </summary>
+[AllowAnonymous]
+[RootLink("/requirement")]
+public partial class RequirementGuardedMcpQuery : IQuery<string>
+{
+    /// <summary>Answers once the requirement has let the caller through.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>A fixed answer.</returns>
+    public static string Handle(RequirementGuardedMcpQuery query)
+    {
+        return "required";
+    }
+}
+
+/// <summary>A query whose handler changes its response's status as it starts and registers a resource for disposal.</summary>
+[AllowAnonymous]
+[RootLink("/callbacks")]
+public partial class CallbacksMcpQuery : IQuery<string>
+{
+}
+
+/// <summary>Handles <see cref="CallbacksMcpQuery"/> through the ambient response.</summary>
+/// <param name="accessor">The accessor the handler reads the response from.</param>
+/// <param name="probe">Counts the resources disposed.</param>
+public class CallbacksMcpQueryHandler(IHttpContextAccessor accessor, ResponseCallbackProbe probe)
+{
+    /// <summary>Registers a callback that sets the status to 203 and a resource the probe counts on disposal.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>A fixed answer.</returns>
+    public string Handle(CallbacksMcpQuery query)
+    {
+        var response = accessor.HttpContext!.Response;
+
+        response.OnStarting(() =>
+        {
+            response.StatusCode = StatusCodes.Status203NonAuthoritative;
+            return Task.CompletedTask;
+        });
+        response.RegisterForDispose(probe.CreateResource());
+
+        return "called back";
+    }
+}
+
+/// <summary>Counts the resources <see cref="CallbacksMcpQueryHandler"/> registered that have been disposed.</summary>
+public sealed class ResponseCallbackProbe
+{
+    private int _disposed;
+
+    /// <summary>Gets the number of resources disposed.</summary>
+    public int Disposed => Volatile.Read(ref this._disposed);
+
+    /// <summary>Makes a resource that counts itself when disposed.</summary>
+    /// <returns>The resource.</returns>
+    public IDisposable CreateResource()
+    {
+        return new Resource(this);
+    }
+
+    private sealed class Resource(ResponseCallbackProbe probe) : IDisposable
+    {
+        public void Dispose()
+        {
+            Interlocked.Increment(ref probe._disposed);
+        }
+    }
+}

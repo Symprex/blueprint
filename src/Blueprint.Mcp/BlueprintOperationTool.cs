@@ -91,63 +91,85 @@ internal sealed class BlueprintOperationTool : McpServerTool
         // request they were first asked for, so the MCP request's would challenge the MCP request, not the operation's.
         await using var scope = caller.RequestServices.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
 
-        var response = new HttpResponseFeature();
-        using var responseBody = new ToolResponseBody(() => response.Headers.ContentType, OperationToolResult.MaxTextBytes);
-        var context = CreateContext(caller, scope.ServiceProvider, endpoint, method, toolRequest, response, responseBody, cancellationToken);
-
-        // A service reading the request from IHttpContextAccessor, as one may over HTTP, is given the operation's, not
-        // the MCP request's. The MCP server itself does not read the accessor.
-        accessor.HttpContext = context;
+        using var response = new ToolResponse(OperationToolResult.MaxTextBytes);
+        var context = CreateContext(caller, scope.ServiceProvider, endpoint, method, toolRequest, response, cancellationToken);
 
         try
         {
-            await RunAsync(endpoint, context).ConfigureAwait(false);
-            await context.Response.CompleteAsync().ConfigureAwait(false);
+            // A service reading the request from IHttpContextAccessor, as one may over HTTP, is given the operation's,
+            // not the MCP request's. The MCP server itself does not read the accessor.
+            accessor.HttpContext = context;
+
+            try
+            {
+                await RunAsync(endpoint, context).ConfigureAwait(false);
+                await context.Response.CompleteAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                accessor.HttpContext = caller;
+            }
+
+            return OperationToolResult.Create(context.Response.StatusCode, context.Response.ContentType, response.Captured);
         }
         finally
         {
-            accessor.HttpContext = caller;
+            // As a server does once it has sent the response, which disposes what the request registered for disposal.
+            await response.RunCompletedCallbacksAsync(scope.ServiceProvider.GetRequiredService<ILogger<BlueprintOperationTool>>()).ConfigureAwait(false);
         }
-
-        return OperationToolResult.Create(context.Response.StatusCode, context.Response.ContentType, responseBody);
     }
 
     /// <summary>
-    /// Runs the endpoint as the routing and authorisation middleware would: the ASP.NET Core authorisation policies its
-    /// metadata requires (<c>RequireAuthorization</c>, <c>[Authorize]</c>) decide first, challenging or forbidding the
-    /// caller as they would over HTTP, and the endpoint runs only when they let the caller through.
+    /// Runs the endpoint as the authorisation middleware would: the policy it applies to the endpoint decides first,
+    /// challenging or forbidding the caller as it would over HTTP, and the endpoint runs only when it lets the caller
+    /// through. That policy combines the endpoint's policies and <c>[Authorize]</c> data, or is the fallback policy when
+    /// it has neither, with the requirements its metadata supplies (<see cref="IAuthorizationRequirementData"/>).
     /// </summary>
     private static async Task RunAsync(RouteEndpoint endpoint, HttpContext context)
     {
-        var authorizeData = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>();
-        var policies = endpoint.Metadata.GetOrderedMetadata<AuthorizationPolicy>();
+        var metadata = endpoint.Metadata;
+        var authorizeData = metadata.GetOrderedMetadata<IAuthorizeData>();
+        var policies = metadata.GetOrderedMetadata<AuthorizationPolicy>();
+        var requirementData = metadata.GetOrderedMetadata<IAuthorizationRequirementData>();
+        var services = context.RequestServices;
 
-        if ((authorizeData.Count == 0 && policies.Count == 0) || endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null)
+        if (services.GetService<IAuthorizationPolicyProvider>() is not { } policyProvider)
         {
+            // A host without authorisation has no policy to apply, but an endpoint that asks for one is refused, as the
+            // authorisation middleware refuses it, rather than run unguarded.
+            if (authorizeData.Count > 0 || policies.Count > 0 || requirementData.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"The endpoint {endpoint.DisplayName} requires authorisation, but the authorisation services are not "
+                    + "registered. Call services.AddAuthorization().");
+            }
+
             await endpoint.RequestDelegate!(context).ConfigureAwait(false);
             return;
-        }
-
-        // An endpoint that asks for a policy nothing can evaluate is refused, as the authorisation middleware refuses it.
-        var services = context.RequestServices;
-        var policyProvider = services.GetService<IAuthorizationPolicyProvider>();
-        var policyEvaluator = services.GetService<IPolicyEvaluator>();
-        var resultHandler = services.GetService<IAuthorizationMiddlewareResultHandler>();
-
-        if (policyProvider is null || policyEvaluator is null || resultHandler is null)
-        {
-            throw new InvalidOperationException(
-                $"The endpoint {endpoint.DisplayName} requires authorisation, but the authorisation services are not "
-                + "registered. Call services.AddAuthorization().");
         }
 
         var policy = await AuthorizationPolicy.CombineAsync(policyProvider, authorizeData, policies).ConfigureAwait(false);
 
-        if (policy is null)
+        if (requirementData.Count > 0)
+        {
+            var requirements = new AuthorizationPolicyBuilder();
+
+            foreach (var data in requirementData)
+            {
+                requirements.AddRequirements([.. data.GetRequirements()]);
+            }
+
+            policy = policy is null ? requirements.Build() : AuthorizationPolicy.Combine(policy, requirements.Build());
+        }
+
+        if (policy is null || metadata.GetMetadata<IAllowAnonymous>() is not null)
         {
             await endpoint.RequestDelegate!(context).ConfigureAwait(false);
             return;
         }
+
+        var policyEvaluator = services.GetRequiredService<IPolicyEvaluator>();
+        var resultHandler = services.GetRequiredService<IAuthorizationMiddlewareResultHandler>();
 
         var authenticateResult = await policyEvaluator.AuthenticateAsync(policy, context).ConfigureAwait(false);
         var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, context).ConfigureAwait(false);
@@ -176,8 +198,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
         RouteEndpoint endpoint,
         string method,
         OperationToolRequest toolRequest,
-        HttpResponseFeature response,
-        Stream responseBody,
+        ToolResponse response,
         CancellationToken cancellationToken)
     {
         var headers = new HeaderDictionary { [HeaderNames.Accept] = "application/json" };
@@ -214,7 +235,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
             Body = body,
         });
         features.Set<IHttpResponseFeature>(response);
-        features.Set<IHttpResponseBodyFeature>(new StreamResponseBodyFeature(responseBody));
+        features.Set<IHttpResponseBodyFeature>(response);
         features.Set<IHttpRequestLifetimeFeature>(new HttpRequestLifetimeFeature { RequestAborted = cancellationToken });
         features.Set<IHttpConnectionFeature>(new HttpConnectionFeature
         {

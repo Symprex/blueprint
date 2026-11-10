@@ -592,11 +592,15 @@ calls it there with the SDK's own MCP client.
 - **Calls run through the pipeline.** A call makes the HTTP request the URL and method its `operationId` names answer
   (of an operation answering GET and POST, the method that reads its body): path arguments into the route, query and
   header arguments as an HTTP caller writes them, and body arguments as the JSON body. The request runs in process
-  through the operation's own endpoint, so the ASP.NET Core authorisation policies on that endpoint
-  (`MapBlueprintApi(...).RequireAuthorization(...)`), binding, validation, authentication and authorisation are those
-  of HTTP. It is the MCP request's caller that runs it: its `HttpContext.User`, its `Authorization` header, its scheme,
-  host and path base (so links point at the HTTP API). It has its own service scope, as an HTTP request has, and
-  `IHttpContextAccessor` gives its handler the operation's request, not the MCP request.
+  through the operation's own endpoint, so the ASP.NET Core authorisation the middleware would apply to that endpoint
+  (its policies, `[Authorize]` data and requirements, or the fallback policy when it has none), binding, validation,
+  authentication and authorisation are those of HTTP. It is the MCP request's caller that runs it: its
+  `HttpContext.User`, its `Authorization` header, its scheme, host and path base (so links point at the HTTP API). It
+  has its own service scope, as an HTTP request has; `IHttpContextAccessor` gives its handler the operation's request,
+  not the MCP request; and its response's `OnStarting` and `OnCompleted` callbacks run, so what it registered for
+  disposal is disposed.
+- **One mapping per tool set.** The tools run through the endpoints of the `MapBlueprintApi` call mapped last before
+  `MapBlueprintMcp`, so an app mapped under two base paths, each with its own conventions, can have tools for each.
 - **Results are the HTTP response.** The body is the tool result's text, and its structured content when it is a JSON
   object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
   problem body an HTTP caller gets, a call that fails validation the same 422.

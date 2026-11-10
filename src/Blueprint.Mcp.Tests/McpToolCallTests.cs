@@ -97,6 +97,79 @@ public sealed class McpToolCallTests
         (Text(result) ?? string.Empty).Should().Be(await overHttp.Content.ReadAsStringAsync());
     }
 
+    [Theory]
+    [InlineData("User", 403)]
+    [InlineData("Blue", 200)]
+    public async Task An_authorisation_requirement_an_endpoint_attribute_supplies_decides_a_tool_call_as_it_decides_HTTP(string roles, int expectedStatus)
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient(roles);
+        await using var client = await host.ConnectAsync(roles: roles);
+
+        using var overHttp = await http.GetAsync("api/requirement");
+        var result = await client.CallToolAsync(ids[("get", "/requirement")], new Dictionary<string, object?>());
+
+        ((int)overHttp.StatusCode).Should().Be(expectedStatus);
+        HttpStatus(result).Should().Be(expectedStatus);
+    }
+
+    [Theory]
+    [InlineData("User", 403)]
+    [InlineData("Admin", 200)]
+    public async Task The_fallback_policy_decides_a_tool_call_to_an_endpoint_without_authorisation_metadata_as_it_decides_HTTP(string roles, int expectedStatus)
+    {
+        await using var host = await McpTestHost.StartAsync(adminFallback: true);
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient(roles);
+        await using var client = await host.ConnectAsync(roles: roles);
+
+        using var overHttp = await http.GetAsync("api/case/upper");
+        var result = await client.CallToolAsync(ids[("get", "/case/upper")], new Dictionary<string, object?>());
+
+        ((int)overHttp.StatusCode).Should().Be(expectedStatus);
+        HttpStatus(result).Should().Be(expectedStatus);
+    }
+
+    [Fact]
+    public async Task An_app_mapped_twice_is_called_through_the_mapping_its_tools_were_mapped_after()
+    {
+        await using var host = await McpTestHost.StartAsync(mapAdminCopy: true);
+        var ids = await host.GetOperationIdsAsync();
+        await using var publicClient = await host.ConnectAsync("api/mcp", roles: "User");
+        await using var adminClient = await host.ConnectAsync("admin/mcp", roles: "User");
+        await using var adminAsAdminClient = await host.ConnectAsync("admin/mcp", roles: "Admin");
+        var accessorTool = ids[("get", "/accessor/{Id}")];
+        var arguments = new Dictionary<string, object?> { ["Id"] = "abc" };
+
+        var overPublic = await publicClient.CallToolAsync(accessorTool, arguments);
+        var overAdmin = await adminClient.CallToolAsync(accessorTool, arguments);
+        var overAdminAsAdmin = await adminAsAdminClient.CallToolAsync(accessorTool, arguments);
+
+        Text(overPublic).Should().Be("\"/api/accessor/abc\"");
+        HttpStatus(overAdmin).Should().Be(403);
+        Text(overAdminAsAdmin).Should().Be("\"/admin/accessor/abc\"");
+    }
+
+    [Fact]
+    public async Task A_handlers_response_callbacks_run_and_its_registered_resources_are_disposed()
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        var probe = host.Services.GetRequiredService<App.ResponseCallbackProbe>();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        using var overHttp = await http.GetAsync("api/callbacks");
+        var disposedBefore = probe.Disposed;
+        var result = await client.CallToolAsync(ids[("get", "/callbacks")], new Dictionary<string, object?>());
+
+        ((int)overHttp.StatusCode).Should().Be(203);
+        HttpStatus(result).Should().Be(203);
+        Text(result).Should().Be(await overHttp.Content.ReadAsStringAsync());
+        probe.Disposed.Should().Be(disposedBefore + 1);
+    }
+
     [Fact]
     public async Task A_file_response_is_described_by_its_size()
     {

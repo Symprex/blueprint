@@ -27,7 +27,8 @@ public static class McpEndpointRouteBuilderExtensions
     /// object), its status as <c>_meta.httpStatus</c>, and a 4xx or 5xx status as a tool error.
     /// </para>
     /// <para>
-    /// Map it after <c>MapBlueprintApi</c> for the same app, whose input schemas it reads, and register it with
+    /// Map it after <c>MapBlueprintApi</c> for the same app, whose input schemas it reads and whose endpoints its tools
+    /// run through (those of the call mapped last, should the app be mapped under two base paths), and register it with
     /// <c>AddBlueprintMcp</c>. An operation whose input schema cannot be made fails this call, as it fails the OpenAPI
     /// document, unless <see cref="BlueprintHttpOptions.RenderOpenApiDocumentOnFirstRequest"/> defers both to their first
     /// use. Listing tools needs no authentication, as reading the OpenAPI document needs none; add

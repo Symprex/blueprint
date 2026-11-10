@@ -8,6 +8,11 @@ internal sealed class OperationInputSchemaProvider : IOperationInputSchemaProvid
 {
     private Lazy<OperationInputSchemaSet>? _schemas;
 
+    /// <summary>
+    /// Gets the <c>MapBlueprintApi</c> call whose operations the schemas describe, or <see langword="null"/> before one.
+    /// </summary>
+    internal MappedBlueprintApi? MappedApi { get; private set; }
+
     /// <inheritdoc />
     public IReadOnlyList<OperationInputSchema> GetSchemas()
     {
@@ -26,19 +31,21 @@ internal sealed class OperationInputSchemaProvider : IOperationInputSchemaProvid
     /// Gives the provider the app's schemas, made when they are first asked for. Called once during endpoint mapping.
     /// </summary>
     /// <param name="schemas">The schemas, made from the rendering of the app's OpenAPI document.</param>
-    internal void Set(Lazy<OperationInputSchemaSet> schemas)
+    /// <param name="mappedApi">The call mapping the operations the schemas describe.</param>
+    internal void Set(Lazy<OperationInputSchemaSet> schemas, MappedBlueprintApi mappedApi)
     {
         this._schemas = schemas;
+        this.MappedApi = mappedApi;
     }
 
     /// <summary>
-    /// Gives a provider of the schemas this one holds now, those of the app <c>MapBlueprintApi</c> mapped last, which
-    /// keeps them when another app's API is mapped after it.
+    /// Gives a provider of the schemas this one holds now, those of the API <c>MapBlueprintApi</c> mapped last, which
+    /// keeps them when another API is mapped after it.
     /// </summary>
     /// <returns>The provider.</returns>
     internal OperationInputSchemaProvider Snapshot()
     {
-        return new OperationInputSchemaProvider { _schemas = this._schemas };
+        return new OperationInputSchemaProvider { _schemas = this._schemas, MappedApi = this.MappedApi };
     }
 
     private OperationInputSchemaSet Schemas => this._schemas?.Value

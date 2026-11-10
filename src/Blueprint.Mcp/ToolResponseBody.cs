@@ -5,13 +5,14 @@ namespace Blueprint.Mcp;
 /// the tool's result; any other body, and text past the limit, is only counted, as a tool result does not carry it.
 /// </summary>
 /// <remarks>
-/// Whether the body is text is decided by the response's content type at its first write, by which time an endpoint
-/// has set it.
+/// Whether the body is text is decided by the response's content type at its first write, by which time an endpoint,
+/// and any <c>OnStarting</c> callback, has set it.
 /// </remarks>
 internal sealed class ToolResponseBody : Stream
 {
     private readonly Func<string?> _contentType;
     private readonly int _maxTextBytes;
+    private readonly Func<CancellationToken, Task>? _start;
     private MemoryStream? _text;
     private bool _decided;
 
@@ -20,10 +21,12 @@ internal sealed class ToolResponseBody : Stream
     /// </summary>
     /// <param name="contentType">Gives the response's content type.</param>
     /// <param name="maxTextBytes">The most bytes of a text body kept.</param>
-    public ToolResponseBody(Func<string?> contentType, int maxTextBytes)
+    /// <param name="start">Starts the response, as a server does before it writes the first byte of its body.</param>
+    public ToolResponseBody(Func<string?> contentType, int maxTextBytes, Func<CancellationToken, Task>? start = null)
     {
         this._contentType = contentType;
         this._maxTextBytes = maxTextBytes;
+        this._start = start;
     }
 
     /// <summary>Gets the number of bytes written, kept or not.</summary>
@@ -75,36 +78,54 @@ internal sealed class ToolResponseBody : Stream
     {
         if (!this._decided)
         {
-            this._decided = true;
-
-            if (OperationToolResult.IsText(this._contentType()))
-            {
-                this._text = new MemoryStream();
-            }
+            this._start?.Invoke(CancellationToken.None).GetAwaiter().GetResult();
+            this.Decide();
         }
 
+        this.Keep(buffer);
+    }
+
+    /// <inheritdoc />
+    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        if (!this._decided && this._start is not null)
+        {
+            await this._start(cancellationToken).ConfigureAwait(false);
+        }
+
+        this.Decide();
+        this.Keep(buffer.Span);
+    }
+
+    /// <inheritdoc />
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        return this.WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+    }
+
+    private void Decide()
+    {
+        if (this._decided)
+        {
+            return;
+        }
+
+        this._decided = true;
+
+        if (OperationToolResult.IsText(this._contentType()))
+        {
+            this._text = new MemoryStream();
+        }
+    }
+
+    private void Keep(ReadOnlySpan<byte> buffer)
+    {
         this.BytesWritten += buffer.Length;
 
         if (this._text is not null && this._text.Length < this._maxTextBytes)
         {
             this._text.Write(buffer[..(int)Math.Min(buffer.Length, this._maxTextBytes - this._text.Length)]);
         }
-    }
-
-    /// <inheritdoc />
-    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-    {
-        this.Write(buffer.AsSpan(offset, count));
-
-        return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
-    {
-        this.Write(buffer.Span);
-
-        return ValueTask.CompletedTask;
     }
 
     /// <inheritdoc />

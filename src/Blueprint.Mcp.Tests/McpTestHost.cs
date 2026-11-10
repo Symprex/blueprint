@@ -8,6 +8,7 @@ using Blueprint.Runtime.Http;
 using Blueprint.SourceGenerator.Sample;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
 
@@ -42,6 +43,9 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// <summary>Gets the host's address.</summary>
     public Uri BaseAddress { get; }
 
+    /// <summary>Gets the host's services.</summary>
+    public IServiceProvider Services => this._app.Services;
+
     /// <summary>
     /// Starts the host.
     /// </summary>
@@ -51,8 +55,20 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// <param name="mapSampleApp">
     /// Whether the sample app's API (<c>sample/</c>) and tools (<c>sample/mcp</c>) are mapped after the test app's.
     /// </param>
+    /// <param name="mapAdminCopy">
+    /// Whether the test app's API is mapped a second time, at <c>admin/</c> with every endpoint requiring
+    /// <see cref="AdminPolicy"/>, with its own tools at <c>admin/mcp</c>.
+    /// </param>
+    /// <param name="adminFallback">
+    /// Whether <see cref="AdminPolicy"/>'s requirement is the fallback policy, which an endpoint without authorisation
+    /// metadata of its own requires, while the tools at <c>api/mcp</c> require only an authenticated caller.
+    /// </param>
     /// <returns>The started host.</returns>
-    public static async Task<McpTestHost> StartAsync(bool renderOnFirstRequest = false, bool mapSampleApp = false)
+    public static async Task<McpTestHost> StartAsync(
+        bool renderOnFirstRequest = false,
+        bool mapSampleApp = false,
+        bool mapAdminCopy = false,
+        bool adminFallback = false)
     {
         var builder = WebApplication.CreateSlimBuilder();
 
@@ -62,7 +78,16 @@ internal sealed class McpTestHost : IAsyncDisposable
         builder.Services.AddBlueprintApi<McpTestBlueprintApp, McpTestBlueprintAppExecutor>();
         builder.Services.Configure<BlueprintHttpOptions>(o => o.RenderOpenApiDocumentOnFirstRequest = renderOnFirstRequest);
         builder.Services.AddAuthentication(SchemeName).AddScheme<AuthenticationSchemeOptions, RolesHeaderAuthenticationHandler>(SchemeName, null);
-        builder.Services.AddAuthorization(o => o.AddPolicy(AdminPolicy, p => p.RequireRole("Admin")));
+        builder.Services.AddAuthorization(o =>
+        {
+            o.AddPolicy(AdminPolicy, p => p.RequireRole("Admin"));
+
+            if (adminFallback)
+            {
+                o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireRole("Admin").Build();
+            }
+        });
+        builder.Services.AddSingleton<ResponseCallbackProbe>();
         builder.Services.AddBlueprintMcp();
 
         if (mapSampleApp)
@@ -84,9 +109,25 @@ internal sealed class McpTestHost : IAsyncDisposable
                 {
                     endpoint.Metadata.Add(new AuthorizeAttribute(AdminPolicy));
                 }
+
+                if (endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(RequirementGuardedMcpQuery)))
+                {
+                    endpoint.Metadata.Add(new BlueRoleAuthorizeAttribute());
+                }
             });
 
-        app.MapBlueprintMcp<McpTestBlueprintApp>("api/mcp");
+        var tools = app.MapBlueprintMcp<McpTestBlueprintApp>("api/mcp");
+
+        if (adminFallback)
+        {
+            tools.RequireAuthorization(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+        }
+
+        if (mapAdminCopy)
+        {
+            app.MapBlueprintApi<McpTestBlueprintApp, McpTestBlueprintAppExecutor>("admin/").RequireAuthorization(AdminPolicy);
+            app.MapBlueprintMcp<McpTestBlueprintApp>("admin/mcp");
+        }
 
         if (mapSampleApp)
         {
@@ -141,7 +182,7 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// <returns>The ids, keyed by lower-case method and path relative to the base path.</returns>
     public async Task<Dictionary<(string Method, string Path), string>> GetOperationIdsAsync(string basePath = "api/")
     {
-        using var http = this.CreateHttpClient();
+        using var http = this.CreateHttpClient("Admin");
         using var document = JsonDocument.Parse(await http.GetStringAsync(basePath + ".blueprint/openapi.json"));
 
         return document.RootElement.GetProperty("paths").EnumerateObject()
@@ -156,6 +197,18 @@ internal sealed class McpTestHost : IAsyncDisposable
     {
         await this._app.StopAsync();
         await this._app.DisposeAsync();
+    }
+
+    /// <summary>
+    /// An <see cref="AuthorizeAttribute"/> that, beyond an authenticated caller, requires the <c>Blue</c> role through
+    /// <see cref="IAuthorizationRequirementData"/> rather than a named policy.
+    /// </summary>
+    private sealed class BlueRoleAuthorizeAttribute : AuthorizeAttribute, IAuthorizationRequirementData
+    {
+        public IEnumerable<IAuthorizationRequirement> GetRequirements()
+        {
+            return [new RolesAuthorizationRequirement(["Blue"])];
+        }
     }
 
     private sealed class RolesHeaderAuthenticationHandler(
