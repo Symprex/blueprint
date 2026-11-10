@@ -606,7 +606,7 @@ calls it there with the SDK's own MCP client.
   `MapBlueprintMcp`, so an app mapped under two base paths, each with its own conventions, can have tools for each.
   `MapBlueprintMcp` refuses to map when that call was another app's, rather than serve its schemas and policies.
 - **Route values are HTTP's.** An empty path argument is refused as missing, as no HTTP route matches an empty
-  segment, and a slash within one reaches the operation escaped (`a%2Fb`), as routing gives it over HTTP.
+  segment, except a catch-all's without a constraint, which matches an empty remainder; and a slash within one reaches the operation escaped (`a%2Fb`), as routing gives it over HTTP.
 - **Results are the HTTP response.** The body is the tool result's text, read in the charset its content type
   declares (UTF-8 when it declares none), and its structured content when it is a JSON object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
   problem body an HTTP caller gets, a call that fails validation the same 422.

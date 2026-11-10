@@ -192,12 +192,16 @@ internal sealed class OperationToolRequest
                     case RoutePatternParameterPart parameter:
                         var value = FindRouteValue(routeValues, parameter.Name);
 
-                        // An empty value is no value: no HTTP request reaches the endpoint with an empty segment for it.
+                        // An empty value is no value: no HTTP request reaches the endpoint with an empty segment for it,
+                        // except for a catch-all, which matches an empty remainder unless a constraint asks for more (a
+                        // constraint is not evaluated here, so one is taken to refuse it).
                         if (string.IsNullOrEmpty(value))
                         {
                             routeValues.Remove(parameter.Name);
 
-                            if (parameter.IsOptional || parameter.Default is not null)
+                            if (parameter.IsOptional
+                                || parameter.Default is not null
+                                || (parameter.IsCatchAll && parameter.ParameterPolicies.Count == 0))
                             {
                                 break;
                             }

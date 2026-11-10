@@ -215,3 +215,20 @@ public partial class EchoIdMcpQuery : IQuery<string>
         return query.Id;
     }
 }
+
+/// <summary>A query answering with its catch-all route value, as the operation was given it.</summary>
+[AllowAnonymous]
+[RootLink("/folders/{**FolderPath}")]
+public partial class FolderPathMcpQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the folder path, every segment after <c>folders/</c>.</summary>
+    public string? FolderPath { get; set; }
+
+    /// <summary>Answers with the folder path.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The folder path, or <c>(none)</c>.</returns>
+    public static string Handle(FolderPathMcpQuery query)
+    {
+        return query.FolderPath ?? "(none)";
+    }
+}

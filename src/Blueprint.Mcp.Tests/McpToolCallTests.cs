@@ -282,6 +282,23 @@ public sealed class McpToolCallTests
         Text(result).Should().Be(overHttp);
     }
 
+    [Theory]
+    [InlineData("", "folders/")]
+    [InlineData("a/b c", "folders/a/b%20c")]
+    public async Task A_catch_all_route_value_reaches_the_operation_as_HTTP_gives_it_even_empty(string value, string url)
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        var overHttp = await http.GetStringAsync("api/" + url);
+        var result = await client.CallToolAsync(ids[("get", "/folders/{**FolderPath}")], new Dictionary<string, object?> { ["FolderPath"] = value });
+
+        result.IsError.Should().NotBe(true);
+        Text(result).Should().Be(overHttp);
+    }
+
     [Fact]
     public async Task An_empty_route_value_is_refused_as_missing_as_no_HTTP_route_matches_it()
     {
