@@ -111,6 +111,7 @@ public sealed record OpenApiSchemaComponentRenderingContext(
             ItemsAreNullable = property.ItemsAreNullable,
             AdditionalPropertiesItemsAreNullable = property.AdditionalPropertiesItemsAreNullable,
             EnumDescription = property.EnumDescription,
+            IsDeserialized = property.IsDeserialized,
         };
     }
 
@@ -323,6 +324,12 @@ public sealed record OpenApiSchemaComponentPropertyModel(
     /// the value's <c>$ref</c>, which OpenAPI 3.0 would otherwise not let it sit beside.
     /// </summary>
     public bool AdditionalPropertiesAreNullable { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether System.Text.Json sets the property when it reads the type, so
+    /// <see cref="IOperationInputSchemaProvider"/> keeps what the serializer or validation requires of a request body.
+    /// </summary>
+    internal bool IsDeserialized { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether the property is a collection whose elements may be null: a collection of

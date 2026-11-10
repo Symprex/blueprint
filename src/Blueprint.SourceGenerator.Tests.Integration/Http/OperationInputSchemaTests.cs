@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Http;
@@ -132,11 +133,17 @@ public sealed class OperationInputSchemaTests
         schema.OperationId.Should().Be("PublicCheckDomains");
     }
 
-    [Fact]
-    public void A_read_only_property_of_a_body_type_is_not_required_of_an_input()
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void A_read_only_property_of_a_body_type_is_not_required_of_an_input(OpenApiSchemaNaming naming)
     {
         // A non-nullable property is required in the document, as in a response; one with no setter is not sent in a request.
-        var schema = CreateProvider(static o => o.RequiredProperties = OpenApiRequiredProperties.NonNullable).GetSchema(NoteOperationName)!.Schema;
+        var schema = CreateProvider(o =>
+        {
+            o.RequiredProperties = OpenApiRequiredProperties.NonNullable;
+            o.SchemaNaming = naming;
+        }).GetSchema(NoteOperationName)!.Schema;
         var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
         var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
 
@@ -179,6 +186,126 @@ public sealed class OperationInputSchemaTests
 
         act.Should().Throw<InvalidOperationException>().WithMessage($"*{DuplicateBodyNameOperationName}*");
         provider.GetSchema(NoteOperationName).Should().NotBeNull("one operation's broken document entry is that operation's alone");
+    }
+
+    [Fact]
+    public void A_component_with_a_read_only_property_and_one_name_twice_fails_only_the_operations_that_use_it()
+    {
+        // The address has a read-only property, so the input schemas look at its properties before any one operation's.
+        var provider = CreateProvider(configureOpenApiSchemas: static o => o.Processors.Add(RenamePostCodeToTotalInAddress));
+
+        var act = () => provider.GetSchema(NoteOperationName);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{NoteOperationName}*");
+        provider.GetSchema(DuplicateBodyNameOperationName).Should().NotBeNull("an operation that does not use the address is not broken by it");
+    }
+
+    [Fact]
+    public void A_conditional_requirement_of_a_read_only_property_is_not_asked_of_an_input()
+    {
+        var schema = GetSchema(NoteOperationName).Schema;
+        var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
+        var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
+
+        address.GetProperty("properties").GetProperty("district").GetProperty("readOnly").GetBoolean().Should().BeTrue();
+        ConditionallyRequired(address).Should().NotContain("district");
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void A_conditional_requirement_of_a_writable_property_marked_read_only_is_still_asked_of_an_input(OpenApiSchemaNaming naming)
+    {
+        // [ReadOnly(true)] leaves the setter, so the body reader still sets the region and validation still requires it.
+        var schema = CreateProvider(o => o.SchemaNaming = naming).GetSchema(NoteOperationName)!.Schema;
+        var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
+        var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
+
+        address.GetProperty("properties").GetProperty("region").GetProperty("readOnly").GetBoolean().Should().BeTrue();
+        ConditionallyRequired(address).Should().Contain("region");
+    }
+
+    [Fact]
+    public async Task A_request_body_without_a_writable_property_validation_requires_is_refused_however_it_is_documented()
+    {
+        // What the schema above requires when the post code is SW1A 1AA is what validation requires of the request.
+        await using var host = await KestrelTestHost.StartAsync();
+
+        using var without = new StringContent("""{"text":"abc","address":{"postCode":"SW1A 1AA","previous":null}}""", System.Text.Encoding.UTF8, "application/json");
+        using var refused = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", without);
+        using var with = new StringContent("""{"text":"abc","address":{"postCode":"SW1A 1AA","previous":null,"region":"London"}}""", System.Text.Encoding.UTF8, "application/json");
+        using var accepted = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", with);
+
+        ((int)refused.StatusCode).Should().BeInRange(400, 499);
+        accepted.IsSuccessStatusCode.Should().BeTrue(await accepted.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void A_conditional_requirement_of_a_getter_only_collection_the_serializer_populates_is_still_asked_of_an_input(OpenApiSchemaNaming naming)
+    {
+        // The list has no setter, but the serializer populates the one the getter returns, and validation requires items.
+        var schema = CreateProvider(o => o.SchemaNaming = naming).GetSchema(NoteOperationName)!.Schema;
+        var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
+        var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
+
+        address.GetProperty("properties").GetProperty("lines").GetProperty("readOnly").GetBoolean().Should().BeTrue();
+        ConditionallyRequired(address).Should().Contain("lines");
+    }
+
+    [Fact]
+    public async Task A_request_body_without_items_validation_requires_of_a_populated_collection_is_refused()
+    {
+        // What the schema above requires when the post code is EC1A 1BB is what validation requires of the request.
+        await using var host = await KestrelTestHost.StartAsync();
+
+        using var without = new StringContent("""{"text":"abc","address":{"postCode":"EC1A 1BB","previous":null}}""", System.Text.Encoding.UTF8, "application/json");
+        using var refused = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", without);
+        using var with = new StringContent("""{"text":"abc","address":{"postCode":"EC1A 1BB","previous":null,"lines":["1 Main Street"]}}""", System.Text.Encoding.UTF8, "application/json");
+        using var accepted = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", with);
+
+        ((int)refused.StatusCode).Should().BeInRange(400, 499);
+        accepted.IsSuccessStatusCode.Should().BeTrue(await accepted.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task An_operation_declaring_a_url_without_its_route_placeholder_first_is_described_at_one_with_it()
+    {
+        // The schema has the route property as a path input, so its operationId must name a URL with that placeholder,
+        // and a request made from the schema at that URL must reach the handler with the value.
+        var schema = CreateProvider().GetSchema(PartialRouteOperationName)!;
+
+        schema.Properties.Should().Equal(new OperationInputProperty("Id", OperationInputLocation.Path));
+
+        await using var host = await KestrelTestHost.StartAsync();
+        var slot = await FindSlotAsync(host, schema.OperationId);
+
+        slot.Path.Should().Contain("{Id}");
+
+        (await host.Client.GetStringAsync("api" + slot.Path.Replace("{Id}", "abc", StringComparison.Ordinal))).Should().Contain("id:abc");
+    }
+
+    [Fact]
+    public async Task An_operation_answering_GET_and_POST_is_described_at_the_method_that_reads_its_inputs()
+    {
+        // Its unannotated properties are bound from the body, which a GET is not read for, so the schema's operationId must
+        // name the POST, and a request made from the schema at that slot must reach the handler with both values.
+        var schema = CreateProvider().GetSchema(MultiMethodOperationName)!;
+
+        schema.Properties.Should().Equal(
+            new OperationInputProperty("name", OperationInputLocation.Body),
+            new OperationInputProperty("count", OperationInputLocation.Body));
+
+        await using var host = await KestrelTestHost.StartAsync();
+        var slot = await FindSlotAsync(host, schema.OperationId);
+
+        slot.Method.Should().Be("post");
+
+        using var body = new StringContent("""{"name":"echo","count":2}""", System.Text.Encoding.UTF8, "application/json");
+        using var response = await host.Client.PostAsync("api" + slot.Path, body);
+
+        (await response.Content.ReadAsStringAsync()).Should().Contain("echo:2");
     }
 
     [Fact]
@@ -236,6 +363,50 @@ public sealed class OperationInputSchemaTests
         CreateProvider().GetSchema("NoSuchOperation").Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void A_read_only_property_the_serializer_requires_is_still_required_of_an_input(OpenApiSchemaNaming naming)
+    {
+        // [JsonRequired] with a setter: the body reader rejects a request without it, read-only or not. Admitting null moves
+        // the reference into an anyOf branch; read-only says what the whole property is, so it stays beside.
+        var schema = CreateProvider(o => o.SchemaNaming = naming).GetSchema(NoteOperationName)!.Schema;
+        var reference = FindReference(schema.GetProperty("properties").GetProperty("address"));
+        var address = schema.GetProperty("$defs").GetProperty(reference["#/$defs/".Length..]);
+
+        address.GetProperty("properties").GetProperty("previous").GetProperty("readOnly").GetBoolean().Should().BeTrue();
+        address.GetProperty("properties").GetProperty("previous").EnumerateObject().Select(static p => p.Name)
+            .Should().NotContain(static name => name.StartsWith("x-", StringComparison.Ordinal));
+        address.GetProperty("required").EnumerateArray().Select(static e => e.GetString()).Should().Contain("previous");
+    }
+
+    [Fact]
+    public async Task A_request_body_without_a_property_the_serializer_requires_is_refused_however_it_is_documented()
+    {
+        // What the schema above requires is what binding requires: the body reader refuses an address without "previous".
+        await using var host = await KestrelTestHost.StartAsync();
+
+        using var without = new StringContent("""{"text":"abc","address":{"postCode":"SW1"}}""", System.Text.Encoding.UTF8, "application/json");
+        using var refused = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", without);
+        using var with = new StringContent("""{"text":"abc","address":{"postCode":"SW1","previous":null}}""", System.Text.Encoding.UTF8, "application/json");
+        using var accepted = await host.Client.PostAsync("api/operation-input-schema/acc/notes?priority=1", with);
+
+        ((int)refused.StatusCode).Should().BeInRange(400, 499);
+        accepted.IsSuccessStatusCode.Should().BeTrue(await accepted.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData(OpenApiParameterNaming.BindingName)]
+    [InlineData(OpenApiParameterNaming.PropertyName)]
+    public void A_query_property_is_an_input_by_the_name_the_request_is_bound_by(OpenApiParameterNaming queryNaming)
+    {
+        // [FromQuery("validationToken")] binds only that name, whichever name the document gives the parameter.
+        var schema = CreateProvider(o => o.QueryParameterNaming = queryNaming).GetSchema("AliasedTokenOperationInputSchema")!;
+
+        schema.Properties.Should().Equal(new OperationInputProperty("validationToken", OperationInputLocation.Query));
+        PropertyNames(schema.Schema).Should().Equal("validationToken");
+    }
+
     [Fact]
     public void The_provider_fails_until_the_api_is_mapped()
     {
@@ -254,6 +425,33 @@ public sealed class OperationInputSchemaTests
     private const string LegacySourcesOperationName = "LegacySourcesOperationInputSchema";
 
     private const string DuplicateBodyNameOperationName = "DuplicateBodyNameOperationInputSchema";
+
+    private const string MultiMethodOperationName = "MultiMethodEchoOperationInputSchema";
+
+    private const string PartialRouteOperationName = "PartialRouteOperationInputSchema";
+
+    /// <summary>Finds the path and method the app's served document gives <paramref name="operationId"/>.</summary>
+    private static async Task<(string Path, string Method)> FindSlotAsync(KestrelTestHost host, string operationId)
+    {
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync("api/.blueprint/openapi.json"));
+
+        return document.RootElement.GetProperty("paths").EnumerateObject()
+            .SelectMany(static path => path.Value.EnumerateObject()
+                .Where(static method => method.Value.ValueKind == JsonValueKind.Object
+                    && method.Value.TryGetProperty("operationId", out _))
+                .Select(method => (Path: path.Name, Method: method.Name, Id: method.Value.GetProperty("operationId").GetString())))
+            .Where(slot => slot.Id == operationId)
+            .Select(static slot => (slot.Path, slot.Method))
+            .Single();
+    }
+
+    private static IEnumerable<string?> ConditionallyRequired(JsonElement schema)
+    {
+        return (schema.TryGetProperty("allOf", out var conditionals) ? conditionals.EnumerateArray() : [])
+            .SelectMany(static c => c.TryGetProperty("then", out var then) && then.TryGetProperty("required", out var required) ? required.EnumerateArray() : [])
+            .Select(static e => e.GetString())
+            .ToList();
+    }
 
     private static OperationInputSchema GetSchema(string operationName)
     {
@@ -300,6 +498,17 @@ public sealed class OperationInputSchemaTests
             context.Component = context.Component with
             {
                 Properties = [.. context.Component.Properties.Select(static p => p.Name == "caption" ? p with { Name = "label" } : p)],
+            };
+        }
+    }
+
+    private static void RenamePostCodeToTotalInAddress(OpenApiSchemaProcessorContext context)
+    {
+        if (context.Component.Properties.Any(static p => p.Name == "postCode") && context.Component.Properties.Any(static p => p.Name == "total"))
+        {
+            context.Component = context.Component with
+            {
+                Properties = [.. context.Component.Properties.Select(static p => p.Name == "postCode" ? p with { Name = "total" } : p)],
             };
         }
     }
@@ -355,6 +564,28 @@ public sealed class OperationInputSchemaAddress
 
     /// <summary>Gets a value the server computes, which a request does not carry.</summary>
     public int Total => this.PostCode?.Length ?? 0;
+
+    /// <summary>Gets or sets an address the server records, which a request does not carry either.</summary>
+    [JsonRequired]
+    [ReadOnly(true)]
+    public OperationInputSchemaAddress? Previous { get; set; }
+
+    /// <summary>
+    /// Gets or sets the region of a post code, which the document marks read-only, though a request can still set it and
+    /// validation still requires it.
+    /// </summary>
+    [RequiredIf(nameof(PostCode), "SW1A 1AA")]
+    [ReadOnly(true)]
+    public string? Region { get; set; }
+
+    /// <summary>Gets the lines of the address, which a request fills though the list has no setter.</summary>
+    [RequiredItemsIf(nameof(PostCode), "EC1A 1BB")]
+    [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+    public List<string> Lines { get; } = [];
+
+    /// <summary>Gets the district the server finds for a post code, which a request cannot carry.</summary>
+    [RequiredIf(nameof(PostCode), "SW1A 1AA")]
+    public string? District => this.PostCode is null ? null : "Westminster";
 }
 
 /// <summary>A command taking a property from every source the caller sends, and two it does not.</summary>
@@ -407,6 +638,51 @@ public partial class CollidingOperationInputSchemaCommand : ICommand<string>
     public static string Handle(CollidingOperationInputSchemaCommand command)
     {
         return "collided";
+    }
+}
+
+/// <summary>A query whose query property is bound by an alias rather than its own name.</summary>
+[AllowAnonymous]
+[RootLink("/operation-input-schema/aliased-token")]
+public partial class AliasedTokenOperationInputSchemaQuery : IQuery<string>
+{
+    [FromQuery("validationToken")]
+    public string? Token { get; set; }
+
+    public static string Handle(AliasedTokenOperationInputSchemaQuery query)
+    {
+        return "validated";
+    }
+}
+
+/// <summary>A query answering GET and POST, whose unannotated properties are bound from the body.</summary>
+[AllowAnonymous]
+[RootLink("/operation-input-schema/multi-method")]
+[HttpGet]
+[HttpPost]
+public partial class MultiMethodEchoOperationInputSchemaQuery : IQuery<string>
+{
+    public string? Name { get; set; }
+
+    public int Count { get; set; }
+
+    public static string Handle(MultiMethodEchoOperationInputSchemaQuery query)
+    {
+        return $"{query.Name}:{query.Count}";
+    }
+}
+
+/// <summary>A query declaring a URL without its route placeholder before one with it.</summary>
+[AllowAnonymous]
+[RootLink("/operation-input-schema/partial-route", Rel = "operation-input-schema-partial-route-fallback")]
+[RootLink("/operation-input-schema/partial-route/{Id}")]
+public partial class PartialRouteOperationInputSchemaQuery : IQuery<string>
+{
+    public string Id { get; set; } = string.Empty;
+
+    public static string Handle(PartialRouteOperationInputSchemaQuery query)
+    {
+        return "id:" + query.Id;
     }
 }
 

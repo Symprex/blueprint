@@ -34,10 +34,13 @@ public interface IOperationInputSchemaProvider
     /// <summary>
     /// Gets the input schema of one operation.
     /// </summary>
-    /// <param name="operationName">The operation's name, as its descriptor gives it (ignoring case).</param>
+    /// <param name="operationName">
+    /// The operation's name, as its descriptor gives it. Case is ignored only when no operation has the name exactly.
+    /// </param>
     /// <returns>Its schema, or <see langword="null"/> when the app exposes no operation of that name.</returns>
     /// <exception cref="InvalidOperationException">
-    /// The API has not been mapped, or two of the operation's properties take the same name.
+    /// The API has not been mapped, two of the operation's properties take the same name, or the name matches two
+    /// operations' only ignoring case.
     /// </exception>
     OperationInputSchema? GetSchema(string operationName);
 }
@@ -47,8 +50,9 @@ public interface IOperationInputSchemaProvider
 /// </summary>
 /// <param name="OperationName">The operation's name, as its descriptor gives it.</param>
 /// <param name="OperationId">
-/// The <c>operationId</c> the OpenAPI document gives the operation at the first URL it declares, which is unique
-/// across the document.
+/// The <c>operationId</c> the OpenAPI document gives the operation at the slot a request made from
+/// <paramref name="Schema"/> is sent to: the first URL it declares with a placeholder for each of its path inputs, at a
+/// method that reads its body when it has one. The id is unique across the document.
 /// </param>
 /// <param name="Schema">
 /// A self-contained JSON Schema (draft 2020-12) of an object whose properties are the operation's inputs: any type

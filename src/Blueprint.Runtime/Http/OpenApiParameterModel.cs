@@ -108,6 +108,13 @@ public sealed record OpenApiParameterModel(
     /// from two that collide.
     /// </summary>
     internal string? ClrPropertyName { get; init; }
+
+    /// <summary>
+    /// Gets the name a query parameter is bound by, where the document may name it otherwise
+    /// (<see cref="OpenApiParameterNaming.PropertyName"/>), so <see cref="IOperationInputSchemaProvider"/> names the input
+    /// as a request must send it; <see langword="null"/> when it is the parameter's <see cref="Name"/>.
+    /// </summary>
+    internal string? BindingName { get; init; }
 }
 
 /// <summary>

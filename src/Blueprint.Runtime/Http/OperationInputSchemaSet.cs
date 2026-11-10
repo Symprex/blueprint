@@ -29,13 +29,21 @@ internal sealed class OperationInputSchemaSet
     private const string ComponentReferencePrefix = "#/components/schemas/";
     private const string DefinitionReferencePrefix = "#/$defs/";
 
+    // Marks a read-only property a request body still sets, until conversion drops it with every other vendor extension.
+    private const string DeserializedKeyword = "x-blueprint-deserialized";
+
     private readonly FrozenDictionary<string, Entry> _entriesByName;
+    private readonly FrozenDictionary<string, ImmutableArray<Entry>> _entriesByNameIgnoringCase;
     private readonly ImmutableArray<Entry> _entries;
 
     private OperationInputSchemaSet(ImmutableArray<Entry> entries)
     {
+        // Descriptor names are unique by ordinal comparison only, so two may differ by case alone.
         this._entries = entries;
-        this._entriesByName = entries.ToFrozenDictionary(static e => e.OperationName, StringComparer.OrdinalIgnoreCase);
+        this._entriesByName = entries.ToFrozenDictionary(static e => e.OperationName, StringComparer.Ordinal);
+        this._entriesByNameIgnoringCase = entries
+            .GroupBy(static e => e.OperationName, StringComparer.OrdinalIgnoreCase)
+            .ToFrozenDictionary(static g => g.Key, static g => g.ToImmutableArray(), StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -44,16 +52,49 @@ internal sealed class OperationInputSchemaSet
     /// <param name="app">The app, whose descriptors give the order each operation declares its URLs in.</param>
     /// <param name="document">The assembled document model.</param>
     /// <param name="documentJson">The JSON the document was rendered as.</param>
+    /// <param name="readOnlyProperties">
+    /// Every read-only property of a component, by the component's key and its name, which the document does not mark under
+    /// <see cref="OpenApiSchemaNaming.Legacy"/>, and whether the serializer sets it from a request body all the same.
+    /// </param>
     /// <returns>The schemas.</returns>
-    public static OperationInputSchemaSet Create(BlueprintApp app, OpenApiDocumentRenderingContext document, string documentJson)
+    public static OperationInputSchemaSet Create(
+        BlueprintApp app,
+        OpenApiDocumentRenderingContext document,
+        string documentJson,
+        IReadOnlyCollection<(string ComponentKey, string PropertyName, bool IsDeserialized)> readOnlyProperties)
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(documentJson);
+        ArgumentNullException.ThrowIfNull(readOnlyProperties);
 
         var root = JsonNode.Parse(documentJson)!.AsObject();
         var paths = root["paths"]?.AsObject();
         var components = root["components"]?["schemas"]?.AsObject();
+
+        // A request does not send a read-only property, so the schema must know one the document left unmarked. The serializer
+        // still sets one with a setter, such as a [ReadOnly(true)] property, so what the serializer or validation requires of
+        // that one is still required of a request.
+        foreach (var (componentKey, propertyName, isDeserialized) in readOnlyProperties)
+        {
+            try
+            {
+                if (components?[componentKey]?["properties"]?[propertyName] is JsonObject property)
+                {
+                    property["readOnly"] = true;
+
+                    if (isDeserialized)
+                    {
+                        property[DeserializedKeyword] = true;
+                    }
+                }
+            }
+            catch (ArgumentException)
+            {
+                // A component a processor made unreadable, such as one with a name twice, fails only the operations that
+                // read it, when they do.
+            }
+        }
         var operationIds = LegacyOperationIds.Assign(document);
 
         // The operation a slot is written for is the first of those that share it, as the document writes it.
@@ -103,6 +144,15 @@ internal sealed class OperationInputSchemaSet
         return new OperationInputSchemaSet([.. entries.OrderBy(static e => e.OperationName, StringComparer.Ordinal)]);
     }
 
+    /// <summary>Makes a set of schemas already made, which is how operations no one app can compile are tested.</summary>
+    /// <param name="schemas">The schemas.</param>
+    /// <returns>The set.</returns>
+    internal static OperationInputSchemaSet FromSchemas(IEnumerable<OperationInputSchema> schemas)
+    {
+        return new OperationInputSchemaSet(
+            [.. schemas.Select(static s => new Entry(s.OperationName, s, null)).OrderBy(static e => e.OperationName, StringComparer.Ordinal)]);
+    }
+
     /// <summary>Gets every schema, failing when one could not be made.</summary>
     /// <returns>The schemas, ordered by operation name.</returns>
     public IReadOnlyList<OperationInputSchema> GetSchemas()
@@ -118,13 +168,27 @@ internal sealed class OperationInputSchemaSet
     }
 
     /// <summary>Gets one operation's schema, failing when it could not be made.</summary>
-    /// <param name="operationName">The operation's name, ignoring case.</param>
+    /// <param name="operationName">
+    /// The operation's name: exactly, or ignoring case when no operation has it exactly and only one has it ignoring case.
+    /// </param>
     /// <returns>The schema, or <see langword="null"/> when the document writes no operation of that name.</returns>
     public OperationInputSchema? GetSchema(string operationName)
     {
         if (!this._entriesByName.TryGetValue(operationName, out var entry))
         {
-            return null;
+            if (!this._entriesByNameIgnoringCase.TryGetValue(operationName, out var matches))
+            {
+                return null;
+            }
+
+            if (matches.Length > 1)
+            {
+                throw new InvalidOperationException(
+                    $"The name '{operationName}' matches the operations {string.Join(" and ", matches.Select(static e => e.OperationName))} "
+                    + "ignoring case; ask for one by its exact name.");
+            }
+
+            entry = matches[0];
         }
 
         return entry.Error is null ? entry.Schema : throw new InvalidOperationException(entry.Error);
@@ -133,20 +197,31 @@ internal sealed class OperationInputSchemaSet
     /// <summary>
     /// Finds the slot whose <c>operationId</c> names the operation: the first URL it declares, as legacy's document gave
     /// that URL its unnumbered id (<see cref="LegacyOperationIds"/>), at the first of its methods, where the document writes
-    /// it rather than another operation sharing the slot.
+    /// it rather than another operation sharing the slot. So that a request made from the schema at that slot carries every
+    /// input where the schema says, the URL is the first with a placeholder for each of its path inputs, which one declared
+    /// without them reads from the query string or body instead, and the method of an operation with a body is one whose
+    /// body is read, which a GET's is not.
     /// </summary>
     private static (string UrlFormat, string Method) FindFirstDeclaredSlot(
         OpenApiOperationModel operation,
         ApiOperationDescriptor? descriptor,
         Dictionary<(string UrlFormat, string Method), OpenApiOperationModel> primaryBySlot)
     {
-        var urlFormats = descriptor is null
+        var pathInputs = operation.Parameters.Where(static p => p.In == "path").Select(static p => p.Name).ToList();
+        var declaredUrlFormats = descriptor is null
             ? operation.UrlFormats
             : [.. descriptor.Urls.Select(static url => OpenApiOperationRenderingContext.ToPathKey(url.UrlFormat))];
 
+        // OrderBy is stable, so the URLs that have every placeholder stay in the order they are declared in.
+        var urlFormats = declaredUrlFormats.OrderBy(url => !HasPlaceholderForEach(url, pathInputs)).ToList();
+        var methods = operation.HttpMethods
+            .OrderBy(method => operation.RequestBody is not null && string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase))
+            .ThenBy(static method => method, StringComparer.Ordinal)
+            .ToList();
+
         foreach (var urlFormat in urlFormats)
         {
-            foreach (var method in operation.HttpMethods.Order(StringComparer.Ordinal))
+            foreach (var method in methods)
             {
                 var slot = (urlFormat, method.ToUpperInvariant());
 
@@ -159,6 +234,29 @@ internal sealed class OperationInputSchemaSet
 
         // Every operation reached here is the primary of a slot, so one is always found above.
         return primaryBySlot.First(pair => ReferenceEquals(pair.Value, operation)).Key;
+    }
+
+    /// <summary>Returns whether a route template has a placeholder for each of <paramref name="names"/>.</summary>
+    private static bool HasPlaceholderForEach(string urlFormat, List<string> names)
+    {
+        var placeholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var start = urlFormat.IndexOf('{', StringComparison.Ordinal); start >= 0; start = urlFormat.IndexOf('{', start + 1))
+        {
+            var end = urlFormat.IndexOf('}', start);
+
+            if (end < 0)
+            {
+                break;
+            }
+
+            // A placeholder's name is what precedes any constraint, default or optional marker, after any catch-all star.
+            var placeholder = urlFormat[(start + 1)..end].TrimStart('*');
+            var nameEnd = placeholder.IndexOfAny([':', '=', '?']);
+            placeholders.Add(nameEnd < 0 ? placeholder : placeholder[..nameEnd]);
+        }
+
+        return names.TrueForAll(placeholders.Contains);
     }
 
     private static Entry CreateEntry(
@@ -222,7 +320,7 @@ internal sealed class OperationInputSchemaSet
                 .OfType<JsonObject>()
                 .FirstOrDefault(p => (string?)p["name"] == parameter.Name && (string?)p["in"] == parameter.In);
 
-            Add(parameter.Name, location.Value, parameter.ClrPropertyName, CreateParameterSchema(parameterJson), parameter.Required);
+            Add(InputName(parameter), location.Value, parameter.ClrPropertyName, CreateParameterSchema(parameterJson), parameter.Required);
         }
 
         JsonNode? additionalProperties = null;
@@ -255,7 +353,7 @@ internal sealed class OperationInputSchemaSet
             var parameterNamesByClrName = operation.Parameters
                 .Where(static p => p.ClrPropertyName is not null)
                 .GroupBy(static p => p.ClrPropertyName!, StringComparer.Ordinal)
-                .ToDictionary(static g => g.Key, static g => g.First().In == "cookie" ? null : g.First().Name, StringComparer.Ordinal);
+                .ToDictionary(static g => g.Key, static g => g.First().In == "cookie" ? null : InputName(g.First()), StringComparer.Ordinal);
             var copiedBodyNames = new Dictionary<string, string?>(StringComparer.Ordinal);
 
             foreach (var (name, propertySchema) in bodySchema["properties"]?.AsObject() ?? [])
@@ -328,6 +426,15 @@ internal sealed class OperationInputSchemaSet
                 Description = operation.Description,
             },
             null);
+    }
+
+    /// <summary>
+    /// Returns the name a request sends a parameter by: a query parameter's binding name, which the document does not write
+    /// under <see cref="OpenApiParameterNaming.PropertyName"/>, or else the name the document gives it.
+    /// </summary>
+    private static string InputName(OpenApiParameterModel parameter)
+    {
+        return parameter.BindingName ?? parameter.Name;
     }
 
     /// <summary>
@@ -477,6 +584,15 @@ internal sealed class OperationInputSchemaSet
             schema["examples"] = new JsonArray(example?.DeepClone());
         }
 
+        // OpenAPI 3.0 requires a read-only property of a response only; JSON Schema's required would ask a request for it,
+        // whether always or when a conditional's if holds. One the serializer sets all the same keeps its requirements.
+        // They are found before the properties are converted, which drops the marker.
+        var readOnlyNames = (schema["properties"] as JsonObject ?? [])
+            .Where(static p => p.Value?["readOnly"]?.GetValueKind() == JsonValueKind.True
+                && p.Value?[DeserializedKeyword]?.GetValueKind() != JsonValueKind.True)
+            .Select(static p => p.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
         foreach (var keyword in (string[])["properties", "patternProperties"])
         {
             if (schema[keyword] is JsonObject map)
@@ -488,17 +604,16 @@ internal sealed class OperationInputSchemaSet
             }
         }
 
-        // OpenAPI 3.0 requires a read-only property of a response only; JSON Schema's required would ask a request for it.
-        if (schema["required"] is JsonArray required && schema["properties"] is JsonObject declared)
+        if (readOnlyNames.Count > 0)
         {
-            foreach (var readOnly in required.Where(n => declared[(string?)n ?? string.Empty]?["readOnly"]?.GetValueKind() == JsonValueKind.True).ToList())
-            {
-                required.Remove(readOnly);
-            }
+            RemoveRequired(schema, readOnlyNames);
 
-            if (required.Count == 0)
+            foreach (var conditional in schema["allOf"] as JsonArray ?? [])
             {
-                schema.Remove("required");
+                if (conditional?["then"] is JsonObject then)
+                {
+                    RemoveRequired(then, readOnlyNames);
+                }
             }
         }
 
@@ -526,6 +641,24 @@ internal sealed class OperationInputSchemaSet
             {
                 AdmitNull(schema);
             }
+        }
+    }
+
+    private static void RemoveRequired(JsonObject schema, HashSet<string> names)
+    {
+        if (schema["required"] is not JsonArray required)
+        {
+            return;
+        }
+
+        foreach (var name in required.Where(n => names.Contains((string?)n ?? string.Empty)).ToList())
+        {
+            required.Remove(name);
+        }
+
+        if (required.Count == 0)
+        {
+            schema.Remove("required");
         }
     }
 
@@ -564,7 +697,11 @@ internal sealed class OperationInputSchemaSet
 
         var branch = new JsonObject();
 
-        foreach (var name in schema.Select(static p => p.Key).Where(static k => k is not ("description" or "deprecated" or "default" or "examples")).ToList())
+        // Annotations say what the whole property is, null or not, so they stay beside the anyOf, where required is checked
+        // against readOnly.
+        foreach (var name in schema.Select(static p => p.Key)
+            .Where(static k => k is not ("description" or "deprecated" or "default" or "examples" or "readOnly" or "writeOnly"))
+            .ToList())
         {
             var value = schema[name]?.DeepClone();
             schema.Remove(name);

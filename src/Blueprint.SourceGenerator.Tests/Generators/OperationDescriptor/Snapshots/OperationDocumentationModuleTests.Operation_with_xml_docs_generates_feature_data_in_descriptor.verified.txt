@@ -13,11 +13,23 @@ using global::Blueprint.Model;
 
 namespace TestNamespace
 {
-    public partial class GetDocumentedWidgetQuery
+    public partial class GetDocumentedWidgetQuery : global::Blueprint.Model.IHttpRequestBuilder<global::TestNamespace.GetDocumentedWidgetQuery>
     {
         public static ApiOperationDescriptor Configure()
         {
             return new GetDocumentedWidgetQueryDescriptor();
+        }
+
+        [return: global::System.Diagnostics.CodeAnalysis.MaybeNull]
+        static string global::Blueprint.Model.IHttpRequestBuilder<global::TestNamespace.GetDocumentedWidgetQuery>.BuildRequestUrl(global::TestNamespace.GetDocumentedWidgetQuery operation)
+        {
+            var url = Http.BuildUrl(operation);
+            return url is null ? null : Http.AppendQueryString(operation, url);
+        }
+
+        static global::System.Net.Http.HttpMethod global::Blueprint.Model.IHttpRequestBuilder<global::TestNamespace.GetDocumentedWidgetQuery>.GetHttpMethod()
+        {
+            return global::System.Net.Http.HttpMethod.Get;
         }
 
 #pragma warning disable CS0108

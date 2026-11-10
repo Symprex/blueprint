@@ -475,6 +475,29 @@ A client is cheap, immutable and thread-safe, because `WithCredential` and `With
 
 Problems are reported at the include (BPCL002 to BPCL005, BPCL007, BPCL008), at the member (BPCL006, BPCL009) or at the class (BPCL001). For an error, the offending include or member is left out so the rest of the client is still generated. BPCL007 is a warning: the call is still generated, and only the request or result type the serializer context does not cover falls back to the JSON options' metadata. See the [BPCL table in the diagnostic reference](diagnostic-reference.md#typed-http-clients-bpcl) for each ID.
 
+### Forwarding
+
+A gateway handler that sends an inner operation on, unchanged, calls `ForwardAsync` on the transport:
+
+```csharp
+public async Task<Results<OkResult<GatewayTemplateResource>, NotFoundResult<GatewayTemplateResource>>> Handle(
+    GetGatewayTemplateQuery query, BlueprintHttpClient upstream, CancellationToken ct)
+{
+    var inner = await upstream.ForwardAsync<GetTemplateQuery, Results<OkResult<TemplateApiResource>, NotFoundResult<TemplateApiResource>>>(
+        new GetTemplateQuery { Id = query.Id }, cancellationToken: ct);
+
+    return inner.IsT2
+        ? new NotFoundResult<GatewayTemplateResource>(new GatewayTemplateResource { Id = query.Id, Name = string.Empty })
+        : new OkResult<GatewayTemplateResource>(Map(inner.AsT1.Content));
+}
+```
+
+- **No app, no lookup.** Every operation the source generator gives a nested `Http` class also implements `IHttpRequestBuilder<TSelf>` (in `Blueprint.Runtime.Model`), explicitly, over those builders. `ForwardAsync<TInner, TResult>` is constrained on it, so it sends the inner operation with the same method and URL a typed client of it sends. An operation without the `Http` class (one with its own member named `Http`) cannot be forwarded: the call does not compile.
+- **A fresh instance of the exact type.** A forward sends only `TInner`. An instance of a derived type, such as the gateway's own operation, is refused with an `ArgumentException`, because it would be written with every property of its own.
+- **`TResult` is the type read back**: the inner operation's result, or a `Results<…>` of it, read exactly as a typed client reads it. It is not reshaped; map it in the handler.
+- **An upstream 404 becomes the declared `NotFoundResult<T>`** when `TResult` is a `Results<…>` with one, and the upstream wrote it as that result (its content as JSON). Every other failure, a thrown not-found's problem document included (the content type tells them apart: a forward sends `Accept: application/problem+json`, so even a host with `NegotiateErrorContentType` on writes its problems as `application/problem+json`; it replaces any `Accept` the caller sets through `CallOptions.ModifyRequest`), escapes as the `BlueprintApiException` the transport raises (or `ValidationException` for a 422), so the gateway answers the upstream problem unchanged. A typed client's own calls do not do this: there, a 404 always fails.
+- **Inner `$links` are never forwarded.** `ApiResource.Links` is get-only and marked `JsonObjectCreationHandling.Replace`, so deserialising a forwarded resource, even with options that populate read-only members, drops the inner service's `$links`, which name the inner host. The gateway generates its own links from its own route attributes.
+
 ### S365 Gateway Migration
 
 S365 gateways wrap inter-service calls. With Blueprint.HttpClient:
