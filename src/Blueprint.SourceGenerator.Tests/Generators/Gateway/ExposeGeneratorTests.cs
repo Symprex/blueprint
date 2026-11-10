@@ -598,6 +598,11 @@ public class ExposeGeneratorTests
         var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
 
         run.EmitErrors.Should().BeEmpty();
+
+        // Nor a nullable warning, which a consumer treating warnings as errors would fail on: `(string)null` used to raise CS8600.
+        run.Output.GetDiagnostics().Where(static d => d.Location.SourceTree?.FilePath.EndsWith("_ExposedProperties.g.cs", StringComparison.Ordinal) == true)
+            .Should().NotContain(static d => d.Severity == DiagnosticSeverity.Warning);
+
         var region = (IPropertySymbol)run.Output.GetTypeByMetadataName("Gateway.GetGatewayWidgetQuery")!.GetMembers("Region").Single();
         region.GetAttributes().Single(static a => a.AttributeClass!.Name == "RuleAttribute").AttributeConstructor!.Parameters.Single().Type.SpecialType
             .Should().Be(SpecialType.System_String);

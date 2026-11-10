@@ -543,10 +543,17 @@ internal static class OperationPropertyModelBuilder
     private static string RenderConstant(TypedConstant constant)
     {
         // Typed, so that the copy selects the constructor overload the original did: a bare null is ambiguous between a
-        // string and a Type parameter.
+        // string and a Type parameter. A reference type is cast to its nullable form, as (string)null raises CS8600 under
+        // #nullable enable; a nullable value type already is one.
         if (constant.IsNull)
         {
-            return constant.Type is { } nullType ? "(" + nullType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")null" : "null";
+            if (constant.Type is not { } nullType)
+            {
+                return "null";
+            }
+
+            var nullTypeName = nullType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return "(" + nullTypeName + (nullType.IsReferenceType ? "?" : string.Empty) + ")null";
         }
 
         return constant.Kind switch
