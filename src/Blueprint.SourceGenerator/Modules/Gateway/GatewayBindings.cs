@@ -148,6 +148,7 @@ internal static class GatewayBindings
     private static EquatableList<GatewayPropertyBinding> Evaluate(INamedTypeSymbol operationType, INamedTypeSymbol innerType, List<DiagnosticInfo>? diagnostics)
     {
         var innerProperties = GetSettableProperties(innerType);
+        var declared = GetDeclaredProperties(operationType);
         var result = new List<GatewayPropertyBinding>();
         var bound = new HashSet<string>(StringComparer.Ordinal);
 
@@ -192,14 +193,14 @@ internal static class GatewayBindings
                     continue;
                 }
 
-                result.Add(Create(innerProperty, GatewayBindingSource.Hidden, null, isAppTier: false));
+                AddUnlessDeclared(Create(innerProperty, GatewayBindingSource.Hidden, null, isAppTier: false), operationType, declared, location, result, diagnostics);
                 continue;
             }
 
             var binding = CreateOperationBinding(attribute, operationType, innerProperty, location, diagnostics);
             if (binding is not null)
             {
-                result.Add(binding);
+                AddUnlessDeclared(binding, operationType, declared, location, result, diagnostics);
             }
         }
 
@@ -237,14 +238,42 @@ internal static class GatewayBindings
                 continue;
             }
 
-            result.Add(Create(innerProperty, GatewayBindingSource.Claim, claim, isAppTier: true) with
+            var appBinding = Create(innerProperty, GatewayBindingSource.Claim, claim, isAppTier: true) with
             {
                 ClaimConversion = conversion,
                 TryParseFormat = tryParseFormat,
-            });
+            };
+            AddUnlessDeclared(appBinding, operationType, declared, GetLocation(attribute, operationType), result, diagnostics);
         }
 
         return EquatableList<GatewayPropertyBinding>.TakeOwnership(result);
+    }
+
+    /// <summary>
+    /// Adds a binding unless the gateway operation declares the property it fills and the binding does not read that
+    /// declaration: the declared property would stay in the public shape, bound from the request and validated, but the
+    /// forward would ignore it (BPGW021). A binding that reads it, <c>[Bind(X, FromProperty = "X")]</c> or a route
+    /// placeholder that binds it, is the gateway forwarding its own property.
+    /// </summary>
+    private static void AddUnlessDeclared(
+        GatewayPropertyBinding binding,
+        INamedTypeSymbol operationType,
+        Dictionary<string, IPropertySymbol> declared,
+        LocationInfo? location,
+        List<GatewayPropertyBinding> result,
+        List<DiagnosticInfo>? diagnostics)
+    {
+        var readsDeclaration = binding.Source is GatewayBindingSource.Route or GatewayBindingSource.Property && binding.Argument == binding.PropertyName;
+        if (declared.ContainsKey(binding.PropertyName) && !readsDeclaration)
+        {
+            diagnostics?.Add(new DiagnosticInfo(
+                GatewayDiagnosticDescriptors.BoundPropertyDeclaredByGateway,
+                location,
+                [operationType.Name, binding.PropertyName]));
+            return;
+        }
+
+        result.Add(binding);
     }
 
     private static GatewayPropertyBinding? CreateOperationBinding(
@@ -300,12 +329,17 @@ internal static class GatewayBindings
                 return null;
             }
 
-            return Create(innerProperty, GatewayBindingSource.Value, OperationPropertyModelBuilder.RenderConstant(value), isAppTier: false);
+            // A bare null: the attribute's typed null, (object?)null, would not convert to the inner property's type.
+            return Create(innerProperty, GatewayBindingSource.Value, value.IsNull ? "null" : OperationPropertyModelBuilder.RenderConstant(value), isAppTier: false);
         }
 
         var declared = GetDeclaredProperties(operationType);
         var sourceName = route is not null ? ResolveRoutePlaceholder(operationType, declared, route) : property;
-        if (sourceName is null || !declared.TryGetValue(sourceName, out var sourceProperty))
+
+        // The pipeline reads the source from outside the operation, so it needs a public getter, as a copied property does.
+        if (sourceName is null
+            || !declared.TryGetValue(sourceName, out var sourceProperty)
+            || sourceProperty.GetMethod is not { DeclaredAccessibility: Accessibility.Public })
         {
             diagnostics?.Add(new DiagnosticInfo(
                 GatewayDiagnosticDescriptors.BindingSourceNotOnOperation,
@@ -375,10 +409,11 @@ internal static class GatewayBindings
                 continue;
             }
 
+            // Every inner template routes by a required name, so the first shows it, whatever its placeholder's form ({**Name}).
             diagnostics.Add(new DiagnosticInfo(
                 GatewayDiagnosticDescriptors.UnboundInnerRoutePlaceholder,
                 exposeLocation,
-                [operationType.Name, name, innerType.Name, innerTemplates.First(t => t.IndexOf("{" + name, StringComparison.OrdinalIgnoreCase) >= 0)]));
+                [operationType.Name, name, innerType.Name, innerTemplates[0]]));
         }
     }
 

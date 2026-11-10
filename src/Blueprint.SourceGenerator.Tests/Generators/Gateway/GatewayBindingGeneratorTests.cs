@@ -439,6 +439,77 @@ public class GatewayBindingGeneratorTests
     }
 
     [Theory]
+    [InlineData("public string? Origin { private get; set; }", "FromProperty")]
+    [InlineData("public string? Origin { set { } }", "FromProperty")]
+    [InlineData("public string? Origin { private get; set; }", "FromRoute")]
+    public void When_a_binding_reads_a_property_without_a_public_getter_then_BPGW012_is_reported(string origin, string source)
+    {
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Bind(nameof(Inner.AddNoteCommand.Source), " + source + " = \"Origin\")]")
+                .Replace("/gateway/notes", "/gateway/notes/{Origin}", StringComparison.Ordinal),
+            origin);
+
+        var diagnostic = SingleDescriptorDiagnostic(gateway, "BPGW012");
+
+        diagnostic.GetMessage().Should().Contain("Origin");
+    }
+
+    [Fact]
+    public void A_null_value_binding_sets_the_inner_property_to_null()
+    {
+        var gateway = WithAttributes(GatewaySource, "[Bind(nameof(Inner.AddNoteCommand.Source), Value = null)]");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().Contain("Source = null");
+    }
+
+    [Theory]
+    [InlineData("/notes/{**TenantId}")]
+    [InlineData("/notes/{*TenantId}")]
+    public void When_an_unbound_inner_catch_all_placeholder_is_not_in_the_gateway_route_then_BPGW010_is_reported(string route)
+    {
+        var inner = InnerSource.Replace("/tenants/{TenantId}/notes", route, StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([GatewaySource], additionalReferences: [contract]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW010").Which;
+        diagnostic.GetMessage().Should().Contain("TenantId").And.Contain(route);
+    }
+
+    [Theory]
+    [InlineData(AppBindingSource, "")]
+    [InlineData("", "[Bind(nameof(Inner.AddNoteCommand.TenantId), FromClaim = \"tenant_id\")]")]
+    [InlineData("", "[Hide(nameof(Inner.AddNoteCommand.TenantId))]")]
+    [InlineData("", "[Bind(nameof(Inner.AddNoteCommand.TenantId), FromProperty = \"Other\")]")]
+    public void When_a_binding_fills_a_property_the_gateway_declares_from_elsewhere_then_BPGW021_is_reported(string appBinding, string opBinding)
+    {
+        var gateway = WithBody(
+            opBinding.Length == 0 ? GatewaySource : WithAttributes(GatewaySource, opBinding),
+            "public string TenantId { get; set; } = \"\";\n    public string Other { get; set; } = \"\";");
+
+        var diagnostic = SingleDescriptorDiagnostic([appBinding, gateway], "BPGW021");
+
+        diagnostic.GetMessage().Should().Contain("AddGatewayNoteCommand").And.Contain("TenantId");
+    }
+
+    [Fact]
+    public void A_binding_that_reads_the_gateways_own_property_of_the_same_name_is_allowed()
+    {
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Bind(nameof(Inner.AddNoteCommand.TenantId), FromProperty = \"TenantId\")]"),
+            "public string TenantId { get; set; } = \"\";");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW021");
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().Contain("TenantId = operation.TenantId");
+    }
+
+    [Theory]
     [InlineData("[Bind(nameof(Inner.AddNoteCommand.Source), Value = \"a\")]", "[Hide(nameof(Inner.AddNoteCommand.Source))]")]
     [InlineData("[Bind(nameof(Inner.AddNoteCommand.Source), Value = \"a\")]", "[Bind(nameof(Inner.AddNoteCommand.Source), Value = \"b\")]")]
     public void When_a_property_is_bound_twice_on_one_operation_then_BPGW013_is_reported(string first, string second)
