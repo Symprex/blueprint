@@ -232,7 +232,7 @@ Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attr
 
 ## Gateway operations (BPGW)
 
-BPGW001 to BPGW014, BPGW018 and BPGW019 are reported for an operation marked `[Expose<TInner>]`; BPGW015 to BPGW017 for any operation, and BPGW017 also for an app, since hand-written and generated forwards read the same attributes. BPGW001, BPGW006, BPGW010 and BPGW018 are reported at the `[Expose<TInner>]` attribute; BPGW007, BPGW008, BPGW009, BPGW011, BPGW012 and BPGW013 at the binding attribute; BPGW014 at the hook; BPGW016 and BPGW017 at their attribute; BPGW015 at the second credential attribute; and the others at the operation's name. An operation with BPGW003, BPGW004, BPGW005 or BPGW019 gets no pipeline. An invalid binding is ignored by the generated forward, so its property stays in the public shape until it is fixed.
+BPGW001 to BPGW014 and BPGW018 to BPGW020 are reported for an operation marked `[Expose<TInner>]`; BPGW015 to BPGW017 for any operation, and BPGW017 also for an app, since hand-written and generated forwards read the same attributes. BPGW001, BPGW006, BPGW010 and BPGW018 are reported at the `[Expose<TInner>]` attribute; BPGW007, BPGW008, BPGW009, BPGW011, BPGW012 and BPGW013 at the binding attribute; BPGW014 at the hook; BPGW016 and BPGW017 at their attribute; BPGW015 at the second credential attribute; and the others at the operation's name. An operation with BPGW003, BPGW004, BPGW005, BPGW019 or BPGW020 gets no pipeline. An invalid binding is ignored by the generated forward, so its property stays in the public shape until it is fixed.
 
 | ID | Severity | Title |
 |----|----------|-------|
@@ -255,6 +255,7 @@ BPGW001 to BPGW014, BPGW018 and BPGW019 are reported for an operation marked `[E
 | BPGW017 | Error | `[TranslateError(fromType, to)]` on an operation or app names no static `ApiExceptionFactory` field or property of that class called `to`. Members inherited from a base class do not count, as the forward does not read them |
 | BPGW018 | Error | A contributed property's attribute names a type the gateway's assembly cannot access, the attribute's own or one in its arguments (`typeof`, an enum value, an array). It is not public, nor internal to an assembly with `InternalsVisibleTo` the gateway, so the emitted property cannot carry it, and the gateway would bind, serialize or validate the property otherwise than the inner operation |
 | BPGW019 | Error | The inner operation has a `required` member the generated forward cannot set: the gateway declares that property with another type, or it is a required field, and no binding sets it. The operation gets no pipeline |
+| BPGW020 | Error | A property the generated forward copies to the inner operation has no public getter: one the gateway declares, which the pipeline cannot read, or the inner one, whose default the contributed property cannot start from, so the forward would replace it whenever the caller omits the value. The operation gets no pipeline |
 
 ## Module system (BPMOD)
 

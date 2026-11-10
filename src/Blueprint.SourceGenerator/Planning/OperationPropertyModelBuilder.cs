@@ -104,16 +104,25 @@ internal static class OperationPropertyModelBuilder
     /// <returns>The operation's own members, then the contributed properties' original members.</returns>
     public static IEnumerable<ISymbol> GetMembersWithContributed(INamedTypeSymbol operationType)
     {
+        // Every site reads members through here, so an operation that exposes nothing (most of them) stops at its own,
+        // rather than building a property model it would discard, and an exposed one adds the contributed members alone.
+        var declaredNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in operationType.GetAllMembers())
         {
+            if (member is IPropertySymbol property && IsPublicInstanceProperty(property))
+            {
+                declaredNames.Add(property.Name);
+            }
+
             yield return member;
         }
 
-        foreach (var property in GetProperties(operationType))
+        foreach (var contributed in GetContributedMembers(operationType, out _))
         {
-            if (property.Info.Origin == OperationPropertyOrigin.Contributed)
+            // As GetProperties: a declared property wins over a contributed one, and the first contributed one of a name wins.
+            if (declaredNames.Add(contributed.Name))
             {
-                yield return property.Member;
+                yield return contributed;
             }
         }
     }
@@ -180,7 +189,7 @@ internal static class OperationPropertyModelBuilder
         source.Append("partial class ").AppendLine(typeName);
         source.AppendLine("{");
 
-        var readsDefaults = exposed.CanCreateDefaults && model.Properties.Any(static p => p.Origin == OperationPropertyOrigin.Contributed);
+        var readsDefaults = exposed.CanCreateDefaults && model.Properties.Any(static p => p is { Origin: OperationPropertyOrigin.Contributed, HasPublicGetter: true });
         if (readsDefaults)
         {
             // An inner operation with required members is made as its own pipeline makes it, with Activator, which runs every
@@ -215,7 +224,8 @@ internal static class OperationPropertyModelBuilder
             source.Append(property.TypeName).Append(' ').Append(property.Name)
                 .Append(property.IsInitOnly ? " { get; init; }" : " { get; set; }");
 
-            if (readsDefaults)
+            // An inner property the gateway cannot read (a private getter, or none) gives no default to start from.
+            if (readsDefaults && property.HasPublicGetter)
             {
                 source.Append(" = ").Append(DefaultsFieldName).Append('.').Append(property.Name).Append(';');
             }
@@ -403,6 +413,7 @@ internal static class OperationPropertyModelBuilder
             origin,
             member.ContainingType.ToFullMetadataName(),
             member.SetMethod is { DeclaredAccessibility: Accessibility.Public },
+            member.GetMethod is { DeclaredAccessibility: Accessibility.Public },
             member.SetMethod?.IsInitOnly == true,
             member.IsRequired,
             EquatableList<string>.TakeOwnership(attributes),
@@ -451,9 +462,21 @@ internal static class OperationPropertyModelBuilder
             TypedConstantKind.Type => "typeof(" + ((ITypeSymbol)constant.Value!).ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")",
             TypedConstantKind.Enum => "(" + constant.Type!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")(" + Convert.ToString(constant.Value, CultureInfo.InvariantCulture) + ")",
             TypedConstantKind.Array => "new " + constant.Type!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + " { " + string.Join(", ", constant.Values.Select(RenderConstant)) + " }",
-            _ => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatPrimitive(constant.Value!, quoteStrings: true, useHexadecimalNumbers: false)
+
+            // A constant passed as object (a params object[], say) is boxed as its literal's type, so a type no literal has
+            // is cast and a double gets its suffix: (short)1, not 1, which would box an int.
+            _ => constant.Type?.SpecialType switch
+            {
+                SpecialType.System_Byte => "(byte)",
+                SpecialType.System_SByte => "(sbyte)",
+                SpecialType.System_Int16 => "(short)",
+                SpecialType.System_UInt16 => "(ushort)",
+                _ => string.Empty,
+            }
+                + Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatPrimitive(constant.Value!, quoteStrings: true, useHexadecimalNumbers: false)
                 + constant.Type?.SpecialType switch
                 {
+                    SpecialType.System_Double => "D",
                     SpecialType.System_Single => "F",
                     SpecialType.System_Int64 => "L",
                     SpecialType.System_UInt32 => "U",
