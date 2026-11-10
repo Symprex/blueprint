@@ -596,8 +596,9 @@ calls it there with the SDK's own MCP client.
   (its policies, `[Authorize]` data and requirements, or the fallback policy when it has none), binding, validation,
   authentication and authorisation are those of HTTP. It is the MCP request's caller that runs it: its
   `HttpContext.User`, its `Authorization` header, its scheme, host and path base (so links point at the HTTP API). It
-  has its own service scope, as an HTTP request has; `IHttpContextAccessor` gives its handler, its callbacks and its
-  scope's disposals the operation's request, not the MCP request; and its response's `OnStarting` and `OnCompleted`
+  has its own service scope and execution context, as an HTTP request has, carrying only the MCP request's tracing
+  activity and culture; `IHttpContextAccessor` gives its handler, its callbacks and its scope's disposals the
+  operation's request, while middleware around the MCP endpoint still reads the MCP request from it; and its response's `OnStarting` and `OnCompleted`
   callbacks run, so what it registered for disposal is disposed. An API mapped in a route group is called with the
   group's prefix and conventions, a route value in the prefix (`tenants/{TenantId}`) taken from the URL the tools were
   called at, and a HEAD operation's result has its status and no body, as HTTP gives it.

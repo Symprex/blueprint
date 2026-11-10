@@ -173,6 +173,20 @@ public sealed class McpToolCallTests
     }
 
     [Fact]
+    public async Task Middleware_around_the_MCP_endpoint_still_reads_its_own_request_from_IHttpContextAccessor_after_a_tool_call()
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        var ambient = host.Services.GetRequiredService<McpTestHost.AmbientContextProbe>();
+        await using var client = await host.ConnectAsync();
+
+        await client.CallToolAsync(ids[("get", "/accessor/{Id}")], new Dictionary<string, object?> { ["Id"] = "abc" });
+        await ambient.WaitForIdleAsync();
+
+        ambient.Lost.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task An_OnCompleted_callback_reads_the_operations_request_from_IHttpContextAccessor()
     {
         await using var host = await McpTestHost.StartAsync();

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
 using Microsoft.AspNetCore.Authorization;
@@ -92,6 +94,42 @@ internal sealed class BlueprintOperationTool : McpServerTool
                      ?? endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.FirstOrDefault()
                      ?? HttpMethods.Get;
 
+        // The operation's request runs in an execution context of its own, as an HTTP request does, inheriting none of
+        // the MCP request's ambient state. So giving IHttpContextAccessor the operation's request, whose setter clears
+        // the context it replaces, leaves the MCP request's in place for the middleware around it. The MCP request's
+        // activity, so that the operation's traces nest under it, and its culture are carried in.
+        var activity = Activity.Current;
+        var culture = CultureInfo.CurrentCulture;
+        var uiCulture = CultureInfo.CurrentUICulture;
+        Task<CallToolResult> run;
+
+        using (ExecutionContext.SuppressFlow())
+        {
+            run = Task.Run(() =>
+            {
+                Activity.Current = activity;
+                CultureInfo.CurrentCulture = culture;
+                CultureInfo.CurrentUICulture = uiCulture;
+
+                return RunRequestAsync(accessor, caller, endpoint, method, toolRequest, cancellationToken);
+            });
+        }
+
+        return await run.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs the operation's request through its endpoint, from start to end, and gives the response it wrote as the
+    /// call's result.
+    /// </summary>
+    private static async Task<CallToolResult> RunRequestAsync(
+        IHttpContextAccessor accessor,
+        HttpContext caller,
+        RouteEndpoint endpoint,
+        string method,
+        OperationToolRequest toolRequest,
+        CancellationToken cancellationToken)
+    {
         // Its own service scope, as an HTTP request has: scoped services such as the authentication handlers serve the
         // request they were first asked for, so the MCP request's would challenge the MCP request, not the operation's.
         var scope = caller.RequestServices.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
@@ -129,7 +167,8 @@ internal sealed class BlueprintOperationTool : McpServerTool
             }
             finally
             {
-                accessor.HttpContext = caller;
+                // As a server clears it once a request has ended. This execution context is the operation's alone.
+                accessor.HttpContext = null;
             }
         }
     }

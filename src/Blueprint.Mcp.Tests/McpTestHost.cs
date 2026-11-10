@@ -106,6 +106,8 @@ internal sealed class McpTestHost : IAsyncDisposable
             }
         });
         builder.Services.AddSingleton<ResponseCallbackProbe>();
+        builder.Services.AddSingleton<AmbientContextProbe>();
+        builder.Services.AddHttpContextAccessor();
         builder.Services.AddBlueprintMcp();
 
         if (mapSampleApp)
@@ -115,6 +117,25 @@ internal sealed class McpTestHost : IAsyncDisposable
         }
 
         var app = builder.Build();
+
+        // Records each request whose HTTP context IHttpContextAccessor no longer gives once the rest of the pipeline has
+        // run, as middleware wrapping an MCP endpoint would see it.
+        var ambient = app.Services.GetRequiredService<AmbientContextProbe>();
+        var accessor = app.Services.GetRequiredService<IHttpContextAccessor>();
+
+        app.Use(async (context, next) =>
+        {
+            ambient.Started();
+
+            try
+            {
+                await next(context);
+            }
+            finally
+            {
+                ambient.Finished(context.Request.Path.Value, ReferenceEquals(accessor.HttpContext, context));
+            }
+        });
 
         app.UseRouting();
         app.UseAuthentication();
@@ -247,6 +268,48 @@ internal sealed class McpTestHost : IAsyncDisposable
     {
         await this._app.StopAsync();
         await this._app.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Records the requests whose HTTP context <see cref="IHttpContextAccessor"/> no longer gave once the rest of the
+    /// pipeline had run.
+    /// </summary>
+    public sealed class AmbientContextProbe
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string?> _lost = new();
+        private int _inFlight;
+
+        /// <summary>Gets the paths of the requests whose context was lost.</summary>
+        public IReadOnlyCollection<string?> Lost => this._lost;
+
+        /// <summary>Waits until no request is in flight.</summary>
+        /// <returns>A task that completes when none is, or after five seconds.</returns>
+        public async Task WaitForIdleAsync()
+        {
+            for (var i = 0; i < 100 && Volatile.Read(ref this._inFlight) > 0; i++)
+            {
+                await Task.Delay(50);
+            }
+        }
+
+        /// <summary>Records that a request has started.</summary>
+        internal void Started()
+        {
+            Interlocked.Increment(ref this._inFlight);
+        }
+
+        /// <summary>Records that a request has finished, and whether the accessor still gave its context.</summary>
+        /// <param name="path">The request's path.</param>
+        /// <param name="hasContext">Whether the accessor gave the request's context.</param>
+        internal void Finished(string? path, bool hasContext)
+        {
+            if (!hasContext)
+            {
+                this._lost.Enqueue(path);
+            }
+
+            Interlocked.Decrement(ref this._inFlight);
+        }
     }
 
     /// <summary>
