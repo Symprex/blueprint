@@ -389,6 +389,42 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
+    public void A_mutable_inner_default_of_an_operation_whose_base_constructor_sets_required_members_is_created_for_each_property()
+    {
+        // Such an operation has to declare a [SetsRequiredMembers] constructor of its own, as its implicit one would not
+        // compile (CS9039), so the partial adds none beside it and the defaults stay initialisers.
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(CommandInnerSource, "InnerContract");
+        const string WithBase = """
+            public partial class TagGatewayWidgetCommand : GatewayCommandBase, ICommand<Inner.WidgetResult>
+                {
+                    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
+                    public TagGatewayWidgetCommand()
+                    {
+                    }
+                }
+
+                public abstract class GatewayCommandBase
+                {
+                    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
+                    protected GatewayCommandBase()
+                    {
+                        this.Tenant = "default";
+                    }
+
+                    public required string Tenant { get; set; }
+                }
+            """;
+        var gateway = CommandGatewaySource.Replace("public partial class TagGatewayWidgetCommand : ICommand<Inner.WidgetResult>;", WithBase, StringComparison.Ordinal);
+
+        var run = RunAllGenerators([CommandClientSource, gateway, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
+        properties.Should().Contain("Tags { get; set; } = new global::Inner.TagWidgetCommand().Tags;")
+            .And.NotContain("__blueprintOwnDefaults");
+    }
+
+    [Fact]
     public void A_value_type_default_that_holds_a_mutable_reference_is_not_shared()
     {
         // Every value type used to be shared, so an ArraySegment<string> default left every gateway operation writing to

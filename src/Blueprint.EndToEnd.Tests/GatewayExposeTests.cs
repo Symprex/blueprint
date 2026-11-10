@@ -81,11 +81,13 @@ public sealed class GatewayExposeTests(SampleSystemFixture system)
             $"gateway/templates/{id}/preview",
             JsonBody("""
                 {
-                    "mergeFields": { "FirstName": "Ada", "LastName": "Lovelace" },
+                    "mergeFields": { "FirstName": "Ada", "LastName": "Lovelace", "recipient.name": "Eve" },
                     "recipient": { "name": "Charles Babbage", "email": "charles@example.com" }
                 }
                 """));
 
+        // The recipient wins over a merge field naming it in another case: placeholders match ignoring case, and the merge
+        // field used to stay beside the recipient's value and fill {{Recipient.Name}} first.
         var text = await response.Content.ReadAsStringAsync();
         response.StatusCode.Should().Be(HttpStatusCode.OK, text);
         using var body = JsonDocument.Parse(text);

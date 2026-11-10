@@ -71,7 +71,8 @@ public sealed record OperationPropertyModel(
 /// </param>
 /// <param name="OperationDeclaresConstructor">
 /// Whether the exposing operation declares an instance constructor of its own, in which case the emitted partial cannot add
-/// the constructor that copies every mutable default from one fresh inner instance.
+/// the constructor that copies every mutable default from one fresh inner instance. An operation whose base constructor is
+/// <c>[SetsRequiredMembers]</c> always does, because its implicit constructor would not compile (CS9039).
 /// </param>
 public sealed record ExposedOperationInfo(
     string MetadataName,
