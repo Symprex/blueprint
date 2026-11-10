@@ -609,7 +609,10 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                 current = nullable.TypeArguments[0];
             }
 
-            var candidates = current.GetAllMembers().OfType<IPropertySymbol>();
+            // The path starts at the operation, whose contributed properties (D25) only the shared property model has.
+            var candidates = (current is INamedTypeSymbol namedCurrent && SymbolEqualityComparer.Default.Equals(current, type)
+                ? Planning.OperationPropertyModelBuilder.GetMembersWithContributed(namedCurrent)
+                : current.GetAllMembers()).OfType<IPropertySymbol>();
 
             if (current.TypeKind == TypeKind.Interface)
             {
@@ -829,7 +832,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
                     {
                         // Primary is valid; fallback is optional. Validate but don't block code gen.
                         var fallbackSegment = token.FallbackPropertyPath.Split('.')[0];
-                        var fallbackProperty = operationType.GetAllMembers()
+                        var fallbackProperty = Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType)
                             .OfType<IPropertySymbol>()
                             .FirstOrDefault(p => p.Name == fallbackSegment);
 
@@ -1088,7 +1091,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
         // Only validate the first segment — deeper segments can't be checked without type flow
         var firstSegment = propertyPath.Split('.')[0];
 
-        var matchingProperty = operationType.GetAllMembers()
+        var matchingProperty = Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType)
             .OfType<IPropertySymbol>()
             .FirstOrDefault(p => p.Name == firstSegment);
 
@@ -1116,7 +1119,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     {
         var firstSegment = propertyPath.Split('.')[0];
 
-        return operationType.GetAllMembers()
+        return Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType)
             .OfType<IPropertySymbol>()
             .Any(p => p.Name == firstSegment);
     }
@@ -1128,7 +1131,7 @@ public sealed class AuthorizationModule : IBlueprintSourceGeneratorModule, IDesc
     {
         var firstSegment = propertyPath.Split('.')[0];
 
-        var matchingProperty = operationType.GetAllMembers()
+        var matchingProperty = Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType)
             .OfType<IPropertySymbol>()
             .FirstOrDefault(p => p.Name == firstSegment);
 

@@ -4,11 +4,12 @@ using Microsoft.AspNetCore.Mvc;
 namespace Blueprint.SourceGenerator.Sample.Gateway;
 
 /// <summary>
-/// Gateway Blueprint app that scans the gateway contract assembly for operations.
-/// Demonstrates how a gateway service registers its own operations while delegating
-/// execution to upstream services via <c>BlueprintHttpClient</c>.
+/// Gateway Blueprint app. It scans its own assembly, whose reads are <c>[Expose&lt;TInner&gt;]</c> operations that forward to the
+/// upstream template service through <see cref="Api.TemplateServiceApi"/>, and the gateway contract assembly, whose create
+/// command has a hand-written handler calling the upstream with <c>BlueprintHttpClient</c>.
 /// </summary>
-[BlueprintAppScan(FromAssemblyOf = typeof(ListGatewayTemplatesQuery))]
+[BlueprintAppScan]
+[BlueprintAppScan(FromAssemblyOf = typeof(CreateGatewayTemplateCommand))]
 [BlueprintHttpClientExtensions]
 [BlueprintAppSerializerContext(JsonSerializerContextType = typeof(GatewayBlueprintAppJsonContext))]
 public partial class GatewayBlueprintApp : BlueprintApp;
@@ -18,6 +19,8 @@ public partial class GatewayBlueprintApp : BlueprintApp;
 /// </summary>
 [JsonSerializable(typeof(GatewayTemplateResource))]
 [JsonSerializable(typeof(GatewayTemplateResource[]))]
+[JsonSerializable(typeof(TemplateApiResource))]
+[JsonSerializable(typeof(TemplateApiResource[]))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(ValidationProblemDetails))]
 public partial class GatewayBlueprintAppJsonContext : JsonSerializerContext;

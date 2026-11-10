@@ -265,6 +265,16 @@ public readonly struct PipelineRenderContext
     }
 
     /// <summary>
+    /// Gets the generated forward of an operation marked <c>[Expose&lt;TInner&gt;]</c>, or <see langword="null"/> when
+    /// the operation has a handler of its own.
+    /// </summary>
+    /// <returns>The forward, or <see langword="null"/>.</returns>
+    public Generators.Pipelines.Model.GatewayForwardModel? GetForward()
+    {
+        return this._handler.Forward;
+    }
+
+    /// <summary>
     /// Gets a value indicating whether the handler method is static.
     /// </summary>
     /// <returns><c>true</c> if the handler method is static; otherwise <c>false</c>.</returns>

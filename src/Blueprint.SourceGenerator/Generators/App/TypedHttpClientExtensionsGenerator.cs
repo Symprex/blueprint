@@ -192,7 +192,7 @@ public sealed class TypedHttpClientExtensionsGenerator : IIncrementalGenerator, 
 
         // Get public settable properties as parameters
         var parameters = new List<TypedClientParameterModel>();
-        foreach (var prop in operationType.GetAllMembers().OfType<IPropertySymbol>())
+        foreach (var prop in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType).OfType<IPropertySymbol>())
         {
             if (prop.DeclaredAccessibility != Accessibility.Public || prop.IsStatic)
             {

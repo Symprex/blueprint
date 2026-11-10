@@ -24,4 +24,19 @@ public interface IBlueprintClient<TSelf>
     /// <param name="client">The transport every call is sent with.</param>
     /// <returns>The new client.</returns>
     static abstract TSelf Create(IServiceProvider services, BlueprintHttpClient client);
+
+    /// <summary>
+    /// Makes the transport a call outside the client sends with, as the client's own calls do: a gateway operation's generated
+    /// forward (<see cref="BlueprintClientTransport.Create{TClient}"/>) through the client that includes its inner operation.
+    /// </summary>
+    /// <remarks>
+    /// A client declaring a <see cref="BlueprintClientAttribute.SerializerContext"/> applies that context here, as its
+    /// constructor does; any other returns the transport unchanged.
+    /// </remarks>
+    /// <param name="client">The transport made from the client's named <see cref="System.Net.Http.HttpClient"/> and JSON options.</param>
+    /// <returns>The transport to send with.</returns>
+    static virtual BlueprintHttpClient ConfigureTransport(BlueprintHttpClient client)
+    {
+        return client;
+    }
 }
