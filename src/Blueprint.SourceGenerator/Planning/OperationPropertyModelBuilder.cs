@@ -27,6 +27,8 @@ internal static class OperationPropertyModelBuilder
     /// </summary>
     public const string DefaultsFieldName = "__blueprintExposedDefaults";
 
+    private const string OwnDefaultsLocalName = "__blueprintOwnDefaults";
+
     private static readonly SymbolDisplayFormat TypeFormat = SymbolDisplayFormat.FullyQualifiedFormat
         .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
@@ -48,7 +50,7 @@ internal static class OperationPropertyModelBuilder
 
         return new OperationPropertyModel(
             operationType.ToFullMetadataName(),
-            exposed is null ? null : CreateExposedInfo(exposed),
+            exposed is null ? null : CreateExposedInfo(exposed, operationType),
             new EquatableList<OperationPropertyInfo>(infos));
     }
 
@@ -174,12 +176,33 @@ internal static class OperationPropertyModelBuilder
             : "new " + exposed.TypeName + "()";
         var ownInner = exposed.RequiredMemberNames.Count > 0 ? "(" + newInner + ")" : newInner;
 
-        // A value-type or string default is read from one shared inner instance. Any other reference-type default, such as a
-        // list, could be mutated through one operation and seen by the next, so each instance creates an inner of its own.
+        // An unmanaged value-type or string default is read from one shared inner instance. Any other default, such as a
+        // list, could be mutated through one operation and seen by the next, so each operation copies those from an inner of
+        // its own: one made in a generated constructor, or, where the operation declares a constructor of its own, one made
+        // for each such property.
         if (readsDefaults && model.Properties.Any(static p => p is { Origin: OperationPropertyOrigin.Contributed, CanShareDefault: true }))
         {
             source.Append("    private static readonly ").Append(exposed.TypeName).Append(' ').Append(DefaultsFieldName)
                 .Append(" = ").Append(newInner).AppendLine(";");
+        }
+
+        var ownDefaults = readsDefaults
+            ? model.Properties.Where(static p => p is { Origin: OperationPropertyOrigin.Contributed, CanShareDefault: false }).ToList()
+            : [];
+        var copiesInConstructor = ownDefaults.Count > 0 && !exposed.OperationDeclaresConstructor;
+        if (copiesInConstructor)
+        {
+            source.AppendLine();
+            source.AppendLine("    /// <summary>Starts every mutable inner default from one inner operation of this operation's own.</summary>");
+            source.Append("    public ").Append(typeName).AppendLine("()");
+            source.AppendLine("    {");
+            source.Append("        var ").Append(OwnDefaultsLocalName).Append(" = ").Append(newInner).AppendLine(";");
+            foreach (var property in ownDefaults)
+            {
+                source.Append("        this.").Append(property.Name).Append(" = ").Append(OwnDefaultsLocalName).Append('.').Append(property.Name).AppendLine(";");
+            }
+
+            source.AppendLine("    }");
         }
 
         foreach (var property in model.Properties)
@@ -207,7 +230,11 @@ internal static class OperationPropertyModelBuilder
 
             if (readsDefaults)
             {
-                source.Append(" = ").Append(property.CanShareDefault ? DefaultsFieldName : ownInner).Append('.').Append(property.Name).Append(';');
+                // A default the generated constructor copies has no initialiser.
+                if (property.CanShareDefault || !copiesInConstructor)
+                {
+                    source.Append(" = ").Append(property.CanShareDefault ? DefaultsFieldName : ownInner).Append('.').Append(property.Name).Append(';');
+                }
             }
             else if (!property.IsRequired && !property.TypeName.EndsWith("?", StringComparison.Ordinal))
             {
@@ -239,7 +266,7 @@ internal static class OperationPropertyModelBuilder
                 && !IsObsolete(member));
     }
 
-    private static ExposedOperationInfo CreateExposedInfo(INamedTypeSymbol exposed)
+    private static ExposedOperationInfo CreateExposedInfo(INamedTypeSymbol exposed, INamedTypeSymbol operationType)
     {
         var required = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -261,7 +288,8 @@ internal static class OperationPropertyModelBuilder
             exposed.ToFullMetadataName(),
             exposed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             EquatableList<string>.TakeOwnership(required),
-            canCreate);
+            canCreate,
+            operationType.InstanceConstructors.Any(static c => !c.IsImplicitlyDeclared));
     }
 
     private static bool IsPublicInstanceProperty(IPropertySymbol member)
@@ -391,7 +419,7 @@ internal static class OperationPropertyModelBuilder
             EquatableList<string>.TakeOwnership(attributes),
             string.IsNullOrWhiteSpace(documentation) ? null : documentation,
             location,
-            member.Type.IsValueType || member.Type.SpecialType == SpecialType.System_String);
+            member.Type.IsUnmanagedType || member.Type.SpecialType == SpecialType.System_String);
     }
 
     private static string? RenderAttribute(AttributeData attribute, IAssemblySymbol within)

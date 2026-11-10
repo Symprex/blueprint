@@ -69,11 +69,16 @@ public sealed record OperationPropertyModel(
 /// Whether the exposing assembly can create an instance of the inner operation with a parameterless constructor, to
 /// read the defaults its initialisers give, which metadata does not carry.
 /// </param>
+/// <param name="OperationDeclaresConstructor">
+/// Whether the exposing operation declares an instance constructor of its own, in which case the emitted partial cannot add
+/// the constructor that copies every mutable default from one fresh inner instance.
+/// </param>
 public sealed record ExposedOperationInfo(
     string MetadataName,
     string TypeName,
     EquatableList<string> RequiredMemberNames,
-    bool CanCreateDefaults);
+    bool CanCreateDefaults,
+    bool OperationDeclaresConstructor);
 
 /// <summary>
 /// One property of an <see cref="OperationPropertyModel"/>.
@@ -95,9 +100,9 @@ public sealed record ExposedOperationInfo(
 /// attribute for a contributed one.
 /// </param>
 /// <param name="CanShareDefault">
-/// Whether one instance's default can safely be shared by every instance: a value type or a <see cref="string"/>. Any other
-/// reference type, such as a list, may be mutated through one instance, so a contributed property of that type starts from
-/// a default of its own (#152).
+/// Whether one instance's default can safely be shared by every instance: an unmanaged value type or a <see cref="string"/>,
+/// neither of which can reach a mutable object. Any other type, such as a list or a struct holding an array, may be mutated
+/// through one instance, so a contributed property of that type starts from a default of its own (#152).
 /// </param>
 public sealed record OperationPropertyInfo(
     string Name,

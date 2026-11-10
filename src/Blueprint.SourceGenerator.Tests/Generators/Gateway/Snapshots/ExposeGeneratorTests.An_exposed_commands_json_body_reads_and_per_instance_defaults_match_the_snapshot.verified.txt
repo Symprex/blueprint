@@ -9,6 +9,14 @@ partial class TagGatewayWidgetCommand
 {
     private static readonly global::Inner.TagWidgetCommand __blueprintExposedDefaults = new global::Inner.TagWidgetCommand();
 
+    /// <summary>Starts every mutable inner default from one inner operation of this operation's own.</summary>
+    public TagGatewayWidgetCommand()
+    {
+        var __blueprintOwnDefaults = new global::Inner.TagWidgetCommand();
+        this.Tags = __blueprintOwnDefaults.Tags;
+        this.Labels = __blueprintOwnDefaults.Labels;
+    }
+
     /// <inheritdoc cref="global::Inner.TagWidgetCommand.Id"/>
     public string Id { get; set; } = __blueprintExposedDefaults.Id;
 
@@ -19,10 +27,10 @@ partial class TagGatewayWidgetCommand
     public int Weight { get; set; } = __blueprintExposedDefaults.Weight;
 
     /// <inheritdoc cref="global::Inner.TagWidgetCommand.Tags"/>
-    public global::System.Collections.Generic.List<string> Tags { get; set; } = new global::Inner.TagWidgetCommand().Tags;
+    public global::System.Collections.Generic.List<string> Tags { get; set; }
 
     /// <inheritdoc cref="global::Inner.TagWidgetCommand.Labels"/>
-    public global::System.Collections.Generic.Dictionary<string, string>? Labels { get; set; } = new global::Inner.TagWidgetCommand().Labels;
+    public global::System.Collections.Generic.Dictionary<string, string>? Labels { get; set; }
 }
 
 Gateway.TagGatewayWidgetCommandExecutorPipeline.g.cs:

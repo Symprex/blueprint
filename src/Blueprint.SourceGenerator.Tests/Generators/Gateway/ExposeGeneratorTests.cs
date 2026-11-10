@@ -355,10 +355,57 @@ public class ExposeGeneratorTests
 
         run.EmitErrors.Should().BeEmpty();
         var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
-        properties.Should().Contain("Tags { get; set; } = new global::Inner.TagWidgetCommand().Tags;")
-            .And.Contain("Labels { get; set; } = new global::Inner.TagWidgetCommand().Labels;")
+        properties.Should().Contain("public global::System.Collections.Generic.List<string> Tags { get; set; }" + Environment.NewLine)
+            .And.Contain("public global::System.Collections.Generic.Dictionary<string, string>? Labels { get; set; }" + Environment.NewLine)
+            .And.Contain("this.Tags = __blueprintOwnDefaults.Tags;")
+            .And.Contain("this.Labels = __blueprintOwnDefaults.Labels;")
             .And.Contain("public string Name { get; set; } = __blueprintExposedDefaults.Name;")
             .And.Contain("public int Weight { get; set; } = __blueprintExposedDefaults.Weight;");
+
+        // One inner operation per gateway operation, however many mutable defaults it has: Tags and Labels used to make an
+        // inner each, so every mutable default was allocated once for each of them.
+        CountOf(properties, "var __blueprintOwnDefaults = new global::Inner.TagWidgetCommand();").Should().Be(1);
+        CountOf(properties, "new global::Inner.TagWidgetCommand()").Should().Be(2, "the shared defaults and the constructor make one each");
+    }
+
+    [Fact]
+    public void A_mutable_inner_default_of_an_operation_that_declares_a_constructor_is_created_for_each_property()
+    {
+        // The generated partial cannot add a parameterless constructor beside the operation's own, so each mutable default
+        // falls back to an inner operation of its own.
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(CommandInnerSource, "InnerContract");
+        var gateway = CommandGatewaySource.Replace(
+            "public partial class TagGatewayWidgetCommand : ICommand<Inner.WidgetResult>;",
+            "public partial class TagGatewayWidgetCommand : ICommand<Inner.WidgetResult> { public TagGatewayWidgetCommand() { } }",
+            StringComparison.Ordinal);
+
+        var run = RunAllGenerators([CommandClientSource, gateway, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
+        properties.Should().Contain("Tags { get; set; } = new global::Inner.TagWidgetCommand().Tags;")
+            .And.Contain("Labels { get; set; } = new global::Inner.TagWidgetCommand().Labels;")
+            .And.NotContain("__blueprintOwnDefaults");
+    }
+
+    [Fact]
+    public void A_value_type_default_that_holds_a_mutable_reference_is_not_shared()
+    {
+        // Every value type used to be shared, so an ArraySegment<string> default left every gateway operation writing to
+        // one backing array.
+        var inner = CommandInnerSource.Replace(
+            "public int Weight { get; set; } = 1;",
+            "public int Weight { get; set; } = 1;\n\n                public System.ArraySegment<string> Slots { get; set; } = new(new string[2]);\n\n                public System.Guid Ref { get; set; } = System.Guid.NewGuid();",
+            StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+
+        var run = RunAllGenerators([CommandClientSource, CommandGatewaySource, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
+        properties.Should().Contain("this.Slots = __blueprintOwnDefaults.Slots;")
+            .And.NotContain("__blueprintExposedDefaults.Slots")
+            .And.Contain("public global::System.Guid Ref { get; set; } = __blueprintExposedDefaults.Ref;");
     }
 
     [Fact]
@@ -371,9 +418,10 @@ public class ExposeGeneratorTests
 
         run.EmitErrors.Should().BeEmpty();
         var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
-        const string OwnInner = "((global::Inner.TagWidgetCommand)global::System.Activator.CreateInstance(typeof(global::Inner.TagWidgetCommand))!)";
-        properties.Should().Contain("public required global::System.Collections.Generic.List<string> Tags { get; set; } = " + OwnInner + ".Tags;")
-            .And.Contain("Labels { get; set; } = " + OwnInner + ".Labels;")
+        properties.Should().Contain("var __blueprintOwnDefaults = (global::Inner.TagWidgetCommand)global::System.Activator.CreateInstance(typeof(global::Inner.TagWidgetCommand))!;")
+            .And.Contain("public required global::System.Collections.Generic.List<string> Tags { get; set; }" + Environment.NewLine)
+            .And.Contain("this.Tags = __blueprintOwnDefaults.Tags;")
+            .And.Contain("this.Labels = __blueprintOwnDefaults.Labels;")
             .And.Contain("public string Name { get; set; } = __blueprintExposedDefaults.Name;");
     }
 
@@ -653,6 +701,11 @@ public class ExposeGeneratorTests
     {
         var tree = diagnostic.Location.SourceTree!;
         return tree.GetText().ToString(diagnostic.Location.SourceSpan);
+    }
+
+    private static int CountOf(string source, string value)
+    {
+        return (source.Length - source.Replace(value, string.Empty, StringComparison.Ordinal).Length) / value.Length;
     }
 
     private static string Updated(MultiGeneratorEditResult result, string hintName)

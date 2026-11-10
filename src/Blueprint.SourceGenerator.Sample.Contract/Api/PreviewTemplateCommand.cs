@@ -34,8 +34,9 @@ public partial class PreviewTemplateCommand : ICommand<TemplatePreviewApiResourc
 
     /// <summary>
     /// An optional recipient to render the preview for, whose values replace <c>{{Recipient.Name}}</c> and
-    /// <c>{{Recipient.Email}}</c>. A nested object no serializer context lists, so a gateway exposing this command reads it
-    /// with the reflection fallback of its JSON options.
+    /// <c>{{Recipient.Email}}</c>. A nested object the sample app's serializer context lists, so its OpenAPI schema
+    /// describes its fields, but the gateway's does not, so a gateway exposing this command reads it with the reflection
+    /// fallback of its JSON options.
     /// </summary>
     [Description("The recipient to render the preview for.")]
     public TemplatePreviewRecipient? Recipient { get; set; }
