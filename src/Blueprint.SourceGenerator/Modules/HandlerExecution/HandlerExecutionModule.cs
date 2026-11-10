@@ -269,7 +269,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
                 HandlerReturnNormalizationKind.ResultsUnion,
                 effectiveHandlerReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 null,
-                CanReturnProxyResult(effectiveHandlerReturnType));
+                CanHoldProxyResult(context, effectiveHandlerReturnType));
         }
 
         if (OperationResultContractHelper.IsOperationResultType(effectiveHandlerReturnType, operationResultType))
@@ -283,7 +283,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
                 HandlerReturnNormalizationKind.OperationResult,
                 effectiveHandlerReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 null,
-                CanReturnProxyResult(effectiveHandlerReturnType));
+                CanHoldProxyResult(context, effectiveHandlerReturnType));
         }
 
         if (IsNullablePlainValue(effectiveHandlerReturnType))
@@ -338,12 +338,14 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
 
         if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out _))
         {
-            return new HandlerReturnNormalization(HandlerReturnNormalizationKind.ResultsUnion, declaredName, null);
+            return new HandlerReturnNormalization(
+                HandlerReturnNormalizationKind.ResultsUnion, declaredName, null, CanHoldProxyResult(context, declaredContractType));
         }
 
         if (OperationResultContractHelper.IsOperationResultType(declaredContractType, operationResultType))
         {
-            return new HandlerReturnNormalization(HandlerReturnNormalizationKind.OperationResult, declaredName, null);
+            return new HandlerReturnNormalization(
+                HandlerReturnNormalizationKind.OperationResult, declaredName, null, CanHoldProxyResult(context, declaredContractType));
         }
 
         return new HandlerReturnNormalization(
@@ -546,19 +548,34 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         bool CanReturnProxyResult = false);
 
     /// <summary>
-    /// Whether a handler returning <paramref name="type"/> can hand over an upstream response in a <c>ProxyResult</c>:
-    /// the type is one, derives from one, or is a <c>Results</c> union with such a member.
+    /// Whether a value of <paramref name="type"/>, a handler's return type or a forward's declared result, can be a
+    /// <c>ProxyResult</c> handing over an upstream response: the type is <c>ProxyResult</c>, derives from it or is one of
+    /// its base types (<c>HttpResult</c>, <c>OperationResult</c>), or is a <c>Results</c> union with such a member.
     /// </summary>
-    private static bool CanReturnProxyResult(ITypeSymbol type)
+    /// <remarks>
+    /// Only the generated registration depends on this, and it checks the actual result at run time, so the test may be
+    /// broad; it is not broader only to keep every other operation's pipeline unchanged.
+    /// </remarks>
+    private static bool CanHoldProxyResult(PipelineContributorContext context, ITypeSymbol type)
     {
-        return IsProxyResult(type)
-               || (type is INamedTypeSymbol { IsGenericType: true } union && union.TypeArguments.Any(IsProxyResult));
-
-        static bool IsProxyResult(ITypeSymbol type)
+        if (context.FindTypeByMetadataName(ProxyResultTypeName) is not { } proxyResultType)
         {
-            for (var current = type; current is not null; current = current.BaseType)
+            return false;
+        }
+
+        return CanHold(type)
+               || (type is INamedTypeSymbol { IsGenericType: true } union && union.TypeArguments.Any(CanHold));
+
+        bool CanHold(ITypeSymbol candidate)
+        {
+            return IsSelfOrBase(proxyResultType, candidate) || IsSelfOrBase(candidate, proxyResultType);
+        }
+
+        static bool IsSelfOrBase(ITypeSymbol derived, ITypeSymbol baseType)
+        {
+            for (var current = derived; current is not null; current = current.BaseType)
             {
-                if (current.ToDisplayString() == ProxyResultTypeName)
+                if (SymbolEqualityComparer.Default.Equals(current, baseType))
                 {
                     return true;
                 }

@@ -191,15 +191,19 @@ public sealed class HttpResultWriterWireTests
         (await Task.WhenAny(disposed, Task.Delay(TimeSpan.FromSeconds(10)))).Should().BeSameAs(disposed, "the upstream response is disposed with the request");
     }
 
-    [Fact]
-    public async Task A_proxy_result_whose_save_fails_still_has_its_upstream_response_disposed()
+    [Theory]
+    [InlineData("proxy")]
+    [InlineData("untyped-proxy")]
+    public async Task A_proxy_result_whose_save_fails_still_has_its_upstream_response_disposed(string route)
     {
         // The failed save replaces the handler's ProxyResult with an exception result, so neither the result nor the host's
-        // dispatch ever sees the response the handler was handed.
+        // dispatch ever sees the response the handler was handed. A handler declared as returning any HttpResult used to
+        // leave it undisposed: only a declared ProxyResult registered it.
         await using var host = await ResultWriterHost.StartAsync(static b => b.Services.AddScoped<Blueprint.Persistence.IUnitOfWork, FailingSaveUnitOfWork>());
-        var disposed = ResultWriterProxyQuery.Track("save-fails");
+        var key = $"save-fails-{route}";
+        var disposed = ResultWriterProxyQuery.Track(key);
 
-        var response = await host.GetAsync("result-writer/proxy?key=save-fails");
+        var response = await host.GetAsync($"result-writer/{route}?key={key}");
 
         response.Status.Should().Be(500, response.Body);
         (await Task.WhenAny(disposed, Task.Delay(TimeSpan.FromSeconds(10)))).Should().BeSameAs(disposed, "the upstream response is disposed with the request");
@@ -722,12 +726,20 @@ public partial class ResultWriterProxyQuery : Blueprint.Model.IQuery<Blueprint.H
     /// <returns>A proxy result owning the simulated upstream response.</returns>
     public static Task<Blueprint.Http.ProxyResult> HandleAsync(ResultWriterProxyQuery query)
     {
+        return Task.FromResult(CreateProxy(query.Key));
+    }
+
+    /// <summary>Creates a proxy result owning an upstream response whose disposal is reported under <paramref name="key"/>.</summary>
+    /// <param name="key">The key to report disposal under.</param>
+    /// <returns>The proxy result.</returns>
+    internal static Blueprint.Http.ProxyResult CreateProxy(string key)
+    {
         var upstream = new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
         {
-            Content = new DisposalReportingContent(query.Key),
+            Content = new DisposalReportingContent(key),
         };
 
-        return Task.FromResult(new Blueprint.Http.ProxyResult(upstream));
+        return new Blueprint.Http.ProxyResult(upstream);
     }
 
     private sealed class DisposalReportingContent(string key) : System.Net.Http.StringContent("upstream")
@@ -741,5 +753,27 @@ public partial class ResultWriterProxyQuery : Blueprint.Model.IQuery<Blueprint.H
 
             base.Dispose(disposing);
         }
+    }
+}
+
+/// <summary>
+/// As <see cref="ResultWriterProxyQuery"/>, but declared as returning any <see cref="Blueprint.Http.HttpResult"/>: its
+/// handler returns a <see cref="Blueprint.Http.ProxyResult"/> its declared type does not name.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Model.Attributes.RootLink("/result-writer/untyped-proxy")]
+[Blueprint.Model.Attributes.HttpGet]
+[Blueprint.Auditing.DoNotAudit]
+public partial class ResultWriterUntypedProxyQuery : Blueprint.Model.IQuery<Blueprint.Http.HttpResult>
+{
+    /// <summary>Gets or sets the key the upstream content's disposal is reported under.</summary>
+    public string Key { get; set; } = string.Empty;
+
+    /// <summary>Simulates an upstream response handed over unread, returned as a plain <see cref="Blueprint.Http.HttpResult"/>.</summary>
+    /// <param name="query">The query, naming the key to report disposal under.</param>
+    /// <returns>A proxy result owning the simulated upstream response.</returns>
+    public static Task<Blueprint.Http.HttpResult> HandleAsync(ResultWriterUntypedProxyQuery query)
+    {
+        return Task.FromResult<Blueprint.Http.HttpResult>(ResultWriterProxyQuery.CreateProxy(query.Key));
     }
 }
