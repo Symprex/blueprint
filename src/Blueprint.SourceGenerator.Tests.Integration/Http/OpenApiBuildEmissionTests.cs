@@ -235,6 +235,13 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
             UseShellExecute = false,
         };
 
+        // A build leaves MSBuild nodes and the compiler server running after it exits, and they inherit its redirected
+        // output. Reading that output to its end then waited for them to go idle and exit, fifteen minutes later, and the
+        // test passed after that wait. Keep every process the build starts inside the build.
+        startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+        startInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
+        startInfo.Environment["UseSharedCompilation"] = "false";
+
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -248,7 +255,9 @@ public sealed class OpenApiBuildEmissionTests : IDisposable
 
         try
         {
+            // The output's end, not only the exit, so anything left holding it fails the test instead of stalling it.
             await process.WaitForExitAsync(timeout.Token);
+            await Task.WhenAll(output, error).WaitAsync(timeout.Token);
         }
         catch (OperationCanceledException)
         {
