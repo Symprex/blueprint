@@ -20,6 +20,22 @@ public sealed class OperationToolRequestTests
     }
 
     [Fact]
+    public void A_route_value_no_input_supplies_is_taken_from_the_route_the_tools_were_called_at()
+    {
+        var request = OperationToolRequest.Create(
+            RoutePatternFactory.Parse("tenants/{TenantId}/api/templates/{Id}"),
+            Schema([new OperationInputProperty("Id", OperationInputLocation.Path)]),
+            Arguments("""{ "Id": "a" }"""),
+            new RouteValueDictionary { ["TenantId"] = "acme", ["Id"] = "not this" },
+            out var error);
+
+        request.Should().NotBeNull(error);
+        request!.Path.Should().Be("/tenants/acme/api/templates/a");
+        request.RouteValues["TenantId"].Should().Be("acme");
+        request.RouteValues["Id"].Should().Be("a");
+    }
+
+    [Fact]
     public void A_catch_all_path_argument_keeps_its_slashes()
     {
         var request = Create(
@@ -37,6 +53,7 @@ public sealed class OperationToolRequestTests
             RoutePatternFactory.Parse("api/templates/{Id}"),
             Schema([new OperationInputProperty("Id", OperationInputLocation.Path)]),
             Arguments("{}"),
+            null,
             out var error);
 
         request.Should().BeNull();
@@ -133,6 +150,7 @@ public sealed class OperationToolRequestTests
             RoutePatternFactory.Parse(route),
             Schema(properties),
             arguments is null ? null : Arguments(arguments),
+            null,
             out var error);
 
         request.Should().NotBeNull(error);

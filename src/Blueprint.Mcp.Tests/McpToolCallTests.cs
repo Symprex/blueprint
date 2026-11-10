@@ -204,6 +204,21 @@ public sealed class McpToolCallTests
     }
 
     [Fact]
+    public async Task An_app_mapped_in_a_route_group_with_a_route_value_is_called_with_the_value_the_tools_were_called_at()
+    {
+        await using var host = await McpTestHost.StartAsync(mapTenantGroup: true);
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync("tenants/acme/api/mcp");
+
+        var overHttp = await http.GetStringAsync("tenants/acme/api/accessor/abc");
+        var result = await client.CallToolAsync(ids[("get", "/accessor/{Id}")], new Dictionary<string, object?> { ["Id"] = "abc" });
+
+        overHttp.Should().Be("\"/tenants/acme/api/accessor/abc\"");
+        Text(result).Should().Be(overHttp);
+    }
+
+    [Fact]
     public async Task A_HEAD_operations_tool_result_carries_its_status_and_no_body_as_HTTP_does()
     {
         await using var host = await McpTestHost.StartAsync();

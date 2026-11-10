@@ -73,13 +73,18 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// Whether the test app's API and tools are mapped a second time, at <c>grouped/api/</c> and
     /// <c>grouped/api/mcp</c>, in a route group requiring <see cref="AdminPolicy"/>, the tools allowing anyone.
     /// </param>
+    /// <param name="mapTenantGroup">
+    /// Whether the test app's API and tools are mapped a second time, at <c>tenants/{TenantId}/api/</c> and
+    /// <c>tenants/{TenantId}/api/mcp</c>, in a route group whose prefix has a route value of its own.
+    /// </param>
     /// <returns>The started host.</returns>
     public static async Task<McpTestHost> StartAsync(
         bool renderOnFirstRequest = false,
         bool mapSampleApp = false,
         bool mapAdminCopy = false,
         bool adminFallback = false,
-        bool mapGrouped = false)
+        bool mapGrouped = false,
+        bool mapTenantGroup = false)
     {
         var builder = WebApplication.CreateSlimBuilder();
 
@@ -154,6 +159,14 @@ internal sealed class McpTestHost : IAsyncDisposable
 
             group.MapBlueprintApi<McpTestBlueprintApp, McpTestBlueprintAppExecutor>("api/");
             group.MapBlueprintMcp<McpTestBlueprintApp>("api/mcp").AllowAnonymous();
+        }
+
+        if (mapTenantGroup)
+        {
+            var tenant = app.MapGroup("tenants/{TenantId}");
+
+            tenant.MapBlueprintApi<McpTestBlueprintApp, McpTestBlueprintAppExecutor>("api/");
+            tenant.MapBlueprintMcp<McpTestBlueprintApp>("api/mcp");
         }
 
         if (mapSampleApp)

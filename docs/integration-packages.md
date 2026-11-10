@@ -599,7 +599,8 @@ calls it there with the SDK's own MCP client.
   has its own service scope, as an HTTP request has; `IHttpContextAccessor` gives its handler, its callbacks and its
   scope's disposals the operation's request, not the MCP request; and its response's `OnStarting` and `OnCompleted`
   callbacks run, so what it registered for disposal is disposed. An API mapped in a route group is called with the
-  group's prefix and conventions, and a HEAD operation's result has its status and no body, as HTTP gives it.
+  group's prefix and conventions, a route value in the prefix (`tenants/{TenantId}`) taken from the URL the tools were
+  called at, and a HEAD operation's result has its status and no body, as HTTP gives it.
 - **One mapping per tool set.** The tools run through the endpoints of the `MapBlueprintApi` call mapped last before
   `MapBlueprintMcp`, so an app mapped under two base paths, each with its own conventions, can have tools for each.
 - **Results are the HTTP response.** The body is the tool result's text, read in the charset its content type

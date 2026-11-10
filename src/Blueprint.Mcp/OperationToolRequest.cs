@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -57,12 +58,17 @@ internal sealed class OperationToolRequest
     /// <param name="route">The route pattern of the endpoint the call runs through.</param>
     /// <param name="schema">The operation's input schema, which says where each argument goes.</param>
     /// <param name="arguments">The tool call's arguments, or <see langword="null"/> for none.</param>
+    /// <param name="ambientRouteValues">
+    /// The route values the tools were called at, which give a route value no input supplies, such as a parameterised
+    /// route group's (<c>tenants/{TenantId}</c>), or <see langword="null"/> for none.
+    /// </param>
     /// <param name="error">Why no request can be made, when this returns <see langword="null"/>.</param>
     /// <returns>The request, or <see langword="null"/> when a route value it needs is missing.</returns>
     public static OperationToolRequest? Create(
         RoutePattern route,
         OperationInputSchema schema,
         IDictionary<string, JsonElement>? arguments,
+        RouteValueDictionary? ambientRouteValues,
         out string? error)
     {
         var routeValues = new RouteValueDictionary();
@@ -103,6 +109,22 @@ internal sealed class OperationToolRequest
                 case OperationInputLocation.Body:
                     body![property.Name] = JsonNode.Parse(value.GetRawText());
                     break;
+            }
+        }
+
+        // A route value no input of the operation's supplies, such as a parameterised route group's, is the one the tools
+        // were called at, as the HTTP API mapped beside them is called at it.
+        if (ambientRouteValues is not null)
+        {
+            foreach (var parameter in route.Parameters)
+            {
+                if (!routeValues.ContainsKey(parameter.Name)
+                    && !schema.Properties.Any(p => p.Location == OperationInputLocation.Path && string.Equals(p.Name, parameter.Name, StringComparison.OrdinalIgnoreCase))
+                    && ambientRouteValues.TryGetValue(parameter.Name, out var ambient)
+                    && ambient is not null)
+                {
+                    routeValues[parameter.Name] = Convert.ToString(ambient, CultureInfo.InvariantCulture);
+                }
             }
         }
 

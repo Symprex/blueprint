@@ -71,7 +71,12 @@ internal sealed class BlueprintOperationTool : McpServerTool
                                           ?? throw new InvalidOperationException(
                                               $"No endpoint is mapped for the operation {this._operation.Name}. Call MapBlueprintApi for its app.");
 
-        var toolRequest = OperationToolRequest.Create(endpoint.RoutePattern, this._schema, request.Params?.Arguments, out var error);
+        var toolRequest = OperationToolRequest.Create(
+            endpoint.RoutePattern,
+            this._schema,
+            request.Params?.Arguments,
+            caller.Request.RouteValues,
+            out var error);
 
         if (toolRequest is null)
         {
