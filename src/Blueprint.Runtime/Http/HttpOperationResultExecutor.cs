@@ -861,7 +861,7 @@ public class HttpOperationResultExecutor
 
     private static IDictionary<string, string[]> CreateValidationErrors(JsonSerializerOptions? serializerOptions, ValidationFailedResult validationFailedResult)
     {
-        var keyPolicy = serializerOptions?.DictionaryKeyPolicy ?? serializerOptions?.PropertyNamingPolicy;
+        var keyPolicy = GetKeyNamingPolicy(serializerOptions);
 
         IDictionary<string, string[]> validationErrors;
 
@@ -1149,7 +1149,11 @@ public class HttpOperationResultExecutor
     /// </summary>
     private static async Task WriteUnhandledExceptionAsync(HttpContext httpContext, ApiOperationContext operationContext, UnhandledExceptionResult unhandledExceptionResult, BlueprintHttpOptions httpOptions)
     {
-        var problemDetails = CreateLegacyExceptionProblem(unhandledExceptionResult.Exception, httpOptions.ExposeExceptionDetailsInErrorResponses, operationContext.Activity);
+        var problemDetails = CreateLegacyExceptionProblem(
+            unhandledExceptionResult.Exception,
+            httpOptions.ExposeExceptionDetailsInErrorResponses,
+            operationContext.Activity,
+            operationContext.App.AppOwnedSerializerContext?.Options);
         var statusCode = problemDetails.Status!.Value;
 
         httpContext.Response.StatusCode = statusCode;
@@ -1178,8 +1182,12 @@ public class HttpOperationResultExecutor
     /// <param name="exception">The exception the operation threw.</param>
     /// <param name="exposeDetails">Whether exception details are exposed, which changes only a non-<see cref="ApiException"/>'s.</param>
     /// <param name="activity">The operation's activity, whose trace id is carried when there is one.</param>
+    /// <param name="serializerOptions">
+    /// The app-owned serializer context's options, whose naming policy names an <see cref="ApiException"/>'s extension keys
+    /// (<see cref="AddNamedExtensions"/>), or <see langword="null"/> when the app has none.
+    /// </param>
     /// <returns>The problem to write.</returns>
-    internal static MvcProblemDetails CreateLegacyExceptionProblem(Exception exception, bool exposeDetails, System.Diagnostics.Activity? activity)
+    internal static MvcProblemDetails CreateLegacyExceptionProblem(Exception exception, bool exposeDetails, System.Diagnostics.Activity? activity, JsonSerializerOptions? serializerOptions)
     {
         MvcProblemDetails problemDetails;
 
@@ -1195,10 +1203,7 @@ public class HttpOperationResultExecutor
 
             // Copied into this body's own dictionary, deliberately unlike legacy, whose exceptions without extensions
             // shared one static dictionary that the traceId below was written into (see AuthorisationDenialWireTests).
-            foreach (var kvp in apiException.Extensions)
-            {
-                problemDetails.Extensions[kvp.Key] = kvp.Value;
-            }
+            AddNamedExtensions(problemDetails.Extensions, apiException.Extensions, GetKeyNamingPolicy(serializerOptions));
         }
         else
         {
@@ -1211,12 +1216,68 @@ public class HttpOperationResultExecutor
             };
         }
 
+        // Blueprint's own member, written by this name whatever the policy.
         if (activity is not null)
         {
             problemDetails.Extensions["traceId"] = activity.TraceId.ToString();
         }
 
         return problemDetails;
+    }
+
+    /// <summary>
+    /// Gets the policy Blueprint names the keys it writes into an error body with - a 422's <c>errors</c> and an
+    /// <see cref="ApiException"/>'s extensions: the <see cref="JsonSerializerOptions.DictionaryKeyPolicy"/>, else the
+    /// <see cref="JsonSerializerOptions.PropertyNamingPolicy"/>, or <see langword="null"/> to write them as they are.
+    /// </summary>
+    private static JsonNamingPolicy? GetKeyNamingPolicy(JsonSerializerOptions? serializerOptions)
+    {
+        return serializerOptions?.DictionaryKeyPolicy ?? serializerOptions?.PropertyNamingPolicy;
+    }
+
+    /// <summary>
+    /// Adds an <see cref="ApiException"/>'s extensions to its problem, each key named whole with <paramref name="keyPolicy"/>,
+    /// as System.Text.Json names a dictionary's keys: extension data is written with its keys as they are, so a client
+    /// that reads the body camelCase would not find <c>Errors</c> by the name it reads every other member by. A key is not
+    /// a member path, so unlike a 422's it is not named segment by segment.
+    /// </summary>
+    /// <remarks>
+    /// Of two keys the policy names alike, the one already so named wins, else the ordinally first: a rule that does not
+    /// depend on the dictionary's enumeration order, which an <see cref="IReadOnlyDictionary{TKey, TValue}"/> does not
+    /// promise. The other is left out rather than failing the response, which would turn the problem into a 500.
+    /// </remarks>
+    private static void AddNamedExtensions(IDictionary<string, object?> target, IReadOnlyDictionary<string, object> extensions, JsonNamingPolicy? keyPolicy)
+    {
+        if (keyPolicy is null)
+        {
+            foreach (var kvp in extensions)
+            {
+                target[kvp.Key] = kvp.Value;
+            }
+
+            return;
+        }
+
+        Dictionary<string, string>? sourceKeys = null;
+
+        foreach (var kvp in extensions)
+        {
+            var name = keyPolicy.ConvertName(kvp.Key);
+            sourceKeys ??= new Dictionary<string, string>(extensions.Count, StringComparer.Ordinal);
+
+            if (sourceKeys.TryGetValue(name, out var existing) && !Precedes(kvp.Key, existing, name))
+            {
+                continue;
+            }
+
+            sourceKeys[name] = kvp.Key;
+            target[name] = kvp.Value;
+        }
+
+        static bool Precedes(string key, string other, string name)
+        {
+            return key == name || (other != name && string.CompareOrdinal(key, other) < 0);
+        }
     }
 
     /// <summary>

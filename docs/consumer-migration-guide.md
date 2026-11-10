@@ -562,6 +562,19 @@ it describes `errors` as a map. Coming from legacy Blueprint nothing changes for
 client that read a PascalCase key (`errors["Name"]`) must read the camelCase one, or the app must set both policies to
 `null` through `blueprint.ConfigureJson(...)` — which also writes its bodies' properties as their CLR names.
 
+**Behaviour change for an `ApiException`'s extension keys (v4.0.0, breaking).** Each key of `ApiException.Extensions`
+is named with the same policy as a 422's `errors` keys when its problem is written: the `DictionaryKeyPolicy`, or else
+the `PropertyNamingPolicy`. System.Text.Json writes extension data keys as they are, so before this an exception made
+with `["Errors"]` answered `"Errors"` while every other member was camelCase. Under Blueprint's default options it now
+answers `{"errors":[...],"htmlErrors":[...]}` where it answered `{"Errors":[...],"HtmlErrors":[...]}`. A key is named
+whole, as a dictionary key is — not split into a member path — and only the keys change, not the values. Of two keys
+the policy names alike (`Errors` and `errors`), the one already so named is written, otherwise the ordinally first, and
+the other is left out. `traceId` keeps its name whatever the policy, and with neither policy set (both `null`) every key
+is written as before. This applies wherever Blueprint writes an exception's problem, including when writing a result
+throws. Blueprint's own client reads extensions case-insensitively, so service-to-service calls are unaffected. A
+client that read a PascalCase extension (`problem.Errors`) must read the camelCase one, or the app must set both
+policies to `null` through `blueprint.ConfigureJson(...)` — which also writes its bodies' properties as their CLR names.
+
 ### 8. Migrate result types
 
 Handler return types now use semantic result types instead of raw objects:
