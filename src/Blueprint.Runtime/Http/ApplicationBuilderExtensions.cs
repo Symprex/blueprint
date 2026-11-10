@@ -156,7 +156,7 @@ public static class EndpointRouteBuilderExtensions
         endpoints.ServiceProvider.GetService<PreRenderedOpenApiDocumentHolder>()?.Set(openApiDocument);
 
         // This call's operation endpoints, told from those another call maps for the same operations.
-        var mappedApi = new MappedBlueprintApi(absoluteBasePath);
+        var mappedApi = new MappedBlueprintApi(typeof(T), absoluteBasePath);
 
         // The per-operation input schemas come from the same rendering, so they agree with the document served.
         if (endpoints.ServiceProvider.GetService<IOperationInputSchemaProvider>() is OperationInputSchemaProvider inputSchemaProvider)

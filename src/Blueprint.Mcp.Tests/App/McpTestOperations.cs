@@ -198,3 +198,20 @@ public class WhoAmIMcpQueryHandler(IHttpContextAccessor accessor)
             : "anonymous";
     }
 }
+
+/// <summary>A query answering with its route value, as the operation was given it.</summary>
+[AllowAnonymous]
+[RootLink("/echo/{Id}")]
+public partial class EchoIdMcpQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the route value.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Answers with the route value.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The route value.</returns>
+    public static string Handle(EchoIdMcpQuery query)
+    {
+        return query.Id;
+    }
+}

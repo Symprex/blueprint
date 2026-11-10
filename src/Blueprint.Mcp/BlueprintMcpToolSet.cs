@@ -80,19 +80,19 @@ internal sealed class BlueprintMcpToolSet
         // and conventions, which the group's own data sources do not apply.
         foreach (var endpoint in this._services.GetRequiredService<EndpointDataSource>().Endpoints)
         {
+            // The app's own descriptor only, never another app's of the same operation type, whose endpoint carries that
+            // app's conventions and policies.
             if (endpoint is not RouteEndpoint routeEndpoint
-                || endpoint.Metadata.GetMetadata<ApiOperationDescriptor>() is not { } mapped
-                || (!ReferenceEquals(mapped, operation) && mapped.OperationType != operation.OperationType)
+                || !ReferenceEquals(endpoint.Metadata.GetMetadata<ApiOperationDescriptor>(), operation)
                 || (this._mappedApi is not null && !ReferenceEquals(endpoint.Metadata.GetMetadata<MappedBlueprintApi>(), this._mappedApi)))
             {
                 continue;
             }
 
-            // The app's own descriptor before another's of the same type, as two apps mapped on one host may share an
-            // operation type, and the schema's URL before the first one mapped.
+            // The schema's URL before the first one mapped.
             var isAtSchemaUrl = schema.UrlFormat is null
                                 || string.Equals(endpoint.Metadata.GetMetadata<ApiOperationUrl>()?.UrlFormat, schema.UrlFormat, StringComparison.Ordinal);
-            var rank = (ReferenceEquals(mapped, operation) ? 0 : 2) + (isAtSchemaUrl ? 0 : 1);
+            var rank = isAtSchemaUrl ? 0 : 1;
 
             if (rank < bestRank)
             {

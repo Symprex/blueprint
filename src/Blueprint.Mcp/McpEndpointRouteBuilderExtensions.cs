@@ -69,6 +69,17 @@ public static class McpEndpointRouteBuilderExtensions
 
         if (schemaProvider is OperationInputSchemaProvider mappedSchemas)
         {
+            // Another app's, or none, would give these tools its schemas and run them through its endpoints and policies,
+            // and with rendering deferred nothing else would notice before the first request.
+            if (mappedSchemas.MappedApi?.AppType != typeof(TApp))
+            {
+                var mappedLast = mappedSchemas.MappedApi is { } other ? $"the API mapped last is {other.AppType.Name}'s" : "no API is mapped";
+
+                throw new InvalidOperationException(
+                    $"MapBlueprintMcp<{typeof(TApp).Name}> must follow MapBlueprintApi for {typeof(TApp).Name}, but "
+                    + $"{mappedLast}. Map each app's API and then its tools before mapping another app's API.");
+            }
+
             schemaProvider = mappedSchemas.Snapshot();
         }
 

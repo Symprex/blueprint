@@ -40,7 +40,7 @@ internal sealed class OperationToolRequest
     /// </summary>
     public string Path { get; }
 
-    /// <summary>Gets the route values, unescaped, as routing would have matched them from <see cref="Path"/>.</summary>
+    /// <summary>Gets the route values as routing would have matched them from <see cref="Path"/>, an escaped slash left escaped.</summary>
     public RouteValueDictionary RouteValues { get; }
 
     /// <summary>Gets the query string.</summary>
@@ -192,8 +192,11 @@ internal sealed class OperationToolRequest
                     case RoutePatternParameterPart parameter:
                         var value = FindRouteValue(routeValues, parameter.Name);
 
-                        if (value is null)
+                        // An empty value is no value: no HTTP request reaches the endpoint with an empty segment for it.
+                        if (string.IsNullOrEmpty(value))
                         {
+                            routeValues.Remove(parameter.Name);
+
                             if (parameter.IsOptional || parameter.Default is not null)
                             {
                                 break;
@@ -203,9 +206,16 @@ internal sealed class OperationToolRequest
                             return null;
                         }
 
-                        // As a server gives the path, decoded but for an escaped slash, which it leaves escaped: a
-                        // catch-all's slashes separate its segments, and any other value's are part of it.
-                        path.Append(parameter.IsCatchAll ? value : value.Replace("/", "%2F", StringComparison.Ordinal));
+                        // As a server gives the path, decoded but for an escaped slash, which it leaves escaped, and as
+                        // routing then gives the value: a catch-all's slashes separate its segments, while any other
+                        // value's are part of it and reach the operation escaped, as they do over HTTP.
+                        if (!parameter.IsCatchAll && value.Contains('/', StringComparison.Ordinal))
+                        {
+                            value = value.Replace("/", "%2F", StringComparison.Ordinal);
+                            routeValues[parameter.Name] = value;
+                        }
+
+                        path.Append(value);
                         break;
                 }
             }

@@ -77,6 +77,10 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// Whether the test app's API and tools are mapped a second time, at <c>tenants/{TenantId}/api/</c> and
     /// <c>tenants/{TenantId}/api/mcp</c>, in a route group whose prefix has a route value of its own.
     /// </param>
+    /// <param name="mapSampleAppBetween">
+    /// Whether the sample app's API is mapped between the test app's API and its tools, so that the API mapped last
+    /// before <c>MapBlueprintMcp</c> is another app's.
+    /// </param>
     /// <returns>The started host.</returns>
     public static async Task<McpTestHost> StartAsync(
         bool renderOnFirstRequest = false,
@@ -84,7 +88,8 @@ internal sealed class McpTestHost : IAsyncDisposable
         bool mapAdminCopy = false,
         bool adminFallback = false,
         bool mapGrouped = false,
-        bool mapTenantGroup = false)
+        bool mapTenantGroup = false,
+        bool mapSampleAppBetween = false)
     {
         var builder = WebApplication.CreateSlimBuilder();
 
@@ -110,7 +115,7 @@ internal sealed class McpTestHost : IAsyncDisposable
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddBlueprintMcp();
 
-        if (mapSampleApp)
+        if (mapSampleApp || mapSampleAppBetween)
         {
             builder.Services.AddBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>(
                 static blueprint => blueprint.AddResourceAuthorizationProvider<ScopePairClaimAuthorizationProvider>());
@@ -160,6 +165,11 @@ internal sealed class McpTestHost : IAsyncDisposable
                     endpoint.Metadata.Add(new AllowAnonymousAttribute());
                 }
             });
+
+        if (mapSampleAppBetween)
+        {
+            app.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("sample/");
+        }
 
         var tools = app.MapBlueprintMcp<McpTestBlueprintApp>("api/mcp");
 

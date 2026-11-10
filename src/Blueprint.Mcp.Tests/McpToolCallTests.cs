@@ -266,6 +266,48 @@ public sealed class McpToolCallTests
         Text(result).Should().Be(overHttp);
     }
 
+    [Theory]
+    [InlineData("a/b", "a%2Fb")]
+    [InlineData("a b", "a%20b")]
+    public async Task A_route_value_reaches_the_operation_as_HTTP_gives_it(string value, string escaped)
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        var overHttp = await http.GetStringAsync("api/echo/" + escaped);
+        var result = await client.CallToolAsync(ids[("get", "/echo/{Id}")], new Dictionary<string, object?> { ["Id"] = value });
+
+        Text(result).Should().Be(overHttp);
+    }
+
+    [Fact]
+    public async Task An_empty_route_value_is_refused_as_missing_as_no_HTTP_route_matches_it()
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        using var overHttp = await http.GetAsync("api/echo/");
+        var result = await client.CallToolAsync(ids[("get", "/echo/{Id}")], new Dictionary<string, object?> { ["Id"] = string.Empty });
+
+        ((int)overHttp.StatusCode).Should().Be(404);
+        result.IsError.Should().BeTrue();
+        Text(result).Should().Contain("'Id'");
+    }
+
+    [Fact]
+    public async Task Tools_mapped_after_another_apps_API_are_refused_at_mapping_even_with_rendering_deferred()
+    {
+        // Deferred, the tools are not made until the first request, so only a check at mapping refuses them at start-up
+        // rather than serving another app's schemas through its endpoints and policies.
+        var act = () => McpTestHost.StartAsync(renderOnFirstRequest: true, mapSampleAppBetween: true);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*McpTestBlueprintApp*MapBlueprintApi*");
+    }
+
     [Fact]
     public async Task A_path_argument_reaches_the_handler_decoded_as_HTTP_gives_it()
     {

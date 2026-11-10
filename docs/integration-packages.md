@@ -604,6 +604,9 @@ calls it there with the SDK's own MCP client.
   called at, and a HEAD operation's result has its status and no body, as HTTP gives it.
 - **One mapping per tool set.** The tools run through the endpoints of the `MapBlueprintApi` call mapped last before
   `MapBlueprintMcp`, so an app mapped under two base paths, each with its own conventions, can have tools for each.
+  `MapBlueprintMcp` refuses to map when that call was another app's, rather than serve its schemas and policies.
+- **Route values are HTTP's.** An empty path argument is refused as missing, as no HTTP route matches an empty
+  segment, and a slash within one reaches the operation escaped (`a%2Fb`), as routing gives it over HTTP.
 - **Results are the HTTP response.** The body is the tool result's text, read in the charset its content type
   declares (UTF-8 when it declares none), and its structured content when it is a JSON object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
   problem body an HTTP caller gets, a call that fails validation the same 422.

@@ -9,11 +9,16 @@ internal sealed class MappedBlueprintApi
     /// <summary>
     /// Initializes a new instance of the <see cref="MappedBlueprintApi"/> class.
     /// </summary>
+    /// <param name="appType">The app whose API it maps.</param>
     /// <param name="basePath">The base path the API is mapped under, with a leading slash.</param>
-    public MappedBlueprintApi(string basePath)
+    public MappedBlueprintApi(Type appType, string basePath)
     {
+        this.AppType = appType;
         this.BasePath = basePath;
     }
+
+    /// <summary>Gets the app whose API it maps.</summary>
+    public Type AppType { get; }
 
     /// <summary>Gets the base path the API is mapped under, with a leading slash.</summary>
     public string BasePath { get; }

@@ -8,7 +8,7 @@ namespace Blueprint.Mcp.Tests;
 public sealed class OperationToolRequestTests
 {
     [Fact]
-    public void A_path_argument_is_written_into_the_path_as_a_server_decodes_it_and_given_unescaped_as_its_route_value()
+    public void A_path_argument_is_written_into_the_path_and_its_route_value_as_a_server_and_routing_give_them()
     {
         var request = Create(
             "api/templates/{Id}",
@@ -16,7 +16,7 @@ public sealed class OperationToolRequestTests
             """{ "Id": "a b/c" }""");
 
         request.Path.Should().Be("/api/templates/a b%2Fc");
-        request.RouteValues["Id"].Should().Be("a b/c");
+        request.RouteValues["Id"].Should().Be("a b%2Fc");
     }
 
     [Fact]
