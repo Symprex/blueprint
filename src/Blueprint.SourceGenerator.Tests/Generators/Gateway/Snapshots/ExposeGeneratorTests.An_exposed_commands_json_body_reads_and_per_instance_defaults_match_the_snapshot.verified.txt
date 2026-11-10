@@ -7,30 +7,28 @@ namespace Gateway;
 
 partial class TagGatewayWidgetCommand
 {
-    private static readonly global::Inner.TagWidgetCommand __blueprintExposedDefaults = new global::Inner.TagWidgetCommand();
+    [global::System.ThreadStatic]
+    private static global::Inner.TagWidgetCommand? __blueprintExposedDefaults;
 
-    /// <summary>Starts every mutable inner default from one inner operation of this operation's own.</summary>
-    public TagGatewayWidgetCommand()
+    private static global::Inner.TagWidgetCommand __blueprintReadExposedDefaults(bool first)
     {
-        var __blueprintOwnDefaults = new global::Inner.TagWidgetCommand();
-        this.Tags = __blueprintOwnDefaults.Tags;
-        this.Labels = __blueprintOwnDefaults.Labels;
+        return first || __blueprintExposedDefaults is null ? __blueprintExposedDefaults = new global::Inner.TagWidgetCommand() : __blueprintExposedDefaults;
     }
 
     /// <inheritdoc cref="global::Inner.TagWidgetCommand.Id"/>
-    public string Id { get; set; } = __blueprintExposedDefaults.Id;
+    public string Id { get; set; } = __blueprintReadExposedDefaults(true).Id;
 
     /// <inheritdoc cref="global::Inner.TagWidgetCommand.Name"/>
-    public string Name { get; set; } = __blueprintExposedDefaults.Name;
+    public string Name { get; set; } = __blueprintReadExposedDefaults(false).Name;
 
     /// <inheritdoc cref="global::Inner.TagWidgetCommand.Weight"/>
-    public int Weight { get; set; } = __blueprintExposedDefaults.Weight;
+    public int Weight { get; set; } = __blueprintReadExposedDefaults(false).Weight;
 
     /// <inheritdoc cref="global::Inner.TagWidgetCommand.Tags"/>
-    public global::System.Collections.Generic.List<string> Tags { get; set; }
+    public global::System.Collections.Generic.List<string> Tags { get; set; } = __blueprintReadExposedDefaults(false).Tags;
 
     /// <inheritdoc cref="global::Inner.TagWidgetCommand.Labels"/>
-    public global::System.Collections.Generic.Dictionary<string, string>? Labels { get; set; }
+    public global::System.Collections.Generic.Dictionary<string, string>? Labels { get; set; } = __blueprintReadExposedDefaults(false).Labels;
 }
 
 Gateway.TagGatewayWidgetCommandExecutorPipeline.g.cs:

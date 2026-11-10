@@ -202,8 +202,8 @@ public class ExposeGeneratorTests
 
         var properties = run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs");
         properties.Should().Contain("[global::System.ComponentModel.DataAnnotations.RequiredAttribute]")
-            .And.Contain("public string Id { get; set; } = __blueprintExposedDefaults.Id;")
-            .And.Contain("public int Revisions { get; set; } = __blueprintExposedDefaults.Revisions;")
+            .And.Contain("public string Id { get; set; } = __blueprintReadExposedDefaults(true).Id;")
+            .And.Contain("public int Revisions { get; set; } = __blueprintReadExposedDefaults(false).Revisions;")
             .And.Contain("[global::Blueprint.Model.Attributes.FromHeaderAttribute(\"X-Region\")]")
             .And.Contain("/// <inheritdoc cref=\"global::Inner.GetWidgetQuery.Id\"/>")
             .And.NotContain("Zone")
@@ -280,7 +280,7 @@ public class ExposeGeneratorTests
 
         run.EmitErrors.Should().BeEmpty();
         var properties = run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs");
-        properties.Should().Contain("public required string Id { get; set; } = __blueprintExposedDefaults.Id;")
+        properties.Should().Contain("public required string Id { get; set; } = __blueprintReadExposedDefaults(true).Id;")
             .And.Contain("global::System.Activator.CreateInstance(typeof(global::Inner.GetWidgetQuery))");
     }
 
@@ -297,7 +297,7 @@ public class ExposeGeneratorTests
 
         run.EmitErrors.Should().BeEmpty();
         var properties = run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs");
-        properties.Should().Contain("public required int Revisions { get; set; } = __blueprintExposedDefaults.Revisions;")
+        properties.Should().Contain("public required int Revisions { get; set; } = __blueprintReadExposedDefaults(false).Revisions;")
             .And.Contain("(global::Inner.GetWidgetQuery)global::System.Activator.CreateInstance(typeof(global::Inner.GetWidgetQuery))!")
             .And.NotContain("Revisions = default!");
     }
@@ -344,121 +344,6 @@ public class ExposeGeneratorTests
                 new[] { "Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs", "Gateway.TagGatewayWidgetCommandExecutorPipeline.g.cs" }
                     .Select(hint => hint + ":\n\n" + run.Source(hint))))
             .UseDirectory("Snapshots");
-    }
-
-    [Fact]
-    public void A_mutable_inner_default_is_created_for_each_instance_and_an_immutable_one_is_read_from_the_shared_defaults()
-    {
-        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(CommandInnerSource, "InnerContract");
-
-        var run = RunAllGenerators([CommandClientSource, CommandGatewaySource, AppSource], contract);
-
-        run.EmitErrors.Should().BeEmpty();
-        var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
-        properties.Should().Contain("public global::System.Collections.Generic.List<string> Tags { get; set; }" + Environment.NewLine)
-            .And.Contain("public global::System.Collections.Generic.Dictionary<string, string>? Labels { get; set; }" + Environment.NewLine)
-            .And.Contain("this.Tags = __blueprintOwnDefaults.Tags;")
-            .And.Contain("this.Labels = __blueprintOwnDefaults.Labels;")
-            .And.Contain("public string Name { get; set; } = __blueprintExposedDefaults.Name;")
-            .And.Contain("public int Weight { get; set; } = __blueprintExposedDefaults.Weight;");
-
-        // One inner operation per gateway operation, however many mutable defaults it has: Tags and Labels used to make an
-        // inner each, so every mutable default was allocated once for each of them.
-        CountOf(properties, "var __blueprintOwnDefaults = new global::Inner.TagWidgetCommand();").Should().Be(1);
-        CountOf(properties, "new global::Inner.TagWidgetCommand()").Should().Be(2, "the shared defaults and the constructor make one each");
-    }
-
-    [Fact]
-    public void A_mutable_inner_default_of_an_operation_that_declares_a_constructor_is_created_for_each_property()
-    {
-        // The generated partial cannot add a parameterless constructor beside the operation's own, so each mutable default
-        // falls back to an inner operation of its own.
-        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(CommandInnerSource, "InnerContract");
-        var gateway = CommandGatewaySource.Replace(
-            "public partial class TagGatewayWidgetCommand : ICommand<Inner.WidgetResult>;",
-            "public partial class TagGatewayWidgetCommand : ICommand<Inner.WidgetResult> { public TagGatewayWidgetCommand() { } }",
-            StringComparison.Ordinal);
-
-        var run = RunAllGenerators([CommandClientSource, gateway, AppSource], contract);
-
-        run.EmitErrors.Should().BeEmpty();
-        var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
-        properties.Should().Contain("Tags { get; set; } = new global::Inner.TagWidgetCommand().Tags;")
-            .And.Contain("Labels { get; set; } = new global::Inner.TagWidgetCommand().Labels;")
-            .And.NotContain("__blueprintOwnDefaults");
-    }
-
-    [Fact]
-    public void A_mutable_inner_default_of_an_operation_whose_base_constructor_sets_required_members_is_created_for_each_property()
-    {
-        // Such an operation has to declare a [SetsRequiredMembers] constructor of its own, as its implicit one would not
-        // compile (CS9039), so the partial adds none beside it and the defaults stay initialisers.
-        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(CommandInnerSource, "InnerContract");
-        const string WithBase = """
-            public partial class TagGatewayWidgetCommand : GatewayCommandBase, ICommand<Inner.WidgetResult>
-                {
-                    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
-                    public TagGatewayWidgetCommand()
-                    {
-                    }
-                }
-
-                public abstract class GatewayCommandBase
-                {
-                    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
-                    protected GatewayCommandBase()
-                    {
-                        this.Tenant = "default";
-                    }
-
-                    public required string Tenant { get; set; }
-                }
-            """;
-        var gateway = CommandGatewaySource.Replace("public partial class TagGatewayWidgetCommand : ICommand<Inner.WidgetResult>;", WithBase, StringComparison.Ordinal);
-
-        var run = RunAllGenerators([CommandClientSource, gateway, AppSource], contract);
-
-        run.EmitErrors.Should().BeEmpty();
-        var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
-        properties.Should().Contain("Tags { get; set; } = new global::Inner.TagWidgetCommand().Tags;")
-            .And.NotContain("__blueprintOwnDefaults");
-    }
-
-    [Fact]
-    public void A_value_type_default_that_holds_a_mutable_reference_is_not_shared()
-    {
-        // Every value type used to be shared, so an ArraySegment<string> default left every gateway operation writing to
-        // one backing array.
-        var inner = CommandInnerSource.Replace(
-            "public int Weight { get; set; } = 1;",
-            "public int Weight { get; set; } = 1;\n\n                public System.ArraySegment<string> Slots { get; set; } = new(new string[2]);\n\n                public System.Guid Ref { get; set; } = System.Guid.NewGuid();",
-            StringComparison.Ordinal);
-        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
-
-        var run = RunAllGenerators([CommandClientSource, CommandGatewaySource, AppSource], contract);
-
-        run.EmitErrors.Should().BeEmpty();
-        var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
-        properties.Should().Contain("this.Slots = __blueprintOwnDefaults.Slots;")
-            .And.NotContain("__blueprintExposedDefaults.Slots")
-            .And.Contain("public global::System.Guid Ref { get; set; } = __blueprintExposedDefaults.Ref;");
-    }
-
-    [Fact]
-    public void A_mutable_default_of_an_inner_op_with_required_members_is_created_for_each_instance_without_setting_them()
-    {
-        var inner = CommandInnerSource.Replace("public List<string> Tags { get; set; } = new();", "public required List<string> Tags { get; set; } = new();", StringComparison.Ordinal);
-        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
-
-        var run = RunAllGenerators([CommandClientSource, CommandGatewaySource, AppSource], contract);
-
-        run.EmitErrors.Should().BeEmpty();
-        var properties = run.Source("Gateway.TagGatewayWidgetCommand_ExposedProperties.g.cs");
-        properties.Should().Contain("var __blueprintOwnDefaults = (global::Inner.TagWidgetCommand)global::System.Activator.CreateInstance(typeof(global::Inner.TagWidgetCommand))!;")
-            .And.Contain("public required global::System.Collections.Generic.List<string> Tags { get; set; }" + Environment.NewLine)
-            .And.Contain("this.Tags = __blueprintOwnDefaults.Tags;")
-            .And.Contain("this.Labels = __blueprintOwnDefaults.Labels;")
-            .And.Contain("public string Name { get; set; } = __blueprintExposedDefaults.Name;");
     }
 
     [Fact]
@@ -534,7 +419,7 @@ public class ExposeGeneratorTests
     [Fact]
     public void When_an_inner_property_has_no_public_getter_then_BPGW020_is_reported_and_the_partial_still_compiles()
     {
-        // The emitted property used to start from __blueprintExposedDefaults.X whatever the inner getter, which does not
+        // The emitted property used to start from the inner defaults instance whatever the inner getter, which does not
         // compile for a private getter (CS0271) or none (CS0154). Its default cannot be read at all, so forwarding it would
         // replace the inner operation's own ("west") with the type's default whenever the caller omits it.
         var inner = InnerSource.Replace(
@@ -551,8 +436,8 @@ public class ExposeGeneratorTests
         var properties = run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs");
         properties.Should().Contain("public string Secret { get; set; } = default!;")
             .And.Contain("public string WriteOnly { get; set; } = default!;")
-            .And.NotContain("__blueprintExposedDefaults.Secret")
-            .And.NotContain("__blueprintExposedDefaults.WriteOnly");
+            .And.NotContain(".Secret;")
+            .And.NotContain(".WriteOnly;");
     }
 
     [Fact]
@@ -591,6 +476,131 @@ public class ExposeGeneratorTests
         var level = (IPropertySymbol)run.Output.GetTypeByMetadataName("Gateway.GetGatewayWidgetQuery")!.GetMembers("Level").Single();
         var denied = level.GetAttributes().Single(static a => a.AttributeClass!.Name == "DeniedValuesAttribute").ConstructorArguments.Single();
         denied.Values.Select(static v => v.Value!.GetType()).Should().Equal(typeof(short), typeof(byte), typeof(sbyte), typeof(ushort), typeof(double));
+    }
+
+    [Fact]
+    public void A_required_field_a_SetsRequiredMembers_constructor_initialises_is_not_BPGW019()
+    {
+        // BPGW019 used to be reported for every required member the forward does not set, though `new TInner { … }` calls
+        // a constructor that sets them all.
+        var inner = InnerSource.Replace(
+            "public string ComputedOnly",
+            "public required string Code;\n\n            [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]\n            public GetWidgetQuery() { this.Code = \"x\"; }\n\n            public string ComputedOnly",
+            StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
+
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.GetGatewayWidgetQueryExecutorPipeline.g.cs").Should().Contain("new global::Inner.GetWidgetQuery {");
+    }
+
+    [Fact]
+    public void Each_exposed_operation_instance_starts_from_a_fresh_inner_default()
+    {
+        // The defaults used to be read from one static inner instance, so a per-construction default (Guid.NewGuid(),
+        // DateTimeOffset.UtcNow, a new list) was the same for every exposed operation for the life of the process.
+        var inner = InnerSource.Replace(
+            "public string ComputedOnly",
+            "public System.Guid Token { get; set; } = System.Guid.NewGuid();\n\n            public string ComputedOnly",
+            StringComparison.Ordinal);
+        var innerImage = EmitWithDescriptors(inner);
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(innerImage));
+
+        run.EmitErrors.Should().BeEmpty();
+        using var gateway = new MemoryStream();
+        run.Output.Emit(gateway).Success.Should().BeTrue();
+
+        var context = new InMemoryLoadContext(("InnerContract", innerImage));
+        var type = context.LoadFromStream(new MemoryStream(gateway.ToArray())).GetType("Gateway.GetGatewayWidgetQuery", throwOnError: true)!;
+        var token = type.GetProperty("Token")!;
+        var revisions = type.GetProperty("Revisions")!;
+
+        var first = Activator.CreateInstance(type)!;
+        var second = Activator.CreateInstance(type)!;
+
+        token.GetValue(first).Should().NotBe(Guid.Empty);
+        token.GetValue(second).Should().NotBe(token.GetValue(first));
+        revisions.GetValue(first).Should().Be(1, "the inner initialiser's value");
+    }
+
+    [Fact]
+    public void An_inner_constructor_callable_without_arguments_gives_the_defaults()
+    {
+        // Only a parameterless constructor used to count, so with GetWidgetQuery(int unused = 0) the defaults were not read
+        // and Revisions started at 0, replacing the inner 1 whenever the caller omitted it.
+        var inner = InnerSource.Replace(
+            "public string ComputedOnly",
+            "public GetWidgetQuery(int unused = 0) { }\n\n            public string ComputedOnly",
+            StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs").Should().MatchRegex(@"public int Revisions \{ get; set; \} = __blueprintReadExposedDefaults\((true|false)\)\.Revisions;");
+    }
+
+    [Fact]
+    public void When_an_inner_attribute_uses_a_constructor_the_gateway_cannot_access_then_BPGW018_is_reported()
+    {
+        // Only the attribute's class and argument types were checked, so a public attribute applied through an internal
+        // constructor was emitted and failed with CS0122.
+        var inner = InnerSource.Replace(
+            "[FromHeader(\"X-Region\")]",
+            "[FromHeader(\"X-Region\")]\n        [Tag(\"region\")]",
+            StringComparison.Ordinal) + """
+
+            namespace Inner
+            {
+                [System.AttributeUsage(System.AttributeTargets.Property)]
+                public sealed class TagAttribute : System.Attribute
+                {
+                    internal TagAttribute(string name) { }
+
+                    public TagAttribute() { }
+                }
+            }
+            """;
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
+
+        run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW018").Which.GetMessage().Should().Contain("TagAttribute");
+        run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs").Should().NotContain("TagAttribute");
+        run.EmitErrors.Should().NotContain(static e => e.Contains("CS0122", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_null_attribute_argument_keeps_the_constructor_overload_it_selected()
+    {
+        // A null argument used to be rendered as an untyped null, which is ambiguous between string? and Type? overloads.
+        var inner = InnerSource.Replace(
+            "[FromHeader(\"X-Region\")]",
+            "[FromHeader(\"X-Region\")]\n        [Rule((string?)null)]",
+            StringComparison.Ordinal) + """
+
+            namespace Inner
+            {
+                [System.AttributeUsage(System.AttributeTargets.Property)]
+                public sealed class RuleAttribute : System.Attribute
+                {
+                    public RuleAttribute(string? name) { }
+
+                    public RuleAttribute(System.Type? type) { }
+                }
+            }
+            """;
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        var region = (IPropertySymbol)run.Output.GetTypeByMetadataName("Gateway.GetGatewayWidgetQuery")!.GetMembers("Region").Single();
+        region.GetAttributes().Single(static a => a.AttributeClass!.Name == "RuleAttribute").AttributeConstructor!.Parameters.Single().Type.SpecialType
+            .Should().Be(SpecialType.System_String);
     }
 
     [Fact]
@@ -801,11 +811,6 @@ public class ExposeGeneratorTests
         return tree.GetText().ToString(diagnostic.Location.SourceSpan);
     }
 
-    private static int CountOf(string source, string value)
-    {
-        return (source.Length - source.Replace(value, string.Empty, StringComparison.Ordinal).Length) / value.Length;
-    }
-
     private static string Updated(MultiGeneratorEditResult result, string hintName)
     {
         return result.Updated.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator))
@@ -855,6 +860,28 @@ public class ExposeGeneratorTests
     }
 
     /// <summary>
+    /// Compiles an inner contract with what the descriptor generator emits for it, and returns its image, for a test that
+    /// loads it to run the gateway's code.
+    /// </summary>
+    private static byte[] EmitWithDescriptors(string source)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var compilation = CSharpCompilation.Create(
+            "InnerContract",
+            [CSharpSyntaxTree.ParseText(source, parseOptions)],
+            TestHelpers.CreateMetadataReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        CSharpGeneratorDriver.Create([new OperationDescriptorSourceGenerator().AsSourceGenerator()], parseOptions: parseOptions)
+            .RunGeneratorsAndUpdateCompilation(compilation, out var generated, out _);
+
+        using var stream = new MemoryStream();
+        var emit = generated.Emit(stream);
+        emit.Success.Should().BeTrue(string.Join(Environment.NewLine, emit.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error)));
+        return stream.ToArray();
+    }
+
+    /// <summary>
     /// Builds a referenced assembly as a consumer's is built, with its operations' request builders and its typed clients'
     /// generated halves, which another assembly's generators see only as metadata.
     /// </summary>
@@ -890,6 +917,26 @@ public class ExposeGeneratorTests
             sources.Select((s, i) => CSharpSyntaxTree.ParseText(s, parseOptions, s.Contains("[Expose<", StringComparison.Ordinal) ? "Gateway.cs" : $"Input{i}.cs")),
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+    }
+
+    /// <summary>
+    /// Loads in-memory assemblies by name, and everything else as the test itself has it.
+    /// </summary>
+    private sealed class InMemoryLoadContext(params (string Name, byte[] Image)[] images)
+        : System.Runtime.Loader.AssemblyLoadContext(isCollectible: true)
+    {
+        protected override System.Reflection.Assembly? Load(System.Reflection.AssemblyName assemblyName)
+        {
+            foreach (var (name, image) in images)
+            {
+                if (name == assemblyName.Name)
+                {
+                    return this.LoadFromStream(new MemoryStream(image));
+                }
+            }
+
+            return null;
+        }
     }
 
     private sealed record AllGeneratorsRun(

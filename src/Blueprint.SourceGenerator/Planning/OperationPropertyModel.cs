@@ -61,25 +61,14 @@ public sealed record OperationPropertyModel(
 /// </summary>
 /// <param name="MetadataName">The inner operation's fully qualified metadata name.</param>
 /// <param name="TypeName">The inner operation as C# source, <c>global::</c>-qualified.</param>
-/// <param name="RequiredMemberNames">
-/// The names of the inner operation's <c>required</c> members, which an object creation of it has to set, so that the
-/// emitted partial can read the inner defaults from a static instance.
-/// </param>
-/// <param name="CanCreateDefaults">
-/// Whether the exposing assembly can create an instance of the inner operation with a parameterless constructor, to
-/// read the defaults its initialisers give, which metadata does not carry.
-/// </param>
-/// <param name="OperationDeclaresConstructor">
-/// Whether the exposing operation declares an instance constructor of its own, in which case the emitted partial cannot add
-/// the constructor that copies every mutable default from one fresh inner instance. An operation whose base constructor is
-/// <c>[SetsRequiredMembers]</c> always does, because its implicit constructor would not compile (CS9039).
+/// <param name="DefaultsCreation">
+/// The C# expression that creates an inner operation to read the defaults its initialisers give, which metadata does not
+/// carry, or <see langword="null"/> when the exposing assembly cannot create one.
 /// </param>
 public sealed record ExposedOperationInfo(
     string MetadataName,
     string TypeName,
-    EquatableList<string> RequiredMemberNames,
-    bool CanCreateDefaults,
-    bool OperationDeclaresConstructor);
+    string? DefaultsCreation);
 
 /// <summary>
 /// One property of an <see cref="OperationPropertyModel"/>.
@@ -101,11 +90,6 @@ public sealed record ExposedOperationInfo(
 /// Where to report a diagnostic about the property: the declaration for a declared one, the <c>[Expose&lt;TInner&gt;]</c>
 /// attribute for a contributed one.
 /// </param>
-/// <param name="CanShareDefault">
-/// Whether one instance's default can safely be shared by every instance: an unmanaged value type or a <see cref="string"/>,
-/// neither of which can reach a mutable object. Any other type, such as a list or a struct holding an array, may be mutated
-/// through one instance, so a contributed property of that type starts from a default of its own (#152).
-/// </param>
 public sealed record OperationPropertyInfo(
     string Name,
     string TypeName,
@@ -117,5 +101,4 @@ public sealed record OperationPropertyInfo(
     bool IsRequired,
     EquatableList<string> Attributes,
     string? DocumentationCommentXml,
-    LocationInfo? Location,
-    bool CanShareDefault);
+    LocationInfo? Location);
