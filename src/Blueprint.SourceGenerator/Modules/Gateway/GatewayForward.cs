@@ -139,7 +139,8 @@ public static class GatewayForward
         var copied = GetCopiedProperties(operationType, exposedType, out var unreadable);
 
         // The pipeline reads each copied property from outside the operation, which a declared one with a getter that is
-        // not public, or none, does not allow (CS0271, CS0154). A contributed one is emitted with a public getter.
+        // not public, or none, does not allow (CS0271, CS0154). A contributed one is emitted with a public getter, but
+        // without one on the inner property its default cannot be read, and the forward would send the type's instead.
         if (unreadable.Count > 0)
         {
             return Result<OperationHandlerModel>.Failure(new DiagnosticInfo(
@@ -261,7 +262,10 @@ public static class GatewayForward
             {
                 copied.Add(property.Info.Name);
 
-                if (property.Info.Origin == OperationPropertyOrigin.Declared && !property.Info.HasPublicGetter)
+                // A declared property the pipeline cannot read; or an inner one whose default the emitted property cannot
+                // start from, so forwarding it would replace the inner operation's default whenever the caller omits it.
+                if (!property.Info.HasPublicGetter
+                    || (property.Info.Origin == OperationPropertyOrigin.Contributed && innerProperty.GetMethod is not { DeclaredAccessibility: Accessibility.Public }))
                 {
                     unreadable.Add(property.Info.Name);
                 }

@@ -346,10 +346,11 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
-    public void An_inner_property_the_gateway_cannot_read_is_contributed_without_reading_its_default()
+    public void When_an_inner_property_has_no_public_getter_then_BPGW020_is_reported_and_the_partial_still_compiles()
     {
         // The emitted property used to start from __blueprintExposedDefaults.X whatever the inner getter, which does not
-        // compile for a private getter (CS0271) or none (CS0154).
+        // compile for a private getter (CS0271) or none (CS0154). Its default cannot be read at all, so forwarding it would
+        // replace the inner operation's own ("west") with the type's default whenever the caller omits it.
         var inner = InnerSource.Replace(
             "public string ComputedOnly",
             "public string Secret { private get; set; } = \"west\";\n\n            public string WriteOnly { set { } }\n\n            public string ComputedOnly",
@@ -358,8 +359,9 @@ public class ExposeGeneratorTests
 
         var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], contract);
 
-        run.GeneratorErrors.Should().BeEmpty();
-        run.EmitErrors.Should().BeEmpty();
+        var diagnostic = run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW020").Which;
+        diagnostic.GetMessage().Should().Contain("Secret").And.Contain("WriteOnly").And.Contain("GetWidgetQuery");
+        run.EmitErrors.Should().NotContain(static e => e.Contains("CS0271", StringComparison.Ordinal) || e.Contains("CS0154", StringComparison.Ordinal));
         var properties = run.Source("Gateway.GetGatewayWidgetQuery_ExposedProperties.g.cs");
         properties.Should().Contain("public string Secret { get; set; } = default!;")
             .And.Contain("public string WriteOnly { get; set; } = default!;")
