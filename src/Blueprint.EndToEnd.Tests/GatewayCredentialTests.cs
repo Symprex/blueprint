@@ -76,6 +76,19 @@ public sealed class GatewayCredentialTests(SampleSystemFixture system)
     }
 
     [Fact]
+    public async Task The_inner_service_refuses_a_tenant_query_from_the_tenants_account_without_template_read()
+    {
+        // Tenant isolation checks only the account; the template read scope GetTemplateQuery requires still applies.
+        var id = await system.SeedTemplateAsync("Tenant Unscoped Template");
+        var token = system.Issuer.CreateToken([new Claim("sub", "e2e-tenant"), new Claim("account_id", TenantId)]);
+        using var inner = system.Inner.CreateClient(token);
+
+        var response = await inner.GetAsync($"api/tenants/{TenantId}/templates/{id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task A_generated_forward_answers_an_upstream_problem_its_TranslateError_names_as_the_gateways_own()
     {
         using var caller = system.NativeGateway.CreateClient(this.CreateTenantCallerToken());

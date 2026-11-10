@@ -894,6 +894,34 @@ public class ExposeGeneratorTests
         run.EmitErrors.Should().BeEmpty();
     }
 
+    [Fact]
+    public void When_an_apps_translation_target_becomes_invalid_then_the_same_driver_reports_BPGW017_and_clears_it_when_repaired()
+    {
+        // The app's operation scan is cached while its attributed declaration is unchanged; its translation check must not
+        // be, since the factory can be declared in another part of the class.
+        var app = AppSource.Replace(
+            "public partial class GatewayApp : BlueprintApp;",
+            "[Blueprint.Model.Attributes.TranslateError(\"widget_gone\", nameof(Missing))]\n    public partial class GatewayApp : BlueprintApp;",
+            StringComparison.Ordinal);
+        static string Factory(string factoryType) =>
+            "namespace Gateway { public partial class GatewayApp { public static " + factoryType + " Missing { get; } = default!; } }";
+
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var valid = CreateCompilation([ClientSource, GatewaySource, app, Factory("Blueprint.ApiExceptionFactory")]);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new AppDataModelSourceGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+
+        driver = driver.RunGenerators(valid);
+        driver.GetRunResult().Diagnostics.Should().NotContain(static d => d.Id == "BPGW017");
+
+        var factoryTree = valid.SyntaxTrees.Last();
+        var invalid = valid.ReplaceSyntaxTree(factoryTree, CSharpSyntaxTree.ParseText(Factory("string"), (CSharpParseOptions)factoryTree.Options, factoryTree.FilePath));
+        driver = driver.RunGenerators(invalid);
+        driver.GetRunResult().Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW017");
+
+        driver = driver.RunGenerators(valid);
+        driver.GetRunResult().Diagnostics.Should().NotContain(static d => d.Id == "BPGW017");
+    }
+
     /// <summary>
     /// Adds an internal validation attribute to the inner operation's <c>Revisions</c>, visible to the gateway's assembly or not.
     /// </summary>

@@ -7,12 +7,13 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// <summary>
 /// Gets a single template within a tenant. Demonstrates a tenant-scoped read: <c>TenantIsolationApiAuthoriser</c> answers
 /// 403 unless the caller's account is the tenant, so a gateway reaches it with a tenant token rather than the caller's own.
+/// It reads the same store as <see cref="GetTemplateQuery"/>, so it requires the same <c>template:read</c> as well.
 /// An unknown identifier is a thrown <c>not_found</c> problem, not a declared result.
 /// </summary>
 [ApiOperations("Templates")]
+[FromResource(typeof(GetTemplatesQuery))]
 [RootLink("/tenants/{TenantId}/templates/{Id}")]
 [HttpGet]
-[MustBeAuthenticated]
 [Description("Retrieve a single template within a tenant.")]
 public partial class GetTenantTemplateQuery : IQuery<TemplateApiResource>
 {

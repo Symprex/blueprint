@@ -157,6 +157,14 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
             .WithComparer(CombinedProviderComparer<Result<ParseOnlyDataModel>>.Instance)
             .WithTrackingName(Stages.CombineWithCompilation);
 
+        // An app's [TranslateError]s apply to every forward it hosts (D8); the operations' own are checked by GatewayModule.
+        // Checked against every compilation, not behind the comparer above: the factory a translation names can be
+        // declared, or changed, in another part of the app class.
+        context.RegisterDiagnosticOutput(classProvider
+            .Combine(context.CompilationProvider)
+            .Select(static (pair, _) => AnalyseAppTranslations(pair.Left, pair.Right))
+            .WithTrackingName(Stages.AppTranslations));
+
         var generationModelProvider = combinedProvider
             .Combine(executionPlanProvider)
             .Combine(exceptionTranslationPolicyProvider)
@@ -410,6 +418,24 @@ public sealed partial class AppDataModelSourceGenerator : IIncrementalGenerator,
         /// Tracks assembly scanning and operation-registration discovery.
         /// </summary>
         public const string FindServicesToRegister = nameof(FindServicesToRegister);
+
+        /// <summary>
+        /// Tracks the check of the app's own <c>[TranslateError]</c>s, which runs against every compilation.
+        /// </summary>
+        public const string AppTranslations = nameof(AppTranslations);
+    }
+
+    /// <summary>
+    /// Checks an app's own <c>[TranslateError]</c>s (BPGW017).
+    /// </summary>
+    /// <param name="model">The parsed app.</param>
+    /// <param name="compilation">The compilation the app's members are read from.</param>
+    /// <returns>BPGW017 for each translation that names no static <c>ApiExceptionFactory</c> of the app.</returns>
+    private static EquatableList<DiagnosticInfo> AnalyseAppTranslations(Result<ParseOnlyDataModel> model, Compilation compilation)
+    {
+        return model.Value is { } parsed && compilation.GetTypeByMetadataName(parsed.Class.MetadataName) is { } appType
+            ? EquatableList<DiagnosticInfo>.TakeOwnership(Modules.Gateway.UpstreamForwardPolicyAnalysis.AnalyseTranslations(appType).ToList())
+            : EquatableList<DiagnosticInfo>.Empty;
     }
 }
 
