@@ -988,6 +988,25 @@ public class ExposeGeneratorTests
         Located(diagnostic).Should().StartWith("Blueprint.Model.Attributes.TranslateError(");
     }
 
+    [Theory]
+    [InlineData("public static Blueprint.ApiExceptionFactory? Missing = new(\"Missing\", \"missing\", 404);")]
+    [InlineData("public static Blueprint.ApiExceptionFactory? Missing { get; } = new(\"Missing\", \"missing\", 404);")]
+    public void A_nullable_static_ApiExceptionFactory_is_a_valid_translation_target_on_an_operation_and_an_app(string member)
+    {
+        // The runtime reads the factory whatever its nullable annotation, so BPGW017 must not reject one.
+        var gateway = CredentialGatewaySource.Replace("nameof(WidgetMissing)", "nameof(Missing)", StringComparison.Ordinal)
+            .Replace("public static readonly string NotAFactory = \"\";", member, StringComparison.Ordinal);
+        var app = AppSource.Replace(
+            "public partial class GatewayApp : BlueprintApp;",
+            "[Blueprint.Model.Attributes.TranslateError(\"widget_gone\", nameof(Missing))]\n    public partial class GatewayApp : BlueprintApp { " + member + " }",
+            StringComparison.Ordinal);
+
+        var run = RunAllGenerators([ClientSource, CredentialSource, gateway, app]);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW017");
+        run.EmitErrors.Should().BeEmpty();
+    }
+
     [Fact]
     public void When_the_credential_and_translations_are_valid_then_no_credential_or_translation_diagnostic_is_reported()
     {

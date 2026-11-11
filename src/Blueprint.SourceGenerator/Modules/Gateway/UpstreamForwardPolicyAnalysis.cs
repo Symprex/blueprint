@@ -109,8 +109,9 @@ public static class UpstreamForwardPolicyAnalysis
 
     private static bool IsFactory(ITypeSymbol type)
     {
+        // The metadata name carries no nullable annotation, which ToString() would ("ApiExceptionFactory?").
         return type is INamedTypeSymbol named
-            && (named.ToString() == ApiExceptionFactoryName || named.InheritsFrom(ApiExceptionFactoryName));
+            && (named.ToFullMetadataName() == ApiExceptionFactoryName || named.InheritsFrom(ApiExceptionFactoryName));
     }
 
     private static LocationInfo? LocationOf(AttributeData attribute, INamedTypeSymbol declaringType)
