@@ -577,7 +577,7 @@ public partial class AddGatewayPartnerNoteCommand : ICommand<TenantNoteApiResour
 ```
 
 - **Tiers.** An operation's `[Bind]` or `[Hide]` overrides the assembly's `[GatewayBind]` for the same property.
-- **Sources.** `[Bind]` sets exactly one of `FromClaim`, `FromRoute` (a placeholder of the gateway's own route, read from the property the route fills), `FromProperty` (a property the gateway class declares, with a public getter) or `Value`. `[GatewayBind]` takes `FromClaim`.
+- **Sources.** `[Bind]` sets exactly one of `FromClaim`, `FromRoute` (a placeholder every one of the gateway's own routes carries, read from the property the route fills), `FromProperty` (a property the gateway class declares, with a public getter) or `Value`. `[GatewayBind]` takes `FromClaim`.
 - **Claims.** A claim converts to the property's type by the rules route binding uses: a string, a scalar, an enum, an `IParsable<T>`, a static `TryParse` or a `[TypeConverter]`. A caller without the claim, or whose claim does not convert, is refused with 403 before anything is sent upstream.
 - **The hook.** `void OnMap(TInner inner)`, not `async`, or `ValueTask`/`Task OnMapAsync(TInner inner, …)`, an `internal` or `public` instance method. An exception it throws stops the forward, so it is the guard too.
 - **Inner routes.** A placeholder of the inner operation's first route, the URL the forward sends, that the gateway's route lacks has to be bound or hidden (BPGW010): the inner request builder needs a value for it.

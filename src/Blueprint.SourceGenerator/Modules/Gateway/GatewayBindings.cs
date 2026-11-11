@@ -437,9 +437,20 @@ internal static class GatewayBindings
             return GatewayClaimConversion.String;
         }
 
-        if (effective.TypeKind == TypeKind.Enum || TypeConversionHelpers.ImplementsIParsable(effective))
+        // The shared helper writes a direct call: the scalar's own TryParse, or T.TryParse(value, provider, out T), which a
+        // type implementing IParsable<T> explicitly does not have. That one is parsed through the interface instead.
+        if (effective.TypeKind == TypeKind.Enum
+            || IsScalarWithOwnTryParse(effective)
+            || (TypeConversionHelpers.ImplementsIParsable(effective) && HasTryParse(effective, withProvider: true)))
         {
             tryParseFormat = TypeConversionHelpers.GetTryParseExpression(effective, ValueToken, ParsedToken);
+            return GatewayClaimConversion.TryParse;
+        }
+
+        if (TypeConversionHelpers.ImplementsIParsable(effective))
+        {
+            tryParseFormat = "global::Blueprint.Runtime.Exec.PipelineHelpers.TryParseInvariant<"
+                + effective.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ">(" + ValueToken + ", out var " + ParsedToken + ")";
             return GatewayClaimConversion.TryParse;
         }
 
@@ -472,6 +483,15 @@ internal static class GatewayBindings
         }
 
         return value.Type is not null && SymbolEqualityComparer.Default.Equals(value.Type, Unwrap(target));
+    }
+
+    /// <summary>
+    /// Whether the shared helper parses the type with the type's own public TryParse, written out for it.
+    /// </summary>
+    private static bool IsScalarWithOwnTryParse(ITypeSymbol type)
+    {
+        return type.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString()
+            is "int" or "long" or "double" or "float" or "bool" or "decimal" or "System.Guid" or "System.DateTime" or "System.DateTimeOffset";
     }
 
     private static bool HasTryParse(ITypeSymbol type, bool withProvider)
@@ -517,20 +537,33 @@ internal static class GatewayBindings
             : type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
     }
 
+    /// <summary>
+    /// Resolves a <c>FromRoute</c> placeholder to the property it binds, only when every one of the gateway's routes carries
+    /// it: on a route without it a POST fills the property from its body, and the forward would send that value instead.
+    /// </summary>
     private static string? ResolveRoutePlaceholder(INamedTypeSymbol operationType, Dictionary<string, IPropertySymbol> declared, string placeholder)
     {
+        string? resolved = null;
         foreach (var template in GetRouteTemplates(operationType))
         {
+            var found = false;
             foreach (Match match in Placeholder.Matches(template))
             {
                 if (string.Equals(match.Groups[1].Value, placeholder, StringComparison.OrdinalIgnoreCase))
                 {
-                    return RoutePlaceholderSyntax.ResolveMemberName(declared.Values, match.Groups[1].Value);
+                    resolved ??= RoutePlaceholderSyntax.ResolveMemberName(declared.Values, match.Groups[1].Value);
+                    found = true;
+                    break;
                 }
+            }
+
+            if (!found)
+            {
+                return null;
             }
         }
 
-        return null;
+        return resolved;
     }
 
     private static Dictionary<string, IPropertySymbol> GetSettableProperties(INamedTypeSymbol type)

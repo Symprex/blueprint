@@ -559,6 +559,48 @@ public class GatewayBindingGeneratorTests
     }
 
     [Fact]
+    public void A_claim_binds_a_type_that_implements_IParsable_explicitly()
+    {
+        const string region = """
+            namespace Inner
+            {
+                public readonly struct Region : System.IParsable<Region>
+                {
+                    static Region System.IParsable<Region>.Parse(string s, System.IFormatProvider? provider) => default;
+
+                    static bool System.IParsable<Region>.TryParse(string? s, System.IFormatProvider? provider, out Region result)
+                    {
+                        result = default;
+                        return s is not null;
+                    }
+                }
+            }
+            """;
+        var inner = InnerSource.Replace("public int Priority { get; set; }", "public int Priority { get; set; }\n\n                public Region Region { get; set; }", StringComparison.Ordinal) + "\n" + region;
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = WithAttributes(GatewaySource, "[Bind(\"Region\", FromClaim = \"region\")]");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().Contain("TryParseInvariant<global::Inner.Region>");
+    }
+
+    [Fact]
+    public void When_a_route_binding_reads_a_placeholder_one_of_the_gateways_routes_lacks_then_BPGW012_is_reported()
+    {
+        // On the route without it, a POST would fill the property from its body, and the forward would send that instead.
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Bind(nameof(Inner.AddNoteCommand.Source), FromRoute = \"Origin\")]")
+                .Replace("[RootLink(\"/gateway/notes\")]", "[RootLink(\"/gateway/notes/{Origin}\")]\n[RootLink(\"/gateway/notes\")]", StringComparison.Ordinal),
+            "public string? Origin { get; set; }");
+
+        var diagnostic = SingleDescriptorDiagnostic(gateway, "BPGW012");
+
+        diagnostic.GetMessage().Should().Contain("Origin");
+    }
+
+    [Fact]
     public void A_claim_binding_uses_a_types_converter_when_its_only_TryParse_is_private()
     {
         const string region = """
