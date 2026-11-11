@@ -762,13 +762,13 @@ upstream.Requests.Single().RequestAuthorization.Should().Be(new AuthenticationHe
 
   | The responder returns or throws | The client sees |
   |---|---|
-  | A value | 200 JSON, written with the client's JSON options and serializer context |
+  | A value | 200 JSON, written with the client's JSON options and serializer context, asynchronously, so an `IAsyncEnumerable<T>` is streamed as an array |
   | `null` | 204 |
   | `NoResultOperationResult` | An empty 200, as the host writes it |
   | `OkResult`, `CreatedResult`, `AcceptedResult`, `ConflictResult` | Its content, with its status |
   | `NotFoundResult<T>` | A JSON 404, read as a declared `NotFoundResult<T>` member |
   | `StatusCodeResult`, `NotModifiedResult<T>` | Its status |
-  | `PlainTextResult` | Its text, with its status and its own content type |
+  | `PlainTextResult` | Its text, with its status and its own content type; at 204, 205 or 304, its status alone |
   | `throw new ApiException(…)` | Its problem document, named as the host names it (an extension the client's serializer context does not register is still written), raised as `BlueprintApiException` (or translated by `[TranslateError]`) |
   | `throw new ValidationException(…)` or `ValidationFailedResult` | A 422 whose keys the host's own naming produces (`form` for a form-level error), raised as `ValidationException` |
 

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -137,10 +138,8 @@ public sealed class BlueprintClientStub<TClient>
 
     private static HttpResponseMessage Json(HttpStatusCode status, object content, JsonSerializerOptions jsonOptions)
     {
-        var body = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(content, content.GetType(), jsonOptions));
-        body.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
-
-        return new HttpResponseMessage(status) { Content = body };
+        // Serialised asynchronously, as the host writes a body, so a body that is or holds an IAsyncEnumerable<T> is written.
+        return new HttpResponseMessage(status) { Content = JsonContent.Create(content, content.GetType(), MediaTypeHeaderValue.Parse("application/json; charset=utf-8"), jsonOptions) };
     }
 
     private static HttpResponseMessage WithHeaders(HttpResponseMessage response, OkResult ok)
@@ -171,6 +170,12 @@ public sealed class BlueprintClientStub<TClient>
     /// </summary>
     private static HttpResponseMessage PlainText(PlainTextResult text)
     {
+        // A status that forbids a body is written as the status alone, with no Content-Type (TryGetBodilessStatusCode).
+        if (text.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.ResetContent or HttpStatusCode.NotModified)
+        {
+            return new HttpResponseMessage(text.StatusCode);
+        }
+
         var body = new ByteArrayContent(Encoding.UTF8.GetBytes(text.Content));
         body.Headers.TryAddWithoutValidation("Content-Type", text.ContentType);
 

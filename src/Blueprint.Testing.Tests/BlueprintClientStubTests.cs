@@ -281,6 +281,39 @@ public sealed class BlueprintClientStubTests
     }
 
     [Fact]
+    public async Task An_async_enumerable_body_is_written_as_the_host_streams_it()
+    {
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<GetTemplatesQuery>(static _ => Stream());
+
+        var result = await BlueprintClientTransport.Create<StubbedTemplatesApi>(provider)
+            .ForwardAsync<GetTemplatesQuery, TemplateApiResource[]>(new GetTemplatesQuery());
+
+        result.Select(static t => t.Id).Should().Equal("t-1", "t-2");
+
+        static async IAsyncEnumerable<TemplateApiResource> Stream()
+        {
+            await Task.Yield();
+            yield return new TemplateApiResource { Id = "t-1", Name = "One" };
+            yield return new TemplateApiResource { Id = "t-2", Name = "Two" };
+        }
+    }
+
+    [Fact]
+    public async Task A_plain_text_result_at_a_bodiless_status_is_written_without_its_text()
+    {
+        // The host writes a 204, 205 or 304 plain-text result as its status alone (TryGetBodilessStatusCode).
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<HealthCheckQuery>(static _ => new PlainTextResult("ignored", System.Net.HttpStatusCode.NoContent));
+
+        // A forward declaring both members reads the host's empty 204 as the no-content member, never as text.
+        var result = await BlueprintClientTransport.Create<StubbedTemplatesApi>(provider)
+            .ForwardAsync<HealthCheckQuery, Results<Blueprint.Runtime.Http.HttpNoContentResult, PlainTextResult>>(new HealthCheckQuery());
+
+        result.IsT1.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task A_no_result_is_the_hosts_empty_200()
     {
         // The host writes NoResultOperationResult as an empty 200, the only status the client reads it from.
