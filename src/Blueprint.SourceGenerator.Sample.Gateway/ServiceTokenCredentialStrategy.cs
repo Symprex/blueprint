@@ -10,7 +10,7 @@ namespace Blueprint.SourceGenerator.Sample.Gateway;
 public sealed class ServiceTokenCredentialStrategy(IConfiguration configuration) : IUpstreamCredentialStrategy
 {
     /// <inheritdoc />
-    public IUpstreamCredential CreateCredential(ApiOperationContext context, UpstreamCredentialAttribute attribute)
+    public IUpstreamCredential CreateCredential(ApiOperationContext context, IOperation inner, UpstreamCredentialAttribute attribute)
     {
         var token = configuration[Startup.ServiceTokenKey]
             ?? throw new InvalidOperationException($"No service token is configured under '{Startup.ServiceTokenKey}'.");

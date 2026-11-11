@@ -213,6 +213,52 @@ public partial class GetExceptionProblemQuery : IQuery<string>
                 "Changed by someone else",
                 409,
                 new Dictionary<string, object> { ["currentVersion"] = 7 }),
+            "pascal-extensions" => new ApiException(
+                "Template has syntax errors",
+                "syntax_error",
+                null,
+                400,
+                new Dictionary<string, object>
+                {
+                    ["Errors"] = new[] { "Unexpected token" },
+                    ["HtmlErrors"] = new[] { "Unclosed tag" },
+                }),
+            "reserved-extensions" => new ApiException(
+                "Widget locked",
+                "widget_locked",
+                "Locked by someone else",
+                400,
+                new Dictionary<string, object>
+                {
+                    ["Status"] = "locked",
+                    ["Detail"] = "shadow",
+                    ["type"] = "shadow",
+                    ["currentVersion"] = 7,
+                }),
+            "colliding-written-first" => new ApiException(
+                "Colliding extensions",
+                "colliding",
+                null,
+                400,
+                new Dictionary<string, object> { ["errors"] = "already named", ["Errors"] = "renamed" }),
+            "colliding-renamed-first" => new ApiException(
+                "Colliding extensions",
+                "colliding",
+                null,
+                400,
+                new Dictionary<string, object> { ["Errors"] = "renamed", ["errors"] = "already named" }),
+            "colliding-both-renamed" => new ApiException(
+                "Colliding extensions",
+                "colliding",
+                null,
+                400,
+                new Dictionary<string, object> { ["HTMLErrors"] = "HTMLErrors", ["HtmlErrors"] = "HtmlErrors" }),
+            "colliding-both-renamed-reversed" => new ApiException(
+                "Colliding extensions",
+                "colliding",
+                null,
+                400,
+                new Dictionary<string, object> { ["HtmlErrors"] = "HtmlErrors", ["HTMLErrors"] = "HTMLErrors" }),
             _ => new InvalidOperationException("The widget store is unavailable"),
         };
     }

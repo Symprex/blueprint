@@ -88,6 +88,27 @@ public sealed class BlueprintHttpClientContextForwardTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_UpstreamCredential_strategy_is_given_the_inner_operation_so_it_reads_a_property_the_gateway_operation_lacks()
+    {
+        // A property a binding tier sets (#66) exists only on the inner operation, never on the gateway operation, so a
+        // strategy's TenantIdProperty must be read from the inner one. The context's operation here has no TenantId at all.
+        HttpRequestMessage? sent = null;
+        var client = CreateClient(request =>
+        {
+            sent = request;
+
+            return Json(HttpStatusCode.OK, TemplateJson);
+        });
+
+        await client.ForwardAsync<GetTenantTemplateQuery, TemplateApiResource>(
+            this._contexts.For<GetGatewayTenantTemplateQuery>(callerAuthorization: "Bearer partner-token"),
+            new GetTenantTemplateQuery { TenantId = "tenant-7", Id = "t-1" });
+
+        this._contexts.Exchanges.Should().Equal(("Bearer partner-token", "tenant-7"));
+        sent!.Headers.Authorization.Should().Be(new AuthenticationHeaderValue("Bearer", "tenant-token:tenant-7"));
+    }
+
+    [Fact]
     public async Task An_UpstreamCredential_strategy_that_is_not_registered_fails_naming_it_and_sends_nothing()
     {
         var sent = false;

@@ -1,3 +1,4 @@
+using Blueprint.Model;
 using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
 
@@ -18,10 +19,14 @@ public interface IUpstreamCredentialStrategy
     /// Creates the credential for one forward.
     /// </summary>
     /// <param name="context">The gateway operation being served; <see cref="ApiOperationContext.Operation"/> is the operation.</param>
+    /// <param name="inner">
+    /// The inner operation being forwarded, filled. Read an argument such as a tenant id from it rather than from the gateway
+    /// operation: a property a gateway binding sets, rather than the caller, exists only on the inner operation.
+    /// </param>
     /// <param name="attribute">
     /// The attribute that selected this strategy, which a strategy that takes arguments declares as its own type deriving
     /// from <see cref="UpstreamCredentialAttribute{TCredential}"/>.
     /// </param>
     /// <returns>The credential to apply to the forwarded request.</returns>
-    IUpstreamCredential CreateCredential(ApiOperationContext context, UpstreamCredentialAttribute attribute);
+    IUpstreamCredential CreateCredential(ApiOperationContext context, IOperation inner, UpstreamCredentialAttribute attribute);
 }

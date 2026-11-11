@@ -53,6 +53,12 @@ public sealed class SampleSystemFixture : IAsyncLifetime
     /// </summary>
     public string ServiceToken { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// The tenant-token exchange both gateways' <c>TenantTokenCredentialStrategy</c> calls, standing in for an identity
+    /// service: it mints a token for the test caller whose <c>account_id</c> is the tenant.
+    /// </summary>
+    public TestTenantTokenExchanger TenantTokens { get; private set; } = null!;
+
     private MultiAppHost Host => this._host ?? throw new InvalidOperationException("The sample system has not been started.");
 
     /// <summary>
@@ -72,6 +78,7 @@ public sealed class SampleSystemFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         this._host = new MultiAppHost(this.Issuer);
+        this.TenantTokens = new TestTenantTokenExchanger(this.Issuer, TemplateScopes);
 
         var inner = await this._host.StartAsync<Blueprint.SourceGenerator.Sample.Startup>(InnerName, inner => inner.ConfigureServices = this.InnerRequests.InstallInto);
 
@@ -120,6 +127,7 @@ public sealed class SampleSystemFixture : IAsyncLifetime
     {
         gateway.Settings[Blueprint.SourceGenerator.Sample.Gateway.Startup.TemplateServiceAddressKey] = new Uri(inner.BaseAddress, "api/").ToString();
         gateway.Settings[Blueprint.SourceGenerator.Sample.Gateway.Startup.ServiceTokenKey] = this.ServiceToken;
+        gateway.ConfigureServices = services => services.AddSingleton<Blueprint.SourceGenerator.Sample.Gateway.ITenantTokenExchanger>(this.TenantTokens);
     }
 }
 

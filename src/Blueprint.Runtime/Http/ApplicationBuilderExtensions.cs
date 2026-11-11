@@ -971,7 +971,11 @@ public static class EndpointRouteBuilderExtensions
 
             // As legacy's writer wrote an exception its result writing threw (Signature365 8b40ecc961,
             // Blueprint.Http/OkResultOperationExecutor.cs:48-65, UnhandledExceptionOperationResultExecutor.cs:30-68).
-            var problem = HttpOperationResultExecutor.CreateLegacyExceptionProblem(ex, this._httpOptions.ExposeExceptionDetailsInErrorResponses, activity);
+            var problem = HttpOperationResultExecutor.CreateLegacyExceptionProblem(
+                ex,
+                this._httpOptions.ExposeExceptionDetailsInErrorResponses,
+                activity,
+                this._app.AppOwnedSerializerContext?.Options);
 
             return HttpOperationResultExecutor.WriteJsonBodyAsync(httpContext, this._app, problem);
         }
