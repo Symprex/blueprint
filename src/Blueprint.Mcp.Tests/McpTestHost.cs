@@ -86,6 +86,10 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// Whether <see cref="App.Lower.GetfooMcpQuery"/>'s endpoint requires the <c>api</c> rate-limiting policy, which allows
     /// one request a minute.
     /// </param>
+    /// <param name="hostRestrictUpperCase">
+    /// Whether <see cref="App.Upper.GetFooMcpQuery"/>'s endpoint requires the host <c>admin.example.test</c>, which no
+    /// request to the test host has.
+    /// </param>
     /// <returns>The started host.</returns>
     public static async Task<McpTestHost> StartAsync(
         bool renderOnFirstRequest = false,
@@ -95,7 +99,8 @@ internal sealed class McpTestHost : IAsyncDisposable
         bool mapGrouped = false,
         bool mapTenantGroup = false,
         bool mapSampleAppBetween = false,
-        bool rateLimitLowerCase = false)
+        bool rateLimitLowerCase = false,
+        bool hostRestrictUpperCase = false)
     {
         var builder = WebApplication.CreateSlimBuilder();
 
@@ -174,6 +179,12 @@ internal sealed class McpTestHost : IAsyncDisposable
                 if (endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(RequirementGuardedMcpQuery)))
                 {
                     endpoint.Metadata.Add(new BlueRoleAuthorizeAttribute());
+                }
+
+                if (hostRestrictUpperCase
+                    && endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(App.Upper.GetFooMcpQuery)))
+                {
+                    endpoint.Metadata.Add(new HostAttribute("admin.example.test"));
                 }
 
                 if (rateLimitLowerCase

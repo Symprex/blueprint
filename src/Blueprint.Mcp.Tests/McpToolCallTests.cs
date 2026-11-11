@@ -348,6 +348,24 @@ public sealed class McpToolCallTests
     }
 
     [Fact]
+    public async Task A_tool_whose_endpoint_requires_another_host_gets_the_404_HTTP_routing_gives()
+    {
+        await using var host = await McpTestHost.StartAsync(hostRestrictUpperCase: true);
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        using var overHttp = await http.GetAsync("api/case/upper");
+        var restricted = await client.CallToolAsync(ids[("get", "/case/upper")], new Dictionary<string, object?>());
+        var unrestricted = await client.CallToolAsync(ids[("get", "/case/lower")], new Dictionary<string, object?>());
+
+        ((int)overHttp.StatusCode).Should().Be(404);
+        HttpStatus(restricted).Should().Be(404);
+        restricted.IsError.Should().BeTrue();
+        Text(unrestricted).Should().Be("\"lower\"");
+    }
+
+    [Fact]
     public async Task A_tool_whose_endpoint_is_rate_limited_is_refused_rather_than_run_outside_the_limit()
     {
         await using var host = await McpTestHost.StartAsync(rateLimitLowerCase: true);

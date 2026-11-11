@@ -273,6 +273,45 @@ internal sealed class OperationToolRequest
         return true;
     }
 
+    /// <summary>
+    /// Gets whether <paramref name="request"/>'s host is one <paramref name="hosts"/> allows, as routing's host matching
+    /// decides it (<c>RequireHost</c>): <c>example.com</c>, a subdomain of <c>*.example.com</c>, or <c>*</c>, each with an
+    /// optional port, which the request's port, or its scheme's default, must then be.
+    /// </summary>
+    /// <param name="hosts">The endpoint's host metadata, or <see langword="null"/> for none.</param>
+    /// <param name="request">The request.</param>
+    /// <returns>Whether HTTP routing would reach the endpoint at the request's host.</returns>
+    public static bool MatchesHost(IHostMetadata? hosts, HttpRequest request)
+    {
+        if (hosts is null || hosts.Hosts.Count == 0)
+        {
+            return true;
+        }
+
+        var host = request.Host.Host;
+        var port = request.Host.Port ?? (string.Equals(request.Scheme, "https", StringComparison.OrdinalIgnoreCase) ? 443 : 80);
+
+        foreach (var allowed in hosts.Hosts)
+        {
+            var separator = allowed.LastIndexOf(':');
+            var allowedHost = separator < 0 ? allowed : allowed[..separator];
+            var allowedPort = separator < 0 ? "*" : allowed[(separator + 1)..];
+
+            var hostMatches = allowedHost == "*"
+                              || (allowedHost.StartsWith("*.", StringComparison.Ordinal)
+                                  ? host.EndsWith(allowedHost[1..], StringComparison.OrdinalIgnoreCase)
+                                  : string.Equals(host, allowedHost, StringComparison.OrdinalIgnoreCase));
+            var portMatches = allowedPort == "*" || allowedPort == port.ToString(CultureInfo.InvariantCulture);
+
+            if (hostMatches && portMatches)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static string? FindRouteValue(RouteValueDictionary routeValues, string name)
     {
         // RouteValueDictionary compares its keys ignoring case, as routing does.

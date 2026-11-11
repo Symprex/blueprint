@@ -172,12 +172,13 @@ internal sealed class BlueprintOperationTool : McpServerTool
 
                 if (!OperationToolRequest.MatchesConstraints(endpoint.RoutePattern, toolRequest.RouteValues, context, policyFactory, out var refused))
                 {
-                    return new CallToolResult
-                    {
-                        IsError = true,
-                        Meta = new JsonObject { [OperationToolResult.HttpStatusMetaKey] = StatusCodes.Status404NotFound },
-                        Content = [new TextContentBlock { Text = $"The argument '{refused}' does not satisfy its route constraints, so no HTTP route would match the request." }],
-                    };
+                    return NotFound($"The argument '{refused}' does not satisfy its route constraints, so no HTTP route would match the request.");
+                }
+
+                // Nor at a host the endpoint does not allow (RequireHost), which routing's host matching refuses.
+                if (!OperationToolRequest.MatchesHost(endpoint.Metadata.GetMetadata<IHostMetadata>(), context.Request))
+                {
+                    return NotFound($"The operation {endpoint.DisplayName} is not served at the host {context.Request.Host}, so no HTTP route would match the request.");
                 }
 
                 await RunAsync(endpoint, context).ConfigureAwait(false);
@@ -269,6 +270,19 @@ internal sealed class BlueprintOperationTool : McpServerTool
         var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, context).ConfigureAwait(false);
 
         await resultHandler.HandleAsync(endpoint.RequestDelegate!, context, policy, authorizeResult).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Makes the result of a call no HTTP route would reach: routing's 404, as a tool error saying why.
+    /// </summary>
+    private static CallToolResult NotFound(string reason)
+    {
+        return new CallToolResult
+        {
+            IsError = true,
+            Meta = new JsonObject { [OperationToolResult.HttpStatusMetaKey] = StatusCodes.Status404NotFound },
+            Content = [new TextContentBlock { Text = reason }],
+        };
     }
 
     private static string? Describe(OperationInputSchema schema)

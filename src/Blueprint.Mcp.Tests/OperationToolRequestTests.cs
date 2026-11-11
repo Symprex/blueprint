@@ -44,6 +44,25 @@ public sealed class OperationToolRequestTests
         request.RouteValues["Kind"].Should().Be("all");
     }
 
+    [Theory]
+    [InlineData("example.com", "http", "example.com", true)]
+    [InlineData("EXAMPLE.com:80", "http", "example.com", true)]
+    [InlineData("other.com", "http", "example.com", false)]
+    [InlineData("api.example.com", "https", "*.example.com", true)]
+    [InlineData("example.com", "https", "*.example.com", false)]
+    [InlineData("example.com:8080", "http", "example.com:8080", true)]
+    [InlineData("example.com", "https", "example.com:443", true)]
+    [InlineData("example.com", "http", "example.com:8080", false)]
+    [InlineData("anything.test:5000", "http", "*:5000", true)]
+    public void A_host_is_matched_against_RequireHost_patterns_as_routing_matches_it(string requestHost, string scheme, string allowed, bool matches)
+    {
+        var request = new Microsoft.AspNetCore.Http.DefaultHttpContext().Request;
+        request.Host = new Microsoft.AspNetCore.Http.HostString(requestHost);
+        request.Scheme = scheme;
+
+        OperationToolRequest.MatchesHost(new Microsoft.AspNetCore.Routing.HostAttribute(allowed), request).Should().Be(matches);
+    }
+
     [Fact]
     public void A_catch_all_path_argument_keeps_its_slashes()
     {
