@@ -400,6 +400,33 @@ public class GatewayBindingGeneratorTests
         Located(diagnostic).Should().StartWith("Expose<");
     }
 
+    [Fact]
+    public void When_an_inner_defaulted_placeholder_binds_a_property_that_cannot_be_null_then_BPGW010_is_reported()
+    {
+        // The inner request builder always sends an int, so it would send 0 and the route's default would never apply.
+        var inner = InnerSource.Replace("/tenants/{TenantId}/notes", "/notes/{Priority:int=1}", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([WithBody(GatewaySource, "public string Priority { get; set; } = \"\";")], additionalReferences: [contract]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW010").Which;
+        diagnostic.GetMessage().Should().Contain("Priority").And.Contain("/notes/{Priority:int=1}");
+    }
+
+    [Theory]
+    [InlineData("/notes/{Source=web}")]
+    [InlineData("/notes/{Source?}")]
+    public void When_an_inner_optional_or_defaulted_placeholder_binds_a_nullable_property_then_BPGW010_is_not_reported(string route)
+    {
+        // The inner request builder sends the default, or leaves the placeholder out, when the property is null.
+        var inner = InnerSource.Replace("/tenants/{TenantId}/notes", route, StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([WithBody(GatewaySource, "public int Source { get; set; }")], additionalReferences: [contract]);
+
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW010");
+    }
+
     [Theory]
     [InlineData(AppBindingSource, "")]
     [InlineData("", "[Hide(nameof(Inner.AddNoteCommand.TenantId))]")]

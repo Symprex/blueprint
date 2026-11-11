@@ -1198,10 +1198,13 @@ property from the path, as `{Ext}` does: `[RootLink("/files/{Name}.{Ext?}")]` gi
 `/files/abc.txt` and `null` for `/files/abc`, and `{Kind=all}` gives `"all"` when the URL leaves it out. Up to v3.0.1
 the generator did not recognise either form as a placeholder, so the property was read from the query string (a GET)
 or the body instead, and the route's value never reached the handler. The OpenAPI document now lists such a property
-as a path parameter, with `required: false`, and the generated client leaves it (and the `.` or `/` before it) out of
-the URL when it is `null`. A path key in the document no longer carries a placeholder's inline constraint
-(`{Id:int}` is keyed `{Id}`), optional marker or default, so it names the path parameter it describes; a catch-all
-keeps its `*` or `**`.
+as a path parameter, with `required: false`, and a path key in the document no longer carries the optional marker or
+default (`/files/{Name}.{Ext}`, `/kinds/{Kind}`); constraints and catch-all stars stay, as before. When the property is
+`null`, the generated client sends a defaulted placeholder's default (`/kinds/all`) and leaves out an optional
+placeholder that ends the route, with the `.` or `/` before it (`/files/abc`). Where leaving it out would move a later
+value into its place, as `/reports/{Year?}/{Month?}` with only `Month` set would, it builds no URL. A gateway's inner
+placeholder that is optional or defaulted but binds a property that cannot be `null`, such as an `int`, still needs a
+value (BPGW010), since the forward would send `0` rather than the route's default.
 
 **Behaviour change (v1.0.3).** A client registered with `AddBlueprintClient<TInterface, TImplementation>` (since the next major release `TImplementation` must be a generated `[BlueprintClient]`; see [Migrating Signature 365 service clients](#migrating-signature-365-service-clients-to-blueprint-clients)) serialises and
 deserialises through the app's configured `BlueprintJsonOptions` (`services.AddOptions<BlueprintJsonOptions>()` or

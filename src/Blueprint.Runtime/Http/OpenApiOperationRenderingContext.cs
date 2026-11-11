@@ -304,77 +304,49 @@ public sealed record OpenApiOperationRenderingContext(
     /// without its slash is one path rather than two keys of which one is invalid.
     /// </para>
     /// <para>
-    /// Each placeholder is written by its name, so it matches the path parameter of that name: an inline constraint
-    /// (<c>{Id:int}</c>), optional marker (<c>{Ext?}</c>) or default (<c>{Kind=all}</c>) the router reads is left out.
-    /// A catch-all keeps its <c>*</c> or <c>**</c>, as the document has always keyed it (<c>/folders/{**FolderPath}</c>).
+    /// A placeholder's optional marker (<c>{Ext?}</c>) or default (<c>{Kind=all}</c>) is left out; the parameter says
+    /// whether it is required. Its catch-all stars and constraints are kept, as the document has always keyed them
+    /// (<c>/folders/{**FolderPath}</c>, <c>/items/{Id:int}</c>): routes that differ only by constraint are different
+    /// routes, which one key would merge into one path with one of their operations.
     /// </para>
     /// </remarks>
     /// <param name="urlFormat">The route template as its link declares it.</param>
     /// <returns>The path key.</returns>
     internal static string ToPathKey(string urlFormat)
     {
-        var placeholders = ReadPlaceholders(urlFormat);
         var path = "/" + urlFormat.TrimStart('/');
 
-        if (placeholders.Count == 0)
+        return RoutePlaceholder.Replace(path, static match =>
         {
-            return path;
-        }
+            var marker = match.Groups["optional"].Success ? match.Groups["optional"] : match.Groups["default"];
 
-        var offset = path.Length - urlFormat.Length;
-        var key = new System.Text.StringBuilder(path.Length);
-        var copied = 0;
+            if (!marker.Success)
+            {
+                return match.Value;
+            }
 
-        foreach (var placeholder in placeholders)
-        {
-            var start = placeholder.Start + offset;
+            // A default's '=' is just before its value, which may be empty.
+            var markerStart = marker == match.Groups["optional"] ? marker.Index : marker.Index - 1;
 
-            key.Append(path, copied, start - copied).Append('{').Append(placeholder.CatchAll).Append(placeholder.Name).Append('}');
-            copied = placeholder.End + offset + 1;
-        }
-
-        return key.Append(path, copied, path.Length - copied).ToString();
+            return string.Concat(
+                match.Value.AsSpan(0, markerStart - match.Index),
+                match.Value.AsSpan(marker.Index + marker.Length - match.Index));
+        });
     }
 
     /// <summary>
-    /// Reads each placeholder of a route template: its name, after any catch-all star and before any constraint, default,
-    /// optional marker or legacy <c>(format)</c>, and whether the router matches a URL without it.
+    /// Matches one route placeholder, as the source generator's <c>RoutePlaceholderSyntax.Placeholder</c> does: the
+    /// <c>name</c> group, after any catch-all stars, then legacy's <c>(format)</c> and any <c>:constraint</c>s, then an
+    /// <c>optional</c> <c>?</c> or a <c>default</c> after <c>=</c>.
     /// </summary>
-    /// <param name="urlFormat">The route template as its link declares it.</param>
-    /// <returns>Each placeholder, with the indexes of its braces and any catch-all stars, in template order.</returns>
-    private static List<(int Start, int End, string CatchAll, string Name, bool IsOptional)> ReadPlaceholders(string urlFormat)
-    {
-        var placeholders = new List<(int Start, int End, string CatchAll, string Name, bool IsOptional)>();
-
-        for (var start = urlFormat.IndexOf('{', StringComparison.Ordinal); start >= 0; start = urlFormat.IndexOf('{', start + 1))
-        {
-            var end = urlFormat.IndexOf('}', start);
-
-            if (end < 0)
-            {
-                break;
-            }
-
-            var placeholder = urlFormat[(start + 1)..end];
-            var name = placeholder.TrimStart('*');
-            var nameEnd = name.IndexOfAny([':', '=', '?', '(']);
-
-            if (nameEnd >= 0)
-            {
-                name = name[..nameEnd];
-            }
-
-            placeholders.Add((
-                start,
-                end,
-                placeholder[..(placeholder.Length - placeholder.TrimStart('*').Length)],
-                name,
-                placeholder.EndsWith('?') || placeholder.Contains('=', StringComparison.Ordinal)));
-            start = end;
-        }
-
-        return placeholders;
-    }
+    /// <remarks>
+    /// As ASP.NET's own parser does, a constraint's argument runs to the first <c>)</c> followed by another constraint, the
+    /// default or the end, so an <c>=</c> inside it (<c>{Code:regex(^a=b$)}</c>) is no default, and a default may be in
+    /// parentheses (<c>{Kind=(none)}</c>).
+    /// </remarks>
+    private static readonly System.Text.RegularExpressions.Regex RoutePlaceholder = new(
+        @"\{\*{0,2}(?<name>[A-Za-z0-9_]+)(?:\([^)]*\))?(?::[^:=?(){}]*(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?)*(?:(?<optional>\?)|=(?<default>(?:\}\}|[^}])*))?\}",
+        System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.ExplicitCapture);
 
     /// <summary>
     /// Returns the names of the route parameters a request may leave out: optional (<c>{Ext?}</c>) or defaulted
@@ -382,14 +354,27 @@ public sealed record OpenApiOperationRenderingContext(
     /// </summary>
     private static HashSet<string> BuildOptionalParameterNames(ApiOperationDescriptor descriptor)
     {
+        return GetOptionalRouteParameterNames(descriptor.Urls.Select(static url => url.UrlFormat));
+    }
+
+    /// <summary>
+    /// Returns the names of the route parameters that are optional (<c>{Ext?}</c>) or defaulted (<c>{Kind=all}</c>) in
+    /// every one of <paramref name="urlFormats"/> that has them.
+    /// </summary>
+    /// <param name="urlFormats">The route templates of one operation.</param>
+    /// <returns>The parameter names, compared ignoring case.</returns>
+    internal static HashSet<string> GetOptionalRouteParameterNames(IEnumerable<string> urlFormats)
+    {
         var optional = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var url in descriptor.Urls)
+        foreach (var urlFormat in urlFormats)
         {
-            foreach (var placeholder in ReadPlaceholders(url.UrlFormat))
+            foreach (System.Text.RegularExpressions.Match placeholder in RoutePlaceholder.Matches(urlFormat))
             {
-                (placeholder.IsOptional ? optional : required).Add(placeholder.Name);
+                var isOptional = placeholder.Groups["optional"].Success || placeholder.Groups["default"].Success;
+
+                (isOptional ? optional : required).Add(placeholder.Groups["name"].Value);
             }
         }
 

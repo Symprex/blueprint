@@ -459,31 +459,35 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             propertyLookup[prop.Name] = prop;
         }
 
-        // An optional ({Ext?}) or defaulted ({Kind=all}) placeholder the route may leave out, so a null value omits it from
-        // the URL rather than leaving the operation without one.
-        var optionalPlaceholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (Match match in _placeholderRegex.Matches(urlTemplate))
-        {
-            if (RoutePlaceholderSyntax.IsOptional(match))
-            {
-                optionalPlaceholders.Add(match.Groups[1].Value);
-            }
-        }
+        bool CanBeNull(string name) => propertyLookup.TryGetValue(name, out var p) && RoutePlaceholderSyntax.CanBeNull(p.Type);
+
+        // A null property's placeholder sends its default ({Kind=all}), or is left out when it is one of the optional
+        // placeholders ({Ext?}) that end the template, rather than leaving the operation without a URL.
+        var omissible = RoutePlaceholderSyntax.GetOmissible(urlTemplate, CanBeNull);
+        var trailingOptional = RoutePlaceholderSyntax.GetTrailingOptional(urlTemplate, CanBeNull)
+            .Select(static match => match.Groups[1].Value)
+            .ToList();
 
         // Generate null checks for placeholder properties
         var nullChecks = new List<string>();
 
         foreach (var placeholder in placeholders)
         {
-            if (!propertyLookup.TryGetValue(placeholder, out var prop) || optionalPlaceholders.Contains(placeholder))
+            if (!propertyLookup.TryGetValue(placeholder, out var prop) || omissible.Contains(placeholder))
             {
                 continue;
             }
 
-            if (!prop.Type.IsValueType || prop.Type.NullableAnnotation == NullableAnnotation.Annotated)
+            if (RoutePlaceholderSyntax.CanBeNull(prop.Type))
             {
                 nullChecks.Add($"typed.{prop.Name} is null");
             }
+        }
+
+        // An optional placeholder left out before one that is set would move that value into its place, so there is no URL.
+        for (var i = 0; i + 1 < trailingOptional.Count; i++)
+        {
+            nullChecks.Add($"(typed.{propertyLookup[trailingOptional[i]].Name} is null && typed.{propertyLookup[trailingOptional[i + 1]].Name} is not null)");
         }
 
         // Build URL using string concatenation with Uri.EscapeDataString
@@ -506,16 +510,13 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
 
             var literal = urlTemplate.Substring(lastEnd, match.Index - lastEnd);
             var matchEnd = match.Index + match.Length;
-            var isNullable = !prop.Type.IsValueType || prop.Type.NullableAnnotation == NullableAnnotation.Annotated;
+            var isLeftOut = trailingOptional.Contains(name, StringComparer.OrdinalIgnoreCase);
+            var defaultValue = RoutePlaceholderSyntax.CanBeNull(prop.Type) ? RoutePlaceholderSyntax.GetDefault(match) : null;
 
-            // An optional placeholder ending its segment takes the '.' or '/' before it along when it is left out, as the
-            // router reads "/files/{Name}.{Ext?}" from "/files/abc" and "/kinds/{Kind=all}" from "/kinds".
+            // An optional placeholder left out takes the '.' or '/' before it along, as the router reads
+            // "/files/{Name}.{Ext?}" from "/files/abc".
             var optionalSeparator = string.Empty;
-            if (isNullable
-                && optionalPlaceholders.Contains(name)
-                && literal.Length > 0
-                && literal[^1] is '.' or '/'
-                && (matchEnd == urlTemplate.Length || urlTemplate[matchEnd] == '/'))
+            if (isLeftOut && literal.Length > 0 && literal[^1] is '.' or '/')
             {
                 optionalSeparator = literal[^1].ToString();
                 literal = literal[..^1];
@@ -559,10 +560,16 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 value = $"global::System.Uri.EscapeDataString({propertyAccess}.ToString()!)";
             }
 
-            if (isNullable && optionalPlaceholders.Contains(name))
+            if (isLeftOut)
             {
                 var present = optionalSeparator.Length > 0 ? $"\"{optionalSeparator}\" + {value}" : value;
                 value = $"({propertyAccess} is null ? \"\" : {present})";
+            }
+            else if (defaultValue is not null)
+            {
+                // The default goes in the URL in its place, wherever it is, so a later segment cannot move into its place.
+                var sent = isCatchAll ? defaultValue : Uri.EscapeDataString(defaultValue);
+                value = $"({propertyAccess} is null ? {SymbolDisplay.FormatLiteral(sent, quote: true)} : {value})";
             }
 
             segments.Add(value);

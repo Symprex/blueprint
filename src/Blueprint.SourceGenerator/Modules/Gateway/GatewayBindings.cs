@@ -383,11 +383,18 @@ internal static class GatewayBindings
         // The inner request builder always sends the first URL, in declaration order as the link module registers it, so a
         // later route without a placeholder is no way round it.
         var innerMembers = innerType.GetAllMembers().ToList();
+
+        // The inner request builder sends a null property's default, or leaves out a trailing optional placeholder, but a
+        // property that cannot be null always sends its value, so the route's default never applies to it.
+        var omissible = RoutePlaceholderSyntax.GetOmissible(
+            innerTemplates[0],
+            name => RoutePlaceholderSyntax.ResolveMemberName(innerMembers, name) is { } member
+                && innerMembers.OfType<IPropertySymbol>().FirstOrDefault(p => p.Name == member) is { } property
+                && RoutePlaceholderSyntax.CanBeNull(property.Type));
         var required = new HashSet<string>(StringComparer.Ordinal);
         foreach (Match match in Placeholder.Matches(innerTemplates[0]))
         {
-            // An optional or defaulted placeholder is left out of the URL when the forward has no value for it.
-            if (!RoutePlaceholderSyntax.IsOptional(match)
+            if (!omissible.Contains(match.Groups[1].Value)
                 && RoutePlaceholderSyntax.ResolveMemberName(innerMembers, match.Groups[1].Value) is { } name)
             {
                 required.Add(name);

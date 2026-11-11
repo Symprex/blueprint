@@ -20,7 +20,8 @@ namespace Blueprint.SourceGenerator.Helpers;
 /// <para>
 /// ASP.NET's optional marker, <c>{Ext?}</c>, and default value, <c>{Kind=all}</c>, end a placeholder too, after any
 /// constraint (<c>{Id:int?}</c>, <c>{Page:int=1}</c>). Such a placeholder still binds its property; the route may leave
-/// it out, so a URL built for it omits it when the property is <see langword="null"/> (<see cref="IsOptional"/>).
+/// it out (<see cref="IsOptional"/>), so a URL built for a <see langword="null"/> property sends the default, or leaves an
+/// optional placeholder out where that cannot move a later value into its place (<see cref="GetOmissible"/>).
 /// </para>
 /// <para>
 /// A self link's or resource link's URL is registered with the suffix removed (<c>LinkGenerationModule</c>), so the router's
@@ -37,10 +38,19 @@ namespace Blueprint.SourceGenerator.Helpers;
 internal static class RoutePlaceholderSyntax
 {
     /// <summary>
-    /// Matches one placeholder; group 1 is the name of the operation property it binds, and the <c>optional</c> group is
-    /// the trailing <c>?</c> or <c>=default</c> that lets the route leave it out.
+    /// Matches one placeholder; group 1 is the name of the operation property it binds, the <c>optional</c> group is a
+    /// trailing <c>?</c>, and the <c>default</c> group is the value after a <c>=</c>.
     /// </summary>
-    public static Regex Placeholder { get; } = new(@"\{\*{0,2}([A-Za-z0-9_]+)(?:[:(][^}]*?)?(?<optional>\?|=[^}()]*)?\}", RegexOptions.Compiled);
+    /// <remarks>
+    /// After the name come legacy's <c>(format)</c>, then any number of <c>:constraint</c>s, each with an optional
+    /// argument in parentheses. As ASP.NET's own parser does, an argument runs to the first <c>)</c> that is followed by
+    /// another constraint, the default or the end, so an <c>=</c> or <c>)</c> inside it (<c>{Code:regex(^a=b$)}</c>) is
+    /// part of the argument, and a default may itself be in parentheses (<c>{Kind=(none)}</c>). A brace inside an
+    /// argument or default is doubled, as ASP.NET escapes it.
+    /// </remarks>
+    public static Regex Placeholder { get; } = new(
+        @"\{\*{0,2}([A-Za-z0-9_]+)(?:\([^)]*\))?(?::[^:=?(){}]*(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?)*(?:(?<optional>\?)|=(?<default>(?:\}\}|[^}])*))?\}",
+        RegexOptions.Compiled);
 
     /// <summary>
     /// Returns whether a <see cref="Placeholder"/> match is optional (<c>{Ext?}</c>) or has a default (<c>{Kind=all}</c>),
@@ -50,7 +60,95 @@ internal static class RoutePlaceholderSyntax
     /// <returns><see langword="true"/> when the route may leave the placeholder out.</returns>
     public static bool IsOptional(Match placeholder)
     {
-        return placeholder.Groups["optional"].Success;
+        return placeholder.Groups["optional"].Success || placeholder.Groups["default"].Success;
+    }
+
+    /// <summary>
+    /// Returns a <see cref="Placeholder"/> match's default value (<c>all</c> in <c>{Kind=all}</c>), with any doubled brace
+    /// read as one, or <see langword="null"/> when it has none.
+    /// </summary>
+    /// <param name="placeholder">A match of <see cref="Placeholder"/>.</param>
+    /// <returns>The default value, or <see langword="null"/>.</returns>
+    public static string? GetDefault(Match placeholder)
+    {
+        var group = placeholder.Groups["default"];
+
+        return group.Success ? group.Value.Replace("{{", "{").Replace("}}", "}") : null;
+    }
+
+    /// <summary>
+    /// Returns the optional placeholders (<c>{Ext?}</c>) a URL built from <paramref name="template"/> can leave out: the
+    /// run of them that ends the template, each with only the <c>/</c> or <c>.</c> before it, whose property can be
+    /// <see langword="null"/>.
+    /// </summary>
+    /// <remarks>
+    /// One followed by anything else cannot be left out: <c>/items/{Page?}/details</c> without <c>Page</c> would be
+    /// <c>/items/details</c>, which the route does not match. Within the run, one can be left out only when every one after
+    /// it is too, or a later value would move into its place: <c>/reports/{Year?}/{Month?}</c> without <c>Year</c> would
+    /// be <c>/reports/12</c>, which binds <c>12</c> to <c>Year</c>.
+    /// </remarks>
+    /// <param name="template">The route template.</param>
+    /// <param name="canBeNull">Whether the property a placeholder names can be <see langword="null"/>.</param>
+    /// <returns>The run's matches, in template order.</returns>
+    public static List<Match> GetTrailingOptional(string template, Func<string, bool> canBeNull)
+    {
+        var matches = Placeholder.Matches(template);
+        var trailing = new List<Match>();
+        var end = template.Length;
+
+        for (var i = matches.Count - 1; i >= 0; i--)
+        {
+            var match = matches[i];
+
+            if (match.Index + match.Length != end || !match.Groups["optional"].Success || !canBeNull(match.Groups[1].Value))
+            {
+                break;
+            }
+
+            trailing.Insert(0, match);
+            end = match.Index > 0 && template[match.Index - 1] is '/' or '.' ? match.Index - 1 : match.Index;
+        }
+
+        return trailing;
+    }
+
+    /// <summary>
+    /// Returns the names of the placeholders of <paramref name="template"/> a URL built from it can go without a value
+    /// for: a defaulted one, whose default it sends instead, and one of <see cref="GetTrailingOptional"/>, which it leaves
+    /// out, when the property can be <see langword="null"/>.
+    /// </summary>
+    /// <param name="template">The route template.</param>
+    /// <param name="canBeNull">Whether the property a placeholder names can be <see langword="null"/>.</param>
+    /// <returns>The placeholder names, as written.</returns>
+    public static HashSet<string> GetOmissible(string template, Func<string, bool> canBeNull)
+    {
+        var omissible = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (Match match in Placeholder.Matches(template))
+        {
+            if (match.Groups["default"].Success && canBeNull(match.Groups[1].Value))
+            {
+                omissible.Add(match.Groups[1].Value);
+            }
+        }
+
+        foreach (var match in GetTrailingOptional(template, canBeNull))
+        {
+            omissible.Add(match.Groups[1].Value);
+        }
+
+        return omissible;
+    }
+
+    /// <summary>
+    /// Returns whether a property of <paramref name="type"/> can be <see langword="null"/>, so a URL built for it can go
+    /// without its value: any reference type, or a <see cref="Nullable{T}"/>.
+    /// </summary>
+    /// <param name="type">The property's type.</param>
+    /// <returns><see langword="true"/> when the property can be <see langword="null"/>.</returns>
+    public static bool CanBeNull(ITypeSymbol type)
+    {
+        return !type.IsValueType || type.NullableAnnotation == NullableAnnotation.Annotated;
     }
 
     /// <summary>
