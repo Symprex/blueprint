@@ -506,8 +506,8 @@ Declare `ProxyResult` as `TResult` to pass the upstream response through unbuffe
 [ProducesContentType("application/octet-stream")]
 public partial class DownloadGatewayTemplateQuery : IQuery<ProxyResult> { /* ... */ }
 
-public Task<ProxyResult> Handle(DownloadGatewayTemplateQuery query, BlueprintHttpClient upstream, CancellationToken ct)
-    => upstream.ForwardAsync<DownloadTemplateQuery, ProxyResult>(new DownloadTemplateQuery { Id = query.Id }, cancellationToken: ct);
+public Task<ProxyResult> Handle(DownloadGatewayTemplateQuery query, ApiOperationContext context, BlueprintHttpClient upstream, CancellationToken ct)
+    => upstream.ForwardAsync<DownloadTemplateQuery, ProxyResult>(context, new DownloadTemplateQuery { Id = query.Id }, cancellationToken: ct);
 ```
 
 - **Answered at the headers.** The transport sends with `HttpCompletionOption.ResponseHeadersRead` and returns the response unread. The gateway sends its own headers at once and copies the body as it arrives.

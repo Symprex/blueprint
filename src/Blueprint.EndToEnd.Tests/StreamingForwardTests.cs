@@ -102,7 +102,8 @@ public sealed class StreamingForwardTests : IAsyncLifetime
         this._gateway = await this._host.StartAsync<Blueprint.SourceGenerator.Sample.Gateway.Startup>(SampleSystem.SampleSystemFixture.GatewayName, gateway =>
         {
             gateway.Settings[Blueprint.SourceGenerator.Sample.Gateway.Startup.TemplateServiceAddressKey] = new Uri(this._inner.BaseAddress, "api/").ToString();
-            gateway.ForwardCallerCredential = true;
+
+            // No harness-filled Authorization header: the download forward sends the caller's credential itself.
             gateway.ConfigureServices = services => services.ConfigureHttpClientDefaults(
                 client => client.AddHttpMessageHandler(() => new UpstreamResponseTrackingHandler(this._tracker)));
         });
