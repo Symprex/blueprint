@@ -11,6 +11,7 @@ namespace Blueprint.Mcp;
 internal sealed class ToolResponseBody : Stream
 {
     private readonly Func<string?> _contentType;
+    private readonly Func<string?>? _contentEncoding;
     private readonly int _maxTextBytes;
     private readonly Func<CancellationToken, Task>? _start;
     private readonly bool _discard;
@@ -24,9 +25,18 @@ internal sealed class ToolResponseBody : Stream
     /// <param name="maxTextBytes">The most bytes of a text body kept.</param>
     /// <param name="start">Starts the response, as a server does before it writes the first byte of its body.</param>
     /// <param name="discard">Whether every byte written is discarded uncounted, as a server discards a HEAD response's body.</param>
-    public ToolResponseBody(Func<string?> contentType, int maxTextBytes, Func<CancellationToken, Task>? start = null, bool discard = false)
+    /// <param name="contentEncoding">
+    /// Gives the response's content encoding: a body encoded (<c>gzip</c>, <c>br</c>) is not text, whatever its type.
+    /// </param>
+    public ToolResponseBody(
+        Func<string?> contentType,
+        int maxTextBytes,
+        Func<CancellationToken, Task>? start = null,
+        bool discard = false,
+        Func<string?>? contentEncoding = null)
     {
         this._contentType = contentType;
+        this._contentEncoding = contentEncoding;
         this._maxTextBytes = maxTextBytes;
         this._start = start;
         this._discard = discard;
@@ -118,10 +128,15 @@ internal sealed class ToolResponseBody : Stream
 
         this._decided = true;
 
-        if (OperationToolResult.IsText(this._contentType()))
+        if (OperationToolResult.IsText(this._contentType()) && IsIdentity(this._contentEncoding?.Invoke()))
         {
             this._text = new MemoryStream();
         }
+    }
+
+    private static bool IsIdentity(string? contentEncoding)
+    {
+        return string.IsNullOrWhiteSpace(contentEncoding) || string.Equals(contentEncoding.Trim(), "identity", StringComparison.OrdinalIgnoreCase);
     }
 
     private void Keep(ReadOnlySpan<byte> buffer)

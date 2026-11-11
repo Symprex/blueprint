@@ -37,6 +37,21 @@ public sealed class ToolResponseTests
     }
 
     [Fact]
+    public async Task A_text_body_with_a_content_encoding_is_described_rather_than_read_as_text()
+    {
+        using var response = new ToolResponse(OperationToolResult.MaxTextBytes);
+        response.Headers.ContentType = "application/json";
+        response.Headers.ContentEncoding = "gzip";
+
+        await response.Stream.WriteAsync(new byte[] { 0x1F, 0x8B, 0x08, 0x00 });
+        var result = OperationToolResult.Create(200, "application/json", response.Captured);
+
+        response.Captured.IsText.Should().BeFalse();
+        result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Single().Text.Should().Be(
+            "The operation returned 4 bytes of application/json, which a tool result does not carry.");
+    }
+
+    [Fact]
     public void Flushing_the_body_synchronously_starts_the_response_too()
     {
         using var response = new ToolResponse(OperationToolResult.MaxTextBytes);

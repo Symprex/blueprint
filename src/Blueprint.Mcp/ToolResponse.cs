@@ -23,7 +23,7 @@ internal sealed class ToolResponse : IHttpResponseFeature, IHttpResponseBodyFeat
     /// <param name="discardBody">Whether the body is discarded, as a server discards it in answer to HEAD.</param>
     public ToolResponse(int maxTextBytes, bool discardBody = false)
     {
-        this.Captured = new ToolResponseBody(() => this.Headers.ContentType, maxTextBytes, this.StartAsync, discardBody);
+        this.Captured = new ToolResponseBody(() => this.Headers.ContentType, maxTextBytes, this.StartAsync, discardBody, () => this.Headers.ContentEncoding);
     }
 
     /// <summary>Gets the body as it was written.</summary>

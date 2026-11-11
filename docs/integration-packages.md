@@ -674,7 +674,7 @@ calls it there with the SDK's own MCP client.
 - Only the `Authorization` header is carried from the MCP request; any other header an operation reads must be a tool
   argument.
 - There are no output schemas yet: `IOperationInputSchemaProvider` gives inputs only.
-- A body that is not text (a file or stream result), or text longer than 1 MiB, is described in the result rather than
+- A body that is not text (a file or stream result), text with a content encoding (`gzip`, `br`), or text longer than 1 MiB, is described in the result rather than
   returned. Its bytes are counted, not kept, so a large download does not fill the server's memory.
 - Blueprint owns the app's MCP server: tools registered with the SDK's own `WithTools` are not served at a
   `MapBlueprintMcp` endpoint.
