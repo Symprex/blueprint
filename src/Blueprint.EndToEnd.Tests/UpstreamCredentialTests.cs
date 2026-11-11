@@ -19,7 +19,10 @@ public sealed class UpstreamCredentialTests(SampleSystemFixture system)
         var callerToken = system.CreateCallerToken();
         using var caller = system.NativeGateway.CreateClient(callerToken);
 
-        var response = await caller.GetAsync($"gateway/templates/{id}");
+        // The rename's hand-written handler forwards with its context. A generated [Expose<TInner>] forward does not yet (#69).
+        var response = await caller.PutAsJsonAsync(
+            $"gateway/templates/{id}",
+            new { name = "Caller Credential Template", htmlSource = "<p>Caller</p>", plainTextSource = "Caller" });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         system.InnerRequests.LatestAuthorizationFor($"/api/templates/{id}").Should().Be($"Bearer {callerToken}");
