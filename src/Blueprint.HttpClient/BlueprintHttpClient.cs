@@ -207,11 +207,7 @@ public class BlueprintHttpClient
             await credential.ApplyAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
-        // Read before HttpClient merges its default headers in, after which no handler can tell the two apart.
-        if (request.Headers.Authorization is { } requestAuthorization)
-        {
-            request.Options.Set(BlueprintRequestOptions.RequestAuthorization, requestAuthorization);
-        }
+        TagRequestAuthorization(request);
 
         HttpResponseMessage? response = null;
 
@@ -342,6 +338,8 @@ public class BlueprintHttpClient
     public async Task<HttpResponseMessage> SendRawAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        TagRequestAuthorization(request);
 
         HttpResponseMessage? response = null;
 
@@ -706,6 +704,19 @@ public class BlueprintHttpClient
             AcceptProblemJson,
             credential,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Records the <c>Authorization</c> header the request itself carries as <see cref="BlueprintRequestOptions.RequestAuthorization"/>.
+    /// It must run before the request is handed to the <see cref="System.Net.Http.HttpClient"/>, which merges its default
+    /// headers in, after which no handler can tell the two apart.
+    /// </summary>
+    private static void TagRequestAuthorization(HttpRequestMessage request)
+    {
+        if (request.Headers.Authorization is { } requestAuthorization)
+        {
+            request.Options.Set(BlueprintRequestOptions.RequestAuthorization, requestAuthorization);
+        }
     }
 
     private async Task EnsureSuccessOrThrowAsync(
