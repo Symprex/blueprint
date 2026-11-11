@@ -706,6 +706,9 @@ calls it there with the SDK's own MCP client.
   segment, except a catch-all's, which matches an empty remainder, and a defaulted parameter's, which is given its
   default. A slash within one reaches the operation escaped (`a%2Fb`), as routing gives it. The route's constraints
   (`{Id:int:min(1)}`) and host (`RequireHost`) are evaluated as routing evaluates them, and a value or host they refuse gets routing's 404.
+  The host's own routing then matches the request, and the operation runs only when routing selects its endpoint: a
+  call to `/items/{Name}` with `special` where `/items/special` is mapped too is refused, as HTTP sends that request
+  to the literal route's operation.
 - **Results are the HTTP response.** The body is the tool result's text, read in the charset its content type
   declares (UTF-8 when it declares none), and its structured content when it is a JSON object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
   problem body an HTTP caller gets, a call that fails validation the same 422.

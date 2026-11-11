@@ -250,6 +250,37 @@ public partial class ConstrainedMcpQuery : IQuery<string>
     }
 }
 
+/// <summary>A query at a parameterised route that a literal route (<see cref="OverlapSpecialMcpQuery"/>) overlaps.</summary>
+[AllowAnonymous]
+[RootLink("/overlap/{Name}")]
+public partial class OverlapByNameMcpQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the name.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Answers with the name, as this operation was given it.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The name.</returns>
+    public static string Handle(OverlapByNameMcpQuery query)
+    {
+        return "by-name:" + query.Name;
+    }
+}
+
+/// <summary>A query at a literal route, which HTTP routing prefers to <see cref="OverlapByNameMcpQuery"/>'s.</summary>
+[AllowAnonymous]
+[RootLink("/overlap/special")]
+public partial class OverlapSpecialMcpQuery : IQuery<string>
+{
+    /// <summary>Answers as the literal route's operation.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>A fixed answer.</returns>
+    public static string Handle(OverlapSpecialMcpQuery query)
+    {
+        return "special";
+    }
+}
+
 /// <summary>A query whose route value has a default, which routing supplies when the URL leaves it out.</summary>
 [AllowAnonymous]
 [RootLink("/defaulted/{Kind=all}")]

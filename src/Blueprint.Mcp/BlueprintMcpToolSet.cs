@@ -20,6 +20,7 @@ internal sealed class BlueprintMcpToolSet
     private readonly IServiceProvider _services;
     private readonly MappedBlueprintApi? _mappedApi;
     private readonly Lazy<IReadOnlyList<BlueprintOperationTool>> _tools;
+    private readonly Lazy<HttpRouteProbe> _routing;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BlueprintMcpToolSet"/> class.
@@ -37,7 +38,13 @@ internal sealed class BlueprintMcpToolSet
         // under two base paths, each with its own conventions.
         this._mappedApi = (schemaProvider as OperationInputSchemaProvider)?.MappedApi;
         this._tools = new Lazy<IReadOnlyList<BlueprintOperationTool>>(this.CreateTools, LazyThreadSafetyMode.ExecutionAndPublication);
+        this._routing = new Lazy<HttpRouteProbe>(() => new HttpRouteProbe(services), LazyThreadSafetyMode.ExecutionAndPublication);
     }
+
+    /// <summary>
+    /// Gets the host's HTTP routing, which a call is run only where it would reach the call's own endpoint.
+    /// </summary>
+    internal HttpRouteProbe Routing => this._routing.Value;
 
     /// <summary>
     /// Makes the tools now, so an operation whose schema cannot be made fails the caller instead of the first MCP request.

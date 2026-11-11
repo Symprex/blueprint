@@ -137,7 +137,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
                 CultureInfo.CurrentCulture = culture;
                 CultureInfo.CurrentUICulture = uiCulture;
 
-                return RunRequestAsync(accessor, caller, endpoint, method, toolRequest, cancellationToken);
+                return RunRequestAsync(accessor, caller, endpoint, this._toolSet.Routing, method, toolRequest, cancellationToken);
             });
         }
 
@@ -152,6 +152,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
         IHttpContextAccessor accessor,
         HttpContext caller,
         RouteEndpoint endpoint,
+        HttpRouteProbe routing,
         string method,
         OperationToolRequest toolRequest,
         CancellationToken cancellationToken)
@@ -190,6 +191,21 @@ internal sealed class BlueprintOperationTool : McpServerTool
                 if (!OperationToolRequest.MatchesHost(endpoint.Metadata.GetMetadata<IHostMetadata>(), context.Request))
                 {
                     return NotFound($"The operation {endpoint.DisplayName} is not served at the host {context.Request.Host}, so no HTTP route would match the request.");
+                }
+
+                // Nor where HTTP routing would select another endpoint, as a literal route that outranks the operation's
+                // ({Name} given "special" where /special is mapped too): over HTTP the operation never sees that request.
+                var routed = await routing.FindAsync(context).ConfigureAwait(false);
+
+                if (!ReferenceEquals(routed, endpoint))
+                {
+                    return routed is null
+                        ? NotFound($"No HTTP route reaches the operation {endpoint.DisplayName} at {context.Request.Path}.")
+                        : new CallToolResult
+                        {
+                            IsError = true,
+                            Content = [new TextContentBlock { Text = $"HTTP routing sends a request for {context.Request.Path} to {routed.DisplayName}, not to the operation {endpoint.DisplayName}, so the operation is not run. Call that operation's tool instead." }],
+                        };
                 }
 
                 await RunAsync(endpoint, context).ConfigureAwait(false);

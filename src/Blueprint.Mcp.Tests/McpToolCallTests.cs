@@ -336,6 +336,37 @@ public sealed class McpToolCallTests
         result.IsError.Should().Be(expectedStatus >= 400);
     }
 
+    [Theory]
+    [InlineData("other", "\"by-name:other\"", false)]
+    [InlineData("special", "\"special\"", true)]
+    public async Task A_call_HTTP_routing_would_send_to_another_operation_is_refused_rather_than_run_where_HTTP_never_runs_it(
+        string name,
+        string overHttpExpected,
+        bool refused)
+    {
+        // A tool call used to run its own operation for any URL its arguments made, so /overlap/special, which HTTP routing
+        // always gives the literal route, reached the parameterised route's operation with a value it never gets over HTTP.
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        var overHttp = await http.GetStringAsync("api/overlap/" + name);
+        var result = await client.CallToolAsync(ids[("get", "/overlap/{Name}")], new Dictionary<string, object?> { ["Name"] = name });
+
+        overHttp.Should().Be(overHttpExpected);
+        result.IsError.Should().Be(refused);
+
+        if (refused)
+        {
+            Text(result).Should().NotContain("by-name").And.Contain("OverlapSpecial");
+        }
+        else
+        {
+            Text(result).Should().Be(overHttp);
+        }
+    }
+
     [Fact]
     public async Task A_route_constraint_that_reads_the_request_is_given_the_operations_request_not_the_MCP_request()
     {
