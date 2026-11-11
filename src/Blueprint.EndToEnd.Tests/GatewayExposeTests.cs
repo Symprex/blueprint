@@ -48,6 +48,23 @@ public sealed class GatewayExposeTests(SampleSystemFixture system)
     }
 
     [Fact]
+    public async Task An_exposed_get_with_the_inner_route_value_in_its_query_string_reaches_the_inner_path_route()
+    {
+        // FindGatewayTemplateQuery's route has no {Id}; the inner GetTemplateQuery's does, so the forward sends the
+        // query-string value as the inner path segment (#161).
+        var id = await this.SeedTemplateAsync("Found By Query Template");
+        using var caller = system.Gateway.CreateClient(system.CreateCallerToken());
+
+        var response = await caller.GetAsync($"gateway/templates/find?id={Uri.EscapeDataString(id)}");
+
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, text);
+        using var body = JsonDocument.Parse(text);
+        body.RootElement.GetProperty("id").GetString().Should().Be(id);
+        body.RootElement.GetProperty("name").GetString().Should().Be("Found By Query Template");
+    }
+
+    [Fact]
     public async Task The_exposed_list_returns_the_inner_resources()
     {
         await this.SeedTemplateAsync("Exposed Listed Template");
