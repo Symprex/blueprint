@@ -166,6 +166,39 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
+    /// BPGW015: an operation carries more than one upstream credential attribute (D7).
+    /// </summary>
+    public static readonly DiagnosticDescriptor SeveralUpstreamCredentials = new(
+        id: "BPGW015",
+        title: "A gateway operation selects one upstream credential",
+        messageFormat: "Gateway operation '{0}' carries {1} upstream credential attributes ({2}), but its forwards authenticate with one strategy. Keep one.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW016: an upstream credential attribute selects a type that is not an <c>IUpstreamCredentialStrategy</c> (D7).
+    /// </summary>
+    public static readonly DiagnosticDescriptor CredentialTypeIsNotAStrategy = new(
+        id: "BPGW016",
+        title: "The upstream credential type must be a strategy",
+        messageFormat: "Gateway operation '{0}' selects '{1}' as its upstream credential strategy, but '{1}' does not implement Blueprint.HttpClient.IUpstreamCredentialStrategy",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW017: a <c>[TranslateError]</c> names no static <c>ApiExceptionFactory</c> of the class it is applied to (D8).
+    /// </summary>
+    public static readonly DiagnosticDescriptor TranslateErrorTargetIsNotAFactory = new(
+        id: "BPGW017",
+        title: "[TranslateError] must name a static ApiExceptionFactory",
+        messageFormat: "[TranslateError(\"{0}\", \"{1}\")] on '{2}' names no static ApiExceptionFactory field or property of '{2}' called '{1}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// BPGW018: an attribute of a contributed property that names a type the gateway's assembly cannot access, its own or
     /// one in its arguments, so the emitted property cannot carry it (D9).
     /// </summary>

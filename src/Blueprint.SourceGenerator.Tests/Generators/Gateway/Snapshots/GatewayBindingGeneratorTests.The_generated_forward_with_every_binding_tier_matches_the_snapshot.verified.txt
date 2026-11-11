@@ -122,7 +122,7 @@ namespace Blueprint.Generated
             await operation.OnMapAsync(forwardInner, _handlerArg_clock).ConfigureAwait(false);
             var forwardTransport = global::Blueprint.HttpClient.BlueprintClientTransport.Create<global::Gateway.NoteApi>(context.ServiceProvider);
 
-            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::Inner.NoteResult>(await forwardTransport.ForwardAsync<global::Inner.AddNoteCommand, global::Inner.NoteResult>(forwardInner, null, context.OperationCancelled).ConfigureAwait(false));
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::Inner.NoteResult>(await forwardTransport.ForwardAsync<global::Inner.AddNoteCommand, global::Inner.NoteResult>(context, forwardInner, null, context.OperationCancelled).ConfigureAwait(false));
 
 
             if (this.HasUnitOfWork)

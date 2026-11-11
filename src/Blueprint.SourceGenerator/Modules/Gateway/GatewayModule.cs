@@ -6,7 +6,8 @@ namespace Blueprint.SourceGenerator.Modules.Gateway;
 
 /// <summary>
 /// Gateway operations (Symprex/blueprint#59): checks that an operation marked <c>[Expose&lt;TInner&gt;]</c> declares its
-/// authorisation with Blueprint's native attributes (D13).
+/// authorisation with Blueprint's native attributes (D13), and that any operation's upstream credential and error
+/// translations are valid (D7, D8; <see cref="UpstreamForwardPolicyAnalysis"/>).
 /// </summary>
 /// <remarks>
 /// The rest of minimal mode lives where the generator that needs it runs: the property model and its emission in
@@ -38,6 +39,13 @@ public sealed class GatewayModule : IBlueprintSourceGeneratorModule, IDescriptor
     public void ContributeToDescriptor(DescriptorContributorContext context)
     {
         var operationType = context.GetOperationTypeSymbol();
+
+        // Generated and hand-written forwards read the same attributes, so every operation is checked.
+        foreach (var diagnostic in UpstreamForwardPolicyAnalysis.AnalyseOperation(operationType))
+        {
+            context.AddDiagnostic(diagnostic);
+        }
+
         if (OperationPropertyModelBuilder.FindExposedType(operationType, out var exposeAttribute) is null)
         {
             return;

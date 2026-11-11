@@ -127,7 +127,7 @@ namespace Blueprint.Generated
             var forwardInner = new global::Inner.GetWidgetQuery { Id = operation.Id, Revisions = operation.Revisions, Region = operation.Region };
             var forwardTransport = global::Blueprint.HttpClient.BlueprintClientTransport.Create<global::Gateway.WidgetApi>(context.ServiceProvider);
 
-            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::Inner.WidgetResult>(await forwardTransport.ForwardAsync<global::Inner.GetWidgetQuery, global::Inner.WidgetResult>(forwardInner, null, context.OperationCancelled).ConfigureAwait(false));
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::Inner.WidgetResult>(await forwardTransport.ForwardAsync<global::Inner.GetWidgetQuery, global::Inner.WidgetResult>(context, forwardInner, null, context.OperationCancelled).ConfigureAwait(false));
 
 
             if (this.HasUnitOfWork && !context.IsNested)

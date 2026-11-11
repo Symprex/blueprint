@@ -351,7 +351,7 @@ public class BlueprintHttpClient
         ArgumentNullException.ThrowIfNull(context);
 
         var policy = UpstreamForwardPolicy.For(context.Descriptor.OperationType, context.App.GetType());
-        var credential = CreateForwardCredential(context, policy);
+        var credential = CreateForwardCredential(context, inner, policy);
 
         try
         {
@@ -395,9 +395,10 @@ public class BlueprintHttpClient
     /// Creates the credential a forward from the gateway operation <paramref name="context"/> serves authenticates with.
     /// </summary>
     /// <param name="context">The gateway operation being served.</param>
+    /// <param name="inner">The inner operation being forwarded, which a strategy reads its arguments from.</param>
     /// <param name="policy">The operation's forward policy.</param>
     /// <returns>The strategy's credential when the operation selects one; otherwise the caller's own.</returns>
-    private static IUpstreamCredential CreateForwardCredential(ApiOperationContext context, UpstreamForwardPolicy policy)
+    private static IUpstreamCredential CreateForwardCredential(ApiOperationContext context, IOperation inner, UpstreamForwardPolicy policy)
     {
         if (policy.CredentialAttribute is not { } attribute)
         {
@@ -408,7 +409,7 @@ public class BlueprintHttpClient
             ?? throw new InvalidOperationException(
                 $"{context.Descriptor.OperationType.Name} forwards with the upstream credential strategy {attribute.CredentialType.Name}, which is not registered in the request's services as an {nameof(IUpstreamCredentialStrategy)}. Register it, for example with services.AddSingleton<{attribute.CredentialType.Name}>().");
 
-        return strategy.CreateCredential(context, attribute);
+        return strategy.CreateCredential(context, inner, attribute);
     }
 
     /// <summary>
@@ -713,9 +714,10 @@ public class BlueprintHttpClient
             foreach (var (key, value) in problem.Extensions)
             {
                 // "instance" in another casing is an extension, as it was to legacy (ReadProblemDetails), and like the member
-                // it can name the remote end's internals.
+                // it can name the remote end's internals. A host names an exception's extension keys with its naming
+                // policy, so the stack trace is matched whatever word separator that policy writes (stack_trace, stack-trace).
                 if (!isServerError
-                    || !(string.Equals(key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase)
+                    || !(IsStackTraceExtension(key)
                          || string.Equals(key, InstanceMemberName, StringComparison.OrdinalIgnoreCase)))
                 {
                     extensions[key] = ToLegacyExtensionValue(value)!;
@@ -798,6 +800,23 @@ public class BlueprintHttpClient
         }
 
         return problem;
+    }
+
+    /// <summary>
+    /// Gets whether <paramref name="key"/> is the stack trace extension in any casing, with or without <c>_</c> or
+    /// <c>-</c> between its words.
+    /// </summary>
+    private static bool IsStackTraceExtension(string key)
+    {
+        if (string.Equals(key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return key.Length == StackTraceExtensionName.Length + 1
+            && key[5] is '_' or '-'
+            && key.AsSpan(0, 5).Equals("stack", StringComparison.OrdinalIgnoreCase)
+            && key.AsSpan(6).Equals("trace", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
