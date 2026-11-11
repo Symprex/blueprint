@@ -118,7 +118,7 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
         string invocationExpression;
         if (context.GetForward() is { } forward)
         {
-            invocationExpression = Gateway.GatewayForward.RenderInvocation(context, forward);
+            invocationExpression = Gateway.GatewayForward.RenderInvocation(context, forward, parameterList);
         }
         else if (context.IsInlineHandler())
         {

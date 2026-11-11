@@ -67,6 +67,7 @@ internal static class ValidationPropertyPlanner
         var implementsIValidatableObject = ValidationSymbolHelpers.ImplementsIValidatableObject(operationType);
 
         var properties = new List<PropertyValidationPlan>();
+        HashSet<string>? boundNames = null;
 
         foreach (var property in ValidationSymbolHelpers.GetPublicInstanceProperties(operationType))
         {
@@ -74,10 +75,19 @@ internal static class ValidationPropertyPlanner
 
             var allAttributes = property.GetAttributes();
 
+            // A contributed property's rule that names a bound or hidden property is the inner operation's to apply, as
+            // the emitted property does not carry it (D11). Only an operation that exposes one has bound names.
+            var isContributed = !SymbolEqualityComparer.Default.Equals(property.ContainingType, operationType);
+
             // Filter validation attributes without LINQ to avoid iterator + array allocation per property
             List<AttributeData>? validationAttributeList = null;
             foreach (var attribute in allAttributes)
             {
+                if (isContributed && Planning.OperationPropertyModelBuilder.IsRuleLeftToInner(attribute, boundNames ??= Planning.OperationPropertyModelBuilder.GetBoundNames(operationType)))
+                {
+                    continue;
+                }
+
                 if (ValidationSymbolHelpers.IsValidationAttribute(attribute.AttributeClass))
                 {
                     validationAttributeList ??= new List<AttributeData>(4);
