@@ -97,6 +97,24 @@ public sealed class McpToolCallTests
         (Text(result) ?? string.Empty).Should().Be(await overHttp.Content.ReadAsStringAsync());
     }
 
+    [Fact]
+    public async Task A_caller_the_MCP_endpoints_own_scheme_signs_in_is_not_who_the_operation_runs_as()
+    {
+        // The MCP endpoint signs its caller in with a scheme the API does not use. Over HTTP, the same request is
+        // anonymous to the API's default scheme, so the operation must not run as the MCP endpoint's user either.
+        await using var host = await McpTestHost.StartAsync(mcpOnlyScheme: true);
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        http.DefaultRequestHeaders.Add(McpTestHost.McpOnlyRolesHeader, "Admin");
+        await using var client = await host.ConnectAsync(mcpOnlyRoles: "Admin");
+
+        using var overHttp = await http.GetAsync("api/guarded");
+        var result = await client.CallToolAsync(ids[("get", "/guarded")], new Dictionary<string, object?>());
+
+        ((int)overHttp.StatusCode).Should().Be(401);
+        HttpStatus(result).Should().Be(401);
+    }
+
     [Theory]
     [InlineData("User", 403)]
     [InlineData("Blue", 200)]
@@ -256,8 +274,8 @@ public sealed class McpToolCallTests
         await using var host = await McpTestHost.StartAsync();
         var ids = await host.GetOperationIdsAsync();
         using var http = host.CreateHttpClient();
-        http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Roles Admin");
-        await using var client = await host.ConnectAsync(authorization: "Roles Admin");
+        http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Named Admin");
+        await using var client = await host.ConnectAsync(authorization: "Named Admin");
 
         var overHttp = await http.GetStringAsync("api/who-am-i");
         var result = await client.CallToolAsync(ids[("get", "/who-am-i")], new Dictionary<string, object?>());

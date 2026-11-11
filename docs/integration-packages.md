@@ -683,8 +683,10 @@ calls it there with the SDK's own MCP client.
   header arguments as an HTTP caller writes them, and body arguments as the JSON body. The request runs in process
   through the operation's own endpoint, so the ASP.NET Core authorisation the middleware would apply to that endpoint
   (its policies, `[Authorize]` data and requirements, or the fallback policy when it has none), binding, validation,
-  authentication and authorisation are those of HTTP. It is the MCP request's caller that runs it: its
-  `HttpContext.User`, its `Authorization` header, its scheme, host and path base (so links point at the HTTP API). It
+  authentication and authorisation are those of HTTP. It carries the MCP request's `Authorization` header, scheme, host
+  and path base (so links point at the HTTP API), and is signed in from that header by the host's default
+  authentication scheme, as the authentication middleware signs in an HTTP request. It is not given the MCP request's
+  `HttpContext.User`, which the MCP endpoint may have signed in with a scheme of its own that the API does not use. It
   has its own service scope and execution context, as an HTTP request has, carrying only the MCP request's tracing
   activity and culture; `IHttpContextAccessor` gives its handler, its callbacks and its scope's disposals the
   operation's request, while middleware around the MCP endpoint still reads the MCP request from it; and its response's `OnStarting` and `OnCompleted`
@@ -710,6 +712,8 @@ calls it there with the SDK's own MCP client.
   the builder `MapBlueprintMcp` returns to require it.
 - An operation whose endpoint requires rate limiting (`RequireRateLimiting`) is refused as a tool: the rate-limiting
   middleware, which a tool call does not go through, offers no way to apply a named policy outside it.
+- A caller signed in by anything but the `Authorization` header, such as a cookie, is anonymous to the operation: the
+  operation's request is signed in from that header alone.
 - Only the `Authorization` header is carried from the MCP request; any other header an operation reads must be a tool
   argument.
 - There are no output schemas yet: `IOperationInputSchemaProvider` gives inputs only.

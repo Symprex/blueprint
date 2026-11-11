@@ -417,7 +417,7 @@ A gateway handler that sends an inner operation on unchanged calls `ForwardAsync
 To serve an app's operations as MCP tools, reference `Blueprint.Mcp`, call `services.AddBlueprintMcp()`, and map
 `endpoints.MapBlueprintMcp<MyApp>("mcp")` **after** `MapBlueprintApi` for the same app (the tools are made from its input
 schemas). Each tool is named by its operation's OpenAPI `operationId`, and a call runs through the operation's own HTTP
-endpoint as the MCP request's caller, so authentication, authorisation and validation are those of HTTP. The result's
+endpoint, signed in from the MCP request's `Authorization` header by the host's default scheme, so authentication, authorisation and validation are those of HTTP. The result's
 text is the HTTP response body, `_meta.httpStatus` its status, and a 4xx or 5xx is a tool error. Detail and limits:
 `docs/integration-packages.md#blueprintmcp`.
 

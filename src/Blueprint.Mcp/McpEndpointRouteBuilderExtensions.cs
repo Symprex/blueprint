@@ -22,7 +22,8 @@ public static class McpEndpointRouteBuilderExtensions
     /// (<see cref="IOperationInputSchemaProvider"/>), its summary and its description. Calling it makes the HTTP request
     /// the URL and method its <c>operationId</c> names answer, from the tool's arguments, and runs it in process through
     /// that endpoint: the same ASP.NET Core authorisation policies, binding, validation, authentication and authorisation
-    /// as HTTP, as the MCP request's caller, with its <c>Authorization</c> header. The result is the response the HTTP
+    /// as HTTP, signed in from the MCP request's <c>Authorization</c> header by the host's default authentication scheme.
+    /// The result is the response the HTTP
     /// caller would have been given: its body as the tool's text (and as its structured content when the body is a JSON
     /// object), its status as <c>_meta.httpStatus</c>, and a 4xx or 5xx status as a tool error.
     /// </para>

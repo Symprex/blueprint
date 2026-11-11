@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Claims;
 using System.Text.Json.Nodes;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Http.Features;
@@ -15,14 +17,14 @@ namespace Blueprint.Mcp;
 
 /// <summary>
 /// The MCP tool for one operation. A call makes the HTTP request the operation's endpoint answers from the call's
-/// arguments and runs it through that endpoint in process, as the MCP request's caller, so the operation is bound,
-/// validated, authenticated and authorised exactly as it is over HTTP (D22).
+/// arguments and runs it through that endpoint in process, signed in from the MCP request's credentials, so the
+/// operation is bound, validated, authenticated and authorised exactly as it is over HTTP (D22).
 /// </summary>
 /// <remarks>
 /// The request is the MCP request's own as far as it can be: its scheme, host and path base (so links in the result
-/// point at the HTTP API), its user, its <c>Authorization</c> header and its cancellation. Its other headers are not
-/// copied: the operation is given only the headers its arguments supply. It has its own service scope, as an HTTP
-/// request has.
+/// point at the HTTP API), its <c>Authorization</c> header and its cancellation. Its other headers are not copied: the
+/// operation is given only the headers its arguments supply. It has its own service scope, as an HTTP request has, and
+/// is signed in from its own credentials by the host's default scheme, not given the MCP request's user.
 /// </remarks>
 internal sealed class BlueprintOperationTool : McpServerTool
 {
@@ -165,6 +167,8 @@ internal sealed class BlueprintOperationTool : McpServerTool
         {
             try
             {
+                await AuthenticateAsync(context).ConfigureAwait(false);
+
                 // A request no HTTP route would match, as a value its route constraints refuse, gets routing's 404. The
                 // constraints are given the operation's request and services, as routing would give them, not the MCP
                 // request's: one may read the method, path, query or headers.
@@ -273,6 +277,34 @@ internal sealed class BlueprintOperationTool : McpServerTool
     }
 
     /// <summary>
+    /// Signs the operation's request in as the authentication middleware signs in an HTTP request: with the host's default
+    /// authenticate scheme, from the request's own credentials (its <c>Authorization</c> header), or as no one.
+    /// </summary>
+    /// <remarks>
+    /// The MCP request's user is not carried over. The MCP endpoint may sign its caller in with a scheme of its own, which
+    /// the API's endpoints do not use, and an operation run as that user could pass a policy the same request fails over
+    /// HTTP. A caller signed in by anything but the <c>Authorization</c> header, such as a cookie, is therefore anonymous
+    /// to the operation.
+    /// </remarks>
+    private static async Task AuthenticateAsync(HttpContext context)
+    {
+        context.User = new ClaimsPrincipal(new ClaimsIdentity());
+
+        if (context.RequestServices.GetService<IAuthenticationSchemeProvider>() is not { } schemes
+            || await schemes.GetDefaultAuthenticateSchemeAsync().ConfigureAwait(false) is not { } scheme)
+        {
+            return;
+        }
+
+        var result = await context.AuthenticateAsync(scheme.Name).ConfigureAwait(false);
+
+        if (result.Principal is { } principal)
+        {
+            context.User = principal;
+        }
+    }
+
+    /// <summary>
     /// Makes the result of a call no HTTP route would reach: routing's 404, as a tool error saying why.
     /// </summary>
     private static CallToolResult NotFound(string reason)
@@ -359,7 +391,6 @@ internal sealed class BlueprintOperationTool : McpServerTool
         var context = new DefaultHttpContext(features)
         {
             RequestServices = services,
-            User = caller.User,
             TraceIdentifier = caller.TraceIdentifier,
         };
 
