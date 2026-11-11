@@ -1,0 +1,56 @@
+using System.Net;
+using Blueprint.EndToEnd.Tests.SampleSystem;
+
+namespace Blueprint.EndToEnd.Tests;
+
+/// <summary>
+/// The credential a gateway's forward sends the inner service, as the inner service receives it off the socket (D7): the
+/// caller's own <c>Authorization</c> header by default, or what an operation's <c>[UpstreamCredential&lt;T&gt;]</c> strategy
+/// creates in its place. Both run through <see cref="SampleSystemFixture.NativeGateway"/>, where the harness forwards
+/// nothing on the gateway's behalf.
+/// </summary>
+[Collection(SampleSystemCollection.Name)]
+public sealed class UpstreamCredentialTests(SampleSystemFixture system)
+{
+    [Fact]
+    public async Task A_gateway_forward_sends_the_callers_own_Authorization_header()
+    {
+        var id = await system.SeedTemplateAsync("Caller Credential Template");
+        var callerToken = system.CreateCallerToken();
+        using var caller = system.NativeGateway.CreateClient(callerToken);
+
+        // The rename's hand-written handler forwards with its context. A generated [Expose<TInner>] forward does not yet (#69).
+        var response = await caller.PutAsJsonAsync(
+            $"gateway/templates/{id}",
+            new { name = "Caller Credential Template", htmlSource = "<p>Caller</p>", plainTextSource = "Caller" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        system.InnerRequests.LatestAuthorizationFor($"/api/templates/{id}").Should().Be($"Bearer {callerToken}");
+    }
+
+    [Fact]
+    public async Task An_UpstreamCredential_strategy_overrides_the_callers_Authorization_header()
+    {
+        var id = await system.SeedTemplateAsync("Service Credential Template");
+        using var caller = system.NativeGateway.CreateClient(system.CreateCallerToken());
+
+        var response = await caller.GetAsync($"gateway/service/templates/{id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        system.InnerRequests.LatestAuthorizationFor($"/api/templates/{id}").Should().Be($"Bearer {system.ServiceToken}");
+    }
+
+    [Fact]
+    public async Task An_UpstreamCredential_operation_refuses_a_caller_without_its_own_read_permission()
+    {
+        var id = await system.SeedTemplateAsync("Service Credential Refusal Template");
+        using var caller = system.NativeGateway.CreateClient(system.CreateCallerToken("template:write"));
+
+        var response = await caller.GetAsync($"gateway/service/templates/{id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+        system.InnerRequests.Requests.Should().NotContain(
+            r => r.Path == $"/api/templates/{id}",
+            "the gateway refuses the caller before it forwards as its own service identity");
+    }
+}
