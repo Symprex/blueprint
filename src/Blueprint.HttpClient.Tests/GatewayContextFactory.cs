@@ -26,10 +26,18 @@ internal sealed class GatewayContextFactory : IAsyncDisposable
                 .AddInMemoryCollection(new Dictionary<string, string?> { [Startup.ServiceTokenKey] = ServiceToken })
                 .Build())
             .AddSingleton<ServiceTokenCredentialStrategy>()
+            .AddSingleton<TenantTokenCredentialStrategy>()
+            .AddSingleton<ITenantTokenExchanger>(new RecordingTenantTokenExchanger(this.Exchanges))
             .AddBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>()
             .BuildServiceProvider();
         this._app = this._services.GetRequiredService<GatewayBlueprintApp>();
     }
+
+    /// <summary>
+    /// Gets each exchange the sample gateway's <see cref="TenantTokenCredentialStrategy"/> asked for: the caller's
+    /// <c>Authorization</c> header and the tenant. Each exchanges to <c>tenant-token:{tenant}</c>.
+    /// </summary>
+    public List<(string? CallerAuthorization, string TenantId)> Exchanges { get; } = [];
 
     /// <summary>
     /// Creates the context <typeparamref name="TOperation"/> is served with.
@@ -56,5 +64,15 @@ internal sealed class GatewayContextFactory : IAsyncDisposable
     public ValueTask DisposeAsync()
     {
         return this._services.DisposeAsync();
+    }
+
+    private sealed class RecordingTenantTokenExchanger(List<(string? CallerAuthorization, string TenantId)> exchanges) : ITenantTokenExchanger
+    {
+        public ValueTask<string> ExchangeAsync(string? callerAuthorization, string tenantId, CancellationToken cancellationToken)
+        {
+            exchanges.Add((callerAuthorization, tenantId));
+
+            return ValueTask.FromResult("tenant-token:" + tenantId);
+        }
     }
 }

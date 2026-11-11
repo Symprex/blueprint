@@ -102,7 +102,7 @@ namespace Blueprint.Generated
             var forwardInner = new global::Inner.TagWidgetCommand { Id = operation.Id, Name = operation.Name, Weight = operation.Weight, Tags = operation.Tags, Labels = operation.Labels };
             var forwardTransport = global::Blueprint.HttpClient.BlueprintClientTransport.Create<global::Gateway.WidgetApi>(context.ServiceProvider);
 
-            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::Inner.WidgetResult>(await forwardTransport.ForwardAsync<global::Inner.TagWidgetCommand, global::Inner.WidgetResult>(forwardInner, null, context.OperationCancelled).ConfigureAwait(false));
+            var handlerResult = (Blueprint.OperationResult)new Blueprint.Runtime.Exec.OkResult<global::Inner.WidgetResult>(await forwardTransport.ForwardAsync<global::Inner.TagWidgetCommand, global::Inner.WidgetResult>(context, forwardInner, null, context.OperationCancelled).ConfigureAwait(false));
 
 
             if (this.HasUnitOfWork)

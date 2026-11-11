@@ -105,7 +105,7 @@ public sealed class UpstreamForwardPolicyTests
 
     private sealed class TenantStrategy : IUpstreamCredentialStrategy
     {
-        public IUpstreamCredential CreateCredential(ApiOperationContext context, UpstreamCredentialAttribute attribute)
+        public IUpstreamCredential CreateCredential(ApiOperationContext context, Blueprint.Model.IOperation inner, UpstreamCredentialAttribute attribute)
         {
             return new BearerTokenCredential("tenant");
         }
