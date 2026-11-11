@@ -53,7 +53,7 @@ public sealed class BlueprintClientStubRequest
     public Uri? RequestUri { get; }
 
     /// <summary>
-    /// Gets the request's headers as the upstream would have received them, the client's default headers included, each
+    /// Gets the request's headers as the upstream would have received them, its content's and the client's default headers included, each
     /// keyed by name, case-insensitively.
     /// </summary>
     public IReadOnlyDictionary<string, string[]> Headers { get; }

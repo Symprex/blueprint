@@ -859,7 +859,15 @@ public class HttpOperationResultExecutor
         return (IReadOnlyDictionary<string, string[]>)CreateValidationErrors(operationContext.App.AppOwnedSerializerContext?.Options, result);
     }
 
-    private static IDictionary<string, string[]> CreateValidationErrors(JsonSerializerOptions? serializerOptions, ValidationFailedResult validationFailedResult)
+    /// <summary>
+    /// Gets the <c>errors</c> Blueprint writes in a 422 for <paramref name="validationFailedResult"/>, each key named with
+    /// <paramref name="serializerOptions"/>' key policy. <c>Blueprint.Testing.HttpClient</c>'s stub writes its 422s with it,
+    /// so a stubbed upstream names them as a real one does.
+    /// </summary>
+    /// <param name="serializerOptions">The options whose policy names the keys, or <see langword="null"/> to leave them as they are.</param>
+    /// <param name="validationFailedResult">The validation failure.</param>
+    /// <returns>The messages for each key.</returns>
+    internal static IDictionary<string, string[]> CreateValidationErrors(JsonSerializerOptions? serializerOptions, ValidationFailedResult validationFailedResult)
     {
         var keyPolicy = GetKeyNamingPolicy(serializerOptions);
 

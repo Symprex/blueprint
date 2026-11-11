@@ -189,9 +189,120 @@ public sealed class BlueprintClientStubTests
         services.StubBlueprintClient<StubbedTemplatesApi>().Should().BeSameAs(services.StubBlueprintClient<StubbedTemplatesApi>());
     }
 
-    private static ServiceProvider BuildProvider(out BlueprintClientStub<StubbedTemplatesApi> upstream)
+    [Fact]
+    public async Task A_plain_text_result_keeps_its_content_type()
+    {
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<HealthCheckQuery>(static _ => new PlainTextResult("BEGIN:VCARD") { ContentType = "text/vcard" });
+
+        var result = await provider.GetRequiredService<IStubbedTemplatesApi>().HealthCheckAsync(new HealthCheckQuery());
+
+        result.Content.Should().Be("BEGIN:VCARD");
+        result.ContentType.Should().Be("text/vcard");
+    }
+
+    [Fact]
+    public async Task An_api_exception_extension_the_clients_context_does_not_register_is_still_written()
+    {
+        // Options whose only metadata is a context that does not list the extension's type, as a client with a strict
+        // serializer context has; a host writes such an extension through its reflection fallback.
+        await using var provider = BuildProvider(
+            out var upstream,
+            static json => json.TypeInfoResolver = StrictStubJsonContext.Default);
+        upstream.Respond<GetTemplateQuery>(static _ => throw new ApiException(
+            "Template archived",
+            "template_archived",
+            "The template was archived.",
+            409,
+            new Dictionary<string, object> { ["archivedBy"] = new UnregisteredArchiver("someone") }));
+
+        var act = () => provider.GetRequiredService<IStubbedTemplatesApi>().GetTemplateAsync(new GetTemplateQuery { Id = "t-1" });
+
+        var thrown = (await act.Should().ThrowAsync<BlueprintApiException>()).Which;
+        thrown.Type.Should().Be("template_archived");
+        thrown.Extensions.Should().ContainKey("archivedBy");
+    }
+
+    [Fact]
+    public async Task Extension_keys_a_policy_names_alike_keep_the_hosts_precedence()
+    {
+        // The host keeps the key already so named, whatever the dictionary's order: here the later one would otherwise win.
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<GetTemplateQuery>(static _ => throw new ApiException(
+            "Clash",
+            "clash",
+            null,
+            409,
+            new Dictionary<string, object> { ["errors"] = "canonical", ["Errors"] = "other" }));
+
+        var act = () => provider.GetRequiredService<IStubbedTemplatesApi>().GetTemplateAsync(new GetTemplateQuery { Id = "t-1" });
+
+        var thrown = (await act.Should().ThrowAsync<BlueprintApiException>()).Which;
+        thrown.Extensions["errors"].Should().Be("canonical");
+    }
+
+    [Fact]
+    public async Task A_returned_validation_failure_with_no_member_is_a_form_level_error()
+    {
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<AddTenantNoteCommand>(static _ => new ValidationFailedResult([new System.ComponentModel.DataAnnotations.ValidationResult("Invalid")]));
+
+        var act = () => provider.GetRequiredService<IStubbedTemplatesApi>().AddTenantNoteAsync(new AddTenantNoteCommand { TenantId = "t" });
+
+        var thrown = (await act.Should().ThrowAsync<Blueprint.Validation.ValidationException>()).Which;
+        thrown.Errors.Should().ContainKey("form").WhoseValue.Should().Equal("Invalid");
+    }
+
+    [Fact]
+    public async Task A_validation_key_is_named_as_the_host_names_it_leaving_an_indexers_key_alone()
+    {
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<AddTenantNoteCommand>(static _ => throw new Blueprint.Validation.ValidationException(
+            new Dictionary<string, string[]> { ["Items[Foo.Bar].Name"] = ["Bad name."] }));
+
+        var act = () => provider.GetRequiredService<IStubbedTemplatesApi>().AddTenantNoteAsync(new AddTenantNoteCommand { TenantId = "t" });
+
+        var thrown = (await act.Should().ThrowAsync<Blueprint.Validation.ValidationException>()).Which;
+        thrown.Errors.Should().ContainKey("items[Foo.Bar].name");
+    }
+
+    [Fact]
+    public async Task The_form_level_key_is_not_renamed_by_the_policy()
+    {
+        await using var provider = BuildProvider(
+            out var upstream,
+            static json => json.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseUpper);
+        upstream.Respond<AddTenantNoteCommand>(static _ => throw new Blueprint.Validation.ValidationException("The note is not allowed."));
+
+        var act = () => provider.GetRequiredService<IStubbedTemplatesApi>().AddTenantNoteAsync(new AddTenantNoteCommand { TenantId = "t" });
+
+        var thrown = (await act.Should().ThrowAsync<Blueprint.Validation.ValidationException>()).Which;
+        thrown.Errors.Should().ContainKey("form");
+    }
+
+    [Fact]
+    public async Task A_commands_content_headers_are_recorded()
+    {
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<AddTenantNoteCommand>(static c => new TenantNoteApiResource { TenantId = c.TenantId, Text = c.Text });
+
+        await provider.GetRequiredService<IStubbedTemplatesApi>().AddTenantNoteAsync(new AddTenantNoteCommand { TenantId = "t", Text = "Hi" });
+
+        upstream.Requests.Single().Headers.Should().ContainKey("Content-Type")
+            .WhoseValue.Should().ContainSingle().Which.Should().StartWith("application/json");
+    }
+
+    private static ServiceProvider BuildProvider(
+        out BlueprintClientStub<StubbedTemplatesApi> upstream,
+        Action<System.Text.Json.JsonSerializerOptions>? configureJson = null)
     {
         var services = new ServiceCollection();
+
+        if (configureJson is not null)
+        {
+            services.Configure<Blueprint.Http.BlueprintJsonOptions>(options => configureJson(options.SerializerOptions));
+        }
+
         services.AddBlueprintClient<IStubbedTemplatesApi, StubbedTemplatesApi>(static (_, client) => client.BaseAddress = _registeredAddress);
         upstream = services.StubBlueprintClient<StubbedTemplatesApi>();
 
@@ -206,4 +317,17 @@ public sealed class BlueprintClientStubTests
 [BlueprintClientInclude(typeof(GetTemplateQuery))]
 [BlueprintClientInclude(typeof(GetTemplatesQuery))]
 [BlueprintClientInclude(typeof(AddTenantNoteCommand))]
+[BlueprintClientInclude(typeof(HealthCheckQuery))]
 public partial class StubbedTemplatesApi;
+
+/// <summary>
+/// An extension value no serializer context registers.
+/// </summary>
+/// <param name="Name">Who archived it.</param>
+public sealed record UnregisteredArchiver(string Name);
+
+/// <summary>
+/// A context that registers only what the strict-context test reads, and not <see cref="UnregisteredArchiver"/>.
+/// </summary>
+[System.Text.Json.Serialization.JsonSerializable(typeof(TemplateApiResource))]
+public sealed partial class StrictStubJsonContext : System.Text.Json.Serialization.JsonSerializerContext;

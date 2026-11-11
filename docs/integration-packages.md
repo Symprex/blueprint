@@ -742,12 +742,13 @@ upstream.Requests.Single().RequestAuthorization.Should().Be(new AuthenticationHe
   | `null` or `NoResultOperationResult` | 204 |
   | `OkResult`, `CreatedResult`, `AcceptedResult`, `ConflictResult` | Its content, with its status |
   | `NotFoundResult<T>` | A JSON 404, read as a declared `NotFoundResult<T>` member |
-  | `StatusCodeResult`, `PlainTextResult`, `NotModifiedResult<T>` | Its status, with its text where it has some |
-  | `throw new ApiException(…)` | Its problem document, raised as `BlueprintApiException` (or translated by `[TranslateError]`) |
-  | `throw new ValidationException(…)` or `ValidationFailedResult` | A 422, raised as `ValidationException` |
+  | `StatusCodeResult`, `NotModifiedResult<T>` | Its status |
+  | `PlainTextResult` | Its text, with its status and its own content type |
+  | `throw new ApiException(…)` | Its problem document, named as the host names it (an extension the client's serializer context does not register is still written), raised as `BlueprintApiException` (or translated by `[TranslateError]`) |
+  | `throw new ValidationException(…)` or `ValidationFailedResult` | A 422 whose keys the host's own naming produces (`form` for a form-level error), raised as `ValidationException` |
 
 - **A missing response fails loudly.** An operation with no `Respond<TOp>` fails the call with an `InvalidOperationException` naming the client and the operation. A request the client did not build from an operation is refused in the same way.
-- **What is recorded.** `Requests` holds each request's operation, method, URI, headers and body. `Authorization` is the header the upstream received. `RequestAuthorization` is the one the request set itself, through a forward's credential or `CallOptions.ModifyRequest`. Assert on `RequestAuthorization` to prove a forward applied its credential: an app that also copies the caller's token onto the client's default headers sends the same token either way.
+- **What is recorded.** `Requests` holds each request's operation, method, URI, headers (content headers such as `Content-Type` included) and body. `Authorization` is the header the upstream received. `RequestAuthorization` is the one the request set itself, through a forward's credential or `CallOptions.ModifyRequest`. Assert on `RequestAuthorization` to prove a forward applied its credential: an app that also copies the caller's token onto the client's default headers sends the same token either way.
 - **Base address.** A named client given no base address, for example because the test leaves out the app's `AddBlueprintClient` registration, gets `BlueprintClientStub<TClient>.DefaultBaseAddress`.
 - **Thread safety.** Calling `StubBlueprintClient` again for the same client returns the same stub. Responses and records may be added and read from any thread.
 

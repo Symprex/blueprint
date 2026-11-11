@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -8,6 +7,7 @@ using System.Text.Json.Nodes;
 using Blueprint.HttpClient;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
+using Blueprint.Runtime.Http;
 
 namespace Blueprint.Testing;
 
@@ -43,8 +43,6 @@ public sealed class BlueprintClientStub<TClient>
     where TClient : class, IBlueprintClient<TClient>
 {
     private const string ValidationTitle = "One or more validation errors occurred.";
-
-    private static readonly string[] _problemMembers = ["type", "title", "status", "detail", "instance"];
 
     private readonly ConcurrentDictionary<Type, Func<IOperation, object?>> _responders = new();
     private readonly List<BlueprintClientStubRequest> _requests = [];
@@ -125,12 +123,9 @@ public sealed class BlueprintClientStub<TClient>
             AcceptedResult accepted => Json(HttpStatusCode.Accepted, accepted.Content, jsonOptions),
             ConflictResult conflict => Json(HttpStatusCode.Conflict, conflict.Content, jsonOptions),
             NotFoundResult notFound => Json(HttpStatusCode.NotFound, notFound.Content, jsonOptions),
-            PlainTextResult text => new HttpResponseMessage(text.StatusCode)
-            {
-                Content = new StringContent(text.Content, Encoding.UTF8, "text/plain"),
-            },
+            PlainTextResult text => PlainText(text),
             StatusCodeResult status => new HttpResponseMessage((HttpStatusCode)status.StatusCode),
-            ValidationFailedResult failed => ValidationProblem(failed.Errors ?? GroupErrors(failed.ValidationResults), jsonOptions),
+            ValidationFailedResult failed => ValidationProblem(failed, jsonOptions),
             OperationResult other => throw new NotSupportedException(
                 $"{typeof(TClient).Name}'s stub cannot answer with a {other.GetType().Name}. Answer with its content, or with an OkResult, CreatedResult, AcceptedResult, ConflictResult, NotFoundResult, StatusCodeResult, PlainTextResult or ValidationFailedResult."),
             _ => Json(HttpStatusCode.OK, value, jsonOptions),
@@ -168,54 +163,61 @@ public sealed class BlueprintClientStub<TClient>
         return response;
     }
 
+    /// <summary>
+    /// Writes a plain-text result with its own content type, verbatim and with no charset appended, as the host does.
+    /// </summary>
+    private static HttpResponseMessage PlainText(PlainTextResult text)
+    {
+        var body = new ByteArrayContent(Encoding.UTF8.GetBytes(text.Content));
+        body.Headers.TryAddWithoutValidation("Content-Type", text.ContentType);
+
+        return new HttpResponseMessage(text.StatusCode) { Content = body };
+    }
+
+    /// <summary>
+    /// Writes an <see cref="ApiException"/> as the host does: its members and extensions named by the host's own
+    /// <see cref="HttpOperationResultExecutor.CreateLegacyExceptionProblem"/>, and the extensions, whose types are open-ended,
+    /// written with the reflection fallback the host gives them, so a strict serializer context does not fail them.
+    /// </summary>
     private static HttpResponseMessage Problem(ApiException exception, JsonSerializerOptions jsonOptions)
     {
+        var details = HttpOperationResultExecutor.CreateLegacyExceptionProblem(exception, exposeDetails: false, activity: null, jsonOptions);
         var problem = new JsonObject
         {
-            ["type"] = exception.Type,
-            ["title"] = exception.Title,
-            ["status"] = exception.HttpStatus,
-            ["detail"] = exception.Detail,
+            ["type"] = details.Type,
+            ["title"] = details.Title,
+            ["status"] = details.Status,
+            ["detail"] = details.Detail,
         };
 
-        var keyPolicy = jsonOptions.DictionaryKeyPolicy ?? jsonOptions.PropertyNamingPolicy;
+        var extensionOptions = SerializerContextTypeInfoCache.GetFallbackOptions(jsonOptions);
 
-        foreach (var (key, value) in exception.Extensions)
+        foreach (var (name, value) in details.Extensions)
         {
-            var name = keyPolicy?.ConvertName(key) ?? key;
-
-            if (!_problemMembers.Contains(name, StringComparer.OrdinalIgnoreCase))
-            {
-                problem[name] = JsonSerializer.SerializeToNode(value, value.GetType(), jsonOptions);
-            }
+            problem[name] = value is null ? null : JsonSerializer.SerializeToNode(value, value.GetType(), extensionOptions);
         }
 
         return ProblemResponse((HttpStatusCode)exception.HttpStatus, problem);
     }
 
-    private static HttpResponseMessage ValidationProblem(IReadOnlyDictionary<string, string[]> errors, JsonSerializerOptions jsonOptions)
+    /// <summary>
+    /// Writes a validation failure as the host's 422, its keys named by the host's own
+    /// <see cref="HttpOperationResultExecutor.CreateValidationErrors"/>.
+    /// </summary>
+    private static HttpResponseMessage ValidationProblem(ValidationFailedResult failed, JsonSerializerOptions jsonOptions)
     {
-        var keyPolicy = jsonOptions.DictionaryKeyPolicy ?? jsonOptions.PropertyNamingPolicy;
-        var named = new JsonObject();
+        var errors = new JsonObject();
 
-        foreach (var (key, messages) in errors)
+        foreach (var (key, messages) in HttpOperationResultExecutor.CreateValidationErrors(jsonOptions, failed))
         {
-            var name = NameMemberPath(key, keyPolicy);
-            var list = named[name] as JsonArray ?? [];
-
-            foreach (var message in messages)
-            {
-                list.Add(message);
-            }
-
-            named[name] = list;
+            errors[key] = new JsonArray(messages.Select(static m => (JsonNode?)m).ToArray());
         }
 
         var problem = new JsonObject
         {
             ["title"] = ValidationTitle,
             ["status"] = (int)HttpStatusCode.UnprocessableEntity,
-            ["errors"] = named,
+            ["errors"] = errors,
         };
 
         return ProblemResponse(HttpStatusCode.UnprocessableEntity, problem);
@@ -229,30 +231,22 @@ public sealed class BlueprintClientStub<TClient>
         return new HttpResponseMessage(status) { Content = body };
     }
 
-    private static Dictionary<string, string[]> GroupErrors(IEnumerable<ValidationResult> results)
-    {
-        return results
-            .SelectMany(static r => (r.MemberNames.Any() ? r.MemberNames : [string.Empty]).Select(m => (Member: m, Message: r.ErrorMessage ?? string.Empty)))
-            .GroupBy(static e => e.Member)
-            .ToDictionary(static g => g.Key, static g => g.Select(static e => e.Message).ToArray());
-    }
-
     /// <summary>
-    /// Names each segment of a member path (<c>Items[0].Name</c>) with the policy, as a host names a 422's keys.
+    /// Snapshots a request's headers and its content's, as the upstream receives both.
     /// </summary>
-    private static string NameMemberPath(string path, JsonNamingPolicy? policy)
+    private static Dictionary<string, string[]> SnapshotHeaders(HttpRequestMessage request)
     {
-        if (policy is null || path.Length == 0)
+        var headers = request.Headers.ToDictionary(static h => h.Key, static h => h.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
+
+        if (request.Content is not null)
         {
-            return path;
+            foreach (var (name, values) in request.Content.Headers)
+            {
+                headers[name] = values.ToArray();
+            }
         }
 
-        return string.Join('.', path.Split('.').Select(segment =>
-        {
-            var index = segment.IndexOf('[', StringComparison.Ordinal);
-
-            return index < 0 ? policy.ConvertName(segment) : policy.ConvertName(segment[..index]) + segment[index..];
-        }));
+        return headers;
     }
 
     private async Task<HttpResponseMessage> HandleAsync(HttpRequestMessage request, StubHandler handler, CancellationToken cancellationToken)
@@ -272,7 +266,7 @@ public sealed class BlueprintClientStub<TClient>
                 operation,
                 request.Method,
                 request.RequestUri,
-                request.Headers.ToDictionary(static h => h.Key, static h => h.Value.ToArray(), StringComparer.OrdinalIgnoreCase),
+                SnapshotHeaders(request),
                 request.Headers.Authorization,
                 requestAuthorization,
                 body));
@@ -294,7 +288,7 @@ public sealed class BlueprintClientStub<TClient>
         }
         catch (Validation.ValidationException e)
         {
-            return ValidationProblem(e.Errors, jsonOptions);
+            return ValidationProblem(new ValidationFailedResult(e), jsonOptions);
         }
         catch (ApiException e)
         {
