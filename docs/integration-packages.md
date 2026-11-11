@@ -648,6 +648,7 @@ services.AddBlueprintHttpClient<TargetServiceApp>(client =>
 | Background task double | `BackgroundTaskCollector` | Captures enqueued tasks |
 | Recurring task double | `NullRecurringTaskProvider` | No-op recurring tasks |
 | Result assertions | `ResultAssertionExtensions` | `ShouldBeOk<T>()`, `ShouldBeValidationFailed()`, etc. |
+| Upstream double (package `Blueprint.Testing.HttpClient`) | `BlueprintClientStub<TClient>` (`services.StubBlueprintClient<TClient>()`) | Answers and records a `[BlueprintClient]`'s calls by operation type |
 
 ### S365 Test Pattern Migration
 
@@ -716,6 +717,39 @@ client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test
 var response = await client.GetAsync("/api/templates/1");
 response.StatusCode.Should().Be(HttpStatusCode.OK);
 ```
+
+### Stubbing a Blueprint client
+
+An `[Expose<TInner>]` gateway's generated forward sends through the named `HttpClient` of the `[BlueprintClient]` that includes `TInner`. It never resolves the client's interface, so substituting that interface intercepts nothing. `StubBlueprintClient<TClient>()`, from the `Blueprint.Testing.HttpClient` package, replaces that named client's upstream with a stub keyed by **operation type**. It ships separately so that `Blueprint.Testing` does not take on `Blueprint.HttpClient`'s `Microsoft.Extensions.*` package dependencies; on Marten 6 they fail restore with NU1608. It intercepts a generated forward and a typed-client call alike, and no test restates a route.
+
+```csharp
+var upstream = services.StubBlueprintClient<CountriesApi>();
+upstream.Respond<GetCountryQuery>(q => new CountryApiResource { IsoCode = q.IsoCode });
+
+// … exercise the gateway …
+
+upstream.Received<GetCountryQuery>().Should().ContainSingle(q => q.IsoCode == "GB");
+upstream.Requests.Single().RequestAuthorization.Should().Be(new AuthenticationHeaderValue("Bearer", callerToken));
+```
+
+- **Where it sits.** It is the named client's primary handler, applied after the app's own configuration in whichever order the two are registered. Requests are still built by each operation's generated request builder, and responses are still read by the client's own readers, so routes, query strings, bodies and reading stay covered. The app's delegating handlers still run, and nothing reaches the network.
+- **How a request is matched.** `BlueprintHttpClient` tags every request with the operation it was built from (`BlueprintRequestOptions.Operation`). The stub dispatches on that operation's exact type.
+- **What it answers with.** A response is written as a Blueprint host writes the same result:
+
+  | The responder returns or throws | The client sees |
+  |---|---|
+  | A value | 200 JSON, written with the client's JSON options and serializer context |
+  | `null` or `NoResultOperationResult` | 204 |
+  | `OkResult`, `CreatedResult`, `AcceptedResult`, `ConflictResult` | Its content, with its status |
+  | `NotFoundResult<T>` | A JSON 404, read as a declared `NotFoundResult<T>` member |
+  | `StatusCodeResult`, `PlainTextResult`, `NotModifiedResult<T>` | Its status, with its text where it has some |
+  | `throw new ApiException(…)` | Its problem document, raised as `BlueprintApiException` (or translated by `[TranslateError]`) |
+  | `throw new ValidationException(…)` or `ValidationFailedResult` | A 422, raised as `ValidationException` |
+
+- **A missing response fails loudly.** An operation with no `Respond<TOp>` fails the call with an `InvalidOperationException` naming the client and the operation. A request the client did not build from an operation is refused in the same way.
+- **What is recorded.** `Requests` holds each request's operation, method, URI, headers and body. `Authorization` is the header the upstream received. `RequestAuthorization` is the one the request set itself, through a forward's credential or `CallOptions.ModifyRequest`. Assert on `RequestAuthorization` to prove a forward applied its credential: an app that also copies the caller's token onto the client's default headers sends the same token either way.
+- **Base address.** A named client given no base address, for example because the test leaves out the app's `AddBlueprintClient` registration, gets `BlueprintClientStub<TClient>.DefaultBaseAddress`.
+- **Thread safety.** Calling `StubBlueprintClient` again for the same client returns the same stub. Responses and records may be added and read from any thread.
 
 ### S365 Pattern Mapping
 

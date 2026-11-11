@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Blueprint.Testing\Blueprint.Testing.csproj" />
+    <ProjectReference Include="..\Blueprint.Testing.HttpClient\Blueprint.Testing.HttpClient.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator.Sample\Blueprint.SourceGenerator.Sample.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
