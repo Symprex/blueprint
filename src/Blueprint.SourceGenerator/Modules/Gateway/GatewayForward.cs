@@ -288,7 +288,16 @@ public static class GatewayForward
             + context.GetContextPropertyExpression("OperationCancelled") + ")";
     }
 
-    private static EquatableList<string> GetCopiedProperties(
+    /// <summary>
+    /// Gets the gateway's properties the forward copies into <c>new TInner { … }</c>: each contributed one, and each declared
+    /// one of the inner property's type, that no binding fills.
+    /// </summary>
+    /// <param name="operationType">The gateway operation.</param>
+    /// <param name="exposedType">The inner operation it forwards to.</param>
+    /// <param name="bindings">The operation's valid bindings.</param>
+    /// <param name="unreadable">The copied properties the pipeline cannot read, BPGW018's.</param>
+    /// <returns>The copied property names.</returns>
+    internal static EquatableList<string> GetCopiedProperties(
         INamedTypeSymbol operationType,
         INamedTypeSymbol exposedType,
         EquatableList<GatewayPropertyBinding> bindings,

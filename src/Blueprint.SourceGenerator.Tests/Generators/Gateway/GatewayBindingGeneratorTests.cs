@@ -90,6 +90,11 @@ public class GatewayBindingGeneratorTests
         }
         """;
 
+    /// <summary>
+    /// A gateway <c>TenantId</c> the forward does not copy, since its type is not the inner property's.
+    /// </summary>
+    private const string DeclaredTenantIdOfAnotherType = "public int TenantId { get; set; }";
+
     private static readonly Lazy<MetadataReference> _innerContract = new(
         static () => TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(InnerSource, "InnerNoteContract"));
 
@@ -374,9 +379,22 @@ public class GatewayBindingGeneratorTests
     }
 
     [Fact]
-    public void When_an_inner_route_placeholder_the_gateway_route_lacks_is_neither_bound_nor_hidden_then_BPGW010_is_reported()
+    public void When_an_inner_route_placeholder_the_gateway_route_lacks_is_contributed_then_BPGW010_is_not_reported_and_the_forward_sets_it()
     {
-        var diagnostic = SingleDescriptorDiagnostic([GatewaySource], "BPGW010");
+        // The gateway takes the contributed TenantId from its query string, and the forward copies it into the inner
+        // operation, so the inner request builder has its route value (#161).
+        var run = RunAllGenerators([ClientSource, GatewaySource, AppSource], _innerContract.Value);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW010");
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().Contain("TenantId = operation.TenantId");
+    }
+
+    [Fact]
+    public void When_an_inner_route_placeholder_the_gateway_route_lacks_is_neither_copied_nor_bound_nor_hidden_then_BPGW010_is_reported()
+    {
+        // A declared property of another type is the gateway's own, so nothing gives the inner property a value.
+        var diagnostic = SingleDescriptorDiagnostic([WithBody(GatewaySource, DeclaredTenantIdOfAnotherType)], "BPGW010");
 
         diagnostic.GetMessage().Should().Contain("TenantId").And.Contain("/tenants/{TenantId}/notes");
         Located(diagnostic).Should().StartWith("Expose<");
@@ -473,7 +491,7 @@ public class GatewayBindingGeneratorTests
         var inner = InnerSource.Replace("/tenants/{TenantId}/notes", route, StringComparison.Ordinal);
         var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
 
-        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([GatewaySource], additionalReferences: [contract]);
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([WithBody(GatewaySource, DeclaredTenantIdOfAnotherType)], additionalReferences: [contract]);
 
         var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW010").Which;
         diagnostic.GetMessage().Should().Contain("TenantId").And.Contain(route);
@@ -525,7 +543,7 @@ public class GatewayBindingGeneratorTests
         var inner = InnerSource.Replace("[RootLink(\"/tenants/{TenantId}/notes\")]", "[RootLink(\"/tenants/{TenantId}/notes\")]\n    [RootLink(\"/notes\")]", StringComparison.Ordinal);
         var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
 
-        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([GatewaySource], additionalReferences: [contract]);
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([WithBody(GatewaySource, DeclaredTenantIdOfAnotherType)], additionalReferences: [contract]);
 
         var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW010").Which;
         diagnostic.GetMessage().Should().Contain("TenantId").And.Contain("/tenants/{TenantId}/notes");

@@ -193,11 +193,15 @@ public sealed class BlueprintClientRegistrationTests
     }
 
     [Fact]
-    public async Task A_second_registration_of_the_same_interface_is_skipped_so_the_first_callback_stands()
+    public async Task A_second_registration_registers_the_interface_once_and_runs_both_callbacks_in_order()
     {
         var sent = new List<Uri>();
         var services = new ServiceCollection();
-        services.AddBlueprintClient<ILocalOperationsApi, LocalOperationsApi>(static (_, client) => client.BaseAddress = _baseAddress)
+        services.AddBlueprintClient<ILocalOperationsApi, LocalOperationsApi>(static (_, client) =>
+            {
+                client.BaseAddress = _baseAddress;
+                client.DefaultRequestHeaders.Add("X-First", "1");
+            })
             .ConfigurePrimaryHttpMessageHandler(() => RespondingWith(sent, "[]"));
         var second = services.AddBlueprintClient<ILocalOperationsApi, LocalOperationsApi>(static (_, client) => client.BaseAddress = new Uri("https://second.example.test/"));
 
@@ -206,8 +210,31 @@ public sealed class BlueprintClientRegistrationTests
         await provider.GetRequiredService<ILocalOperationsApi>().FindTemplateCopiesAsync(new FindTemplateCopiesQuery { Id = "t-1" });
 
         services.Count(static s => s.ServiceType == typeof(ILocalOperationsApi)).Should().Be(1);
-        second.Name.Should().Be(nameof(LocalOperationsApi), "the skipped call still returns the builder of the client already registered");
-        sent.Should().ContainSingle().Which.Host.Should().Be("default.example.test");
+        second.Name.Should().Be(nameof(LocalOperationsApi), "the second call returns the builder of the same named client");
+
+        // Both callbacks configure the one named client, in registration order, so the second's base address wins and the
+        // first's header still applies.
+        sent.Should().ContainSingle().Which.Host.Should().Be("second.example.test");
+        provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(LocalOperationsApi))
+            .DefaultRequestHeaders.GetValues("X-First").Should().Equal("1");
+    }
+
+    [Fact]
+    public async Task An_interface_registered_beforehand_still_leaves_the_named_client_configured_for_a_forward()
+    {
+        // Registering the interface first (a test double, say) used to skip the named client's configuration, so a
+        // gateway's generated forward, which takes the named client by name, had no base address (#164).
+        var registeredFirst = new LocalOperationsApi(new BlueprintHttpClient(new System.Net.Http.HttpClient()));
+        var services = new ServiceCollection();
+        services.AddSingleton<ILocalOperationsApi>(registeredFirst);
+        services.AddBlueprintClient<ILocalOperationsApi, LocalOperationsApi>(static (_, client) => client.BaseAddress = _baseAddress);
+
+        await using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(LocalOperationsApi)).BaseAddress.Should().Be(_baseAddress);
+        BlueprintClientTransport.Create<LocalOperationsApi>(provider).HttpClient.BaseAddress.Should().Be(_baseAddress);
+        provider.GetRequiredService<ILocalOperationsApi>().Should().BeSameAs(registeredFirst, "the interface registered first stands");
+        services.Count(static s => s.ServiceType == typeof(ILocalOperationsApi)).Should().Be(1);
     }
 
     [Fact]
