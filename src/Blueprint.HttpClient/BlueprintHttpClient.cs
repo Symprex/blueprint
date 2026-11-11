@@ -207,6 +207,12 @@ public class BlueprintHttpClient
             await credential.ApplyAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
+        // Read before HttpClient merges its default headers in, after which no handler can tell the two apart.
+        if (request.Headers.Authorization is { } requestAuthorization)
+        {
+            request.Options.Set(BlueprintRequestOptions.RequestAuthorization, requestAuthorization);
+        }
+
         try
         {
             using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -591,6 +597,7 @@ public class BlueprintHttpClient
         }
 
         var request = new HttpRequestMessage(method, url);
+        request.Options.Set(BlueprintRequestOptions.Operation, operation);
 
         if (method != HttpMethod.Get)
         {

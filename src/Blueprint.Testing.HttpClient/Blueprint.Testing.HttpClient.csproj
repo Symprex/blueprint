@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Description>A test double of a Blueprint typed client's upstream for Blueprint.Testing: answers and records a [BlueprintClient]'s calls, and an [Expose] gateway's forwards, by operation type.</Description>
+        <Nullable>enable</Nullable>
+        <LangVersion>preview</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>Blueprint.Testing</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Blueprint.HttpClient\Blueprint.HttpClient.csproj" />
+        <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
+        <ProjectReference Include="..\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
+    </ItemGroup>
+
+</Project>

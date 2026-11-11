@@ -364,8 +364,8 @@ internal static class GatewayBindings
     }
 
     /// <summary>
-    /// D9's edge case: an inner route placeholder the gateway's routes do not carry is either bound or hidden, or the inner
-    /// operation's own request builder would have no value for it.
+    /// D9's edge case: an inner route placeholder the gateway's routes do not carry is either copied, bound or hidden, or the
+    /// inner operation's own request builder would have no value for it.
     /// </summary>
     private static void ReportUnboundInnerRoutePlaceholders(
         INamedTypeSymbol operationType,
@@ -403,9 +403,13 @@ internal static class GatewayBindings
             }
         }
 
+        // A copied property gives the inner request builder its value wherever the gateway reads it from, the query string
+        // included (#161). A declared one of another type is the gateway's own, so it does not.
+        var copied = GatewayForward.GetCopiedProperties(operationType, innerType, bindings, out _);
+
         foreach (var name in required)
         {
-            if (gatewayPlaceholders.Contains(name) || bindings.Any(b => b.PropertyName == name))
+            if (gatewayPlaceholders.Contains(name) || copied.Contains(name) || bindings.Any(b => b.PropertyName == name))
             {
                 continue;
             }
