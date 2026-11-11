@@ -215,6 +215,9 @@ public class BlueprintHttpClientFailureTests : IClassFixture<SampleAppFixture>
     [Theory]
     [InlineData("stackTrace")]
     [InlineData("StackTrace")]
+    [InlineData("stack_trace")]
+    [InlineData("STACK_TRACE")]
+    [InlineData("stack-trace")]
     public async Task When_a_server_error_response_has_problem_extensions_then_carries_them_but_not_its_stack_trace_or_instance(string stackTraceKey)
     {
         // A host exposing exception details writes a 5xx's stack trace as the stackTrace extension

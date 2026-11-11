@@ -605,9 +605,10 @@ public class BlueprintHttpClient
             foreach (var (key, value) in problem.Extensions)
             {
                 // "instance" in another casing is an extension, as it was to legacy (ReadProblemDetails), and like the member
-                // it can name the remote end's internals.
+                // it can name the remote end's internals. A host names an exception's extension keys with its naming
+                // policy, so the stack trace is matched whatever word separator that policy writes (stack_trace, stack-trace).
                 if (!isServerError
-                    || !(string.Equals(key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase)
+                    || !(IsStackTraceExtension(key)
                          || string.Equals(key, InstanceMemberName, StringComparison.OrdinalIgnoreCase)))
                 {
                     extensions[key] = ToLegacyExtensionValue(value)!;
@@ -690,6 +691,23 @@ public class BlueprintHttpClient
         }
 
         return problem;
+    }
+
+    /// <summary>
+    /// Gets whether <paramref name="key"/> is the stack trace extension in any casing, with or without <c>_</c> or
+    /// <c>-</c> between its words.
+    /// </summary>
+    private static bool IsStackTraceExtension(string key)
+    {
+        if (string.Equals(key, StackTraceExtensionName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return key.Length == StackTraceExtensionName.Length + 1
+            && key[5] is '_' or '-'
+            && key.AsSpan(0, 5).Equals("stack", StringComparison.OrdinalIgnoreCase)
+            && key.AsSpan(6).Equals("trace", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

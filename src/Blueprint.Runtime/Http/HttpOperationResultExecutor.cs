@@ -1242,9 +1242,16 @@ public class HttpOperationResultExecutor
     /// a member path, so unlike a 422's it is not named segment by segment.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// A key named as one of the problem's own members (<c>type</c>, <c>title</c>, <c>status</c>, <c>detail</c>,
+    /// <c>instance</c>) is left out: written, it would be a second member of that name, which a reader rejects or takes for
+    /// the problem's own.
+    /// </para>
+    /// <para>
     /// Of two keys the policy names alike, the one already so named wins, else the ordinally first: a rule that does not
     /// depend on the dictionary's enumeration order, which an <see cref="IReadOnlyDictionary{TKey, TValue}"/> does not
     /// promise. The other is left out rather than failing the response, which would turn the problem into a 500.
+    /// </para>
     /// </remarks>
     private static void AddNamedExtensions(IDictionary<string, object?> target, IReadOnlyDictionary<string, object> extensions, JsonNamingPolicy? keyPolicy)
     {
@@ -1252,7 +1259,10 @@ public class HttpOperationResultExecutor
         {
             foreach (var kvp in extensions)
             {
-                target[kvp.Key] = kvp.Value;
+                if (!IsProblemMemberName(kvp.Key))
+                {
+                    target[kvp.Key] = kvp.Value;
+                }
             }
 
             return;
@@ -1263,6 +1273,12 @@ public class HttpOperationResultExecutor
         foreach (var kvp in extensions)
         {
             var name = keyPolicy.ConvertName(kvp.Key);
+
+            if (IsProblemMemberName(name))
+            {
+                continue;
+            }
+
             sourceKeys ??= new Dictionary<string, string>(extensions.Count, StringComparer.Ordinal);
 
             if (sourceKeys.TryGetValue(name, out var existing) && !Precedes(kvp.Key, existing, name))
@@ -1277,6 +1293,12 @@ public class HttpOperationResultExecutor
         static bool Precedes(string key, string other, string name)
         {
             return key == name || (other != name && string.CompareOrdinal(key, other) < 0);
+        }
+
+        // ProblemDetails names its own members with fixed JSON property names, whatever the policy.
+        static bool IsProblemMemberName(string name)
+        {
+            return name is "type" or "title" or "status" or "detail" or "instance";
         }
     }
 

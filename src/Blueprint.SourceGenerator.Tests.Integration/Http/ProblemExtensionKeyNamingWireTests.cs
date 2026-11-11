@@ -87,6 +87,31 @@ public sealed class ProblemExtensionKeyNamingWireTests
         document.RootElement.GetProperty(name).GetString().Should().Be(value);
     }
 
+    [Fact]
+    public async Task An_extension_named_as_a_standard_member_is_left_out()
+    {
+        // Written, "Status" would be a second status member, which a reader rejects or takes for the problem's own.
+        await using var host = await ExtensionHost.StartAsync(static _ => { });
+
+        var body = await host.GetAsync("reserved-extensions");
+
+        body.Should().Be("""{"type":"widget_locked","title":"Widget locked","status":400,"detail":"Locked by someone else","currentVersion":7}""");
+    }
+
+    [Fact]
+    public async Task With_neither_policy_set_only_an_extension_already_named_as_a_standard_member_is_left_out()
+    {
+        await using var host = await ExtensionHost.StartAsync(static json =>
+        {
+            json.PropertyNamingPolicy = null;
+            json.DictionaryKeyPolicy = null;
+        });
+
+        var names = MemberNames(await host.GetAsync("reserved-extensions"));
+
+        names.Should().Equal("type", "title", "status", "detail", "Status", "Detail", "currentVersion");
+    }
+
     private static string[] MemberNames(string body)
     {
         using var document = JsonDocument.Parse(body);

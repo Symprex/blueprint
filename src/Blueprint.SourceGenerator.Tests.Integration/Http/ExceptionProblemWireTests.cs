@@ -223,6 +223,18 @@ public partial class GetExceptionProblemQuery : IQuery<string>
                     ["Errors"] = new[] { "Unexpected token" },
                     ["HtmlErrors"] = new[] { "Unclosed tag" },
                 }),
+            "reserved-extensions" => new ApiException(
+                "Widget locked",
+                "widget_locked",
+                "Locked by someone else",
+                400,
+                new Dictionary<string, object>
+                {
+                    ["Status"] = "locked",
+                    ["Detail"] = "shadow",
+                    ["type"] = "shadow",
+                    ["currentVersion"] = 7,
+                }),
             "colliding-written-first" => new ApiException(
                 "Colliding extensions",
                 "colliding",

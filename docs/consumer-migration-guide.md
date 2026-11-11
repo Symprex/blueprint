@@ -569,7 +569,11 @@ with `["Errors"]` answered `"Errors"` while every other member was camelCase. Un
 answers `{"errors":[...],"htmlErrors":[...]}` where it answered `{"Errors":[...],"HtmlErrors":[...]}`. A key is named
 whole, as a dictionary key is — not split into a member path — and only the keys change, not the values. Of two keys
 the policy names alike (`Errors` and `errors`), the one already so named is written, otherwise the ordinally first, and
-the other is left out. `traceId` keeps its name whatever the policy, and with neither policy set (both `null`) every key
+the other is left out. A key named as one of the problem's own members (`type`, `title`, `status`, `detail`,
+`instance`) is left out too, whatever the policy, rather than written as a second member of that name. Blueprint's
+client drops a 5xx's stack trace extension under any casing and with `_` or `-` between its words (`stackTrace`,
+`stack_trace`, `stack-trace`), so a host with a separator-writing policy does not pass it through a gateway.
+`traceId` keeps its name whatever the policy, and with neither policy set (both `null`) every key
 is written as before. This applies wherever Blueprint writes an exception's problem, including when writing a result
 throws. Blueprint's own client reads extensions case-insensitively, so service-to-service calls are unaffected. A
 client that read a PascalCase extension (`problem.Errors`) must read the camelCase one, or the app must set both
