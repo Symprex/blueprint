@@ -187,13 +187,21 @@ internal static class OpenApiXmlDocs
         return File.Exists(inCurrentDirectory) ? inCurrentDirectory : Path.Combine(currentDirectory, "bin", fileName);
     }
 
-    // An <inheritdoc/> takes every node of the base type's member of the same name, or failing that an interface's.
+    // An <inheritdoc/> takes every node of the base type's member of the same name, or failing that an interface's. One
+    // neither gives anything, and a type's, take what its cref names: a gateway operation's generated partial inherits the
+    // inner operation's documentation, which no base type or interface carries (Symprex/blueprint#67, D15).
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Documentation of a base or interface member that has been trimmed away is none, as for any member without documentation.")]
     private static void ReplaceInheritdocElements(MemberInfo member, XElement element)
     {
         foreach (var child in element.Nodes().ToList().OfType<XElement>())
         {
-            if (!string.Equals(child.Name.LocalName, "inheritdoc", StringComparison.OrdinalIgnoreCase))
+            if (!IsInheritdoc(child))
+            {
+                continue;
+            }
+
+            // A type has no member of its own name on its base to inherit from.
+            if (member is Type && ReplaceInheritdocFromCref(member.Module.Assembly, child, depth: 0))
             {
                 continue;
             }
@@ -209,7 +217,78 @@ internal static class OpenApiXmlDocs
             {
                 ReplaceInheritdocFromInterfaces(member, child);
             }
+
+            // Still in place: nothing inherited gave it any nodes.
+            if (child.Parent is not null)
+            {
+                ReplaceInheritdocFromCref(member.Module.Assembly, child, depth: 0);
+            }
         }
+    }
+
+    private static bool IsInheritdoc(XElement element)
+    {
+        return string.Equals(element.Name.LocalName, "inheritdoc", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Replaces an <c>&lt;inheritdoc cref="..."/&gt;</c> with every node of the member its cref names, as the compiler
+    /// writes it (<c>P:Ns.Type.Property</c>), looked for in the documentation of <paramref name="assembly"/> and then of each
+    /// assembly it references. An inheritdoc with a cref in those nodes is resolved in turn, from the assembly they came from.
+    /// </summary>
+    /// <returns>Whether the inheritdoc was replaced.</returns>
+    private static bool ReplaceInheritdocFromCref(Assembly assembly, XElement inheritdoc, int depth)
+    {
+        const int maximumDepth = 4;
+
+        if (depth > maximumDepth
+            || inheritdoc.Attribute("cref")?.Value is not { Length: > 2 } cref
+            || FindDocumentedMember(assembly, cref) is not ({ } target, { } targetAssembly))
+        {
+            return false;
+        }
+
+        var copy = new XElement(target);
+
+        foreach (var nested in copy.Descendants().Where(IsInheritdoc).ToList())
+        {
+            ReplaceInheritdocFromCref(targetAssembly, nested, depth + 1);
+        }
+
+        inheritdoc.ReplaceWith(copy.Nodes().ToArray());
+
+        return true;
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "A referenced assembly that cannot be loaded has no documentation, as for any assembly without a documentation file.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "A reference that has been trimmed away has no documentation, as for any assembly without a documentation file; the lookup only builds the OpenAPI document.")]
+    private static (XElement? Element, Assembly? Assembly) FindDocumentedMember(Assembly assembly, string documentationId)
+    {
+        if (GetMembers(assembly) is { } own && own.TryGetValue(documentationId, out var ownElement))
+        {
+            return (ownElement, assembly);
+        }
+
+        foreach (var referencedName in assembly.GetReferencedAssemblies())
+        {
+            Assembly referenced;
+
+            try
+            {
+                referenced = Assembly.Load(referencedName);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            if (GetMembers(referenced) is { } members && members.TryGetValue(documentationId, out var element))
+            {
+                return (element, referenced);
+            }
+        }
+
+        return (null, null);
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Documentation of an interface member that has been trimmed away is none, as for any member without documentation.")]

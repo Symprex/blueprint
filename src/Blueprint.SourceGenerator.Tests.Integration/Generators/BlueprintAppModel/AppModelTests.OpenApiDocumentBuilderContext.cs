@@ -39,6 +39,7 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.Http.ResourceEvent<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeTenantApiResource>",
             "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeCountryApiResource>",
             "Blueprint.SourceGenerator.Tests.Integration.Http.LegacyShape.LegacyShapeGatewayRunApiResource",
+            "Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionHolderApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionTrailApiResource",
             "Blueprint.SourceGenerator.Tests.Integration.Http.SchemaNameCollisions.CollisionPreviewApiResource",

@@ -3,6 +3,7 @@ using Blueprint.SourceGenerator.Helpers;
 using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using CSharpSymbolDisplay = Microsoft.CodeAnalysis.CSharp.SymbolDisplay;
 
 namespace Blueprint.SourceGenerator.Modules;
 
@@ -53,16 +54,131 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             return;
         }
 
-        var registrations = DiscoverFactoryFields(operationType, apiExceptionFactoryType, context);
-        if (registrations.Length == 0)
-        {
-            return;
-        }
-
-        foreach (var registration in registrations)
+        foreach (var registration in DiscoverFactoryFields(operationType, apiExceptionFactoryType, context))
         {
             context.AddMetadata(registration);
         }
+
+        // A gateway operation documents the inner operation's factories as though it declared them (D14).
+        if (OperationPropertyModelBuilder.FindExposedType(operationType, out _) is { } innerType)
+        {
+            foreach (var registration in DiscoverInnerFactoryFields(operationType, innerType, apiExceptionFactoryType, context))
+            {
+                context.AddMetadata(registration);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Discovers the factories of the inner operation an <c>[Expose&lt;TInner&gt;]</c> operation forwards to, less those
+    /// whose problem type one of the operation's <c>[TranslateError]</c>s answers with a factory of its own, which is
+    /// documented as the operation's own.
+    /// </summary>
+    /// <remarks>
+    /// A factory is documented by its title and type where they are known at compile time: from its initialiser in this
+    /// compilation, or from its assembly's <c>[BlueprintApiExceptionStatus]</c> index. Otherwise it is read from the field at
+    /// run time, as the operation's own are, when the operation can name it. A factory whose initialiser cannot be evaluated
+    /// is left out, as the inner operation's own descriptor reports it.
+    /// </remarks>
+    private static IEnumerable<ApiExceptionFactoryRegistration> DiscoverInnerFactoryFields(
+        INamedTypeSymbol operationType,
+        INamedTypeSymbol innerType,
+        INamedTypeSymbol apiExceptionFactoryType,
+        DescriptorContributorContext context)
+    {
+        var translatedTypes = GetTranslatedProblemTypes(operationType);
+
+        foreach (var member in innerType.GetMembers())
+        {
+            if (member is not IFieldSymbol { IsStatic: true } field
+                || !SymbolEqualityComparer.Default.Equals(field.Type, apiExceptionFactoryType))
+            {
+                continue;
+            }
+
+            ISymbol named = field.AssociatedSymbol is IPropertySymbol property ? property : field;
+
+            if (!TryExtractFactory(field, context, out var factory)
+                || (factory.Type is { } type && translatedTypes.Contains(type)))
+            {
+                continue;
+            }
+
+            string problemExample;
+            if (factory is { Title: { } knownTitle, Type: { } knownType })
+            {
+                problemExample = RenderProblemExample(CSharpSymbolDisplay.FormatLiteral(knownTitle, quote: true), CSharpSymbolDisplay.FormatLiteral(knownType, quote: true));
+            }
+            else if (CanName(named, operationType.ContainingAssembly))
+            {
+                problemExample = RenderProblemExample($"{innerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{named.Name}");
+            }
+            else
+            {
+                continue;
+            }
+
+            yield return new ApiExceptionFactoryRegistration(named.Name, factory.HttpStatus, problemExample);
+        }
+    }
+
+    /// <summary>
+    /// The upstream problem types an operation's own <c>[TranslateError]</c>s answer.
+    /// </summary>
+    private static HashSet<string> GetTranslatedProblemTypes(INamedTypeSymbol operationType)
+    {
+        var types = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var attribute in operationType.GetAttributes())
+        {
+            if (attribute.AttributeClass is { Name: "TranslateErrorAttribute" } attributeClass
+                && attributeClass.IsInNamespace("Blueprint", "Model", "Attributes")
+                && attribute.ConstructorArguments is [{ Value: string fromType }, _])
+            {
+                types.Add(fromType);
+            }
+        }
+
+        return types;
+    }
+
+    /// <summary>
+    /// Whether code in <paramref name="within"/> can name <paramref name="member"/>: it and every type containing it are
+    /// public, or internal to an assembly that gives <paramref name="within"/> access.
+    /// </summary>
+    private static bool CanName(ISymbol member, IAssemblySymbol within)
+    {
+        for (var current = member; current is not null and not INamespaceSymbol; current = current.ContainingType)
+        {
+            var accessible = current.DeclaredAccessibility switch
+            {
+                Accessibility.Public => true,
+                Accessibility.Internal or Accessibility.ProtectedOrInternal => SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, within)
+                    || current.ContainingAssembly.GivesAccessTo(within),
+                _ => false,
+            };
+
+            if (!accessible)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Renders the construction of the <c>OperationProblemExample</c> that documents a factory: from its field's own title
+    /// and type, read when the descriptor is built, or from the given title and type expressions.
+    /// </summary>
+    private static string RenderProblemExample(string fieldReference)
+    {
+        return RenderProblemExample($"{fieldReference}.Title", $"{fieldReference}.Type");
+    }
+
+    private static string RenderProblemExample(string title, string type)
+    {
+        return $"new global::Blueprint.Model.OperationProblemExample({title}, {type})";
     }
 
     private static ImmutableArray<ApiExceptionFactoryRegistration> DiscoverFactoryFields(
@@ -92,12 +208,12 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             // backs, whose initializer is the one the field is given (TryExtractHttpStatusCore).
             var memberName = field.AssociatedSymbol is IPropertySymbol property ? property.Name : field.Name;
 
-            if (TryExtractHttpStatus(field, context, out var httpStatus))
+            if (TryExtractFactory(field, context, out var factory))
             {
                 builder.Add(new ApiExceptionFactoryRegistration(
                     memberName,
-                    httpStatus,
-                    $"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{memberName}"));
+                    factory.HttpStatus,
+                    RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{memberName}")));
             }
             else
             {
@@ -112,29 +228,29 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
     }
 
     /// <summary>
-    /// Extracts the HTTP status code from the field initializer. Supports direct <c>new ApiExceptionFactory(...)</c>
-    /// constructor calls (with <c>int</c> literal or <c>HttpStatusCode.X</c> enum forms in the third argument)
-    /// and single-hop field references (e.g. <c>CommonApiExceptions.NotFound</c>) that themselves have a
-    /// resolvable constructor initializer.
+    /// Extracts the HTTP status code, and the title and type where they are constants, from the field initializer.
+    /// Supports direct <c>new ApiExceptionFactory(...)</c> constructor calls (with <c>int</c> literal or
+    /// <c>HttpStatusCode.X</c> enum forms in the third argument) and single-hop field references (e.g.
+    /// <c>CommonApiExceptions.NotFound</c>) that themselves have a resolvable constructor initializer.
     /// </summary>
-    private static bool TryExtractHttpStatus(
+    private static bool TryExtractFactory(
         IFieldSymbol field,
         DescriptorContributorContext context,
-        out int httpStatus)
+        out FactoryDetails factory)
     {
-        return TryExtractHttpStatusCore(field, context, out httpStatus, depth: 0);
+        return TryExtractFactoryCore(field, context, out factory, depth: 0);
     }
 
     /// <summary>
     /// Core extraction with depth guard to prevent infinite recursion on circular field references.
     /// </summary>
-    private static bool TryExtractHttpStatusCore(
+    private static bool TryExtractFactoryCore(
         IFieldSymbol field,
         DescriptorContributorContext context,
-        out int httpStatus,
+        out FactoryDetails factory,
         int depth)
     {
-        httpStatus = 0;
+        factory = default;
 
         // Guard against circular references or deep chains.
         if (depth > 2)
@@ -148,12 +264,18 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
         // then fall back to matching the field name against well-known HttpStatusCode enum members.
         if (declaringSyntaxReferences.Length == 0)
         {
-            if (TryResolveFromAssemblyAttributes(field, out httpStatus))
+            if (TryResolveFromAssemblyAttributes(field, out factory))
             {
                 return true;
             }
 
-            return WellKnownHttpStatusCodes.TryGetValue(field.Name, out httpStatus);
+            if (WellKnownHttpStatusCodes.TryGetValue(field.Name, out var wellKnownStatus))
+            {
+                factory = new FactoryDetails(wellKnownStatus, null, null);
+                return true;
+            }
+
+            return false;
         }
 
         var syntax = declaringSyntaxReferences[0].GetSyntax();
@@ -184,7 +306,20 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
         if (argumentList is { Arguments.Count: >= 3 })
         {
             var statusArgExpression = argumentList.Arguments[2].Expression;
-            return TryResolveStatusCodeFromExpression(statusArgExpression, field, out httpStatus);
+            if (!TryResolveStatusCodeFromExpression(statusArgExpression, field, out var httpStatus))
+            {
+                return false;
+            }
+
+            // The title and type are known only when both are constants.
+            var constantsModel = context.GetSemanticModel(initializerExpression.SyntaxTree);
+            var title = constantsModel?.GetConstantValue(argumentList.Arguments[0].Expression).Value as string;
+            var type = constantsModel?.GetConstantValue(argumentList.Arguments[1].Expression).Value as string;
+
+            factory = title is not null && type is not null
+                ? new FactoryDetails(httpStatus, title, type)
+                : new FactoryDetails(httpStatus, null, null);
+            return true;
         }
 
         // Follow field references using the semantic model: `field = CommonApiExceptions.NotFound`.
@@ -196,7 +331,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                 var symbolInfo = semanticModel.GetSymbolInfo(initializerExpression);
                 if (symbolInfo.Symbol is IFieldSymbol referencedField)
                 {
-                    return TryExtractHttpStatusCore(referencedField, context, out httpStatus, depth + 1);
+                    return TryExtractFactoryCore(referencedField, context, out factory, depth + 1);
                 }
             }
         }
@@ -274,13 +409,14 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
     }
 
     /// <summary>
-    /// Resolves the HTTP status code from <c>[assembly: BlueprintApiExceptionStatus(...)]</c> attributes
-    /// on the assembly containing the referenced field. These attributes are emitted by the
-    /// <c>ApiExceptionStatusIndexGenerator</c> in the referenced assembly's compilation.
+    /// Resolves the HTTP status code, and the title and type where indexed, from
+    /// <c>[assembly: BlueprintApiExceptionStatus(...)]</c> attributes on the assembly containing the referenced field.
+    /// These attributes are emitted by the <c>ApiExceptionStatusIndexGenerator</c> in the referenced assembly's
+    /// compilation; one built by an earlier generator indexes the status alone.
     /// </summary>
-    private static bool TryResolveFromAssemblyAttributes(IFieldSymbol field, out int httpStatus)
+    private static bool TryResolveFromAssemblyAttributes(IFieldSymbol field, out FactoryDetails factory)
     {
-        httpStatus = 0;
+        factory = default;
 
         var assembly = field.ContainingAssembly;
         if (assembly is null)
@@ -293,7 +429,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
         foreach (var attr in assembly.GetAttributes())
         {
             if (attr.AttributeClass?.Name != "BlueprintApiExceptionStatusAttribute"
-                || attr.ConstructorArguments.Length != 3)
+                || attr.ConstructorArguments.Length is not (3 or 5))
             {
                 continue;
             }
@@ -305,7 +441,9 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                 && string.Equals(fieldArg, field.Name, StringComparison.Ordinal)
                 && attr.ConstructorArguments[2].Value is int statusCode)
             {
-                httpStatus = statusCode;
+                factory = attr.ConstructorArguments is [_, _, _, { Value: string title }, { Value: string type }]
+                    ? new FactoryDetails(statusCode, title, type)
+                    : new FactoryDetails(statusCode, null, null);
                 return true;
             }
         }
@@ -365,4 +503,9 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
         ["BadGateway"] = 502,
         ["ServiceUnavailable"] = 503,
     };
+
+    /// <summary>
+    /// What is known of a factory at compile time: its status, and its title and type when both are constants.
+    /// </summary>
+    private readonly record struct FactoryDetails(int HttpStatus, string? Title, string? Type);
 }

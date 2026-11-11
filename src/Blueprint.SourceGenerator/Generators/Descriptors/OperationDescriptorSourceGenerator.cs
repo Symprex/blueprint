@@ -141,7 +141,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             .Select(static (x, _) => x.Left.GetDiagnostics(allowExpose: x.Right)));
 
         context.RegisterSourceOutput(
-            exposedOperations.Where(static analysis => analysis.Model.HasContributedProperties),
+            exposedOperations.Where(static analysis => analysis.Model.HasPartialToEmit),
             static (spc, analysis) => spc.AddSource(
                 $"{analysis.Model.OperationTypeName}_ExposedProperties.g.cs",
                 SourceText.From(OperationPropertyModelBuilder.RenderContributedProperties(analysis.Model), Encoding.UTF8)));

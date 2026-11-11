@@ -10,9 +10,10 @@ namespace Blueprint.SourceGenerator.Generators.ApiExceptionStatusIndex;
 
 /// <summary>
 /// Lightweight incremental generator that scans all <c>public static readonly ApiExceptionFactory</c>
-/// fields in the compilation and emits assembly-level attributes recording their HTTP status codes.
-/// Downstream compilations (via project references) can then read these attributes to resolve
-/// cross-assembly field references without needing syntax access.
+/// fields in the compilation and emits assembly-level attributes recording their HTTP status codes, and their titles and
+/// types where both are constants. Downstream compilations (via project references) can then read these attributes to
+/// resolve cross-assembly field references without needing syntax access, as a gateway operation does to document the
+/// factories of the inner operation it exposes (Symprex/blueprint#67).
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, ITrackedSourceGenerator
@@ -51,6 +52,17 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
                         /// <param name="fieldName">The name of the ApiExceptionFactory field.</param>
                         /// <param name="httpStatusCode">The resolved HTTP status code.</param>
                         public BlueprintApiExceptionStatusAttribute(string containingTypeMetadataName, string fieldName, int httpStatusCode) { }
+
+                        /// <summary>
+                        /// Initializes a new instance of the <see cref="BlueprintApiExceptionStatusAttribute"/> class, for a
+                        /// field whose title and type are constants.
+                        /// </summary>
+                        /// <param name="containingTypeMetadataName">The metadata name of the type containing the field.</param>
+                        /// <param name="fieldName">The name of the ApiExceptionFactory field.</param>
+                        /// <param name="httpStatusCode">The resolved HTTP status code.</param>
+                        /// <param name="title">The factory's problem title.</param>
+                        /// <param name="type">The factory's problem type.</param>
+                        public BlueprintApiExceptionStatusAttribute(string containingTypeMetadataName, string fieldName, int httpStatusCode, string title, string type) { }
                     }
                 }
                 """;
@@ -106,12 +118,12 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
                 continue;
             }
 
-            if (TryResolveFromInitializer(initExpr, ctx.SemanticModel, out var httpStatus))
+            if (TryResolveFromInitializer(initExpr, ctx.SemanticModel, out var httpStatus, out var title, out var type))
             {
                 var containingType = fieldSymbol.ContainingType;
                 var metadataName = containingType.ToFullMetadataName();
 
-                return new ApiExceptionFieldEntry(metadataName, fieldSymbol.Name, httpStatus);
+                return new ApiExceptionFieldEntry(metadataName, fieldSymbol.Name, httpStatus, title, type);
             }
         }
 
@@ -121,9 +133,13 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
     private static bool TryResolveFromInitializer(
         ExpressionSyntax initExpr,
         SemanticModel semanticModel,
-        out int httpStatus)
+        out int httpStatus,
+        out string? title,
+        out string? type)
     {
         httpStatus = 0;
+        title = null;
+        type = null;
 
         // Direct constructor: new ApiExceptionFactory("title", "type", statusCode)
         var argumentList = initExpr switch
@@ -135,6 +151,14 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
 
         if (argumentList is { Arguments.Count: >= 3 })
         {
+            // Indexed only when both are constants; a consumer otherwise reads them from the field, which it can name.
+            if (semanticModel.GetConstantValue(argumentList.Arguments[0].Expression).Value is string constantTitle
+                && semanticModel.GetConstantValue(argumentList.Arguments[1].Expression).Value is string constantType)
+            {
+                title = constantTitle;
+                type = constantType;
+            }
+
             return TryResolveStatusCodeFromExpression(argumentList.Arguments[2].Expression, out httpStatus);
         }
 
@@ -148,7 +172,7 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
                 var refSyntax = referencedField.DeclaringSyntaxReferences[0].GetSyntax();
                 if (refSyntax is VariableDeclaratorSyntax { Initializer.Value: var refInit })
                 {
-                    return TryResolveFromInitializer(refInit, semanticModel, out httpStatus);
+                    return TryResolveFromInitializer(refInit, semanticModel, out httpStatus, out title, out type);
                 }
             }
 
@@ -206,7 +230,11 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
 
         foreach (var entry in uniqueEntries)
         {
-            sb.AppendLine($"[assembly: global::Blueprint.Model.Attributes.BlueprintApiExceptionStatus(\"{entry.ContainingTypeMetadataName}\", \"{entry.FieldName}\", {entry.HttpStatus})]");
+            var titleAndType = entry is { Title: { } title, Type: { } type }
+                ? $", {SymbolDisplay.FormatLiteral(title, quote: true)}, {SymbolDisplay.FormatLiteral(type, quote: true)}"
+                : string.Empty;
+
+            sb.AppendLine($"[assembly: global::Blueprint.Model.Attributes.BlueprintApiExceptionStatus(\"{entry.ContainingTypeMetadataName}\", \"{entry.FieldName}\", {entry.HttpStatus}{titleAndType})]");
         }
 
         spc.AddSource("Blueprint.ApiExceptionStatuses.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
@@ -237,9 +265,10 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
     };
 
     /// <summary>
-    /// Represents a discovered ApiExceptionFactory field with its resolved HTTP status code.
+    /// Represents a discovered ApiExceptionFactory field with its resolved HTTP status code, and its title and type when both
+    /// are constants.
     /// </summary>
-    private sealed record ApiExceptionFieldEntry(string ContainingTypeMetadataName, string FieldName, int HttpStatus);
+    private sealed record ApiExceptionFieldEntry(string ContainingTypeMetadataName, string FieldName, int HttpStatus, string? Title, string? Type);
 
     /// <summary>
     /// Incremental generator tracking stage names for cacheability verification.

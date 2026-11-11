@@ -54,7 +54,7 @@ internal static class OperationPropertyModelBuilder
 
         return new OperationPropertyModel(
             operationType.ToFullMetadataName(),
-            exposed is null ? null : CreateExposedInfo(exposed),
+            exposed is null ? null : CreateExposedInfo(exposed, operationType),
             new EquatableList<OperationPropertyInfo>(infos),
             GetBindings(operationType));
     }
@@ -243,6 +243,17 @@ internal static class OperationPropertyModelBuilder
             source.AppendLine();
         }
 
+        if (exposed.InheritsDocumentation)
+        {
+            source.Append("/// <inheritdoc cref=\"").Append(exposed.TypeName).AppendLine("\"/>");
+        }
+
+        if (exposed.InheritedDescription is { } description)
+        {
+            source.Append("[global::System.ComponentModel.DescriptionAttribute(")
+                .Append(Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(description, quote: true)).AppendLine(")]");
+        }
+
         source.Append("partial class ").AppendLine(typeName);
         source.AppendLine("{");
 
@@ -395,7 +406,7 @@ internal static class OperationPropertyModelBuilder
         return false;
     }
 
-    private static ExposedOperationInfo CreateExposedInfo(INamedTypeSymbol exposed)
+    private static ExposedOperationInfo CreateExposedInfo(INamedTypeSymbol exposed, INamedTypeSymbol operationType)
     {
         var typeName = exposed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
@@ -415,7 +426,30 @@ internal static class OperationPropertyModelBuilder
             }
         }
 
-        return new ExposedOperationInfo(exposed.ToFullMetadataName(), typeName, creation);
+        // D15: an operation that documents or describes itself keeps its own. Where the build writes no documentation file,
+        // the comment is not parsed and so reads as none, and the inheritdoc emitted for it is ignored in turn.
+        var inheritsDocumentation = string.IsNullOrWhiteSpace(operationType.GetDocumentationCommentXml());
+        var inheritedDescription = FindDescription(operationType) is null ? FindDescription(exposed) : null;
+
+        return new ExposedOperationInfo(exposed.ToFullMetadataName(), typeName, creation, inheritsDocumentation, inheritedDescription);
+    }
+
+    /// <summary>
+    /// The text of a type's own <c>[System.ComponentModel.Description]</c>, or <see langword="null"/>.
+    /// </summary>
+    private static string? FindDescription(INamedTypeSymbol type)
+    {
+        foreach (var attribute in type.GetAttributes())
+        {
+            if (attribute.AttributeClass is { Name: "DescriptionAttribute" } attributeClass
+                && attributeClass.IsInNamespace("System", "ComponentModel")
+                && attribute.ConstructorArguments is [{ Value: string description }])
+            {
+                return description;
+            }
+        }
+
+        return null;
     }
 
     private static bool IsPublicInstanceProperty(IPropertySymbol member)

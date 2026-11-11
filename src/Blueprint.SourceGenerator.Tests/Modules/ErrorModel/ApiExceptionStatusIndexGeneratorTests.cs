@@ -69,6 +69,39 @@ public class ApiExceptionStatusIndexGeneratorTests
     }
 
     [Fact]
+    public void Each_factorys_title_and_type_are_indexed_with_its_status_and_a_referencing_field_takes_those_it_references()
+    {
+        // A gateway re-exports an inner operation's factories from another assembly, where only this index can tell it
+        // what they are titled and which problem type a [TranslateError] would match (Symprex/blueprint#67, D14).
+        const string source = """
+            using System.Net;
+            using Blueprint;
+
+            namespace TestNamespace
+            {
+                public static class CommonApiExceptions
+                {
+                    public const string NotFoundType = "not_found";
+
+                    public static readonly ApiExceptionFactory NotFound = new("Not \"found\"", NotFoundType, HttpStatusCode.NotFound);
+
+                    public static readonly ApiExceptionFactory MissingThing = NotFound;
+                }
+            }
+            """;
+
+        var result = TestHelpers.CompileWithTrackedGenerators([TestHelpers.CreateTrackedGenerator<ApiExceptionStatusIndexGenerator>()], [source], ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var text = result.GetGeneratedSources(nameof(ApiExceptionStatusIndexGenerator))
+            .Single(static s => s.HintName.Contains("ApiExceptionStatuses")).SourceText.ToString();
+
+        text.Should().Contain("(\"TestNamespace.CommonApiExceptions\", \"NotFound\", 404, \"Not \\\"found\\\"\", \"not_found\")")
+            .And.Contain("(\"TestNamespace.CommonApiExceptions\", \"MissingThing\", 404, \"Not \\\"found\\\"\", \"not_found\")");
+    }
+
+    [Fact]
     public void When_factory_uses_int_literal_status_then_emits_attribute()
     {
         const string source = """

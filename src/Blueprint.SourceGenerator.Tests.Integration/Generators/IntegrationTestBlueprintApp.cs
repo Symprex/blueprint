@@ -54,6 +54,7 @@ public partial class IntegrationTestBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(Blueprint.Http.ResourceEvent<Http.LegacyShape.LegacyShapeTenantApiResource>))]
 [JsonSerializable(typeof(Http.LegacyShape.LegacyShapeListApiResource<Http.LegacyShape.LegacyShapeCountryApiResource>))]
 [JsonSerializable(typeof(Http.LegacyShape.LegacyShapeGatewayRunApiResource))]
+[JsonSerializable(typeof(Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource))]
 [JsonSerializable(typeof(Http.SchemaNameCollisions.CollisionHolderApiResource))]
 [JsonSerializable(typeof(Http.SchemaNameCollisions.CollisionTrailApiResource))]
 [JsonSerializable(typeof(Http.SchemaNameCollisions.CollisionPreviewApiResource))]

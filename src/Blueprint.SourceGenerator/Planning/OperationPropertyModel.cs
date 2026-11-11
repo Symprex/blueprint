@@ -42,6 +42,13 @@ public sealed record OperationPropertyModel(
     EquatableList<Modules.Gateway.GatewayPropertyBinding> Bindings)
 {
     /// <summary>
+    /// Gets a value indicating whether the operation has a partial to emit: contributed properties, or documentation or a
+    /// description it inherits from the inner operation.
+    /// </summary>
+    public bool HasPartialToEmit => this.HasContributedProperties
+        || this.Exposed is { InheritsDocumentation: true } or { InheritedDescription: not null };
+
+    /// <summary>
     /// Gets a value indicating whether any property is contributed and so has to be emitted into the partial.
     /// </summary>
     public bool HasContributedProperties
@@ -70,10 +77,21 @@ public sealed record OperationPropertyModel(
 /// The C# expression that creates an inner operation to read the defaults its initialisers give, which metadata does not
 /// carry, or <see langword="null"/> when the exposing assembly cannot create one.
 /// </param>
+/// <param name="InheritsDocumentation">
+/// Whether the exposing operation has no documentation comment of its own, so its partial inherits the inner operation's
+/// (D15): the documentation file then carries an <c>&lt;inheritdoc cref&gt;</c> the runtime resolves against the inner
+/// contract's file, as Roslyn gives no documentation for a project reference's metadata.
+/// </param>
+/// <param name="InheritedDescription">
+/// The inner operation's <c>[Description]</c>, which the partial carries when the exposing operation declares none of its
+/// own, or <see langword="null"/>.
+/// </param>
 public sealed record ExposedOperationInfo(
     string MetadataName,
     string TypeName,
-    string? DefaultsCreation);
+    string? DefaultsCreation,
+    bool InheritsDocumentation = false,
+    string? InheritedDescription = null);
 
 /// <summary>
 /// One property of an <see cref="OperationPropertyModel"/>.
