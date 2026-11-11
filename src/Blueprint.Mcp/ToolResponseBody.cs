@@ -91,6 +91,9 @@ internal sealed class ToolResponseBody : Stream
     /// <inheritdoc />
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
+        // As a server refuses a write once its caller has cancelled it.
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!this._decided && this._start is not null)
         {
             await this._start(cancellationToken).ConfigureAwait(false);
@@ -153,6 +156,11 @@ internal sealed class ToolResponseBody : Stream
     /// <returns>A task that completes once the response has started.</returns>
     public override Task FlushAsync(CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled(cancellationToken);
+        }
+
         return this._start?.Invoke(cancellationToken) ?? Task.CompletedTask;
     }
 
