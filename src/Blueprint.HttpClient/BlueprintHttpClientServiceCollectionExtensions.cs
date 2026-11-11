@@ -121,10 +121,11 @@ public static class BlueprintHttpClientServiceCollectionExtensions
     /// </param>
     /// <returns>
     /// An <see cref="IHttpClientBuilder"/> for the named client (named for <typeparamref name="TImplementation"/>), for further
-    /// configuration such as a primary handler or retry. Where <typeparamref name="TInterface"/> is already registered nothing
-    /// is added and the builder for the named client <c>typeof(TImplementation).Name</c> is returned. That configures the
-    /// existing client only if its registration was made by this method for the same implementation; a manual registration,
-    /// or one against another implementation, leaves the returned builder configuring a client nothing uses.
+    /// configuration such as a primary handler or retry. The named client is given <paramref name="configureClient"/> on every
+    /// call. Where <typeparamref name="TInterface"/> is already registered, by this method or anything else, that registration
+    /// stands and no other is added, but the named client is still configured, so that a gateway's generated forward through
+    /// <typeparamref name="TImplementation"/>, which takes the named client by name, has its base address. A second call for
+    /// the same client adds its callback to the same named client: both run, in registration order.
     /// </returns>
     public static IHttpClientBuilder AddBlueprintClient<TInterface, TImplementation>(
         this IServiceCollection services,
@@ -134,16 +135,18 @@ public static class BlueprintHttpClientServiceCollectionExtensions
     {
         var httpClientName = typeof(TImplementation).Name;
 
-        // Idempotent: skip if already registered (mirrors S365 behavior)
-        if (services.Any(static s => s.ServiceType == typeof(TInterface)))
-        {
-            return services.AddHttpClient(httpClientName);
-        }
-
+        // The named client is configured on every call, whoever registered the interface: a gateway's generated forward
+        // (BlueprintClientTransport) takes it by name, not through TInterface.
         var builder = services.AddHttpClient(httpClientName, (sp, client) =>
         {
             configureClient(sp, client);
         });
+
+        // Idempotent for the interface: one registered beforehand (a test double, say) stands.
+        if (services.Any(static s => s.ServiceType == typeof(TInterface)))
+        {
+            return builder;
+        }
 
         services.AddTransient<TInterface>(sp =>
         {

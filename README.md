@@ -87,6 +87,7 @@ GET /api/greetings/Ada
 | `Blueprint.Marten.Rebus` | Publishes Marten domain events to Rebus. |
 | `Blueprint.Hangfire` | Background tasks and recurring tasks on Hangfire. |
 | `Blueprint.Testing.Marten` | Marten fixtures for `Blueprint.Testing`. |
+| `Blueprint.Testing.HttpClient` | `StubBlueprintClient<TClient>`, a test double of a typed client's upstream, keyed by operation type. |
 
 Every package targets `net10.0`, apart from the generator, which targets `netstandard2.0` as all Roslyn components
 must.

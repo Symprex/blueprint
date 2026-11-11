@@ -33,5 +33,8 @@
     <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Contract\Blueprint.SourceGenerator.Sample.Contract.csproj" />
     <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Gateway.Contract\Blueprint.SourceGenerator.Sample.Gateway.Contract.csproj" />
     <ProjectReference Include="..\Blueprint.HttpClient\Blueprint.HttpClient.csproj" />
+
+    <!-- StubBlueprintClient, standing in for a gateway's upstream. -->
+    <ProjectReference Include="..\Blueprint.Testing.HttpClient\Blueprint.Testing.HttpClient.csproj" />
   </ItemGroup>
 </Project>

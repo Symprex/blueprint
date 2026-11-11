@@ -16,6 +16,9 @@
     <InternalsVisibleTo Include="Blueprint.Mcp" />
     <InternalsVisibleTo Include="Blueprint.SourceGenerator.Benchmarks" />
     <InternalsVisibleTo Include="Blueprint.SourceGenerator.Tests.Integration" />
+
+    <!-- The upstream stub writes problems and 422s with the host's own naming and fallback, so a stub answers as a host does. -->
+    <InternalsVisibleTo Include="Blueprint.Testing.HttpClient" />
   </ItemGroup>
 
   <ItemGroup>

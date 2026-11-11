@@ -467,6 +467,11 @@ IRegionalOperationsApi api = new RegionalOperationsApi(transport, endpoints);
 
 A client is cheap, immutable and thread-safe, because `WithCredential` and `WithRequestModifier` make clones that share the transport and fields. Register it with `services.AddBlueprintClient<IItemsApi, ItemsApi>((sp, client) => client.BaseAddress = ...)`, which returns the named client's `IHttpClientBuilder` (so handlers such as retry still apply), makes the client transient, and resolves each readonly field the class declares from the container through the generated `Create` (a field declared nullable is left null where the container has none).
 
+The named client, `typeof(TImplementation).Name`, is configured on every call, but the interface is registered only once:
+
+- **An interface already registered stands.** Where `TInterface` is in the container before `AddBlueprintClient` runs (a test double, a hand-written factory), no second registration is added, and resolving `TInterface` gives the earlier one. The named client is still given the callback, so a gateway's generated forward, which takes the named client by name through `BlueprintClientTransport.Create<TClient>` and not through `TInterface`, has its base address and handlers.
+- **A second call adds to the same named client.** Its callback runs after the first, as `IHttpClientBuilder` configuration always composes, so a base address set by both is the second's, and a header set only by the first still applies. Handlers chained on either returned builder apply to the one client.
+
 #### Serializer context
 
 `[BlueprintClient(SerializerContext = typeof(MyContext))]` optionally names a `JsonSerializerContext` for the client to read and write with. The generated constructor calls `client.WithSerializerContext(MyContext.Default)`, which derives read-only options with the context first in the resolver chain. The derived options are cached per read-only options and context (options still open to change are derived afresh for each client, so a change is never missed), so converters on the transport's options (NodaTime, for example) still apply. Each included operation's request and result type infos, and its reader, are resolved once per options instance into a plan that every client over those options shares, clones included: making a client is one lookup, and a call looks up no metadata, except for a derived operation's body or a type the plan could not resolve. A GET request type needs no context entry, as it has no body. A type reachable from one the context names (through its public properties and fields, collection and array elements, and generic arguments) is covered, as the System.Text.Json source generator gives the context metadata for it too; a request or result type the context does not cover is warning BPCL007. Without a context, the metadata comes from the JSON options' own resolver, resolved into the plan the same way; a transport given no options shares one read-only default instance, so its clients share one plan.
@@ -581,7 +586,7 @@ public partial class AddGatewayPartnerNoteCommand : ICommand<TenantNoteApiResour
 - **Sources.** `[Bind]` sets exactly one of `FromClaim`, `FromRoute` (a placeholder every one of the gateway's own routes carries, read from the property the route fills), `FromProperty` (a property the gateway class declares, with a public getter) or `Value`. `[GatewayBind]` takes `FromClaim`.
 - **Claims.** A claim converts to the property's type by the rules route binding uses: a string, a scalar, an enum, an `IParsable<T>`, a static `TryParse` or a `[TypeConverter]`. A caller without the claim, or whose claim does not convert, is refused with 403 before anything is sent upstream.
 - **The hook.** `void OnMap(TInner inner)`, not `async`, or `ValueTask`/`Task OnMapAsync(TInner inner, …)`, an `internal` or `public` instance method. An exception it throws stops the forward, so it is the guard too.
-- **Inner routes.** A placeholder of the inner operation's first route, the URL the forward sends, that the gateway's route lacks has to be bound or hidden (BPGW010): the inner request builder needs a value for it.
+- **Inner routes.** A placeholder of the inner operation's first route, the URL the forward sends, that the gateway's route lacks has to be copied, bound or hidden (BPGW010): the inner request builder needs a value for it. A copied property satisfies it: one the gateway contributes, or declares with the inner property's type, is read from wherever the gateway's route leaves it, such as the query string, and set on `new TInner { … }`. So `GET /gateway/templates/find?id=…` can forward to `GET /templates/{Id}`. For a caller who leaves the value out to get 422 from the gateway, the gateway's property needs `[Required]`: a contributed property takes it from the inner property, but a declared one has only its own annotations, so give it `[Required]` too. Without it the forward has no URL to send. A property the gateway declares with another type is its own and is not copied, so it does not satisfy the placeholder.
 - **Hide.** A property the inner operation requires, by `required` or `[Required]`, cannot be hidden (BPGW009); bind it instead.
 - **Rules.** A contributed property's validation rule that names a bound or hidden property, such as `[RequiredIf(nameof(Enabled), true)]` with `Enabled` bound, is left to the inner operation, which applies it with the bound value in place.
 - **Declared properties.** A property the gateway class declares itself cannot be bound or hidden from anything but that declaration (BPGW021): callers would see it while the forward ignored it. Remove it, or forward it with `[Bind("X", FromProperty = "X")]`.
@@ -742,6 +747,7 @@ calls it there with the SDK's own MCP client.
 | Background task double | `BackgroundTaskCollector` | Captures enqueued tasks |
 | Recurring task double | `NullRecurringTaskProvider` | No-op recurring tasks |
 | Result assertions | `ResultAssertionExtensions` | `ShouldBeOk<T>()`, `ShouldBeValidationFailed()`, etc. |
+| Upstream double (package `Blueprint.Testing.HttpClient`) | `BlueprintClientStub<TClient>` (`services.StubBlueprintClient<TClient>()`) | Answers and records a `[BlueprintClient]`'s calls by operation type |
 
 ### S365 Test Pattern Migration
 
@@ -810,6 +816,41 @@ client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test
 var response = await client.GetAsync("/api/templates/1");
 response.StatusCode.Should().Be(HttpStatusCode.OK);
 ```
+
+### Stubbing a Blueprint client
+
+An `[Expose<TInner>]` gateway's generated forward sends through the named `HttpClient` of the `[BlueprintClient]` that includes `TInner`. It never resolves the client's interface, so substituting that interface intercepts nothing. `StubBlueprintClient<TClient>()`, from the `Blueprint.Testing.HttpClient` package, replaces that named client's upstream with a stub keyed by **operation type**. It ships separately so that `Blueprint.Testing` does not take on `Blueprint.HttpClient`'s `Microsoft.Extensions.*` package dependencies; on Marten 6 they fail restore with NU1608. It intercepts a generated forward and a typed-client call alike, and no test restates a route.
+
+```csharp
+var upstream = services.StubBlueprintClient<CountriesApi>();
+upstream.Respond<GetCountryQuery>(q => new CountryApiResource { IsoCode = q.IsoCode });
+
+// … exercise the gateway …
+
+upstream.Received<GetCountryQuery>().Should().ContainSingle(q => q.IsoCode == "GB");
+upstream.Requests.Single().RequestAuthorization.Should().Be(new AuthenticationHeaderValue("Bearer", callerToken));
+```
+
+- **Where it sits.** It is the named client's primary handler, applied after the app's own configuration in whichever order the two are registered. Requests are still built by each operation's generated request builder, and responses are still read by the client's own readers, so routes, query strings, bodies and reading stay covered. The app's delegating handlers still run, and nothing reaches the network.
+- **How a request is matched.** `BlueprintHttpClient` tags every request with the operation it was built from (`BlueprintRequestOptions.Operation`). The stub dispatches on that operation's exact type.
+- **What it answers with.** A response is written as a Blueprint host writes the same result:
+
+  | The responder returns or throws | The client sees |
+  |---|---|
+  | A value | 200 JSON, written with the client's JSON options and serializer context, asynchronously, so an `IAsyncEnumerable<T>` is streamed as an array |
+  | `null` | 204 |
+  | `NoResultOperationResult` | An empty 200, as the host writes it |
+  | `OkResult`, `CreatedResult`, `AcceptedResult`, `ConflictResult` | Its content, with its status |
+  | `NotFoundResult<T>` | A JSON 404, read as a declared `NotFoundResult<T>` member |
+  | `StatusCodeResult`, `NotModifiedResult<T>` | Its status |
+  | `PlainTextResult` | Its text, with its status and its own content type; at 204, 205 or 304, its status alone |
+  | `throw new ApiException(…)` | Its problem document, named as the host names it (an extension the client's serializer context does not register is still written), raised as `BlueprintApiException` (or translated by `[TranslateError]`) |
+  | `throw new ValidationException(…)` or `ValidationFailedResult` | A 422 whose keys the host's own naming produces (`form` for a form-level error), raised as `ValidationException` |
+
+- **A missing response fails loudly.** An operation with no `Respond<TOp>` fails the call with an `InvalidOperationException` naming the client and the operation. A request the client did not build from an operation is refused in the same way.
+- **What is recorded.** `Requests` holds each request's operation, method, URI, headers (content headers such as `Content-Type` included) and body. `Authorization` is the header the upstream received. `RequestAuthorization` is the one the request set itself, through a forward's credential or `CallOptions.ModifyRequest`. Assert on `RequestAuthorization` to prove a forward applied its credential: an app that also copies the caller's token onto the client's default headers sends the same token either way.
+- **Base address.** A named client given no base address, for example because the test leaves out the app's `AddBlueprintClient` registration, gets `BlueprintClientStub<TClient>.DefaultBaseAddress`.
+- **Thread safety.** Calling `StubBlueprintClient` again for the same client returns the same stub. Responses and records may be added and read from any thread.
 
 ### S365 Pattern Mapping
 
