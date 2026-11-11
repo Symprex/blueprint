@@ -54,6 +54,10 @@ public sealed class OperationToolRequestTests
     [InlineData("example.com", "https", "example.com:443", true)]
     [InlineData("example.com", "http", "example.com:8080", false)]
     [InlineData("anything.test:5000", "http", "*:5000", true)]
+    [InlineData("[::1]:5000", "http", "[::1]", true)]
+    [InlineData("[::1]:5000", "http", "[::1]:5000", true)]
+    [InlineData("[::1]:5000", "http", "[::1]:6000", false)]
+    [InlineData("[::1]", "https", "[::1]:443", true)]
     public void A_host_is_matched_against_RequireHost_patterns_as_routing_matches_it(string requestHost, string scheme, string allowed, bool matches)
     {
         var request = new Microsoft.AspNetCore.Http.DefaultHttpContext().Request;

@@ -102,6 +102,10 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// Whether the tools at <c>api/mcp</c> require a caller <see cref="McpOnlyScheme"/> signs in, a scheme the API's
     /// endpoints do not use.
     /// </param>
+    /// <param name="endpointResourceUpperCase">
+    /// Whether <see cref="App.Upper.GetFooMcpQuery"/>'s endpoint requires <see cref="EndpointResourceRequirement"/>, which
+    /// only a handler given the endpoint as its resource satisfies.
+    /// </param>
     /// <returns>The started host.</returns>
     public static async Task<McpTestHost> StartAsync(
         bool renderOnFirstRequest = false,
@@ -113,7 +117,8 @@ internal sealed class McpTestHost : IAsyncDisposable
         bool mapSampleAppBetween = false,
         bool rateLimitLowerCase = false,
         bool hostRestrictUpperCase = false,
-        bool mcpOnlyScheme = false)
+        bool mcpOnlyScheme = false,
+        bool endpointResourceUpperCase = false)
     {
         var builder = WebApplication.CreateSlimBuilder();
 
@@ -136,6 +141,7 @@ internal sealed class McpTestHost : IAsyncDisposable
                 o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireRole("Admin").Build();
             }
         });
+        builder.Services.AddSingleton<IAuthorizationHandler, EndpointResourceHandler>();
         builder.Services.AddSingleton<ResponseCallbackProbe>();
         builder.Services.AddSingleton<AmbientContextProbe>();
         builder.Services.AddHttpContextAccessor();
@@ -193,6 +199,12 @@ internal sealed class McpTestHost : IAsyncDisposable
                 if (endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(RequirementGuardedMcpQuery)))
                 {
                     endpoint.Metadata.Add(new BlueRoleAuthorizeAttribute());
+                }
+
+                if (endpointResourceUpperCase
+                    && endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(App.Upper.GetFooMcpQuery)))
+                {
+                    endpoint.Metadata.Add(new AuthorizationPolicyBuilder().AddRequirements(new EndpointResourceRequirement()).Build());
                 }
 
                 if (hostRestrictUpperCase
@@ -392,6 +404,21 @@ internal sealed class McpTestHost : IAsyncDisposable
         public IEnumerable<IAuthorizationRequirement> GetRequirements()
         {
             return [new RolesAuthorizationRequirement(["Blue"])];
+        }
+    }
+
+    /// <summary>A requirement only <see cref="EndpointResourceHandler"/> meets, when it is given an endpoint.</summary>
+    public sealed class EndpointResourceRequirement : IAuthorizationRequirement
+    {
+    }
+
+    /// <summary>Meets <see cref="EndpointResourceRequirement"/> when the resource authorised is an endpoint.</summary>
+    private sealed class EndpointResourceHandler : AuthorizationHandler<EndpointResourceRequirement, Endpoint>
+    {
+        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, EndpointResourceRequirement requirement, Endpoint resource)
+        {
+            context.Succeed(requirement);
+            return Task.CompletedTask;
         }
     }
 

@@ -305,7 +305,14 @@ internal sealed class OperationToolRequest
 
         foreach (var allowed in hosts.Hosts)
         {
+            // A colon inside an IPv6 address's brackets ([::1]) is part of the host, not the port's separator.
             var separator = allowed.LastIndexOf(':');
+
+            if (separator < allowed.LastIndexOf(']'))
+            {
+                separator = -1;
+            }
+
             var allowedHost = separator < 0 ? allowed : allowed[..separator];
             var allowedPort = separator < 0 ? "*" : allowed[(separator + 1)..];
 

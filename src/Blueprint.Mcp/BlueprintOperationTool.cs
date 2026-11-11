@@ -28,6 +28,13 @@ namespace Blueprint.Mcp;
 /// </remarks>
 internal sealed class BlueprintOperationTool : McpServerTool
 {
+    /// <summary>
+    /// The <see cref="AppContext"/> switch with which a host has the authorisation middleware evaluate a policy for the
+    /// endpoint rather than the request.
+    /// </summary>
+    private const string SuppressUseHttpContextAsAuthorizationResource =
+        "Microsoft.AspNetCore.Authorization.SuppressUseHttpContextAsAuthorizationResource";
+
     private readonly BlueprintMcpToolSet _toolSet;
     private readonly ApiOperationDescriptor _operation;
     private readonly OperationInputSchema _schema;
@@ -271,7 +278,13 @@ internal sealed class BlueprintOperationTool : McpServerTool
             return;
         }
 
-        var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, context).ConfigureAwait(false);
+        // The resource the policy is evaluated for, as the authorisation middleware chooses it: the endpoint where the host
+        // has switched to it, else the request.
+        object resource = AppContext.TryGetSwitch(SuppressUseHttpContextAsAuthorizationResource, out var useEndpoint) && useEndpoint
+            ? endpoint
+            : context;
+
+        var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, resource).ConfigureAwait(false);
 
         await resultHandler.HandleAsync(endpoint.RequestDelegate!, context, policy, authorizeResult).ConfigureAwait(false);
     }
