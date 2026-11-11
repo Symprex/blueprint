@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Modules.Gateway;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Planning;
@@ -54,7 +55,8 @@ internal static class OperationPropertyModelBuilder
         return new OperationPropertyModel(
             operationType.ToFullMetadataName(),
             exposed is null ? null : CreateExposedInfo(exposed),
-            new EquatableList<OperationPropertyInfo>(infos));
+            new EquatableList<OperationPropertyInfo>(infos),
+            GetBindings(operationType));
     }
 
     /// <summary>
@@ -82,6 +84,7 @@ internal static class OperationPropertyModelBuilder
                 member));
         }
 
+        HashSet<string>? bound = null;
         foreach (var member in GetContributedMembers(operationType, out var exposeAttribute))
         {
             if (!seenNames.Add(member.Name))
@@ -93,7 +96,8 @@ internal static class OperationPropertyModelBuilder
                 ? LocationInfo.CreateFrom(reference.GetSyntax())
                 : null;
 
-            result.Add(new ResolvedOperationProperty(CreateInfo(member, OperationPropertyOrigin.Contributed, exposeLocation, operationType.ContainingAssembly), member));
+            bound ??= GetBoundNames(operationType);
+            result.Add(new ResolvedOperationProperty(CreateInfo(member, OperationPropertyOrigin.Contributed, exposeLocation, operationType.ContainingAssembly, bound), member));
         }
 
         return result;
@@ -128,6 +132,69 @@ internal static class OperationPropertyModelBuilder
                 yield return contributed;
             }
         }
+    }
+
+    /// <summary>
+    /// Gets the D11 bindings of an operation marked <c>[Expose&lt;TInner&gt;]</c>: the inner properties it binds or hides,
+    /// which are left out of its contributed properties and filled by the generated forward instead.
+    /// </summary>
+    /// <param name="operationType">The operation.</param>
+    /// <returns>The valid bindings, empty when the operation exposes nothing or binds nothing.</returns>
+    public static EquatableList<GatewayPropertyBinding> GetBindings(INamedTypeSymbol operationType)
+    {
+        return FindExposedType(operationType, out _) is { } exposed
+            ? GatewayBindings.Resolve(operationType, exposed)
+            : EquatableList<GatewayPropertyBinding>.Empty;
+    }
+
+    /// <summary>
+    /// Gets the names of the inner properties an operation binds or hides (D11).
+    /// </summary>
+    /// <param name="operationType">The operation.</param>
+    /// <returns>The names, empty when the operation exposes nothing or binds nothing.</returns>
+    public static HashSet<string> GetBoundNames(INamedTypeSymbol operationType)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var binding in GetBindings(operationType))
+        {
+            names.Add(binding.PropertyName);
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// Whether a contributed property's validation rule names a property the operation binds or hides. The gateway has no
+    /// such property to compare against, so the rule is neither emitted nor planned there: the inner operation applies it
+    /// to the forwarded instance, with the bound value in place.
+    /// </summary>
+    /// <param name="attribute">The rule.</param>
+    /// <param name="boundNames">The operation's bound and hidden property names, from <see cref="GetBoundNames"/>.</param>
+    /// <returns><see langword="true"/> when the rule is left to the inner operation.</returns>
+    public static bool IsRuleLeftToInner(AttributeData attribute, HashSet<string> boundNames)
+    {
+        return boundNames.Count > 0
+            && attribute.AttributeClass is { } attributeClass
+            && NamesAnotherProperty(attributeClass)
+            && Modules.ValidationSymbolHelpers.GetReferencedPropertyName(attribute) is { } name
+            && boundNames.Contains(name);
+    }
+
+    /// <summary>
+    /// Whether a rule's first argument names another property, as the validation module's missing-property checks read it,
+    /// rather than being a literal such as <c>[RegularExpression]</c>'s pattern that may spell a property's name.
+    /// </summary>
+    private static bool NamesAnotherProperty(INamedTypeSymbol attributeClass)
+    {
+        return Modules.ValidationSymbolHelpers.IsCompareAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsLessThanPropertyAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsMustBeGreaterThanOrEqualAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsRequiredIfAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsRequiredIfNotAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsNotAllowedIfAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsRequiredItemsIfAttribute(attributeClass)
+            || Modules.ValidationSymbolHelpers.IsRequiredItemsIfNotAttribute(attributeClass);
     }
 
     /// <summary>
@@ -250,12 +317,19 @@ internal static class OperationPropertyModelBuilder
         }
 
         // D9: each public settable inner property that is not obsolete is contributed. D11's bound and hidden properties
-        // (#66) are left out here too, so that every site and the emitted partial agree on them.
+        // are left out here, so that every site and the emitted partial agree that none is in the public shape.
+        var bound = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var binding in GatewayBindings.Resolve(operationType, exposedType))
+        {
+            bound.Add(binding.PropertyName);
+        }
+
         return exposedType.GetAllMembers()
             .OfType<IPropertySymbol>()
-            .Where(static member => IsPublicInstanceProperty(member)
+            .Where(member => IsPublicInstanceProperty(member)
                 && member.SetMethod is { DeclaredAccessibility: Accessibility.Public }
-                && !IsObsolete(member));
+                && !IsObsolete(member)
+                && !bound.Contains(member.Name));
     }
 
     /// <summary>
@@ -489,11 +563,21 @@ internal static class OperationPropertyModelBuilder
         return true;
     }
 
-    private static OperationPropertyInfo CreateInfo(IPropertySymbol member, OperationPropertyOrigin origin, LocationInfo? location, IAssemblySymbol within)
+    private static OperationPropertyInfo CreateInfo(
+        IPropertySymbol member,
+        OperationPropertyOrigin origin,
+        LocationInfo? location,
+        IAssemblySymbol within,
+        HashSet<string>? boundNames = null)
     {
         var attributes = new List<string>();
         foreach (var attribute in member.GetAttributes())
         {
+            if (boundNames is not null && IsRuleLeftToInner(attribute, boundNames))
+            {
+                continue;
+            }
+
             if (RenderAttribute(attribute, within) is { } rendered)
             {
                 attributes.Add(rendered);
@@ -540,7 +624,12 @@ internal static class OperationPropertyModelBuilder
         return arguments.Count == 0 ? name : name + "(" + string.Join(", ", arguments) + ")";
     }
 
-    private static string RenderConstant(TypedConstant constant)
+    /// <summary>
+    /// Renders an attribute argument as C# source.
+    /// </summary>
+    /// <param name="constant">The argument.</param>
+    /// <returns>The C# expression.</returns>
+    internal static string RenderConstant(TypedConstant constant)
     {
         // Typed, so that the copy selects the constructor overload the original did: a bare null is ambiguous between a
         // string and a Type parameter. A reference type is cast to its nullable form, as (string)null raises CS8600 under

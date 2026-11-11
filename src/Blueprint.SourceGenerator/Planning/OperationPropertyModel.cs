@@ -31,10 +31,15 @@ public enum OperationPropertyOrigin
 /// <param name="OperationTypeName">The fully qualified metadata name of the operation.</param>
 /// <param name="Exposed">The <c>[Expose&lt;TInner&gt;]</c> inner operation, if any.</param>
 /// <param name="Properties">The operation's public instance properties, declared first, then contributed.</param>
+/// <param name="Bindings">
+/// The inner properties D11 binds or hides, which are therefore not among <paramref name="Properties"/>: the generated
+/// forward fills them, from a claim, the gateway's route or properties, or a fixed value, or leaves them unset.
+/// </param>
 public sealed record OperationPropertyModel(
     string OperationTypeName,
     ExposedOperationInfo? Exposed,
-    EquatableList<OperationPropertyInfo> Properties)
+    EquatableList<OperationPropertyInfo> Properties,
+    EquatableList<Modules.Gateway.GatewayPropertyBinding> Bindings)
 {
     /// <summary>
     /// Gets a value indicating whether any property is contributed and so has to be emitted into the partial.
