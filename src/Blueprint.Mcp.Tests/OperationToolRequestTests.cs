@@ -40,8 +40,22 @@ public sealed class OperationToolRequestTests
     {
         var request = Create("api/defaulted/{Kind=all}", [new OperationInputProperty("Kind", OperationInputLocation.Path)], "{}");
 
-        request.Path.Should().Be("/api/defaulted/");
+        request.Path.Should().Be("/api/defaulted/all");
         request.RouteValues["Kind"].Should().Be("all");
+    }
+
+    [Fact]
+    public void An_omitted_defaulted_path_argument_before_a_supplied_one_is_written_into_the_path_as_its_default()
+    {
+        // This used to leave the segment empty (/api//templates/123), which routing does not match, so the call was refused.
+        var request = Create(
+            "api/{Version=v1}/templates/{Id}",
+            [new OperationInputProperty("Version", OperationInputLocation.Path), new OperationInputProperty("Id", OperationInputLocation.Path)],
+            """{ "Id": "123" }""");
+
+        request.Path.Should().Be("/api/v1/templates/123");
+        request.RouteValues["Version"].Should().Be("v1");
+        request.RouteValues["Id"].Should().Be("123");
     }
 
     [Theory]

@@ -212,25 +212,29 @@ internal sealed class OperationToolRequest
                         var value = FindRouteValue(routeValues, parameter.Name);
 
                         // An empty value is no value: no HTTP request reaches the endpoint with an empty segment for it,
-                        // except for a catch-all, which matches an empty remainder, and a defaulted parameter, which
-                        // routing gives its default. Constraints are the caller's to evaluate (MatchesConstraints).
+                        // except for a catch-all, which matches an empty remainder. A defaulted parameter is written as
+                        // its default, which matches wherever it stands, where an empty segment before a later one
+                        // would not. Constraints are the caller's to evaluate (MatchesConstraints).
                         if (string.IsNullOrEmpty(value))
                         {
                             routeValues.Remove(parameter.Name);
 
-                            if (parameter.Default is not null)
+                            var fallback = Convert.ToString(parameter.Default, CultureInfo.InvariantCulture);
+
+                            if (!string.IsNullOrEmpty(fallback))
                             {
-                                routeValues[parameter.Name] = Convert.ToString(parameter.Default, CultureInfo.InvariantCulture);
+                                value = fallback;
+                                routeValues[parameter.Name] = value;
+                            }
+                            else if (parameter.IsOptional || parameter.IsCatchAll)
+                            {
                                 break;
                             }
-
-                            if (parameter.IsOptional || parameter.IsCatchAll)
+                            else
                             {
-                                break;
+                                error = $"The argument '{parameter.Name}' is required: it is part of the operation's URL.";
+                                return null;
                             }
-
-                            error = $"The argument '{parameter.Name}' is required: it is part of the operation's URL.";
-                            return null;
                         }
 
                         // As a server gives the path, decoded but for an escaped slash, which it leaves escaped, and as
