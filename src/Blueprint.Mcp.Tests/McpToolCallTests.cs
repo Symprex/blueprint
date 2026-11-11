@@ -299,6 +299,59 @@ public sealed class McpToolCallTests
         Text(result).Should().Be(overHttp);
     }
 
+    [Theory]
+    [InlineData("0", 404)]
+    [InlineData("abc", 404)]
+    [InlineData("5", 200)]
+    public async Task A_route_value_its_inline_constraints_refuse_is_refused_as_HTTP_routing_refuses_it(string id, int expectedStatus)
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        using var overHttp = await http.GetAsync("api/items/" + id);
+        var result = await client.CallToolAsync(ToolAt(ids, "/items/"), new Dictionary<string, object?> { ["Id"] = id });
+
+        ((int)overHttp.StatusCode).Should().Be(expectedStatus);
+        HttpStatus(result).Should().Be(expectedStatus);
+        result.IsError.Should().Be(expectedStatus >= 400);
+    }
+
+    [Fact]
+    public async Task An_omitted_route_value_with_a_default_is_given_the_default_as_HTTP_routing_gives_it()
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        var overHttp = await http.GetStringAsync("api/defaulted");
+        var result = await client.CallToolAsync(ToolAt(ids, "/defaulted/"), new Dictionary<string, object?>());
+
+        Text(result).Should().Be(overHttp);
+    }
+
+    [Fact]
+    public async Task A_tool_whose_endpoint_is_rate_limited_is_refused_rather_than_run_outside_the_limit()
+    {
+        await using var host = await McpTestHost.StartAsync(rateLimitLowerCase: true);
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        using var first = await http.GetAsync("api/case/lower");
+        using var second = await http.GetAsync("api/case/lower");
+        var limited = await client.CallToolAsync(ids[("get", "/case/lower")], new Dictionary<string, object?>());
+        var unlimited = await client.CallToolAsync(ids[("get", "/case/upper")], new Dictionary<string, object?>());
+
+        ((int)first.StatusCode).Should().Be(200);
+        ((int)second.StatusCode).Should().Be(429);
+        limited.IsError.Should().BeTrue();
+        Text(limited).Should().Contain("rate limiting");
+        Text(unlimited).Should().Be("\"upper\"");
+    }
+
     [Fact]
     public async Task An_empty_route_value_is_refused_as_missing_as_no_HTTP_route_matches_it()
     {
@@ -358,6 +411,11 @@ public sealed class McpToolCallTests
     private static string? Text(CallToolResult result)
     {
         return result.Content.OfType<TextContentBlock>().SingleOrDefault()?.Text;
+    }
+
+    private static string ToolAt(Dictionary<(string Method, string Path), string> ids, string pathPrefix)
+    {
+        return ids.Single(e => e.Key.Method == "get" && e.Key.Path.StartsWith(pathPrefix, StringComparison.Ordinal)).Value;
     }
 
     private static int HttpStatus(CallToolResult result)

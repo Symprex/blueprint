@@ -232,3 +232,37 @@ public partial class FolderPathMcpQuery : IQuery<string>
         return query.FolderPath ?? "(none)";
     }
 }
+
+/// <summary>A query whose route value must be a positive integer, as its inline constraints say.</summary>
+[AllowAnonymous]
+[RootLink("/items/{Id:int:min(1)}")]
+public partial class ConstrainedMcpQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the item's id.</summary>
+    public int Id { get; set; }
+
+    /// <summary>Answers with the id.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The id.</returns>
+    public static string Handle(ConstrainedMcpQuery query)
+    {
+        return query.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+}
+
+/// <summary>A query whose route value has a default, which routing supplies when the URL leaves it out.</summary>
+[AllowAnonymous]
+[RootLink("/defaulted/{Kind=all}")]
+public partial class DefaultedMcpQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the kind.</summary>
+    public string? Kind { get; set; }
+
+    /// <summary>Answers with the kind.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The kind, or <c>(none)</c>.</returns>
+    public static string Handle(DefaultedMcpQuery query)
+    {
+        return query.Kind ?? "(none)";
+    }
+}

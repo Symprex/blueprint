@@ -136,15 +136,24 @@ internal sealed class ToolResponseBody : Stream
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Starts the response, as a server does when a body is flushed, so its <c>OnStarting</c> callbacks run and it has
+    /// started, though nothing has been written.
+    /// </summary>
     public override void Flush()
     {
+        this._start?.Invoke(CancellationToken.None).GetAwaiter().GetResult();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Starts the response, as a server does when a body is flushed, so its <c>OnStarting</c> callbacks run and it has
+    /// started, though nothing has been written.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the start.</param>
+    /// <returns>A task that completes once the response has started.</returns>
     public override Task FlushAsync(CancellationToken cancellationToken)
     {
-        return Task.CompletedTask;
+        return this._start?.Invoke(cancellationToken) ?? Task.CompletedTask;
     }
 
     /// <inheritdoc />

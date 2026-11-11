@@ -36,6 +36,15 @@ public sealed class OperationToolRequestTests
     }
 
     [Fact]
+    public void An_omitted_defaulted_path_argument_is_given_its_default_as_a_route_value_as_routing_gives_it()
+    {
+        var request = Create("api/defaulted/{Kind=all}", [new OperationInputProperty("Kind", OperationInputLocation.Path)], "{}");
+
+        request.Path.Should().Be("/api/defaulted/");
+        request.RouteValues["Kind"].Should().Be("all");
+    }
+
+    [Fact]
     public void A_catch_all_path_argument_keeps_its_slashes()
     {
         var request = Create(

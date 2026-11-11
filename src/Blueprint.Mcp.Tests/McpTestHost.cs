@@ -9,6 +9,7 @@ using Blueprint.SourceGenerator.Sample;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
 
@@ -81,6 +82,10 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// Whether the sample app's API is mapped between the test app's API and its tools, so that the API mapped last
     /// before <c>MapBlueprintMcp</c> is another app's.
     /// </param>
+    /// <param name="rateLimitLowerCase">
+    /// Whether <see cref="App.Lower.GetfooMcpQuery"/>'s endpoint requires the <c>api</c> rate-limiting policy, which allows
+    /// one request a minute.
+    /// </param>
     /// <returns>The started host.</returns>
     public static async Task<McpTestHost> StartAsync(
         bool renderOnFirstRequest = false,
@@ -89,7 +94,8 @@ internal sealed class McpTestHost : IAsyncDisposable
         bool adminFallback = false,
         bool mapGrouped = false,
         bool mapTenantGroup = false,
-        bool mapSampleAppBetween = false)
+        bool mapSampleAppBetween = false,
+        bool rateLimitLowerCase = false)
     {
         var builder = WebApplication.CreateSlimBuilder();
 
@@ -114,6 +120,15 @@ internal sealed class McpTestHost : IAsyncDisposable
         builder.Services.AddSingleton<AmbientContextProbe>();
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddBlueprintMcp();
+        builder.Services.AddRateLimiter(o =>
+        {
+            o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            o.AddFixedWindowLimiter("api", w =>
+            {
+                w.PermitLimit = 1;
+                w.Window = TimeSpan.FromMinutes(1);
+            });
+        });
 
         if (mapSampleApp || mapSampleAppBetween)
         {
@@ -145,9 +160,10 @@ internal sealed class McpTestHost : IAsyncDisposable
         app.UseRouting();
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseRateLimiter();
 
         app.MapBlueprintApi<McpTestBlueprintApp, McpTestBlueprintAppExecutor>("api/")
-            .Add(static endpoint =>
+            .Add(endpoint =>
             {
                 if (endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(PolicyGuardedMcpQuery)))
                 {
@@ -157,6 +173,12 @@ internal sealed class McpTestHost : IAsyncDisposable
                 if (endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(RequirementGuardedMcpQuery)))
                 {
                     endpoint.Metadata.Add(new BlueRoleAuthorizeAttribute());
+                }
+
+                if (rateLimitLowerCase
+                    && endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(App.Lower.GetfooMcpQuery)))
+                {
+                    endpoint.Metadata.Add(new EnableRateLimitingAttribute("api"));
                 }
 
                 if (endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(WhoAmIMcpQuery)))

@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json.Nodes;
 using Blueprint.Model;
 using Blueprint.Runtime.Http;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Net.Http.Headers;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -86,6 +88,34 @@ internal sealed class BlueprintOperationTool : McpServerTool
             {
                 IsError = true,
                 Content = [new TextContentBlock { Text = error! }],
+            };
+        }
+
+        // A request no HTTP route would match, as a value its route constraints refuse, gets routing's 404.
+        var policyFactory = caller.RequestServices.GetRequiredService<ParameterPolicyFactory>();
+
+        if (!OperationToolRequest.MatchesConstraints(endpoint.RoutePattern, toolRequest.RouteValues, caller, policyFactory, out var refused))
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Meta = new JsonObject { [OperationToolResult.HttpStatusMetaKey] = StatusCodes.Status404NotFound },
+                Content = [new TextContentBlock { Text = $"The argument '{refused}' does not satisfy its route constraints, so no HTTP route would match the request." }],
+            };
+        }
+
+        // A rate-limiting policy on the endpoint is applied by the rate-limiting middleware, which a tool call does not
+        // go through and which offers no way to apply a named policy outside it. Rather than run the operation outside
+        // its limit, the tool refuses to.
+        if (endpoint.Metadata.GetMetadata<DisableRateLimitingAttribute>() is null
+            && endpoint.Metadata.GetMetadata<EnableRateLimitingAttribute>() is { } rateLimiting)
+        {
+            var policy = rateLimiting.PolicyName is { } name ? $"rate limiting ('{name}')" : "rate limiting";
+
+            return new CallToolResult
+            {
+                IsError = true,
+                Content = [new TextContentBlock { Text = $"The operation {this._operation.Name} requires {policy}, which a tool call cannot apply, so it is not run. Call it over HTTP." }],
             };
         }
 

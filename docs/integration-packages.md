@@ -656,7 +656,9 @@ calls it there with the SDK's own MCP client.
   `MapBlueprintMcp`, so an app mapped under two base paths, each with its own conventions, can have tools for each.
   `MapBlueprintMcp` refuses to map when that call was another app's, rather than serve its schemas and policies.
 - **Route values are HTTP's.** An empty path argument is refused as missing, as no HTTP route matches an empty
-  segment, except a catch-all's without a constraint, which matches an empty remainder; and a slash within one reaches the operation escaped (`a%2Fb`), as routing gives it over HTTP.
+  segment, except a catch-all's, which matches an empty remainder, and a defaulted parameter's, which is given its
+  default. A slash within one reaches the operation escaped (`a%2Fb`), as routing gives it. The route's constraints
+  (`{Id:int:min(1)}`) are evaluated as routing evaluates them, and a value they refuse gets routing's 404.
 - **Results are the HTTP response.** The body is the tool result's text, read in the charset its content type
   declares (UTF-8 when it declares none), and its structured content when it is a JSON object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
   problem body an HTTP caller gets, a call that fails validation the same 422.
@@ -667,6 +669,8 @@ calls it there with the SDK's own MCP client.
 
 - Listing tools needs no authentication, as reading the OpenAPI document needs none. Add `.RequireAuthorization()` to
   the builder `MapBlueprintMcp` returns to require it.
+- An operation whose endpoint requires rate limiting (`RequireRateLimiting`) is refused as a tool: the rate-limiting
+  middleware, which a tool call does not go through, offers no way to apply a named policy outside it.
 - Only the `Authorization` header is carried from the MCP request; any other header an operation reads must be a tool
   argument.
 - There are no output schemas yet: `IOperationInputSchemaProvider` gives inputs only.

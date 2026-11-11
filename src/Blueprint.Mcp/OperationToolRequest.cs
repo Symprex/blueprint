@@ -193,15 +193,19 @@ internal sealed class OperationToolRequest
                         var value = FindRouteValue(routeValues, parameter.Name);
 
                         // An empty value is no value: no HTTP request reaches the endpoint with an empty segment for it,
-                        // except for a catch-all, which matches an empty remainder unless a constraint asks for more (a
-                        // constraint is not evaluated here, so one is taken to refuse it).
+                        // except for a catch-all, which matches an empty remainder, and a defaulted parameter, which
+                        // routing gives its default. Constraints are the caller's to evaluate (MatchesConstraints).
                         if (string.IsNullOrEmpty(value))
                         {
                             routeValues.Remove(parameter.Name);
 
-                            if (parameter.IsOptional
-                                || parameter.Default is not null
-                                || (parameter.IsCatchAll && parameter.ParameterPolicies.Count == 0))
+                            if (parameter.Default is not null)
+                            {
+                                routeValues[parameter.Name] = Convert.ToString(parameter.Default, CultureInfo.InvariantCulture);
+                                break;
+                            }
+
+                            if (parameter.IsOptional || parameter.IsCatchAll)
                             {
                                 break;
                             }
@@ -227,6 +231,46 @@ internal sealed class OperationToolRequest
 
         error = null;
         return path.Length == 0 ? "/" : path.ToString();
+    }
+
+    /// <summary>
+    /// Evaluates the constraints <paramref name="route"/> puts on its parameters (<c>{Id:int:min(1)}</c>) against the
+    /// request's route values, as routing does before it chooses an endpoint, since a tool call does not go through
+    /// routing. An optional parameter without a value is not held to its constraints, as routing does not hold it.
+    /// </summary>
+    /// <param name="route">The route pattern of the endpoint the call runs through.</param>
+    /// <param name="routeValues">The request's route values.</param>
+    /// <param name="httpContext">The request the constraints are evaluated for.</param>
+    /// <param name="policyFactory">Makes each constraint from its reference.</param>
+    /// <param name="refused">The parameter whose constraint refused its value, when this returns <see langword="false"/>.</param>
+    /// <returns>Whether every constraint matches, so HTTP routing would reach the endpoint.</returns>
+    public static bool MatchesConstraints(
+        RoutePattern route,
+        RouteValueDictionary routeValues,
+        HttpContext httpContext,
+        ParameterPolicyFactory policyFactory,
+        out string? refused)
+    {
+        foreach (var parameter in route.Parameters)
+        {
+            if (parameter.IsOptional && !routeValues.ContainsKey(parameter.Name))
+            {
+                continue;
+            }
+
+            foreach (var reference in route.ParameterPolicies.GetValueOrDefault(parameter.Name) ?? [])
+            {
+                if (policyFactory.Create(parameter, reference) is IRouteConstraint constraint
+                    && !constraint.Match(httpContext, null, parameter.Name, routeValues, RouteDirection.IncomingRequest))
+                {
+                    refused = parameter.Name;
+                    return false;
+                }
+            }
+        }
+
+        refused = null;
+        return true;
     }
 
     private static string? FindRouteValue(RouteValueDictionary routeValues, string name)
