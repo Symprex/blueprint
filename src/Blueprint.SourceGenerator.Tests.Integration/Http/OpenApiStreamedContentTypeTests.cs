@@ -59,6 +59,18 @@ public sealed class OpenApiStreamedContentTypeTests
         AssertBinary(content.GetProperty("application/pdf"));
     }
 
+    [Fact]
+    public void A_derived_proxy_result_is_documented_with_its_declared_content_type()
+    {
+        // This used to be matched by exact type name, so a ProxyResult subclass lost its declared media type and its body.
+        using var document = Render();
+
+        var content = SuccessContent(document, "/streamed/derived-proxy-pdf");
+
+        content.EnumerateObject().Select(static media => media.Name).Should().Equal("application/pdf");
+        AssertBinary(content.GetProperty("application/pdf"));
+    }
+
     private static JsonDocument Render()
     {
         var (_, rendered) = OpenApiDocumentEndpoint.Create(new IntegrationTestBlueprintApp(), new OpenApiInfoOptions());
@@ -127,5 +139,26 @@ public partial class GetStreamedProxyPdfQuery : IQuery<ProxyResult>
     public static ProxyResult Handle(GetStreamedProxyPdfQuery query)
     {
         return new ProxyResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+    }
+}
+
+/// <summary>A proxy result of the integration app's own, as a gateway might add to label its upstream.</summary>
+public sealed class DerivedPdfProxyResult : ProxyResult
+{
+    public DerivedPdfProxyResult(HttpResponseMessage downstreamResponse)
+        : base(downstreamResponse)
+    {
+    }
+}
+
+/// <summary>Proxies an upstream PDF as a <see cref="DerivedPdfProxyResult"/>.</summary>
+[AllowAnonymous]
+[RootLink("/streamed/derived-proxy-pdf")]
+[ProducesContentType("application/pdf")]
+public partial class GetStreamedDerivedProxyPdfQuery : IQuery<DerivedPdfProxyResult>
+{
+    public static DerivedPdfProxyResult Handle(GetStreamedDerivedProxyPdfQuery query)
+    {
+        return new DerivedPdfProxyResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
     }
 }

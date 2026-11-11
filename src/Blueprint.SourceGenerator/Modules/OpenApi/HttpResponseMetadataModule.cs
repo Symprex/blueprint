@@ -114,11 +114,36 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             contentTypes.Add(contentType);
         }
 
+        var streamedTypeNames = GetStreamedResultTypeNames(context, operationType);
+
         return responses
-            .Select(response => response.ResultTypeNames.Any(static name => name is FileStreamResultTypeName or ProxyResultTypeName)
+            .Select(response => response.ResultTypeNames.Any(streamedTypeNames.Contains)
                 ? response with { HasResponseBody = true, ContentTypes = contentTypes.ToImmutable() }
                 : response)
             .ToImmutableArray();
+    }
+
+    /// <summary>
+    /// The names, as a response's <see cref="HttpResponseMetadataRegistration.ResultTypeNames"/> holds them, of the declared
+    /// results that stream their body: a <c>FileStreamResult</c> or <c>ProxyResult</c>, or a type derived from either. Read
+    /// from the symbols, because a response keeps only names and a subclass's name says nothing of its base.
+    /// </summary>
+    private static ImmutableHashSet<string> GetStreamedResultTypeNames(DescriptorContributorContext context, INamedTypeSymbol operationType)
+    {
+        var operationResultType = context.FindTypeByMetadataName("Blueprint.OperationResult");
+        var fileStreamResultType = context.FindTypeByMetadataName(FileStreamResultTypeName);
+        var proxyResultType = context.FindTypeByMetadataName(ProxyResultTypeName);
+        var declaredContractType = OperationResultContractHelper.GetDeclaredOperationResultType(operationType);
+
+        if (operationResultType is null || declaredContractType is null)
+        {
+            return [];
+        }
+
+        return OperationResultContractHelper.GetFlattenedSemanticResultTypes(declaredContractType, operationResultType)
+            .Where(resultType => IsTypeOrDerivedFromOptional(resultType, fileStreamResultType) || IsTypeOrDerivedFromOptional(resultType, proxyResultType))
+            .Select(static resultType => GetTypeName(resultType))
+            .ToImmutableHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>

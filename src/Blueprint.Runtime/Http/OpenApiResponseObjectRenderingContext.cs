@@ -133,7 +133,10 @@ public sealed record OpenApiResponseObjectRenderingContext(
                 ];
             }
 
-            if (string.Equals(resultTypeName, FileStreamResultTypeName, StringComparison.Ordinal)
+            // The generator sets a response's content types only for a streamed result, a subclass's included, so they mark
+            // one whose type name is not FileStreamResult's or ProxyResult's own.
+            if (!response.ContentTypes.IsDefaultOrEmpty
+                || string.Equals(resultTypeName, FileStreamResultTypeName, StringComparison.Ordinal)
                 || string.Equals(resultTypeName, ProxyResultTypeName, StringComparison.Ordinal))
             {
                 // A streamed body as the operation's [ProducesContentType] declares it, or a file as octet-stream.
