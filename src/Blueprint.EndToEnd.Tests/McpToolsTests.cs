@@ -23,7 +23,9 @@ public sealed class McpToolsTests(SampleSystemFixture system)
         var tools = await client.ListToolsAsync();
 
         tools.Select(static t => t.Name).Should().BeEquivalentTo(operationIds.Values);
-        operationIds.Should().HaveCount(3, "the gateway has three operations, each at one URL and method");
+        operationIds.Should().HaveCount(
+            new Blueprint.SourceGenerator.Sample.Gateway.GatewayBlueprintApp().Operations.Count(static o => o.Urls.Count > 0),
+            "each gateway operation is at one URL and method, so the document has one slot per operation");
     }
 
     [Fact]

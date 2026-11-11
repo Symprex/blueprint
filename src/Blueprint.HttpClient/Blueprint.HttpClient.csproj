@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.7" />
+    <InternalsVisibleTo Include="Blueprint.HttpClient.Tests" />
   </ItemGroup>
 
   <ItemGroup>

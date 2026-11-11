@@ -401,6 +401,17 @@ Call another Blueprint service through a generated typed client, not a runtime-d
 - **Removed:** the non-generic `CallAsync`/`SendVoidAsync` and `From<TApp>`. The operation-typed extension methods on `BlueprintHttpClient<TApp>` are opt-in: they exist only for an app carrying `[BlueprintHttpClientExtensions]`.
 - **Diagnostics:** a bad client or include is a `BPCL001`-`BPCL009` build diagnostic (see `docs/diagnostic-reference.md`); fix the declaration rather than working around it at runtime.
 
+### Forwarding from a gateway
+
+A gateway handler that sends an inner operation on unchanged calls `ForwardAsync<TInner, TResult>` on `BlueprintHttpClient`. Full detail: `docs/integration-packages.md` (Forwarding, and Credentials and error translation).
+
+- **Pass the operation's context:** `ForwardAsync<TInner, TResult>(context, new TInner { ... }, cancellationToken: ct)`, taking `ApiOperationContext context` as a handler parameter. Only this overload applies the gateway operation's credential and error-translation policy. The context-free `ForwardAsync<TInner, TResult>(inner, ...)` applies neither: it adds no per-call credential (only what the `HttpClient` itself is configured to send) and lets every upstream problem through unchanged. The handler generated for an `[Expose<TInner>]` operation uses that overload for now, so it applies neither policy until #69.
+- **Default credential:** the caller's own `Authorization` header, captured per call (`CallerAuthorizationCredential`). Nothing is set on the shared `HttpClient`.
+- **`[UpstreamCredential<TStrategy>]`** on the gateway operation replaces it. `TStrategy` implements `IUpstreamCredentialStrategy` and must be registered in the gateway's services (`services.AddSingleton<TStrategy>()`); an unregistered one fails the forward before anything is sent. Declare the operation in the gateway assembly, since the attribute names the gateway's strategy type.
+- **A service-identity credential bypasses the upstream's check of the caller.** Give such an operation its own `[Resource(noun, verb)]` and register an `IResourceAuthorizationProvider` in the gateway, so the gateway refuses a caller without permission before it forwards.
+- **`[TranslateError(fromType, nameof(Factory))]`** on the gateway operation or its `BlueprintApp` answers an upstream problem whose `type` is `fromType` as the attributed class's static `ApiExceptionFactory` member. The operation's mapping wins over the app's; untranslated problems escape unchanged.
+- **Forward every field the inner operation replaces.** A forward sends a fresh `TInner`, so a property the handler leaves unset is sent as its default.
+
 ### MCP tools (`Blueprint.Mcp`)
 
 To serve an app's operations as MCP tools, reference `Blueprint.Mcp`, call `services.AddBlueprintMcp()`, and map
