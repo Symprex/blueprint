@@ -18,6 +18,11 @@ namespace Blueprint.SourceGenerator.Helpers;
 /// parameter name of an ASP.NET inline constraint, such as <c>{**path:required}</c>.
 /// </para>
 /// <para>
+/// ASP.NET's optional marker, <c>{Ext?}</c>, and default value, <c>{Kind=all}</c>, end a placeholder too, after any
+/// constraint (<c>{Id:int?}</c>, <c>{Page:int=1}</c>). Such a placeholder still binds its property; the route may leave
+/// it out, so a URL built for it omits it when the property is <see langword="null"/> (<see cref="IsOptional"/>).
+/// </para>
+/// <para>
 /// A self link's or resource link's URL is registered with the suffix removed (<c>LinkGenerationModule</c>), so the router's
 /// route value is keyed by the same name.
 /// </para>
@@ -32,9 +37,21 @@ namespace Blueprint.SourceGenerator.Helpers;
 internal static class RoutePlaceholderSyntax
 {
     /// <summary>
-    /// Matches one placeholder; group 1 is the name of the operation property it binds.
+    /// Matches one placeholder; group 1 is the name of the operation property it binds, and the <c>optional</c> group is
+    /// the trailing <c>?</c> or <c>=default</c> that lets the route leave it out.
     /// </summary>
-    public static Regex Placeholder { get; } = new(@"\{\*{0,2}([A-Za-z0-9_]+)(?:[:(][^}]*)?\}", RegexOptions.Compiled);
+    public static Regex Placeholder { get; } = new(@"\{\*{0,2}([A-Za-z0-9_]+)(?:[:(][^}]*?)?(?<optional>\?|=[^}()]*)?\}", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns whether a <see cref="Placeholder"/> match is optional (<c>{Ext?}</c>) or has a default (<c>{Kind=all}</c>),
+    /// so the route matches a URL without it.
+    /// </summary>
+    /// <param name="placeholder">A match of <see cref="Placeholder"/>.</param>
+    /// <returns><see langword="true"/> when the route may leave the placeholder out.</returns>
+    public static bool IsOptional(Match placeholder)
+    {
+        return placeholder.Groups["optional"].Success;
+    }
 
     /// <summary>
     /// Finds the member a placeholder names: one spelled exactly as the placeholder, else a property that differs only in
@@ -68,8 +85,8 @@ internal static class RoutePlaceholderSyntax
 
     /// <summary>
     /// Rewrites each placeholder of <paramref name="template"/> to name the operation's property it binds (as
-    /// <see cref="ResolveMemberName"/> finds it), leaving any <c>*</c>, <c>:ResourceProperty</c> or <c>(format)</c> as
-    /// written. A placeholder that names no property is left as it is, for the caller to report.
+    /// <see cref="ResolveMemberName"/> finds it), leaving any <c>*</c>, <c>:ResourceProperty</c>, <c>(format)</c>, <c>?</c>
+    /// or <c>=default</c> as written. A placeholder that names no property is left as it is, for the caller to report.
     /// </summary>
     /// <param name="template">The route template as declared.</param>
     /// <param name="operationType">The operation whose properties the placeholders bind.</param>

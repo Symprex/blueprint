@@ -299,14 +299,98 @@ public sealed record OpenApiOperationRenderingContext(
     /// leading slash, as legacy keyed it (<c>"/" + route.RoutingUrl</c>, R149), whether the link that declares it wrote one.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This is applied where an operation's URL formats are read, before paths are grouped, so a route declared with and
     /// without its slash is one path rather than two keys of which one is invalid.
+    /// </para>
+    /// <para>
+    /// Each placeholder is written as its bare name, <c>{Name}</c>, the only form OpenAPI's path templating has, so it
+    /// matches the path parameter of that name: a catch-all's <c>*</c>, and an inline constraint (<c>{Id:int}</c>),
+    /// optional marker (<c>{Ext?}</c>) or default (<c>{Kind=all}</c>) the router reads, are left out.
+    /// </para>
     /// </remarks>
     /// <param name="urlFormat">The route template as its link declares it.</param>
     /// <returns>The path key.</returns>
     internal static string ToPathKey(string urlFormat)
     {
-        return "/" + urlFormat.TrimStart('/');
+        var placeholders = ReadPlaceholders(urlFormat);
+        var path = "/" + urlFormat.TrimStart('/');
+
+        if (placeholders.Count == 0)
+        {
+            return path;
+        }
+
+        var offset = path.Length - urlFormat.Length;
+        var key = new System.Text.StringBuilder(path.Length);
+        var copied = 0;
+
+        foreach (var placeholder in placeholders)
+        {
+            var start = placeholder.Start + offset;
+
+            key.Append(path, copied, start - copied).Append('{').Append(placeholder.Name).Append('}');
+            copied = placeholder.End + offset + 1;
+        }
+
+        return key.Append(path, copied, path.Length - copied).ToString();
+    }
+
+    /// <summary>
+    /// Reads each placeholder of a route template: its name, after any catch-all star and before any constraint, default,
+    /// optional marker or legacy <c>(format)</c>, and whether the router matches a URL without it.
+    /// </summary>
+    /// <param name="urlFormat">The route template as its link declares it.</param>
+    /// <returns>Each placeholder, with the indexes of its braces, in template order.</returns>
+    private static List<(int Start, int End, string Name, bool IsOptional)> ReadPlaceholders(string urlFormat)
+    {
+        var placeholders = new List<(int Start, int End, string Name, bool IsOptional)>();
+
+        for (var start = urlFormat.IndexOf('{', StringComparison.Ordinal); start >= 0; start = urlFormat.IndexOf('{', start + 1))
+        {
+            var end = urlFormat.IndexOf('}', start);
+
+            if (end < 0)
+            {
+                break;
+            }
+
+            var placeholder = urlFormat[(start + 1)..end];
+            var name = placeholder.TrimStart('*');
+            var nameEnd = name.IndexOfAny([':', '=', '?', '(']);
+
+            if (nameEnd >= 0)
+            {
+                name = name[..nameEnd];
+            }
+
+            placeholders.Add((start, end, name, placeholder.EndsWith('?') || placeholder.Contains('=', StringComparison.Ordinal)));
+            start = end;
+        }
+
+        return placeholders;
+    }
+
+    /// <summary>
+    /// Returns the names of the route parameters a request may leave out: optional (<c>{Ext?}</c>) or defaulted
+    /// (<c>{Kind=all}</c>) in every one of the operation's URL formats that has them.
+    /// </summary>
+    private static HashSet<string> BuildOptionalParameterNames(ApiOperationDescriptor descriptor)
+    {
+        var optional = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var url in descriptor.Urls)
+        {
+            foreach (var placeholder in ReadPlaceholders(url.UrlFormat))
+            {
+                (placeholder.IsOptional ? optional : required).Add(placeholder.Name);
+            }
+        }
+
+        optional.ExceptWith(required);
+
+        return optional;
     }
 
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
@@ -331,6 +415,7 @@ public sealed record OpenApiOperationRenderingContext(
 
         // Pre-compute which route parameter names are catch-all (contain slashes/reserved chars).
         var catchAllNames = BuildCatchAllParameterNames(descriptor);
+        var optionalRouteNames = BuildOptionalParameterNames(descriptor);
 
         var parameters = ImmutableArray.CreateBuilder<OpenApiParameterModel>();
         var bodyProperties = ImmutableArray.CreateBuilder<OpenApiRequestBodyPropertyModel>();
@@ -443,10 +528,12 @@ public sealed record OpenApiOperationRenderingContext(
             {
                 case PropertyBindingSource.Route:
                     var bindingName = entry.BindingName ?? entry.PropertyName;
+
+                    // OpenAPI requires every path parameter, but one the route may leave out is described as it is bound.
                     parameters.Add(new OpenApiParameterModel(
                         bindingName,
                         "path",
-                        Required: true,
+                        Required: !optionalRouteNames.Contains(bindingName),
                         schemaType,
                         parameterFormat)
                     {

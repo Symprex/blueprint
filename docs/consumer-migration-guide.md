@@ -1193,6 +1193,15 @@ parameter. This is what legacy Blueprint did (`ApiOperationLink.cs:59-61` read t
 the resource spells it. A placeholder that matches no property even ignoring case is still reported. Where two
 properties differ only in case, the placeholder takes the one spelled exactly as it (legacy threw on the ambiguity).
 
+**Behaviour change (after v3.0.1).** An optional placeholder, `{Ext?}`, or one with a default, `{Kind=all}`, binds its
+property from the path, as `{Ext}` does: `[RootLink("/files/{Name}.{Ext?}")]` gives the handler `Ext == "txt"` for
+`/files/abc.txt` and `null` for `/files/abc`, and `{Kind=all}` gives `"all"` when the URL leaves it out. Up to v3.0.1
+the generator did not recognise either form as a placeholder, so the property was read from the query string (a GET)
+or the body instead, and the route's value never reached the handler. The OpenAPI document now lists such a property
+as a path parameter, with `required: false`, and the generated client leaves it (and the `.` or `/` before it) out of
+the URL when it is `null`. Every path key in the document is written with bare placeholder names, `{Name}`, so a
+catch-all's `*` and an inline constraint (`{Id:int}`), optional marker or default no longer appear in it.
+
 **Behaviour change (v1.0.3).** A client registered with `AddBlueprintClient<TInterface, TImplementation>` (since the next major release `TImplementation` must be a generated `[BlueprintClient]`; see [Migrating Signature 365 service clients](#migrating-signature-365-service-clients-to-blueprint-clients)) serialises and
 deserialises through the app's configured `BlueprintJsonOptions` (`services.AddOptions<BlueprintJsonOptions>()` or
 `ConfigureJson`), as legacy's did: its `BlueprintHttpClient` took `IOptions<BlueprintJsonOptions>` from DI

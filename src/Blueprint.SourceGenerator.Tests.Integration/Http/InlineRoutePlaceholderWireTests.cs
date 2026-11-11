@@ -1,0 +1,300 @@
+using System.Net.Http.Headers;
+using System.Text.Json;
+using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Http;
+using FluentAssertions;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+namespace Blueprint.SourceGenerator.Tests.Integration.Http;
+
+/// <summary>
+/// Proves that a route placeholder written with one of ASP.NET's inline forms — optional (<c>{Ext?}</c>), defaulted
+/// (<c>{Kind=all}</c>), constrained (<c>{Id:int}</c>) or catch-all (<c>{*rest}</c>) — binds its property from the route
+/// through the real router, and that the OpenAPI document and the input schema describe it as a path parameter.
+/// </summary>
+/// <remarks>
+/// The generator used to read a placeholder's name only from <c>{Name}</c>, <c>{*Name}</c> and legacy's
+/// <c>{Name:ResourceProperty}</c> / <c>{Name(format)}</c>, so an optional or defaulted placeholder named no property: the
+/// property was bound from the query string instead, the route's value never reached the handler, and the document listed
+/// it as a query parameter. Found by Blueprint.Mcp's comparison of MCP tool calls with HTTP (Symprex/blueprint#110).
+/// </remarks>
+public sealed class InlineRoutePlaceholderWireTests
+{
+    [Fact]
+    public async Task An_optional_placeholder_binds_its_property_from_the_path_when_the_url_has_it()
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("inline-placeholders/files/abc.txt");
+
+        status.Should().Be(200);
+        body.Should().Be("\"name=abc;ext=txt\"");
+    }
+
+    [Fact]
+    public async Task An_optional_placeholder_leaves_its_property_null_when_the_url_omits_it()
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("inline-placeholders/files/abc");
+
+        status.Should().Be(200);
+        body.Should().Be("\"name=abc;ext=(none)\"");
+    }
+
+    [Fact]
+    public async Task A_defaulted_placeholder_binds_the_routes_default_when_the_url_omits_it()
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("inline-placeholders/kinds");
+
+        status.Should().Be(200);
+        body.Should().Be("\"kind=all\"");
+    }
+
+    [Fact]
+    public async Task A_defaulted_placeholder_binds_the_urls_value_when_the_url_has_it()
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("inline-placeholders/kinds/recent");
+
+        status.Should().Be(200);
+        body.Should().Be("\"kind=recent\"");
+    }
+
+    [Fact]
+    public async Task A_constrained_placeholder_binds_its_property_from_the_path()
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("inline-placeholders/numbers/42");
+
+        status.Should().Be(200);
+        body.Should().Be("\"id=42\"");
+    }
+
+    [Fact]
+    public async Task A_lower_case_catch_all_placeholder_binds_its_property_from_the_path()
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("inline-placeholders/rest/a/b/c");
+
+        status.Should().Be(200);
+        body.Should().Be("\"rest=a/b/c\"");
+    }
+
+    [Theory]
+    [InlineData("txt", "/inline-placeholders/files/abc.txt")]
+    [InlineData(null, "/inline-placeholders/files/abc")]
+    public void The_typed_client_leaves_an_optional_placeholder_and_its_period_out_when_it_is_null(string? ext, string expected)
+    {
+        var url = InlinePlaceholderFileQuery.Http.BuildUrl(new InlinePlaceholderFileQuery { Name = "abc", Ext = ext });
+
+        url.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("recent", "/inline-placeholders/kinds/recent")]
+    [InlineData(null, "/inline-placeholders/kinds")]
+    public void The_typed_client_leaves_a_defaulted_placeholder_and_its_slash_out_when_it_is_null(string? kind, string expected)
+    {
+        var url = InlinePlaceholderKindQuery.Http.BuildUrl(new InlinePlaceholderKindQuery { Kind = kind });
+
+        url.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task A_url_the_typed_client_builds_without_the_optional_placeholder_reaches_the_handler()
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var url = InlinePlaceholderKindQuery.Http.BuildUrl(new InlinePlaceholderKindQuery())!;
+        var (status, body) = await host.GetAsync(url.TrimStart('/'));
+
+        status.Should().Be(200);
+        body.Should().Be("\"kind=all\"");
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void The_document_lists_an_optional_placeholder_as_an_optional_path_parameter(OpenApiSchemaNaming naming)
+    {
+        using var document = Render(naming);
+
+        var parameters = Parameters(document, "/inline-placeholders/files/{Name}.{Ext}");
+
+        parameters.Should().BeEquivalentTo([("Name", "path", true), ("Ext", "path", false)]);
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void The_document_lists_a_defaulted_placeholder_as_an_optional_path_parameter(OpenApiSchemaNaming naming)
+    {
+        using var document = Render(naming);
+
+        Parameters(document, "/inline-placeholders/kinds/{Kind}").Should().BeEquivalentTo([("Kind", "path", false)]);
+    }
+
+    [Theory]
+    [InlineData(OpenApiSchemaNaming.Default)]
+    [InlineData(OpenApiSchemaNaming.Legacy)]
+    public void The_document_lists_a_constrained_placeholder_as_a_required_path_parameter(OpenApiSchemaNaming naming)
+    {
+        using var document = Render(naming);
+
+        Parameters(document, "/inline-placeholders/numbers/{Id}").Should().BeEquivalentTo([("Id", "path", true)]);
+    }
+
+    [Fact]
+    public async Task The_input_schema_reads_an_optional_and_a_defaulted_placeholder_from_the_path()
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+        var provider = host.Services.GetRequiredService<IOperationInputSchemaProvider>();
+
+        // In the document's order: by location, then name.
+        provider.GetSchema("InlinePlaceholderFile")!.Properties.Should().Equal(
+            new OperationInputProperty("Ext", OperationInputLocation.Path),
+            new OperationInputProperty("Name", OperationInputLocation.Path));
+        provider.GetSchema("InlinePlaceholderKind")!.Properties.Should().Equal(
+            new OperationInputProperty("Kind", OperationInputLocation.Path));
+    }
+
+    private static JsonDocument Render(OpenApiSchemaNaming naming)
+    {
+        var (_, rendered) = OpenApiDocumentEndpoint.Create(
+            new Generators.OperationDescriptors.IntegrationTestBlueprintApp(),
+            new OpenApiInfoOptions { SchemaNaming = naming });
+
+        return JsonDocument.Parse(rendered.Json);
+    }
+
+    private static List<(string Name, string In, bool Required)> Parameters(JsonDocument document, string path)
+    {
+        var paths = document.RootElement.GetProperty("paths");
+
+        paths.TryGetProperty(path, out var pathItem).Should().BeTrue(
+            "the document should key the path {0}; it has {1}",
+            path,
+            string.Join(", ", paths.EnumerateObject().Select(static p => p.Name).Where(static p => p.Contains("inline-placeholders", StringComparison.Ordinal))));
+
+        return [.. pathItem.GetProperty("get").GetProperty("parameters").EnumerateArray().Select(static p => (
+            p.GetProperty("name").GetString()!,
+            p.GetProperty("in").GetString()!,
+            p.TryGetProperty("required", out var required) && required.GetBoolean()))];
+    }
+
+    /// <summary>The integration app, registered and mapped as a consumer does, served by Kestrel.</summary>
+    private sealed class InlinePlaceholderHost : IAsyncDisposable
+    {
+        private readonly WebApplication _app;
+
+        private InlinePlaceholderHost(WebApplication app, System.Net.Http.HttpClient client)
+        {
+            this._app = app;
+            this.Client = client;
+        }
+
+        public System.Net.Http.HttpClient Client { get; }
+
+        public IServiceProvider Services => this._app.Services;
+
+        public static async Task<InlinePlaceholderHost> StartAsync()
+        {
+            var builder = WebApplication.CreateSlimBuilder();
+
+            builder.WebHost.UseUrls("http://127.0.0.1:0");
+            builder.Logging.ClearProviders();
+            builder.Services.AddBlueprintApi<Generators.OperationDescriptors.IntegrationTestBlueprintApp, Generators.OperationDescriptors.IntegrationTestBlueprintAppExecutor>(
+                static blueprint => blueprint.AddResourceAuthorizationProvider<PermitAllResourceAuthorizationProvider>());
+
+            var app = builder.Build();
+            app.MapBlueprintApi<Generators.OperationDescriptors.IntegrationTestBlueprintApp, Generators.OperationDescriptors.IntegrationTestBlueprintAppExecutor>("api/");
+
+            await app.StartAsync();
+
+            var client = new System.Net.Http.HttpClient { BaseAddress = new Uri(app.Urls.First().TrimEnd('/') + "/api/") };
+
+            return new InlinePlaceholderHost(app, client);
+        }
+
+        public async Task<(int Status, string Body)> GetAsync(string url)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            using var response = await this.Client.SendAsync(request);
+
+            return ((int)response.StatusCode, await response.Content.ReadAsStringAsync());
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            this.Client.Dispose();
+            await this._app.StopAsync();
+            await this._app.DisposeAsync();
+        }
+    }
+}
+
+/// <summary>A GET whose extension is an optional placeholder, after a period in the same segment.</summary>
+[AllowAnonymous]
+[RootLink("/inline-placeholders/files/{Name}.{Ext?}")]
+public partial class InlinePlaceholderFileQuery : IQuery<string>
+{
+    public string Name { get; set; } = null!;
+
+    public string? Ext { get; set; }
+
+    public static string Handle(InlinePlaceholderFileQuery query)
+    {
+        return "name=" + query.Name + ";ext=" + (query.Ext ?? "(none)");
+    }
+}
+
+/// <summary>A GET whose last segment is a placeholder with a default value.</summary>
+[AllowAnonymous]
+[RootLink("/inline-placeholders/kinds/{Kind=all}")]
+public partial class InlinePlaceholderKindQuery : IQuery<string>
+{
+    public string? Kind { get; set; }
+
+    public static string Handle(InlinePlaceholderKindQuery query)
+    {
+        return "kind=" + (query.Kind ?? "(none)");
+    }
+}
+
+/// <summary>A GET whose placeholder carries an ASP.NET route constraint.</summary>
+[AllowAnonymous]
+[RootLink("/inline-placeholders/numbers/{Id:int}")]
+public partial class InlinePlaceholderNumberQuery : IQuery<string>
+{
+    public int Id { get; set; }
+
+    public static string Handle(InlinePlaceholderNumberQuery query)
+    {
+        return "id=" + query.Id;
+    }
+}
+
+/// <summary>A GET whose catch-all placeholder is spelled in lower case, unlike its property.</summary>
+[AllowAnonymous]
+[RootLink("/inline-placeholders/rest/{*rest}")]
+public partial class InlinePlaceholderRestQuery : IQuery<string>
+{
+    public string Rest { get; set; } = null!;
+
+    public static string Handle(InlinePlaceholderRestQuery query)
+    {
+        return "rest=" + query.Rest;
+    }
+}

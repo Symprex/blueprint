@@ -459,12 +459,23 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             propertyLookup[prop.Name] = prop;
         }
 
+        // An optional ({Ext?}) or defaulted ({Kind=all}) placeholder the route may leave out, so a null value omits it from
+        // the URL rather than leaving the operation without one.
+        var optionalPlaceholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match match in _placeholderRegex.Matches(urlTemplate))
+        {
+            if (RoutePlaceholderSyntax.IsOptional(match))
+            {
+                optionalPlaceholders.Add(match.Groups[1].Value);
+            }
+        }
+
         // Generate null checks for placeholder properties
         var nullChecks = new List<string>();
 
         foreach (var placeholder in placeholders)
         {
-            if (!propertyLookup.TryGetValue(placeholder, out var prop))
+            if (!propertyLookup.TryGetValue(placeholder, out var prop) || optionalPlaceholders.Contains(placeholder))
             {
                 continue;
             }
@@ -493,44 +504,70 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 continue;
             }
 
-            // Add literal segment before this placeholder
-            if (match.Index > lastEnd)
+            var literal = urlTemplate.Substring(lastEnd, match.Index - lastEnd);
+            var matchEnd = match.Index + match.Length;
+            var isNullable = !prop.Type.IsValueType || prop.Type.NullableAnnotation == NullableAnnotation.Annotated;
+
+            // An optional placeholder ending its segment takes the '.' or '/' before it along when it is left out, as the
+            // router reads "/files/{Name}.{Ext?}" from "/files/abc" and "/kinds/{Kind=all}" from "/kinds".
+            var optionalSeparator = string.Empty;
+            if (isNullable
+                && optionalPlaceholders.Contains(name)
+                && literal.Length > 0
+                && literal[^1] is '.' or '/'
+                && (matchEnd == urlTemplate.Length || urlTemplate[matchEnd] == '/'))
             {
-                segments.Add($"\"{urlTemplate.Substring(lastEnd, match.Index - lastEnd)}\"");
+                optionalSeparator = literal[^1].ToString();
+                literal = literal[..^1];
+            }
+
+            // Add literal segment before this placeholder
+            if (literal.Length > 0)
+            {
+                segments.Add($"\"{literal}\"");
             }
 
             // Catch-all parameters (e.g. {*FolderPath} or {**FolderPath}) preserve slashes
             // and must not be URL-encoded. Regular parameters are escaped.
             var propertyAccess = $"typed.{prop.Name}";
+            string value;
             if (isCatchAll)
             {
                 if (prop.Type.SpecialType == SpecialType.System_String)
                 {
-                    segments.Add(propertyAccess);
+                    value = propertyAccess;
                 }
                 else if (prop.Type.IsValueType && prop.Type.NullableAnnotation == NullableAnnotation.Annotated)
                 {
-                    segments.Add($"{propertyAccess}.Value.ToString()!");
+                    value = $"{propertyAccess}.Value.ToString()!";
                 }
                 else
                 {
-                    segments.Add($"{propertyAccess}.ToString()!");
+                    value = $"{propertyAccess}.ToString()!";
                 }
             }
             else if (prop.Type.SpecialType == SpecialType.System_String)
             {
-                segments.Add($"global::System.Uri.EscapeDataString({propertyAccess})");
+                value = $"global::System.Uri.EscapeDataString({propertyAccess})";
             }
             else if (prop.Type.IsValueType && prop.Type.NullableAnnotation == NullableAnnotation.Annotated)
             {
-                segments.Add($"global::System.Uri.EscapeDataString({propertyAccess}.Value.ToString()!)");
+                value = $"global::System.Uri.EscapeDataString({propertyAccess}.Value.ToString()!)";
             }
             else
             {
-                segments.Add($"global::System.Uri.EscapeDataString({propertyAccess}.ToString()!)");
+                value = $"global::System.Uri.EscapeDataString({propertyAccess}.ToString()!)";
             }
 
-            lastEnd = match.Index + match.Length;
+            if (isNullable && optionalPlaceholders.Contains(name))
+            {
+                var present = optionalSeparator.Length > 0 ? $"\"{optionalSeparator}\" + {value}" : value;
+                value = $"({propertyAccess} is null ? \"\" : {present})";
+            }
+
+            segments.Add(value);
+
+            lastEnd = matchEnd;
         }
 
         // Add remaining literal after last placeholder

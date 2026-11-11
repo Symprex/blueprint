@@ -386,7 +386,9 @@ internal static class GatewayBindings
         var required = new HashSet<string>(StringComparer.Ordinal);
         foreach (Match match in Placeholder.Matches(innerTemplates[0]))
         {
-            if (RoutePlaceholderSyntax.ResolveMemberName(innerMembers, match.Groups[1].Value) is { } name)
+            // An optional or defaulted placeholder is left out of the URL when the forward has no value for it.
+            if (!RoutePlaceholderSyntax.IsOptional(match)
+                && RoutePlaceholderSyntax.ResolveMemberName(innerMembers, match.Groups[1].Value) is { } name)
             {
                 required.Add(name);
             }
