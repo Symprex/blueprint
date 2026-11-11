@@ -91,19 +91,6 @@ internal sealed class BlueprintOperationTool : McpServerTool
             };
         }
 
-        // A request no HTTP route would match, as a value its route constraints refuse, gets routing's 404.
-        var policyFactory = caller.RequestServices.GetRequiredService<ParameterPolicyFactory>();
-
-        if (!OperationToolRequest.MatchesConstraints(endpoint.RoutePattern, toolRequest.RouteValues, caller, policyFactory, out var refused))
-        {
-            return new CallToolResult
-            {
-                IsError = true,
-                Meta = new JsonObject { [OperationToolResult.HttpStatusMetaKey] = StatusCodes.Status404NotFound },
-                Content = [new TextContentBlock { Text = $"The argument '{refused}' does not satisfy its route constraints, so no HTTP route would match the request." }],
-            };
-        }
-
         // A rate-limiting policy on the endpoint is applied by the rate-limiting middleware, which a tool call does not
         // go through and which offers no way to apply a named policy outside it. Rather than run the operation outside
         // its limit, the tool refuses to.
@@ -178,6 +165,21 @@ internal sealed class BlueprintOperationTool : McpServerTool
         {
             try
             {
+                // A request no HTTP route would match, as a value its route constraints refuse, gets routing's 404. The
+                // constraints are given the operation's request and services, as routing would give them, not the MCP
+                // request's: one may read the method, path, query or headers.
+                var policyFactory = context.RequestServices.GetRequiredService<ParameterPolicyFactory>();
+
+                if (!OperationToolRequest.MatchesConstraints(endpoint.RoutePattern, toolRequest.RouteValues, context, policyFactory, out var refused))
+                {
+                    return new CallToolResult
+                    {
+                        IsError = true,
+                        Meta = new JsonObject { [OperationToolResult.HttpStatusMetaKey] = StatusCodes.Status404NotFound },
+                        Content = [new TextContentBlock { Text = $"The argument '{refused}' does not satisfy its route constraints, so no HTTP route would match the request." }],
+                    };
+                }
+
                 await RunAsync(endpoint, context).ConfigureAwait(false);
                 await context.Response.CompleteAsync().ConfigureAwait(false);
 

@@ -266,3 +266,30 @@ public partial class DefaultedMcpQuery : IQuery<string>
         return query.Kind ?? "(none)";
     }
 }
+
+/// <summary>A query whose route value is admitted by a constraint that reads the request: only a GET passes it.</summary>
+[AllowAnonymous]
+[RootLink("/request-aware/{Id:getonly}")]
+public partial class RequestAwareConstraintMcpQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the route value.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Answers with the route value.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The route value.</returns>
+    public static string Handle(RequestAwareConstraintMcpQuery query)
+    {
+        return query.Id;
+    }
+}
+
+/// <summary>A route constraint that matches only a GET request, whatever the value.</summary>
+public sealed class GetOnlyRouteConstraint : IRouteConstraint
+{
+    /// <inheritdoc />
+    public bool Match(HttpContext? httpContext, IRouter? route, string routeKey, RouteValueDictionary values, RouteDirection routeDirection)
+    {
+        return httpContext is null || HttpMethods.IsGet(httpContext.Request.Method);
+    }
+}

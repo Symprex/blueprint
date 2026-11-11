@@ -319,6 +319,21 @@ public sealed class McpToolCallTests
     }
 
     [Fact]
+    public async Task A_route_constraint_that_reads_the_request_is_given_the_operations_request_not_the_MCP_request()
+    {
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        var overHttp = await http.GetStringAsync("api/request-aware/abc");
+        var result = await client.CallToolAsync(ToolAt(ids, "/request-aware/"), new Dictionary<string, object?> { ["Id"] = "abc" });
+
+        HttpStatus(result).Should().Be(200);
+        Text(result).Should().Be(overHttp);
+    }
+
+    [Fact]
     public async Task An_omitted_route_value_with_a_default_is_given_the_default_as_HTTP_routing_gives_it()
     {
         await using var host = await McpTestHost.StartAsync();
