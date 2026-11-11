@@ -9,5 +9,6 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Api;
 [BlueprintClient]
 [BlueprintClientInclude(typeof(GetTemplateQuery))]
 [BlueprintClientInclude(typeof(GetTemplatesQuery))]
+[BlueprintClientInclude(typeof(AddTenantNoteCommand))]
 [BlueprintClientInclude(typeof(PreviewTemplateCommand))]
 public partial class TemplateServiceApi;

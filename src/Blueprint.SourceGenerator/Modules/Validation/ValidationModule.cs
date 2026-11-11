@@ -85,10 +85,12 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
         var operationType = context.GetOperationTypeSymbol();
         var operationProperties = ValidationSymbolHelpers.GetPublicInstanceProperties(operationType)
             .ToArray();
+        HashSet<string>? boundNames = null;
 
         foreach (var property in operationProperties)
         {
             var attributes = property.GetAttributes();
+            var isContributed = !SymbolEqualityComparer.Default.Equals(property.ContainingType, operationType);
 
             // Single pass over attributes, dispatching to relevant checks without creating
             // 7 separate LINQ iterator objects per property (saves ~4,000 allocations for 500 ops).
@@ -96,6 +98,12 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             {
                 var attributeClass = attribute.AttributeClass;
                 if (attributeClass is null)
+                {
+                    continue;
+                }
+
+                // A rule naming a bound or hidden property is the inner operation's to apply, so it is not checked here (D11).
+                if (isContributed && Planning.OperationPropertyModelBuilder.IsRuleLeftToInner(attribute, boundNames ??= Planning.OperationPropertyModelBuilder.GetBoundNames(operationType)))
                 {
                     continue;
                 }

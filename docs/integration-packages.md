@@ -546,6 +546,45 @@ public partial class GetGatewayTemplateQuery : IQuery<Results<OkResult<TemplateA
 - **Response types.** The gateway reads the upstream response with the JSON options it writes its own with. A type its serializer context covers needs a constructor the source-generated metadata can call: a public one, not a private `[JsonConstructor]`.
 - **Minimal mode is for first-party apps.** A property added to `TInner` becomes settable at the gateway with no change to its source. A public API sets `<BlueprintGatewayAllowExpose>false</BlueprintGatewayAllowExpose>`, which makes every `[Expose<TInner>]` error BPGW001.
 
+#### Binding inner properties
+
+A property the gateway must fill itself, rather than take from its caller, is bound. A bound or hidden property is not in the gateway operation's shape at all: it is not emitted, so it is in neither the OpenAPI document nor the request builders, and no caller can set it.
+
+```csharp
+// Every exposed operation in this assembly whose inner operation has a TenantId takes it from the caller's claim.
+[assembly: GatewayBind("TenantId", FromClaim = "tenant_id")]
+
+[Expose<AddTenantNoteCommand>]
+[Bind(nameof(AddTenantNoteCommand.TenantId), FromClaim = "account_id")]   // overrides the assembly's binding here
+[Bind(nameof(AddTenantNoteCommand.Source), Value = "partner-portal")]     // a fixed value
+[Hide(nameof(AddTenantNoteCommand.InternalNote))]                          // not exposed, left unset
+[MustBeAuthenticated]
+[RootLink("/partner-notes")]
+[HttpPost]
+public partial class AddGatewayPartnerNoteCommand : ICommand<TenantNoteApiResource>
+{
+    // After the copy and the bindings, before sending. Later parameters are injected as a handler's are.
+    internal ValueTask OnMapAsync(AddTenantNoteCommand inner, IS365RoleCatalogue roles)
+    {
+        if (!roles.MayAddNotes(inner.TenantId))
+        {
+            throw new ForbiddenException("Partners may not add notes to this tenant.");
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}
+```
+
+- **Tiers.** An operation's `[Bind]` or `[Hide]` overrides the assembly's `[GatewayBind]` for the same property.
+- **Sources.** `[Bind]` sets exactly one of `FromClaim`, `FromRoute` (a placeholder every one of the gateway's own routes carries, read from the property the route fills), `FromProperty` (a property the gateway class declares, with a public getter) or `Value`. `[GatewayBind]` takes `FromClaim`.
+- **Claims.** A claim converts to the property's type by the rules route binding uses: a string, a scalar, an enum, an `IParsable<T>`, a static `TryParse` or a `[TypeConverter]`. A caller without the claim, or whose claim does not convert, is refused with 403 before anything is sent upstream.
+- **The hook.** `void OnMap(TInner inner)`, not `async`, or `ValueTask`/`Task OnMapAsync(TInner inner, …)`, an `internal` or `public` instance method. An exception it throws stops the forward, so it is the guard too.
+- **Inner routes.** A placeholder of the inner operation's first route, the URL the forward sends, that the gateway's route lacks has to be bound or hidden (BPGW010): the inner request builder needs a value for it.
+- **Hide.** A property the inner operation requires, by `required` or `[Required]`, cannot be hidden (BPGW009); bind it instead.
+- **Rules.** A contributed property's validation rule that names a bound or hidden property, such as `[RequiredIf(nameof(Enabled), true)]` with `Enabled` bound, is left to the inner operation, which applies it with the bound value in place.
+- **Declared properties.** A property the gateway class declares itself cannot be bound or hidden from anything but that declaration (BPGW021): callers would see it while the forward ignored it. Remove it, or forward it with `[Bind("X", FromProperty = "X")]`.
+
 The `BPGW` diagnostics are listed in [diagnostic-reference.md](diagnostic-reference.md#gateway-operations-bpgw).
 
 ### S365 Gateway Migration
