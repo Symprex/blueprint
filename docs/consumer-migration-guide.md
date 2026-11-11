@@ -575,7 +575,10 @@ client drops a 5xx's stack trace extension under any casing and with `_` or `-` 
 `stack_trace`, `stack-trace`), so a host with a separator-writing policy does not pass it through a gateway.
 `traceId` keeps its name whatever the policy, and with neither policy set (both `null`) every key
 is written as before. This applies wherever Blueprint writes an exception's problem, including when writing a result
-throws. Blueprint's own client reads extensions case-insensitively, so service-to-service calls are unaffected. A
+throws. Blueprint's own client reads extensions case-insensitively, so under a policy that changes only casing (the
+default camelCase) service-to-service calls are unaffected. A policy that adds separators or prefixes does change the
+name the client sees: under `SnakeCaseLower`, `currentVersion` is written `current_version`, and
+`exception.Extensions["currentVersion"]` no longer finds it, so a caller of such a service must read the policy's name. A
 client that read a PascalCase extension (`problem.Errors`) must read the camelCase one, or the app must set both
 policies to `null` through `blueprint.ConfigureJson(...)` — which also writes its bodies' properties as their CLR names.
 
