@@ -4,7 +4,7 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Api;
 
 /// <summary>
 /// Gateway handler that streams a template's content from the upstream service. Declaring <see cref="ProxyResult"/> as
-/// the forward's result makes <see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}"/> return as soon as the
+/// the forward's result makes <see cref="BlueprintHttpClient.ForwardAsync{TInner, TResult}(TInner, CallOptions, CancellationToken)"/> return as soon as the
 /// upstream's headers arrive, and the gateway copies the body to its caller as it is read.
 /// </summary>
 public class DownloadGatewayTemplateQueryHandler(BlueprintHttpClient<SampleBlueprintApp> upstreamClient)
