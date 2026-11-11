@@ -884,6 +884,43 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
+    public void When_only_the_strategy_in_another_file_changes_then_the_same_driver_reports_BPGW016_and_clears_it_when_repaired()
+    {
+        // The operation's descriptor plan is cached while its own declarations are unchanged; the strategy it names is not
+        // one of them.
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var valid = CreateCompilation([CredentialSource, CredentialGatewaySource]);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new OperationDescriptorSourceGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+
+        driver = driver.RunGenerators(valid);
+        driver.GetRunResult().Diagnostics.Should().NotContain(static d => d.Id == "BPGW016");
+
+        var strategyTree = valid.SyntaxTrees.First();
+        var notAStrategy = CredentialSource.Replace("TenantTokenStrategy : IUpstreamCredentialStrategy", "TenantTokenStrategy", StringComparison.Ordinal);
+        var invalid = valid.ReplaceSyntaxTree(strategyTree, CSharpSyntaxTree.ParseText(notAStrategy, (CSharpParseOptions)strategyTree.Options, strategyTree.FilePath));
+        driver = driver.RunGenerators(invalid);
+        driver.GetRunResult().Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW016");
+
+        driver = driver.RunGenerators(valid);
+        driver.GetRunResult().Diagnostics.Should().NotContain(static d => d.Id == "BPGW016");
+    }
+
+    [Fact]
+    public void When_the_credential_type_is_an_array_then_BPGW016_is_reported_at_the_attribute()
+    {
+        var gateway = CredentialGatewaySource.Replace(
+            "[TenantToken(TenantIdProperty = nameof(Inner.GetWidgetQuery.Region))]",
+            "[UpstreamCredential<string[]>]",
+            StringComparison.Ordinal);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([CredentialSource, gateway], additionalReferences: [_innerContract.Value]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW016").Which;
+        diagnostic.GetMessage().Should().Contain("string[]").And.Contain("IUpstreamCredentialStrategy");
+        Located(diagnostic).Should().StartWith("UpstreamCredential<string[]>");
+    }
+
+    [Fact]
     public void When_the_credential_type_is_the_strategy_interface_itself_then_BPGW016_is_not_reported()
     {
         // The runtime resolves the strategy type from the gateway's services, where the interface can be registered with

@@ -222,12 +222,18 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             ? OperationPropertyModelBuilder.Build(type)
             : null;
 
+        // D7, D8: the credential strategy and translation factories the operation names can be declared in other files.
+        var forwardPolicyDiagnostics = type is null
+            ? EquatableList<DiagnosticInfo>.Empty
+            : EquatableList<DiagnosticInfo>.TakeOwnership(UpstreamForwardPolicyAnalysis.AnalyseOperation(type).ToList());
+
         return result with
         {
             Value = operation with
             {
                 DeclarationChecksums = EquatableList<string>.TakeOwnership(checksums),
                 ExposedProperties = exposedProperties,
+                ForwardPolicyDiagnostics = forwardPolicyDiagnostics,
             },
         };
     }
@@ -449,6 +455,12 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         /// the inner operation re-plans the descriptor although no file of the operation changed.
         /// </summary>
         public OperationPropertyModel? ExposedProperties { get; init; }
+
+        /// <summary>
+        /// Gets what <see cref="UpstreamForwardPolicyAnalysis"/> reports for the operation, so an edit to the credential
+        /// strategy or a translation factory it names, in another file, re-plans the descriptor that reports it.
+        /// </summary>
+        public EquatableList<DiagnosticInfo> ForwardPolicyDiagnostics { get; init; } = EquatableList<DiagnosticInfo>.Empty;
     }
 
     /// <summary>

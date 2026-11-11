@@ -40,14 +40,15 @@ public static class UpstreamForwardPolicyAnalysis
         foreach (var credential in credentials)
         {
             // The strategy is resolved from the gateway's services, where the interface itself can be registered.
+            // A type that is not a named type, such as an array, can implement no interface.
             if (FindStrategyType(credential.AttributeClass!) is { TypeKind: not TypeKind.Error } strategy
-                && strategy.ToFullMetadataName() != StrategyInterfaceName
-                && !strategy.ImplementsInterface(StrategyInterfaceName))
+                && (strategy is not INamedTypeSymbol named
+                    || (named.ToFullMetadataName() != StrategyInterfaceName && !named.ImplementsInterface(StrategyInterfaceName))))
             {
                 yield return new DiagnosticInfo(
                     GatewayDiagnosticDescriptors.CredentialTypeIsNotAStrategy,
                     LocationOf(credential, operationType),
-                    [operationType.Name, strategy.Name]);
+                    [operationType.Name, strategy.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)]);
             }
         }
 
@@ -92,11 +93,11 @@ public static class UpstreamForwardPolicyAnalysis
         }
     }
 
-    private static INamedTypeSymbol? FindStrategyType(INamedTypeSymbol attributeClass)
+    private static ITypeSymbol? FindStrategyType(INamedTypeSymbol attributeClass)
     {
         for (var current = attributeClass; current is not null; current = current.BaseType)
         {
-            if (current is { IsGenericType: true, TypeArguments: [INamedTypeSymbol strategy] }
+            if (current is { IsGenericType: true, TypeArguments: [var strategy] }
                 && current.OriginalDefinition.ToFullMetadataName() == UpstreamCredentialAttributeName + "`1")
             {
                 return strategy;
