@@ -313,3 +313,23 @@ public partial class RangeMcpQuery : IQuery<string>
         return $"{query.From}|{query.To}";
     }
 }
+
+/// <summary>A query whose route segment ends in an optional value behind a separator, which routing lets a URL leave out.</summary>
+[AllowAnonymous]
+[RootLink("/files/{Name}.{Ext?}")]
+public partial class FileNameMcpQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the file's name.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the file's extension, if the URL gives one.</summary>
+    public string? Ext { get; set; }
+
+    /// <summary>Answers with the name and extension as the operation was given them.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The name and extension, as <c>name|ext</c>.</returns>
+    public static string Handle(FileNameMcpQuery query)
+    {
+        return $"{query.Name}|{query.Ext ?? "(none)"}";
+    }
+}

@@ -67,6 +67,21 @@ public sealed class OperationToolRequestTests
         OperationToolRequest.MatchesHost(new Microsoft.AspNetCore.Routing.HostAttribute(allowed), request).Should().Be(matches);
     }
 
+    [Theory]
+    [InlineData("""{ "Name": "abc" }""", "/api/files/abc", null)]
+    [InlineData("""{ "Name": "abc", "Ext": "txt" }""", "/api/files/abc.txt", "txt")]
+    public void An_optional_value_behind_a_separator_and_its_separator_are_left_out_when_it_is_not_given(string arguments, string path, string? ext)
+    {
+        var request = Create(
+            "api/files/{Name}.{Ext?}",
+            [new OperationInputProperty("Name", OperationInputLocation.Path), new OperationInputProperty("Ext", OperationInputLocation.Path)],
+            arguments);
+
+        request.Path.Should().Be(path);
+        request.RouteValues["Name"].Should().Be("abc");
+        request.RouteValues.GetValueOrDefault("Ext").Should().Be(ext);
+    }
+
     [Fact]
     public void A_catch_all_path_argument_keeps_its_slashes()
     {

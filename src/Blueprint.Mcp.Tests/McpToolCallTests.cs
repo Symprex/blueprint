@@ -370,6 +370,31 @@ public sealed class McpToolCallTests
         Text(result).Should().Be(overHttp);
     }
 
+    [Theory]
+    [InlineData(null, "files/abc")]
+    public async Task An_optional_value_behind_a_separator_may_be_left_out_as_HTTP_routing_lets_a_URL_leave_it_out(string? ext, string url)
+    {
+        // Only the omitted value: the generator does not take an optional placeholder ({Ext?}) as the property's route
+        // input, so the schema gives Ext as a query input and a URL's .txt does not reach the operation over HTTP either.
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        var overHttp = await http.GetStringAsync("api/" + url);
+        var arguments = new Dictionary<string, object?> { ["Name"] = "abc" };
+
+        if (ext is not null)
+        {
+            arguments["Ext"] = ext;
+        }
+
+        var result = await client.CallToolAsync(ToolAt(ids, "/files/"), arguments);
+
+        result.IsError.Should().NotBe(true);
+        Text(result).Should().Be(overHttp);
+    }
+
     [Fact]
     public async Task An_omitted_route_value_with_a_default_is_given_the_default_as_HTTP_routing_gives_it()
     {

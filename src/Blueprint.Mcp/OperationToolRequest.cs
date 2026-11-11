@@ -189,16 +189,23 @@ internal sealed class OperationToolRequest
         {
             path.Append('/');
 
-            foreach (var part in segment.Parts)
+            for (var i = 0; i < segment.Parts.Count; i++)
             {
-                switch (part)
+                switch (segment.Parts[i])
                 {
                     case RoutePatternLiteralPart literal:
                         path.Append(literal.Content);
                         break;
 
+                    // A separator comes before an optional parameter ({Name}.{Ext?}), which a URL may leave out with it.
                     case RoutePatternSeparatorPart separator:
-                        path.Append(separator.Content);
+                        if (i + 1 >= segment.Parts.Count
+                            || segment.Parts[i + 1] is not RoutePatternParameterPart next
+                            || !string.IsNullOrEmpty(FindRouteValue(routeValues, next.Name)))
+                        {
+                            path.Append(separator.Content);
+                        }
+
                         break;
 
                     case RoutePatternParameterPart parameter:
