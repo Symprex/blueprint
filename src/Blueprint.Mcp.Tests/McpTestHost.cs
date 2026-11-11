@@ -126,7 +126,11 @@ internal sealed class McpTestHost : IAsyncDisposable
         builder.Logging.ClearProviders();
 
         builder.Services.AddBlueprintApi<McpTestBlueprintApp, McpTestBlueprintAppExecutor>();
-        builder.Services.Configure<RouteOptions>(o => o.SetParameterPolicy<GetOnlyRouteConstraint>("getonly"));
+        builder.Services.Configure<RouteOptions>(o =>
+        {
+            o.SetParameterPolicy<GetOnlyRouteConstraint>("getonly");
+            o.SetParameterPolicy<LoopbackOnlyRouteConstraint>("loopbackonly");
+        });
         builder.Services.Configure<BlueprintHttpOptions>(o => o.RenderOpenApiDocumentOnFirstRequest = renderOnFirstRequest);
         builder.Services.AddAuthentication(SchemeName)
             .AddScheme<HeaderRolesOptions, HeaderRolesAuthenticationHandler>(SchemeName, static o => o.Prefix = "Roles ")

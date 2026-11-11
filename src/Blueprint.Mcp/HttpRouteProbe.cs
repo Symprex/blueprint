@@ -56,6 +56,14 @@ internal sealed class HttpRouteProbe
         probe.Request.Path = request.Request.Path;
         probe.Request.QueryString = request.Request.QueryString;
 
+        // The connection too, which a constraint may read, as one admitting loopback callers only does.
+        probe.Connection.Id = request.Connection.Id;
+        probe.Connection.RemoteIpAddress = request.Connection.RemoteIpAddress;
+        probe.Connection.RemotePort = request.Connection.RemotePort;
+        probe.Connection.LocalIpAddress = request.Connection.LocalIpAddress;
+        probe.Connection.LocalPort = request.Connection.LocalPort;
+        probe.Connection.ClientCertificate = request.Connection.ClientCertificate;
+
         foreach (var (name, values) in request.Request.Headers)
         {
             probe.Request.Headers[name] = values;

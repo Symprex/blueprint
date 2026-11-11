@@ -325,6 +325,34 @@ public sealed class GetOnlyRouteConstraint : IRouteConstraint
     }
 }
 
+/// <summary>A query whose route value is admitted by a constraint that reads the connection: only a loopback caller passes it.</summary>
+[AllowAnonymous]
+[RootLink("/connection-aware/{Id:loopbackonly}")]
+public partial class ConnectionAwareConstraintMcpQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the route value.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Answers with the route value.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The route value.</returns>
+    public static string Handle(ConnectionAwareConstraintMcpQuery query)
+    {
+        return query.Id;
+    }
+}
+
+/// <summary>A route constraint that matches only a request from a loopback address, whatever the value.</summary>
+public sealed class LoopbackOnlyRouteConstraint : IRouteConstraint
+{
+    /// <inheritdoc />
+    public bool Match(HttpContext? httpContext, IRouter? route, string routeKey, RouteValueDictionary values, RouteDirection routeDirection)
+    {
+        return httpContext is null
+               || (httpContext.Connection.RemoteIpAddress is { } address && System.Net.IPAddress.IsLoopback(address));
+    }
+}
+
 /// <summary>A query whose one route segment holds two values, which routing splits at the last hyphen it can.</summary>
 [AllowAnonymous]
 [RootLink("/range/{From}-{To}")]

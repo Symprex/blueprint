@@ -368,6 +368,23 @@ public sealed class McpToolCallTests
     }
 
     [Fact]
+    public async Task A_route_constraint_that_reads_the_connection_is_given_the_callers_connection_as_HTTP_routing_gives_it()
+    {
+        // The routing a call is matched by used to be given a request without the caller's connection, so a constraint
+        // admitting only loopback callers refused a call the same caller makes over HTTP.
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        var overHttp = await http.GetStringAsync("api/connection-aware/abc");
+        var result = await client.CallToolAsync(ToolAt(ids, "/connection-aware/"), new Dictionary<string, object?> { ["Id"] = "abc" });
+
+        HttpStatus(result).Should().Be(200);
+        Text(result).Should().Be(overHttp);
+    }
+
+    [Fact]
     public async Task A_route_constraint_that_reads_the_request_is_given_the_operations_request_not_the_MCP_request()
     {
         await using var host = await McpTestHost.StartAsync();
