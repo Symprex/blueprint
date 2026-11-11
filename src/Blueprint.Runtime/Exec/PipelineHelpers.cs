@@ -2285,6 +2285,21 @@ public static class PipelineHelpers
     // ────────────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Parses a string with an <see cref="IParsable{TSelf}"/> type's own parser and the invariant culture. The generated
+    /// gateway forward calls it for a claim bound to such a type, which may implement the interface explicitly and so
+    /// expose no public <c>TryParse</c> of its own to call.
+    /// </summary>
+    /// <typeparam name="T">The target type.</typeparam>
+    /// <param name="value">The string to parse.</param>
+    /// <param name="result">The parsed value on success.</param>
+    /// <returns><see langword="true"/> when <paramref name="value"/> parsed.</returns>
+    public static bool TryParseInvariant<T>(string? value, [MaybeNullWhen(false)] out T result)
+        where T : IParsable<T>
+    {
+        return T.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out result);
+    }
+
+    /// <summary>
     /// Parses a typed route value. The generated pipeline calls this only when the route value is present, and otherwise
     /// leaves the operation's own value, as legacy Blueprint did. Returns <see langword="null"/> on success, or a
     /// <see cref="BindingFailureResult"/> when unparseable.
