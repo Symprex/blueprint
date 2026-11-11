@@ -304,9 +304,9 @@ public sealed record OpenApiOperationRenderingContext(
     /// without its slash is one path rather than two keys of which one is invalid.
     /// </para>
     /// <para>
-    /// Each placeholder is written as its bare name, <c>{Name}</c>, the only form OpenAPI's path templating has, so it
-    /// matches the path parameter of that name: a catch-all's <c>*</c>, and an inline constraint (<c>{Id:int}</c>),
-    /// optional marker (<c>{Ext?}</c>) or default (<c>{Kind=all}</c>) the router reads, are left out.
+    /// Each placeholder is written by its name, so it matches the path parameter of that name: an inline constraint
+    /// (<c>{Id:int}</c>), optional marker (<c>{Ext?}</c>) or default (<c>{Kind=all}</c>) the router reads is left out.
+    /// A catch-all keeps its <c>*</c> or <c>**</c>, as the document has always keyed it (<c>/folders/{**FolderPath}</c>).
     /// </para>
     /// </remarks>
     /// <param name="urlFormat">The route template as its link declares it.</param>
@@ -329,7 +329,7 @@ public sealed record OpenApiOperationRenderingContext(
         {
             var start = placeholder.Start + offset;
 
-            key.Append(path, copied, start - copied).Append('{').Append(placeholder.Name).Append('}');
+            key.Append(path, copied, start - copied).Append('{').Append(placeholder.CatchAll).Append(placeholder.Name).Append('}');
             copied = placeholder.End + offset + 1;
         }
 
@@ -341,10 +341,10 @@ public sealed record OpenApiOperationRenderingContext(
     /// optional marker or legacy <c>(format)</c>, and whether the router matches a URL without it.
     /// </summary>
     /// <param name="urlFormat">The route template as its link declares it.</param>
-    /// <returns>Each placeholder, with the indexes of its braces, in template order.</returns>
-    private static List<(int Start, int End, string Name, bool IsOptional)> ReadPlaceholders(string urlFormat)
+    /// <returns>Each placeholder, with the indexes of its braces and any catch-all stars, in template order.</returns>
+    private static List<(int Start, int End, string CatchAll, string Name, bool IsOptional)> ReadPlaceholders(string urlFormat)
     {
-        var placeholders = new List<(int Start, int End, string Name, bool IsOptional)>();
+        var placeholders = new List<(int Start, int End, string CatchAll, string Name, bool IsOptional)>();
 
         for (var start = urlFormat.IndexOf('{', StringComparison.Ordinal); start >= 0; start = urlFormat.IndexOf('{', start + 1))
         {
@@ -364,7 +364,12 @@ public sealed record OpenApiOperationRenderingContext(
                 name = name[..nameEnd];
             }
 
-            placeholders.Add((start, end, name, placeholder.EndsWith('?') || placeholder.Contains('=', StringComparison.Ordinal)));
+            placeholders.Add((
+                start,
+                end,
+                placeholder[..(placeholder.Length - placeholder.TrimStart('*').Length)],
+                name,
+                placeholder.EndsWith('?') || placeholder.Contains('=', StringComparison.Ordinal)));
             start = end;
         }
 

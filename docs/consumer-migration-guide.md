@@ -1199,8 +1199,9 @@ property from the path, as `{Ext}` does: `[RootLink("/files/{Name}.{Ext?}")]` gi
 the generator did not recognise either form as a placeholder, so the property was read from the query string (a GET)
 or the body instead, and the route's value never reached the handler. The OpenAPI document now lists such a property
 as a path parameter, with `required: false`, and the generated client leaves it (and the `.` or `/` before it) out of
-the URL when it is `null`. Every path key in the document is written with bare placeholder names, `{Name}`, so a
-catch-all's `*` and an inline constraint (`{Id:int}`), optional marker or default no longer appear in it.
+the URL when it is `null`. A path key in the document no longer carries a placeholder's inline constraint
+(`{Id:int}` is keyed `{Id}`), optional marker or default, so it names the path parameter it describes; a catch-all
+keeps its `*` or `**`.
 
 **Behaviour change (v1.0.3).** A client registered with `AddBlueprintClient<TInterface, TImplementation>` (since the next major release `TImplementation` must be a generated `[BlueprintClient]`; see [Migrating Signature 365 service clients](#migrating-signature-365-service-clients-to-blueprint-clients)) serialises and
 deserialises through the app's configured `BlueprintJsonOptions` (`services.AddOptions<BlueprintJsonOptions>()` or
