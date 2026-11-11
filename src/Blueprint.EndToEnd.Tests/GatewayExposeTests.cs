@@ -167,7 +167,7 @@ public sealed class GatewayExposeTests(SampleSystemFixture system)
     /// forwarded a request to the inner app. Every test that uses the sample system is in one collection, which xUnit runs
     /// serially, so no other test's pipeline starts meanwhile.
     /// </summary>
-    private sealed class PipelineRecorder : IDisposable
+    internal sealed class PipelineRecorder : IDisposable
     {
         private readonly System.Collections.Concurrent.ConcurrentQueue<string> _started = new();
         private readonly System.Diagnostics.ActivityListener _listener;

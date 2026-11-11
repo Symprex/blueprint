@@ -68,6 +68,7 @@ internal static class ValidationPropertyPlanner
 
         var properties = new List<PropertyValidationPlan>();
         HashSet<string>? boundNames = null;
+        var forwardedType = Gateway.DeclaredForward.FindForwardedType(operationType, out _);
 
         foreach (var property in ValidationSymbolHelpers.GetPublicInstanceProperties(operationType))
         {
@@ -93,6 +94,22 @@ internal static class ValidationPropertyPlanner
                     validationAttributeList ??= new List<AttributeData>(4);
                     validationAttributeList.Add(attribute);
                 }
+            }
+
+            // D10: a declared-mode property with no rules of its own is validated by its inner counterpart's. Only generated
+            // checks can apply them, since the runtime path reads the gateway property's own attributes, so a rule without
+            // a fast path is left to the inner operation, which validates the forwarded instance.
+            if (validationAttributeList is null
+                && forwardedType is not null
+                && Gateway.DeclaredForward.GetInheritedRules(operationType, forwardedType, property) is { Count: > 0 } inheritedRules)
+            {
+                if (TryCreateFastPathPlan(property, propertyAccess, inheritedRules, out var inheritedPlan))
+                {
+                    properties.Add(inheritedPlan);
+                }
+
+                AppendChildValidationIfApplicable(properties, property, propertyAccess);
+                continue;
             }
 
             if (validationAttributeList is null)

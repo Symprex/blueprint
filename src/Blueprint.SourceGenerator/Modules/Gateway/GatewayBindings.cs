@@ -407,7 +407,7 @@ internal static class GatewayBindings
 
         foreach (var name in required)
         {
-            if (gatewayPlaceholders.Contains(name) || copied.Contains(name) || bindings.Any(b => b.PropertyName == name))
+            if (gatewayPlaceholders.Contains(name) || copied.Any(c => c.InnerName == name) || bindings.Any(b => b.PropertyName == name))
             {
                 continue;
             }

@@ -232,7 +232,7 @@ Reported for a `[BlueprintClient]` class and its `[BlueprintClientInclude]` attr
 
 ## Gateway operations (BPGW)
 
-BPGW001 to BPGW014 and BPGW018 to BPGW021 are reported for an operation marked `[Expose<TInner>]`; BPGW015 to BPGW017 for any operation, and BPGW017 also for an app, since hand-written and generated forwards read the same attributes. BPGW001, BPGW006, BPGW010 and BPGW018 are reported at the `[Expose<TInner>]` attribute; BPGW007, BPGW008, BPGW009, BPGW011, BPGW012, BPGW013 and BPGW021 at the binding attribute; BPGW014 at the hook; BPGW016 and BPGW017 at their attribute; BPGW015 at the second credential attribute; and the others at the operation's name. An operation with BPGW003, BPGW004, BPGW005, BPGW019 or BPGW020 gets no pipeline. An invalid binding is ignored by the generated forward, so its property stays in the public shape until it is fixed.
+BPGW001 to BPGW014 and BPGW018 to BPGW021 are reported for an operation marked `[Expose<TInner>]`; BPGW002 to BPGW005, BPGW007 to BPGW014, BPGW019 to BPGW026 and BPGW028 for one marked `[ForwardsTo<TInner>]` (declared mode), with BPGW022 at the property, BPGW023 and a rename's BPGW024 at the `[ForwardAs]`, and BPGW025, BPGW026 and BPGW028 at the `[ForwardsTo<TInner>]` attribute; BPGW027 at the `[ForwardAs]` of any other operation; BPGW015 to BPGW017 for any operation, and BPGW017 also for an app, since hand-written and generated forwards read the same attributes. BPGW001, BPGW006, BPGW010 and BPGW018 are reported at the `[Expose<TInner>]` attribute; BPGW007, BPGW008, BPGW009, BPGW011, BPGW012, BPGW013 and BPGW021 at the binding attribute; BPGW014 at the hook; BPGW016 and BPGW017 at their attribute; BPGW015 at the second credential attribute; and the others at the operation's name. An operation with BPGW003, BPGW004, BPGW005, BPGW019 or BPGW020 gets no pipeline. An invalid binding is ignored by the generated forward, so its property stays in the public shape until it is fixed.
 
 | ID | Severity | Title |
 |----|----------|-------|
@@ -257,6 +257,13 @@ BPGW001 to BPGW014 and BPGW018 to BPGW021 are reported for an operation marked `
 | BPGW019 | Error | The inner operation has a `required` member the generated forward cannot set: the gateway declares that property with another type, or it is a required field, and no binding sets it. The operation gets no pipeline |
 | BPGW020 | Error | A property the generated forward copies to the inner operation has no public getter: one the gateway declares, which the pipeline cannot read, or the inner one, whose default the contributed property cannot start from, so the forward would replace it whenever the caller omits the value. The operation gets no pipeline |
 | BPGW021 | Error | `[GatewayBind]`, `[Bind]` or `[Hide]` fills or hides a property the gateway operation declares itself, from anything but that declaration. The declaration would stay in the public shape, bound from the request and validated, while the forward ignored it. Remove it, or forward it with `[Bind("X", FromProperty = "X")]` |
+| BPGW022 | Error | A declared-mode property has another type than the inner property it forwards to, by name or by `[ForwardAs]`, so the forward cannot copy it. Nullable annotations alone do not count. Declare it with the inner type, rename it with `[ForwardAs]` so it no longer matches, or fill the inner property with `[Bind]` |
+| BPGW023 | Error | `[ForwardAs("X")]` names no public settable property `X` of the inner operation |
+| BPGW024 | Error | An inner property is supplied more than once: two declared properties forward to it with `[ForwardAs]`, or one does and a binding fills it |
+| BPGW025 | Error | The inner operation has a property marked `[Required]` that no declared property, binding or `OnMap` hook supplies. (A `required` member is BPGW019's) |
+| BPGW026 | Warning | As BPGW025, but the operation has an `OnMap` or `OnMapAsync` hook, which may supply it; the generator does not analyse the hook. Fill it with `[Bind]` where a binding can, or `[Hide]` it if the hook sets it |
+| BPGW027 | Error | `[ForwardAs]` on a property of an operation not marked `[ForwardsTo<TInner>]`, which nothing reads |
+| BPGW028 | Error | An operation is marked both `[Expose<TInner>]` and `[ForwardsTo<TInner>]` |
 
 ## Module system (BPMOD)
 

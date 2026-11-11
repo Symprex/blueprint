@@ -1931,6 +1931,51 @@ These apply to `BlueprintHttpClient<TApp>` and the generated clients alike, beca
 - **`Results<A, A>` with a non-JSON success body** returns member 1 of the union.
 - **Timeout and unreachable mapping** (`service_timeout` and `service_unavailable`) now also covers reading the body of a resource-event response, not only the send.
 
+### Migrating a gateway operation that inherits an inner operation
+
+Blueprint does not generate a forward for a gateway operation that inherits the inner operation (`class X : Inner.X`): rebinding would need `new`-shadowing and attribute copying, and the inherited type would travel upstream. Move each one onto one of the two supported modes, both of which generate the handler, so the hand-written one is deleted.
+
+- **First-party gateway, same shape as the inner operation: `[Expose<TInner>]`.** The class keeps its route, HTTP method and authorisation, declares the inner operation's interface, and nothing else. Every public settable inner property is emitted into it with its type, rules, docs and default.
+- **Public API, or a shape of its own: `[ForwardsTo<TInner>]` (declared mode).** The class writes out each property its callers may set. A declared property is forwarded to the inner property of the same name, or of the name `[ForwardAs("…")]` gives, and must have its type (BPGW022). Where it declares no validation attribute of its own it is validated by the inner property's, and where it has no XML docs of its own, or only `<inheritdoc cref="…"/>`, it is documented by the inner property's.
+
+A declared-mode migration, from an inheriting operation:
+
+```csharp
+// Before: inherits every inner property, rules and all, and forwards by hand.
+public class CreateImportRunCommand : Inner.CreateImportRunCommand, ICommand<ImportRunApiResource>
+{
+    public static async Task<ImportRunApiResource> Invoke(CreateImportRunCommand operation, IImportApi api)
+    {
+        return await api.CreateImportRunAsync(new Inner.CreateImportRunCommand
+        {
+            TenantId = operation.TenantId, SourceName = operation.SourceName, SourceId = operation.ExternalId,
+        });
+    }
+}
+
+// After: the public contract is written out; [Required, MaxLength(100)] and the docs come from the inner property.
+[ForwardsTo<Inner.CreateImportRunCommand>]
+[MustBeAuthenticated]
+[RootLink("/v1/importRuns")]
+[HttpPost]
+public partial class CreateImportRunCommand : ICommand<ImportRunApiResource>
+{
+    /// <inheritdoc cref="Inner.CreateImportRunCommand.SourceName"/>
+    public required string SourceName { get; init; }
+
+    /// <inheritdoc cref="Inner.CreateImportRunCommand.SourceId"/>
+    [ForwardAs(nameof(Inner.CreateImportRunCommand.SourceId))]
+    public string? ExternalId { get; init; }
+}
+```
+
+- **Identity properties** such as `TenantId` are not declared: `[assembly: GatewayBind("TenantId", FromClaim = …)]` or a per-operation `[Bind]` fills them.
+- **Properties the gateway computes** go in an `OnMap(TInner inner)` or `OnMapAsync(TInner inner, …)` hook, which runs after the copy and before the send. A declared property with no inner counterpart is not forwarded, so it can carry input for the hook.
+- **Every required inner property must be supplied.** A `required` member nobody sets is BPGW019, and one marked `[Required]` is BPGW025, or the BPGW026 warning when only the hook could set it.
+- **Rules that name another property** (`[Compare]`, `[RequiredIf]` and the like) and rules generated validation cannot apply are not taken from the inner property. The inner operation still applies them when it receives the forward.
+- **Authorisation is declared on every gateway operation** (BPGW002); the inner operation's is never copied.
+- **OpenAPI.** Inherited rules are enforced by the gateway's generated validation, and inherited docs are its property descriptions, but the OpenAPI schema's constraints (`maxLength` and the like) still come from the gateway property's own attributes. Declare a rule on the gateway property when the published schema must show it.
+
 ### Hangfire (background task scheduling)
 
 Blueprint provides the `Blueprint.Tasks.Hangfire` package with ready-to-use implementations:

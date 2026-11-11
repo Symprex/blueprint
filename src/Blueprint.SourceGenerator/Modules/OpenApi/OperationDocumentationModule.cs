@@ -65,6 +65,9 @@ public sealed class OperationDocumentationModule : IBlueprintSourceGeneratorModu
     {
         var summaries = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        // D10: in declared mode a property with no docs of its own is documented by its inner counterpart's.
+        var forwardedType = Gateway.DeclaredForward.FindForwardedType(operationType, out _);
+
         foreach (var member in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType).OfType<IPropertySymbol>())
         {
             if (member.IsStatic || member.DeclaredAccessibility != Accessibility.Public)
@@ -72,7 +75,8 @@ public sealed class OperationDocumentationModule : IBlueprintSourceGeneratorModu
                 continue;
             }
 
-            var propertySummary = ExtractSummary(member);
+            var propertySummary = ExtractSummary(member)
+                ?? ExtractXmlSection(Gateway.DeclaredForward.GetInheritedDocumentation(operationType, forwardedType, member), "summary");
 
             if (propertySummary is not null)
             {
@@ -85,8 +89,11 @@ public sealed class OperationDocumentationModule : IBlueprintSourceGeneratorModu
 
     private static string? ExtractXmlSection(ISymbol symbol, string sectionName)
     {
-        var xmlComment = symbol.GetDocumentationCommentXml();
+        return ExtractXmlSection(symbol.GetDocumentationCommentXml(), sectionName);
+    }
 
+    private static string? ExtractXmlSection(string? xmlComment, string sectionName)
+    {
         if (string.IsNullOrWhiteSpace(xmlComment))
         {
             return null;
