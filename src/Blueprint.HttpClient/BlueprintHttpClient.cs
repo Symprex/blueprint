@@ -7,6 +7,8 @@ using System.Text.Json.Serialization.Metadata;
 using Blueprint.Http;
 using Blueprint.HttpClient.Readers;
 using Blueprint.Model;
+using Blueprint.Model.Attributes;
+using Blueprint.Runtime.Exec;
 using Blueprint.Validation;
 
 namespace Blueprint.HttpClient;
@@ -289,31 +291,81 @@ public class BlueprintHttpClient
     public Task<TResult> ForwardAsync<TInner, TResult>(TInner inner, CallOptions? options = null, CancellationToken cancellationToken = default)
         where TInner : class, IOperation, IHttpRequestBuilder<TInner>
     {
-        ArgumentNullException.ThrowIfNull(inner);
+        return this.ForwardCoreAsync<TInner, TResult>(inner, options, credential: null, cancellationToken);
+    }
 
-        if (inner.GetType() != typeof(TInner))
+    /// <summary>
+    /// Forwards an inner operation for the gateway operation <paramref name="context"/> serves, authenticated and with its
+    /// upstream failures translated as that operation declares, and reads the upstream outcome as the result the caller
+    /// declares.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Sends and reads exactly as <see cref="ForwardAsync{TInner, TResult}(TInner, CallOptions, CancellationToken)"/> does,
+    /// and in addition (D7, D8):
+    /// </para>
+    /// <list type="bullet">
+    /// <item>
+    /// <description>
+    /// <b>Credential.</b> The request is authenticated, last, with the caller's own <c>Authorization</c> header
+    /// (<see cref="CallerAuthorizationCredential"/>), or, when the gateway operation carries an
+    /// <see cref="UpstreamCredentialAttribute"/>, with the credential its <see cref="IUpstreamCredentialStrategy"/>, resolved from
+    /// <see cref="ApiOperationContext.ServiceProvider"/>, creates for this forward.
+    /// </description>
+    /// </item>
+    /// <item>
+    /// <description>
+    /// <b>Error translation.</b> A <see cref="BlueprintApiException"/> whose problem type a <see cref="TranslateErrorAttribute"/>
+    /// on the gateway operation, or else on its app, names is raised as that attribute's local
+    /// <see cref="ApiExceptionFactory"/> problem, with the upstream problem's detail and the upstream failure as its inner
+    /// exception. Every other failure escapes unchanged.
+    /// </description>
+    /// </item>
+    /// </list>
+    /// <para>
+    /// The gateway operation's attributes are read the first time it forwards, and cached.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TInner">The inner operation's type, exactly: a forward sends a fresh instance of it and nothing else.</typeparam>
+    /// <typeparam name="TResult">The type the response is read as.</typeparam>
+    /// <param name="context">The gateway operation being served, whose caller and attributes the forward uses.</param>
+    /// <param name="inner">The inner operation to send, constructed for this forward.</param>
+    /// <param name="options">Optional per-call request customisation, applied before the credential.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The upstream outcome, as <typeparamref name="TResult"/>.</returns>
+    /// <exception cref="ArgumentException"><paramref name="inner"/> is an instance of a type derived from <typeparamref name="TInner"/>.</exception>
+    /// <exception cref="ApiException">The upstream failed with a problem type the gateway operation or its app translates.</exception>
+    /// <exception cref="BlueprintApiException">The request could not be sent or timed out, or the response was a failure no declared member claims and nothing translates.</exception>
+    /// <exception cref="ValidationException">The response was a 422 Unprocessable Entity.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The gateway operation's credential strategy is not registered, or its attributes are invalid; a route placeholder has
+    /// no value; or the response could not be read as <typeparamref name="TResult"/>.
+    /// </exception>
+    public async Task<TResult> ForwardAsync<TInner, TResult>(
+        ApiOperationContext context,
+        TInner inner,
+        CallOptions? options = null,
+        CancellationToken cancellationToken = default)
+        where TInner : class, IOperation, IHttpRequestBuilder<TInner>
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var policy = UpstreamForwardPolicy.For(context.Descriptor.OperationType, context.App.GetType());
+        var credential = CreateForwardCredential(context, policy);
+
+        try
         {
-            throw new ArgumentException(
-                $"A forward sends a fresh {typeof(TInner).Name} and nothing else, but was given a {inner.GetType().Name}, which would be sent with every property of its own. Construct a new {typeof(TInner).Name} from it.",
-                nameof(inner));
+            return await this.ForwardCoreAsync<TInner, TResult>(inner, options, credential, cancellationToken).ConfigureAwait(false);
         }
-
-        return this.SendAsync(
-            TInner.GetHttpMethod(),
-            TInner.BuildRequestUrl(inner),
-            inner,
-            operationTypeInfo: null,
-            ForwardResponseReaders.For<TResult>(),
-            typeof(TInner).Name,
-            options,
-            AcceptProblemJson,
-            credential: null,
-            cancellationToken);
+        catch (BlueprintApiException e) when (policy.FindTranslation(e.Type) is { } factory)
+        {
+            throw e.Detail is null ? factory.Create(e) : factory.Create(e, e.Detail);
+        }
     }
 
     /// <summary>
     /// Asks a forward's errors to be written as <c>application/problem+json</c>, replacing any <c>Accept</c> the caller set; see
-    /// <see cref="ForwardAsync{TInner, TResult}"/>. A Blueprint host reads <c>Accept</c> for nothing but an error's content
+    /// <see cref="ForwardAsync{TInner, TResult}(TInner, CallOptions, CancellationToken)"/>. A Blueprint host reads <c>Accept</c> for nothing but an error's content
     /// type, so a success is written as it would be without it, and a caller's own <c>Accept</c> could only make a thrown 404
     /// look like a not-found result.
     /// </summary>
@@ -337,6 +389,26 @@ public class BlueprintHttpClient
             { } uri => uri.OriginalString,
             null => "the requested resource",
         };
+    }
+
+    /// <summary>
+    /// Creates the credential a forward from the gateway operation <paramref name="context"/> serves authenticates with.
+    /// </summary>
+    /// <param name="context">The gateway operation being served.</param>
+    /// <param name="policy">The operation's forward policy.</param>
+    /// <returns>The strategy's credential when the operation selects one; otherwise the caller's own.</returns>
+    private static IUpstreamCredential CreateForwardCredential(ApiOperationContext context, UpstreamForwardPolicy policy)
+    {
+        if (policy.CredentialAttribute is not { } attribute)
+        {
+            return CallerAuthorizationCredential.FromContext(context);
+        }
+
+        var strategy = context.ServiceProvider.GetService(attribute.CredentialType) as IUpstreamCredentialStrategy
+            ?? throw new InvalidOperationException(
+                $"{context.Descriptor.OperationType.Name} forwards with the upstream credential strategy {attribute.CredentialType.Name}, which is not registered in the request's services as an {nameof(IUpstreamCredentialStrategy)}. Register it, for example with services.AddSingleton<{attribute.CredentialType.Name}>().");
+
+        return strategy.CreateCredential(context, attribute);
     }
 
     /// <summary>
@@ -461,6 +533,42 @@ public class BlueprintHttpClient
         derived.MakeReadOnly();
 
         return derived;
+    }
+
+    /// <summary>
+    /// Sends a forward of <paramref name="inner"/> through its own request builders, authenticated with
+    /// <paramref name="credential"/>, and reads the outcome with the forward readers.
+    /// </summary>
+    /// <typeparam name="TInner">The inner operation's type, exactly.</typeparam>
+    /// <typeparam name="TResult">The type the response is read as.</typeparam>
+    /// <param name="inner">The inner operation to send.</param>
+    /// <param name="options">Optional per-call request customisation.</param>
+    /// <param name="credential">The credential to apply last, or <see langword="null"/> for none.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The upstream outcome.</returns>
+    private Task<TResult> ForwardCoreAsync<TInner, TResult>(TInner inner, CallOptions? options, IUpstreamCredential? credential, CancellationToken cancellationToken)
+        where TInner : class, IOperation, IHttpRequestBuilder<TInner>
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+
+        if (inner.GetType() != typeof(TInner))
+        {
+            throw new ArgumentException(
+                $"A forward sends a fresh {typeof(TInner).Name} and nothing else, but was given a {inner.GetType().Name}, which would be sent with every property of its own. Construct a new {typeof(TInner).Name} from it.",
+                nameof(inner));
+        }
+
+        return this.SendAsync(
+            TInner.GetHttpMethod(),
+            TInner.BuildRequestUrl(inner),
+            inner,
+            operationTypeInfo: null,
+            ForwardResponseReaders.For<TResult>(),
+            typeof(TInner).Name,
+            options,
+            AcceptProblemJson,
+            credential,
+            cancellationToken);
     }
 
     private HttpRequestMessage CreateRequest<TOperation>(HttpMethod method, string? url, TOperation operation, JsonTypeInfo<TOperation>? operationTypeInfo)
