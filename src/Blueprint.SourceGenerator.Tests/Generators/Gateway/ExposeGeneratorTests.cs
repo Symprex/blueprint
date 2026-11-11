@@ -90,6 +90,54 @@ public class ExposeGeneratorTests
         }
         """;
 
+    private const string CredentialSource = """
+        namespace Gateway
+        {
+            using Blueprint.HttpClient;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Runtime.Exec;
+
+            public sealed class TenantTokenStrategy : IUpstreamCredentialStrategy
+            {
+                public IUpstreamCredential CreateCredential(ApiOperationContext context, IOperation inner, UpstreamCredentialAttribute attribute)
+                {
+                    return new BearerTokenCredential("exchanged");
+                }
+            }
+
+            public sealed class TenantTokenAttribute : UpstreamCredentialAttribute<TenantTokenStrategy>
+            {
+                public string? TenantIdProperty { get; set; }
+            }
+        }
+        """;
+
+    private const string CredentialGatewaySource = """
+        namespace Gateway
+        {
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            [Expose<Inner.GetWidgetQuery>]
+            [AllowAnonymous]
+            [RootLink("/gateway/widgets/{Id}")]
+            [HttpGet]
+            [TenantToken(TenantIdProperty = nameof(Inner.GetWidgetQuery.Region))]
+            [TranslateError("widget_gone", nameof(WidgetMissing))]
+            public partial class GetGatewayWidgetQuery : IQuery<Inner.WidgetResult>
+            {
+                public static readonly Blueprint.ApiExceptionFactory WidgetMissing = new("Widget missing", "widget_missing", 404);
+
+                public static readonly string NotAFactory = "";
+
+                public Blueprint.ApiExceptionFactory InstanceFactory => WidgetMissing;
+
+                public static Blueprint.ApiExceptionFactory SetterOnlyFactory { set { } }
+            }
+        }
+        """;
+
     private const string CommandInnerSource = """
         namespace Inner
         {
@@ -821,6 +869,216 @@ public class ExposeGeneratorTests
         var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW006").Which;
         diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
         diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("IQuery<global::Inner.WidgetResult>");
+    }
+
+    [Fact]
+    public void The_generated_forward_passes_its_context_so_it_authenticates_and_translates_as_its_operation_declares()
+    {
+        // The context overload of ForwardAsync (#64) is what applies the caller's credential, [UpstreamCredential<T>] and
+        // [TranslateError]; the context-free one applies none of them.
+        var run = RunAllGenerators([ClientSource, CredentialSource, CredentialGatewaySource, AppSource]);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.GeneratorErrors.Should().BeEmpty();
+        run.Source("Gateway.GetGatewayWidgetQueryExecutorPipeline.g.cs").Should().Contain(
+            "forwardTransport.ForwardAsync<global::Inner.GetWidgetQuery, global::Inner.WidgetResult>(context, forwardInner, null, context.OperationCancelled)");
+    }
+
+    [Fact]
+    public void When_an_operation_carries_two_upstream_credential_attributes_then_BPGW015_is_reported_naming_both()
+    {
+        var gateway = CredentialGatewaySource.Replace(
+            "[TenantToken(TenantIdProperty = nameof(Inner.GetWidgetQuery.Region))]",
+            "[TenantToken(TenantIdProperty = nameof(Inner.GetWidgetQuery.Region))]\n    [UpstreamCredential<TenantTokenStrategy>]",
+            StringComparison.Ordinal);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([CredentialSource, gateway], additionalReferences: [_innerContract.Value]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW015").Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("TenantTokenAttribute").And.Contain("UpstreamCredentialAttribute<TenantTokenStrategy>");
+    }
+
+    [Fact]
+    public void When_the_credential_type_is_not_an_upstream_credential_strategy_then_BPGW016_is_reported_at_the_attribute()
+    {
+        var gateway = CredentialGatewaySource.Replace(
+            "[TenantToken(TenantIdProperty = nameof(Inner.GetWidgetQuery.Region))]",
+            "[UpstreamCredential<NotAStrategy>]",
+            StringComparison.Ordinal) + "\nnamespace Gateway { public sealed class NotAStrategy; }";
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([CredentialSource, gateway], additionalReferences: [_innerContract.Value]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW016").Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("NotAStrategy").And.Contain("IUpstreamCredentialStrategy");
+        Located(diagnostic).Should().StartWith("UpstreamCredential<NotAStrategy>");
+    }
+
+    [Fact]
+    public void When_only_the_strategy_in_another_file_changes_then_the_same_driver_reports_BPGW016_and_clears_it_when_repaired()
+    {
+        // The operation's descriptor plan is cached while its own declarations are unchanged; the strategy it names is not
+        // one of them.
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var valid = CreateCompilation([CredentialSource, CredentialGatewaySource]);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new OperationDescriptorSourceGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+
+        driver = driver.RunGenerators(valid);
+        driver.GetRunResult().Diagnostics.Should().NotContain(static d => d.Id == "BPGW016");
+
+        var strategyTree = valid.SyntaxTrees.First();
+        var notAStrategy = CredentialSource.Replace("TenantTokenStrategy : IUpstreamCredentialStrategy", "TenantTokenStrategy", StringComparison.Ordinal);
+        var invalid = valid.ReplaceSyntaxTree(strategyTree, CSharpSyntaxTree.ParseText(notAStrategy, (CSharpParseOptions)strategyTree.Options, strategyTree.FilePath));
+        driver = driver.RunGenerators(invalid);
+        driver.GetRunResult().Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW016");
+
+        driver = driver.RunGenerators(valid);
+        driver.GetRunResult().Diagnostics.Should().NotContain(static d => d.Id == "BPGW016");
+    }
+
+    [Fact]
+    public void When_the_credential_type_is_an_array_then_BPGW016_is_reported_at_the_attribute()
+    {
+        var gateway = CredentialGatewaySource.Replace(
+            "[TenantToken(TenantIdProperty = nameof(Inner.GetWidgetQuery.Region))]",
+            "[UpstreamCredential<string[]>]",
+            StringComparison.Ordinal);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([CredentialSource, gateway], additionalReferences: [_innerContract.Value]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW016").Which;
+        diagnostic.GetMessage().Should().Contain("string[]").And.Contain("IUpstreamCredentialStrategy");
+        Located(diagnostic).Should().StartWith("UpstreamCredential<string[]>");
+    }
+
+    [Fact]
+    public void When_the_credential_type_is_the_strategy_interface_itself_then_BPGW016_is_not_reported()
+    {
+        // The runtime resolves the strategy type from the gateway's services, where the interface can be registered with
+        // an implementation, so naming the interface is valid.
+        var gateway = CredentialGatewaySource.Replace(
+            "[TenantToken(TenantIdProperty = nameof(Inner.GetWidgetQuery.Region))]",
+            "[UpstreamCredential<Blueprint.HttpClient.IUpstreamCredentialStrategy>]",
+            StringComparison.Ordinal);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([CredentialSource, gateway], additionalReferences: [_innerContract.Value]);
+
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW016");
+    }
+
+    [Theory]
+    [InlineData("\"NoSuchMember\"", "NoSuchMember")]
+    [InlineData("nameof(NotAFactory)", "NotAFactory")]
+    [InlineData("nameof(InstanceFactory)", "InstanceFactory")]
+    [InlineData("nameof(SetterOnlyFactory)", "SetterOnlyFactory")]
+    public void When_an_operations_TranslateError_names_no_static_ApiExceptionFactory_then_BPGW017_is_reported_at_the_attribute(string to, string name)
+    {
+        var gateway = CredentialGatewaySource.Replace("nameof(WidgetMissing)", to, StringComparison.Ordinal);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([CredentialSource, gateway], additionalReferences: [_innerContract.Value]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW017").Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("GetGatewayWidgetQuery").And.Contain("widget_gone").And.Contain("'" + name + "'");
+        Located(diagnostic).Should().StartWith("TranslateError(");
+    }
+
+    [Fact]
+    public void When_a_hand_written_forwarding_operations_TranslateError_names_no_factory_then_BPGW017_is_reported()
+    {
+        // A hand-written ForwardAsync(context, …) reads the same attributes, so it gets the same check.
+        var operation = """
+            namespace Gateway
+            {
+                using Blueprint.Model;
+                using Blueprint.Model.Attributes;
+
+                [AllowAnonymous]
+                [RootLink("/gateway/hand-written")]
+                [HttpGet]
+                [TranslateError("widget_gone", "Missing")]
+                public partial class HandWrittenQuery : IQuery<Inner.WidgetResult>;
+            }
+            """;
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([operation], additionalReferences: [_innerContract.Value]);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW017").Which.GetMessage().Should().Contain("HandWrittenQuery");
+    }
+
+    [Fact]
+    public void When_the_apps_TranslateError_names_no_static_ApiExceptionFactory_then_BPGW017_is_reported_on_the_app()
+    {
+        var app = AppSource.Replace("[BlueprintAppScan]", "[BlueprintAppScan]\n    [Blueprint.Model.Attributes.TranslateError(\"widget_gone\", \"Missing\")]", StringComparison.Ordinal);
+
+        var run = RunAllGenerators([ClientSource, GatewaySource, app]);
+
+        var diagnostic = run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW017").Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("GatewayApp").And.Contain("'Missing'");
+        Located(diagnostic).Should().StartWith("Blueprint.Model.Attributes.TranslateError(");
+    }
+
+    [Theory]
+    [InlineData("public static Blueprint.ApiExceptionFactory? Missing = new(\"Missing\", \"missing\", 404);")]
+    [InlineData("public static Blueprint.ApiExceptionFactory? Missing { get; } = new(\"Missing\", \"missing\", 404);")]
+    public void A_nullable_static_ApiExceptionFactory_is_a_valid_translation_target_on_an_operation_and_an_app(string member)
+    {
+        // The runtime reads the factory whatever its nullable annotation, so BPGW017 must not reject one.
+        var gateway = CredentialGatewaySource.Replace("nameof(WidgetMissing)", "nameof(Missing)", StringComparison.Ordinal)
+            .Replace("public static readonly string NotAFactory = \"\";", member, StringComparison.Ordinal);
+        var app = AppSource.Replace(
+            "public partial class GatewayApp : BlueprintApp;",
+            "[Blueprint.Model.Attributes.TranslateError(\"widget_gone\", nameof(Missing))]\n    public partial class GatewayApp : BlueprintApp { " + member + " }",
+            StringComparison.Ordinal);
+
+        var run = RunAllGenerators([ClientSource, CredentialSource, gateway, app]);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW017");
+        run.EmitErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_the_credential_and_translations_are_valid_then_no_credential_or_translation_diagnostic_is_reported()
+    {
+        var app = AppSource.Replace(
+            "public partial class GatewayApp : BlueprintApp;",
+            "[Blueprint.Model.Attributes.TranslateError(\"widget_gone\", nameof(Missing))]\n    public partial class GatewayApp : BlueprintApp { public static Blueprint.ApiExceptionFactory Missing { get; } = new(\"Missing\", \"missing\", 404); }",
+            StringComparison.Ordinal);
+
+        var run = RunAllGenerators([ClientSource, CredentialSource, CredentialGatewaySource, app]);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW015" || d.Id == "BPGW016" || d.Id == "BPGW017");
+        run.EmitErrors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_an_apps_translation_target_becomes_invalid_then_the_same_driver_reports_BPGW017_and_clears_it_when_repaired()
+    {
+        // The app's operation scan is cached while its attributed declaration is unchanged; its translation check must not
+        // be, since the factory can be declared in another part of the class.
+        var app = AppSource.Replace(
+            "public partial class GatewayApp : BlueprintApp;",
+            "[Blueprint.Model.Attributes.TranslateError(\"widget_gone\", nameof(Missing))]\n    public partial class GatewayApp : BlueprintApp;",
+            StringComparison.Ordinal);
+        static string Factory(string factoryType) =>
+            "namespace Gateway { public partial class GatewayApp { public static " + factoryType + " Missing { get; } = default!; } }";
+
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var valid = CreateCompilation([ClientSource, GatewaySource, app, Factory("Blueprint.ApiExceptionFactory")]);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new AppDataModelSourceGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+
+        driver = driver.RunGenerators(valid);
+        driver.GetRunResult().Diagnostics.Should().NotContain(static d => d.Id == "BPGW017");
+
+        var factoryTree = valid.SyntaxTrees.Last();
+        var invalid = valid.ReplaceSyntaxTree(factoryTree, CSharpSyntaxTree.ParseText(Factory("string"), (CSharpParseOptions)factoryTree.Options, factoryTree.FilePath));
+        driver = driver.RunGenerators(invalid);
+        driver.GetRunResult().Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW017");
+
+        driver = driver.RunGenerators(valid);
+        driver.GetRunResult().Diagnostics.Should().NotContain(static d => d.Id == "BPGW017");
     }
 
     /// <summary>
