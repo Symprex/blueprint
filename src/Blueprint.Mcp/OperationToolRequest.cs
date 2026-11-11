@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Blueprint.Runtime.Http;
 using Microsoft.AspNetCore.Routing.Patterns;
+using Microsoft.AspNetCore.Routing.Template;
 using Microsoft.Extensions.Primitives;
 
 namespace Blueprint.Mcp;
@@ -135,9 +136,20 @@ internal sealed class OperationToolRequest
             return null;
         }
 
+        // The route values are those routing reads from the path, not the arguments as given: a segment holding two
+        // values ({From}-{To}) may split differently from how they were written into it, and binding, validation and
+        // authorisation must see what an HTTP request for the same path would give them.
+        var matched = new RouteValueDictionary();
+
+        if (!new TemplateMatcher(new RouteTemplate(route), new RouteValueDictionary(route.Defaults)).TryMatch(new PathString(path), matched))
+        {
+            error = $"No route of the operation's matches the URL its arguments make, {path}.";
+            return null;
+        }
+
         return new OperationToolRequest(
             path,
-            routeValues,
+            matched,
             QueryString.Create(query),
             headers,
             body is null ? null : Encoding.UTF8.GetBytes(body.ToJsonString()));

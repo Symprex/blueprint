@@ -352,6 +352,25 @@ public sealed class McpToolCallTests
     }
 
     [Fact]
+    public async Task Route_values_are_those_routing_reads_from_the_path_the_call_makes_not_the_arguments_as_given()
+    {
+        // From "a" and To "b-c" make the path range/a-b-c, which routing reads as From "a-b" and To "c". The operation is
+        // given what HTTP routing gives a request for that path, so binding, validation and authorisation agree with it.
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        var overHttp = await http.GetStringAsync("api/range/a-b-c");
+        var result = await client.CallToolAsync(
+            ToolAt(ids, "/range/"),
+            new Dictionary<string, object?> { ["From"] = "a", ["To"] = "b-c" });
+
+        overHttp.Should().Be("\"a-b|c\"");
+        Text(result).Should().Be(overHttp);
+    }
+
+    [Fact]
     public async Task An_omitted_route_value_with_a_default_is_given_the_default_as_HTTP_routing_gives_it()
     {
         await using var host = await McpTestHost.StartAsync();

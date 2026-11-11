@@ -696,7 +696,7 @@ calls it there with the SDK's own MCP client.
 - **One mapping per tool set.** The tools run through the endpoints of the `MapBlueprintApi` call mapped last before
   `MapBlueprintMcp`, so an app mapped under two base paths, each with its own conventions, can have tools for each.
   `MapBlueprintMcp` refuses to map when that call was another app's, rather than serve its schemas and policies.
-- **Route values are HTTP's.** An empty path argument is refused as missing, as no HTTP route matches an empty
+- **Route values are HTTP's.** They are read back from the path the arguments make, as routing reads them, so a segment holding two values (`{From}-{To}`) splits as it does over HTTP. An empty path argument is refused as missing, as no HTTP route matches an empty
   segment, except a catch-all's, which matches an empty remainder, and a defaulted parameter's, which is given its
   default. A slash within one reaches the operation escaped (`a%2Fb`), as routing gives it. The route's constraints
   (`{Id:int:min(1)}`) and host (`RequireHost`) are evaluated as routing evaluates them, and a value or host they refuse gets routing's 404.

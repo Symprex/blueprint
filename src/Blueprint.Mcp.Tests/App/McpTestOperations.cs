@@ -293,3 +293,23 @@ public sealed class GetOnlyRouteConstraint : IRouteConstraint
         return httpContext is null || HttpMethods.IsGet(httpContext.Request.Method);
     }
 }
+
+/// <summary>A query whose one route segment holds two values, which routing splits at the last hyphen it can.</summary>
+[AllowAnonymous]
+[RootLink("/range/{From}-{To}")]
+public partial class RangeMcpQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the start of the range.</summary>
+    public string From { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the end of the range.</summary>
+    public string To { get; set; } = string.Empty;
+
+    /// <summary>Answers with the two values as the operation was given them.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The values, as <c>from|to</c>.</returns>
+    public static string Handle(RangeMcpQuery query)
+    {
+        return $"{query.From}|{query.To}";
+    }
+}
