@@ -148,6 +148,7 @@ internal static class GatewayBindings
     private static EquatableList<GatewayPropertyBinding> Evaluate(INamedTypeSymbol operationType, INamedTypeSymbol innerType, List<DiagnosticInfo>? diagnostics)
     {
         var innerProperties = GetSettableProperties(innerType);
+        var declared = GetDeclaredProperties(operationType);
         var result = new List<GatewayPropertyBinding>();
         var bound = new HashSet<string>(StringComparer.Ordinal);
 
@@ -183,7 +184,7 @@ internal static class GatewayBindings
 
             if (isHide)
             {
-                if (innerProperty.IsRequired)
+                if (IsRequired(innerProperty))
                 {
                     diagnostics?.Add(new DiagnosticInfo(
                         GatewayDiagnosticDescriptors.HiddenPropertyIsRequired,
@@ -192,14 +193,14 @@ internal static class GatewayBindings
                     continue;
                 }
 
-                result.Add(Create(innerProperty, GatewayBindingSource.Hidden, null, isAppTier: false));
+                AddUnlessDeclared(Create(innerProperty, GatewayBindingSource.Hidden, null, isAppTier: false), operationType, declared, location, result, diagnostics);
                 continue;
             }
 
             var binding = CreateOperationBinding(attribute, operationType, innerProperty, location, diagnostics);
             if (binding is not null)
             {
-                result.Add(binding);
+                AddUnlessDeclared(binding, operationType, declared, location, result, diagnostics);
             }
         }
 
@@ -237,14 +238,42 @@ internal static class GatewayBindings
                 continue;
             }
 
-            result.Add(Create(innerProperty, GatewayBindingSource.Claim, claim, isAppTier: true) with
+            var appBinding = Create(innerProperty, GatewayBindingSource.Claim, claim, isAppTier: true) with
             {
                 ClaimConversion = conversion,
                 TryParseFormat = tryParseFormat,
-            });
+            };
+            AddUnlessDeclared(appBinding, operationType, declared, GetLocation(attribute, operationType), result, diagnostics);
         }
 
         return EquatableList<GatewayPropertyBinding>.TakeOwnership(result);
+    }
+
+    /// <summary>
+    /// Adds a binding unless the gateway operation declares the property it fills and the binding does not read that
+    /// declaration: the declared property would stay in the public shape, bound from the request and validated, but the
+    /// forward would ignore it (BPGW021). A binding that reads it, <c>[Bind(X, FromProperty = "X")]</c> or a route
+    /// placeholder that binds it, is the gateway forwarding its own property.
+    /// </summary>
+    private static void AddUnlessDeclared(
+        GatewayPropertyBinding binding,
+        INamedTypeSymbol operationType,
+        Dictionary<string, IPropertySymbol> declared,
+        LocationInfo? location,
+        List<GatewayPropertyBinding> result,
+        List<DiagnosticInfo>? diagnostics)
+    {
+        var readsDeclaration = binding.Source is GatewayBindingSource.Route or GatewayBindingSource.Property && binding.Argument == binding.PropertyName;
+        if (declared.ContainsKey(binding.PropertyName) && !readsDeclaration)
+        {
+            diagnostics?.Add(new DiagnosticInfo(
+                GatewayDiagnosticDescriptors.BoundPropertyDeclaredByGateway,
+                location,
+                [operationType.Name, binding.PropertyName]));
+            return;
+        }
+
+        result.Add(binding);
     }
 
     private static GatewayPropertyBinding? CreateOperationBinding(
@@ -300,12 +329,20 @@ internal static class GatewayBindings
                 return null;
             }
 
-            return Create(innerProperty, GatewayBindingSource.Value, OperationPropertyModelBuilder.RenderConstant(value), isAppTier: false);
+            // A bare null: the attribute's typed null, (object?)null, would not convert to the inner property's type.
+            return Create(innerProperty, GatewayBindingSource.Value, value.IsNull ? "null" : OperationPropertyModelBuilder.RenderConstant(value), isAppTier: false);
         }
 
         var declared = GetDeclaredProperties(operationType);
         var sourceName = route is not null ? ResolveRoutePlaceholder(operationType, declared, route) : property;
-        if (sourceName is null || !declared.TryGetValue(sourceName, out var sourceProperty))
+
+        // The pipeline reads the source from outside the operation, so it needs a public getter, as a copied property does.
+        // A route's source has to be the property the route fills: request binding sets it, so it has a public setter, and
+        // no other source attribute moves it off the route, or the forward would send a query or body value instead.
+        if (sourceName is null
+            || !declared.TryGetValue(sourceName, out var sourceProperty)
+            || sourceProperty.GetMethod is not { DeclaredAccessibility: Accessibility.Public }
+            || (route is not null && !IsBoundFromRoute(sourceProperty)))
         {
             diagnostics?.Add(new DiagnosticInfo(
                 GatewayDiagnosticDescriptors.BindingSourceNotOnOperation,
@@ -343,20 +380,16 @@ internal static class GatewayBindings
             return;
         }
 
+        // The inner request builder always sends the first URL, in declaration order as the link module registers it, so a
+        // later route without a placeholder is no way round it.
         var innerMembers = innerType.GetAllMembers().ToList();
-        HashSet<string>? required = null;
-        foreach (var template in innerTemplates)
+        var required = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match match in Placeholder.Matches(innerTemplates[0]))
         {
-            var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (Match match in Placeholder.Matches(template))
+            if (RoutePlaceholderSyntax.ResolveMemberName(innerMembers, match.Groups[1].Value) is { } name)
             {
-                if (RoutePlaceholderSyntax.ResolveMemberName(innerMembers, match.Groups[1].Value) is { } name)
-                {
-                    names.Add(name);
-                }
+                required.Add(name);
             }
-
-            required = required is null ? names : new HashSet<string>(required.Where(names.Contains), StringComparer.Ordinal);
         }
 
         var gatewayPlaceholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -368,7 +401,7 @@ internal static class GatewayBindings
             }
         }
 
-        foreach (var name in required!)
+        foreach (var name in required)
         {
             if (gatewayPlaceholders.Contains(name) || bindings.Any(b => b.PropertyName == name))
             {
@@ -378,7 +411,7 @@ internal static class GatewayBindings
             diagnostics.Add(new DiagnosticInfo(
                 GatewayDiagnosticDescriptors.UnboundInnerRoutePlaceholder,
                 exposeLocation,
-                [operationType.Name, name, innerType.Name, innerTemplates.First(t => t.IndexOf("{" + name, StringComparison.OrdinalIgnoreCase) >= 0)]));
+                [operationType.Name, name, innerType.Name, innerTemplates[0]]));
         }
     }
 
@@ -404,10 +437,39 @@ internal static class GatewayBindings
             return GatewayClaimConversion.String;
         }
 
-        if (effective.TypeKind == TypeKind.Enum || TypeConversionHelpers.IsStringParsable(effective))
+        // The shared helper writes a direct call: the scalar's own TryParse, or T.TryParse(value, provider, out T), which a
+        // type implementing IParsable<T> explicitly does not have. That one is parsed through the interface instead.
+        if (effective.TypeKind == TypeKind.Enum
+            || IsScalarWithOwnTryParse(effective)
+            || (TypeConversionHelpers.ImplementsIParsable(effective) && HasTryParse(effective, withProvider: true)))
         {
             tryParseFormat = TypeConversionHelpers.GetTryParseExpression(effective, ValueToken, ParsedToken);
             return GatewayClaimConversion.TryParse;
+        }
+
+        if (TypeConversionHelpers.ImplementsIParsable(effective))
+        {
+            tryParseFormat = "global::Blueprint.Runtime.Exec.PipelineHelpers.TryParseInvariant<"
+                + effective.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ">(" + ValueToken + ", out var " + ParsedToken + ")";
+            return GatewayClaimConversion.TryParse;
+        }
+
+        // A conventional static TryParse: the shared helper calls TryParse(string, out T), which a type whose TryParse takes
+        // a format provider lacks, so the call is chosen from the overloads the type has.
+        if (TypeConversionHelpers.HasStaticTryParseMethod(effective))
+        {
+            var typeName = effective.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (HasTryParse(effective, withProvider: false))
+            {
+                tryParseFormat = typeName + ".TryParse(" + ValueToken + ", out var " + ParsedToken + ")";
+                return GatewayClaimConversion.TryParse;
+            }
+
+            if (HasTryParse(effective, withProvider: true))
+            {
+                tryParseFormat = typeName + ".TryParse(" + ValueToken + ", global::System.Globalization.CultureInfo.InvariantCulture, out var " + ParsedToken + ")";
+                return GatewayClaimConversion.TryParse;
+            }
         }
 
         return TypeConversionHelpers.HasTypeConverterAttribute(effective) ? GatewayClaimConversion.TypeConverter : GatewayClaimConversion.None;
@@ -423,6 +485,45 @@ internal static class GatewayBindings
         return value.Type is not null && SymbolEqualityComparer.Default.Equals(value.Type, Unwrap(target));
     }
 
+    /// <summary>
+    /// Whether the shared helper parses the type with the type's own public TryParse, written out for it.
+    /// </summary>
+    private static bool IsScalarWithOwnTryParse(ITypeSymbol type)
+    {
+        return type.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString()
+            is "int" or "long" or "double" or "float" or "bool" or "decimal" or "System.Guid" or "System.DateTime" or "System.DateTimeOffset";
+    }
+
+    private static bool HasTryParse(ITypeSymbol type, bool withProvider)
+    {
+        // Public only: the generated pipeline calls it from outside the type, and a private one would not compile (CS0122).
+        return type.GetMembers("TryParse").OfType<IMethodSymbol>().Any(m =>
+            m is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, ReturnType.SpecialType: SpecialType.System_Boolean }
+            && m.Parameters.Length == (withProvider ? 3 : 2)
+            && m.Parameters[0].Type.SpecialType == SpecialType.System_String
+            && (!withProvider || m.Parameters[1].Type.ToDisplayString().TrimEnd('?') == "System.IFormatProvider")
+            && m.Parameters[^1] is { RefKind: RefKind.Out } output
+            && SymbolEqualityComparer.Default.Equals(output.Type, type));
+    }
+
+    private static bool IsBoundFromRoute(IPropertySymbol property)
+    {
+        return property.SetMethod is { DeclaredAccessibility: Accessibility.Public }
+            && !property.GetAttributes().Any(static a => a.AttributeClass is { Name: "FromQueryAttribute" or "FromBodyAttribute" or "FromHeaderAttribute" or "FromCookieAttribute" or "FromAuthContextAttribute" } attributeClass
+                && attributeClass.IsInNamespace("Blueprint", "Model", "Attributes"));
+    }
+
+    /// <summary>
+    /// Whether the inner operation requires the property: the <c>required</c> modifier, or <c>[Required]</c>, which its
+    /// validation applies to a value the gateway would leave unset.
+    /// </summary>
+    private static bool IsRequired(IPropertySymbol property)
+    {
+        return property.IsRequired
+            || property.GetAttributes().Any(static a => a.AttributeClass?.InheritsFrom("System.ComponentModel.DataAnnotations.RequiredAttribute") == true
+                || a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.RequiredAttribute");
+    }
+
     private static bool IsSameType(ITypeSymbol source, ITypeSymbol target)
     {
         return SymbolEqualityComparer.Default.Equals(source, target)
@@ -436,20 +537,33 @@ internal static class GatewayBindings
             : type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
     }
 
+    /// <summary>
+    /// Resolves a <c>FromRoute</c> placeholder to the property it binds, only when every one of the gateway's routes carries
+    /// it: on a route without it a POST fills the property from its body, and the forward would send that value instead.
+    /// </summary>
     private static string? ResolveRoutePlaceholder(INamedTypeSymbol operationType, Dictionary<string, IPropertySymbol> declared, string placeholder)
     {
+        string? resolved = null;
         foreach (var template in GetRouteTemplates(operationType))
         {
+            var found = false;
             foreach (Match match in Placeholder.Matches(template))
             {
                 if (string.Equals(match.Groups[1].Value, placeholder, StringComparison.OrdinalIgnoreCase))
                 {
-                    return RoutePlaceholderSyntax.ResolveMemberName(declared.Values, match.Groups[1].Value);
+                    resolved ??= RoutePlaceholderSyntax.ResolveMemberName(declared.Values, match.Groups[1].Value);
+                    found = true;
+                    break;
                 }
+            }
+
+            if (!found)
+            {
+                return null;
             }
         }
 
-        return null;
+        return resolved;
     }
 
     private static Dictionary<string, IPropertySymbol> GetSettableProperties(INamedTypeSymbol type)

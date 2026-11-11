@@ -8,8 +8,8 @@ namespace Blueprint.SourceGenerator.Modules.Gateway;
 /// the generated forward calls after copying and binding the inner operation and before sending it.
 /// </summary>
 /// <remarks>
-/// The hook is an instance method the generated pipeline can call, so <c>internal</c> or <c>public</c>. <c>OnMap</c>
-/// returns <c>void</c>; <c>OnMapAsync</c> returns <c>ValueTask</c> or <c>Task</c>. Parameters after the first are injected as
+/// The hook is an instance method the generated pipeline can call, so <c>internal</c> or <c>public</c>, and may be split
+/// across partial declarations. <c>OnMap</c> returns <c>void</c> and is not <c>async</c>; <c>OnMapAsync</c> returns <c>ValueTask</c> or <c>Task</c>. Parameters after the first are injected as
 /// a handler's are (<c>ParameterAnalyzer</c>). An exception it throws, such as <c>ForbiddenException</c>, stops the forward.
 /// </remarks>
 internal static class GatewayMapHook
@@ -37,16 +37,14 @@ internal static class GatewayMapHook
 
         foreach (var member in operationType.GetMembers())
         {
-            if (member is not IMethodSymbol { MethodKind: MethodKind.Ordinary, Name: SyncName or AsyncName } method)
+            if (member is not IMethodSymbol { MethodKind: MethodKind.Ordinary, Name: SyncName or AsyncName } listed)
             {
                 continue;
             }
 
-            // An implementation part is the method; its defining declaration repeats it.
-            if (method.PartialImplementationPart is not null)
-            {
-                continue;
-            }
+            // GetMembers lists a partial method once, by its defining part; the implementation part is the one the
+            // pipeline calls, and the one whose modifiers (async among them) matter.
+            var method = listed.PartialImplementationPart ?? listed;
 
             if (!IsValid(method, innerType) || found is not null)
             {
@@ -75,9 +73,11 @@ internal static class GatewayMapHook
             return false;
         }
 
+        // An async void OnMap would return at its first await, before its mapping or guard ran, and the forward would send
+        // the inner operation without it; its exceptions would escape the pipeline.
         if (method.Name == SyncName)
         {
-            return method.ReturnsVoid;
+            return method.ReturnsVoid && !method.IsAsync;
         }
 
         return method.ReturnType is INamedTypeSymbol { Arity: 0, Name: "ValueTask" or "Task" } returnType
