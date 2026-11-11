@@ -281,6 +281,18 @@ public sealed class BlueprintClientStubTests
     }
 
     [Fact]
+    public async Task A_no_result_is_the_hosts_empty_200()
+    {
+        // The host writes NoResultOperationResult as an empty 200, the only status the client reads it from.
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<ChangePasswordCommand>(static _ => NoResultOperationResult.Instance);
+
+        var result = await provider.GetRequiredService<IStubbedTemplatesApi>().ChangePasswordAsync(new ChangePasswordCommand());
+
+        result.Should().BeSameAs(NoResultOperationResult.Instance);
+    }
+
+    [Fact]
     public async Task A_commands_content_headers_are_recorded()
     {
         await using var provider = BuildProvider(out var upstream);
@@ -318,6 +330,7 @@ public sealed class BlueprintClientStubTests
 [BlueprintClientInclude(typeof(GetTemplatesQuery))]
 [BlueprintClientInclude(typeof(AddTenantNoteCommand))]
 [BlueprintClientInclude(typeof(HealthCheckQuery))]
+[BlueprintClientInclude(typeof(ChangePasswordCommand))]
 public partial class StubbedTemplatesApi;
 
 /// <summary>

@@ -27,8 +27,8 @@ namespace Blueprint.Testing;
 /// A response is written as a Blueprint host writes the same result: a value as a 200 JSON body; an
 /// <see cref="OkResult"/>, <see cref="CreatedResult"/>, <see cref="AcceptedResult"/>, <see cref="ConflictResult"/> or
 /// <see cref="NotFoundResult"/> as its content with its status, so that a declared <see cref="NotFoundResult{T}"/> is read as
-/// that member; a <see cref="PlainTextResult"/>, <see cref="StatusCodeResult"/>, <see cref="NotModifiedResult{T}"/> or
-/// <see cref="NoResultOperationResult"/> as its status; a <see cref="ValidationFailedResult"/>, or a thrown
+/// that member; a <see cref="PlainTextResult"/> as its text with its own content type; a <see cref="StatusCodeResult"/> or
+/// <see cref="NotModifiedResult{T}"/> as its status; a <see cref="NoResultOperationResult"/> as an empty 200; a <see cref="ValidationFailedResult"/>, or a thrown
 /// <see cref="Validation.ValidationException"/>, as a 422 the client raises as a <see cref="Validation.ValidationException"/>;
 /// and a thrown <see cref="ApiException"/> as its problem document, which the client raises as a
 /// <see cref="BlueprintApiException"/>. <see langword="null"/> is a 204.
@@ -116,7 +116,10 @@ public sealed class BlueprintClientStub<TClient>
     {
         return value switch
         {
-            null or NoResultOperationResult => new HttpResponseMessage(HttpStatusCode.NoContent),
+            null => new HttpResponseMessage(HttpStatusCode.NoContent),
+
+            // The host writes nothing for it, leaving the default 200, and the client reads it from a 200 alone.
+            NoResultOperationResult => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([]) },
             INotModifiedResult notModified => WithETag(new HttpResponseMessage(HttpStatusCode.NotModified), notModified.ETag),
             OkResult ok => WithHeaders(Json(HttpStatusCode.OK, ok.Content, jsonOptions), ok),
             CreatedResult created => Json(HttpStatusCode.Created, created.Content, jsonOptions),

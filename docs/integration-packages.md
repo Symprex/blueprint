@@ -744,7 +744,8 @@ upstream.Requests.Single().RequestAuthorization.Should().Be(new AuthenticationHe
   | The responder returns or throws | The client sees |
   |---|---|
   | A value | 200 JSON, written with the client's JSON options and serializer context |
-  | `null` or `NoResultOperationResult` | 204 |
+  | `null` | 204 |
+  | `NoResultOperationResult` | An empty 200, as the host writes it |
   | `OkResult`, `CreatedResult`, `AcceptedResult`, `ConflictResult` | Its content, with its status |
   | `NotFoundResult<T>` | A JSON 404, read as a declared `NotFoundResult<T>` member |
   | `StatusCodeResult`, `NotModifiedResult<T>` | Its status |
