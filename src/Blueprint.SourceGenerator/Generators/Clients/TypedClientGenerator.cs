@@ -1143,6 +1143,18 @@ public sealed class TypedClientGenerator : IIncrementalGenerator, ITrackedSource
         sb.AppendLine($"{indent}    return new {client.ClassName}(this, credential, this.{RequestModifierFieldName});");
         sb.AppendLine($"{indent}}}");
         sb.AppendLine();
+
+        // The same clone for code that knows the client only by its type (AddCallerBlueprintClient). Explicit, so the class's
+        // own surface keeps the one WithCredential its interface declares.
+        sb.AppendLine($"{indent}/// <inheritdoc />");
+        sb.AppendLine($"{indent}static {client.ClassName} global::Blueprint.HttpClient.IBlueprintClient<{client.ClassName}>.{WithCredentialMethodName}({client.ClassName} client, global::Blueprint.HttpClient.IUpstreamCredential credential)");
+        sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{indent}    global::System.ArgumentNullException.ThrowIfNull(client);");
+        sb.AppendLine($"{indent}    global::System.ArgumentNullException.ThrowIfNull(credential);");
+        sb.AppendLine();
+        sb.AppendLine($"{indent}    return new {client.ClassName}(client, credential, client.{RequestModifierFieldName});");
+        sb.AppendLine($"{indent}}}");
+        sb.AppendLine();
         sb.AppendLine($"{indent}/// <summary>");
         sb.AppendLine($"{indent}/// Makes a client that also runs a modifier on every request, after the call's own modifier and any this client already has,");
         sb.AppendLine($"{indent}/// and before the credential. This client is unchanged.");
