@@ -96,7 +96,9 @@ internal static class RoutePlaceholderSyntax
     {
         var matches = Placeholder.Matches(template);
         var trailing = new List<Match>();
-        var end = template.Length;
+
+        // ASP.NET ignores a trailing slash, so the run ends before it; the URL keeps it.
+        var end = template.Length > 1 && template[template.Length - 1] == '/' ? template.Length - 1 : template.Length;
 
         for (var i = matches.Count - 1; i >= 0; i--)
         {

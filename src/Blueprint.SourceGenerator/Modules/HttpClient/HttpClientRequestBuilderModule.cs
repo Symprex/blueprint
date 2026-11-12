@@ -495,6 +495,23 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             nullChecks.Add($"(typed.{propertyLookup[trailingOptional[i]].Name} is null && typed.{propertyLookup[trailingOptional[i + 1]].Name} is not null)");
         }
 
+        // One after a '.' cannot be left out when a value before it in its segment has a '.' of its own: the router splits
+        // the segment at its last '.', so /files/{Name}.{Ext?} would read "abc.txt" as Name "abc" and Ext "txt".
+        foreach (var leftOut in trailingMatches.Where(match => !RoutePlaceholderSyntax.IsWholeSegment(urlTemplate, match)))
+        {
+            var segmentStart = urlTemplate.LastIndexOf('/', leftOut.Index - 1) + 1;
+            var before = _placeholderRegex.Matches(urlTemplate)
+                .Cast<Match>()
+                .Where(match => match.Index >= segmentStart && match.Index < leftOut.Index && propertyLookup.ContainsKey(match.Groups[1].Value))
+                .Select(match => $"(global::System.Convert.ToString(typed.{propertyLookup[match.Groups[1].Value].Name}) ?? \"\").IndexOf('.') >= 0")
+                .ToList();
+
+            if (before.Count > 0)
+            {
+                nullChecks.Add($"(typed.{propertyLookup[leftOut.Groups[1].Value].Name} is null && ({string.Join(" || ", before)}))");
+            }
+        }
+
         // Build URL using string concatenation with Uri.EscapeDataString
         // We avoid $"" interpolation because global:: is not valid inside interpolation holes in C# < 13
         var segments = new List<string>();

@@ -139,6 +139,52 @@ public sealed class InlineRoutePlaceholderWireTests
         url.Should().BeNull();
     }
 
+    [Fact]
+    public void The_typed_client_builds_no_url_for_a_value_with_a_period_before_an_optional_placeholder_it_leaves_out()
+    {
+        // /files/abc.txt would bind Name "abc" and Ext "txt", not Name "abc.txt" and no Ext.
+        var url = InlinePlaceholderFileQuery.Http.BuildUrl(new InlinePlaceholderFileQuery { Name = "abc.txt" });
+
+        url.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_value_with_a_period_before_an_optional_placeholder_that_is_set_reaches_the_handler_whole()
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var url = InlinePlaceholderFileQuery.Http.BuildUrl(new InlinePlaceholderFileQuery { Name = "abc.txt", Ext = "gz" });
+        var (status, body) = await host.GetAsync(url!.TrimStart('/'));
+
+        status.Should().Be(200);
+        body.Should().Be("\"name=abc.txt;ext=gz\"");
+    }
+
+    [Theory]
+    [InlineData(null, "/inline-placeholders/archives/")]
+    [InlineData(2026, "/inline-placeholders/archives/2026/")]
+    public void The_typed_client_leaves_out_an_optional_placeholder_before_a_trailing_slash(int? year, string expected)
+    {
+        // The trailing slash used to stop the scan for the optional run that ends the route, so a null Year built no URL.
+        var url = InlinePlaceholderArchiveQuery.Http.BuildUrl(new InlinePlaceholderArchiveQuery { Year = year });
+
+        url.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(null, "year=")]
+    [InlineData(2026, "year=2026")]
+    public async Task A_url_the_typed_client_builds_before_a_trailing_slash_reaches_the_handler(int? year, string expected)
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var url = InlinePlaceholderArchiveQuery.Http.BuildUrl(new InlinePlaceholderArchiveQuery { Year = year });
+        var (status, body) = await host.GetAsync(url!.TrimStart('/'));
+
+        status.Should().Be(200);
+        body.Should().Be("\"" + expected + "\"");
+    }
+
     [Theory]
     [InlineData(null, null, "/inline-placeholders/revisions/abc")]
     [InlineData("txt", null, "/inline-placeholders/revisions/abc.txt")]
@@ -460,6 +506,19 @@ public partial class InlinePlaceholderSectionQuery : IQuery<string>
     public static string Handle(InlinePlaceholderSectionQuery query)
     {
         return "section=" + (query.Kind ?? "(none)");
+    }
+}
+
+/// <summary>A GET whose optional segment is followed by a trailing slash.</summary>
+[AllowAnonymous]
+[RootLink("/inline-placeholders/archives/{Year?}/")]
+public partial class InlinePlaceholderArchiveQuery : IQuery<string>
+{
+    public int? Year { get; set; }
+
+    public static string Handle(InlinePlaceholderArchiveQuery query)
+    {
+        return "year=" + query.Year;
     }
 }
 
