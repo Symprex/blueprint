@@ -103,6 +103,58 @@ public sealed class GatewayBindingTests(SampleSystemFixture system)
     }
 
     [Fact]
+    public async Task A_required_inner_property_the_map_hook_fills_reaches_the_inner_op()
+    {
+        // The inner tenant isolation refuses any TenantId but the caller's account, so a 200 means the hook's value arrived.
+        var id = await system.SeedTemplateAsync("Workspace template");
+        using var caller = system.Gateway.CreateClient(this.CreateToken(tenantId: "tenant-alpha", accountId: "tenant-alpha"));
+
+        var response = await caller.GetAsync($"gateway/workspaces/alpha/templates/{id}");
+
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, text);
+        text.Should().Contain(id);
+    }
+
+    [Fact]
+    public async Task A_Required_inner_property_the_map_hook_fills_reaches_the_inner_op()
+    {
+        using var caller = system.Gateway.CreateClient(this.CreateToken(tenantId: "tenant-g", accountId: "tenant-g"));
+
+        var note = await PostNoteAsync(caller, "gateway/canned-notes", new { kind = "welcome", text = "from caller" });
+
+        note.GetProperty("tenantId").GetString().Should().Be("tenant-g");
+        note.GetProperty("text").GetString().Should().Be("Welcome aboard.");
+    }
+
+    [Fact]
+    public async Task A_required_inner_property_the_map_hook_leaves_null_is_never_sent()
+    {
+        // Sent, the null text would come back as the inner service's 422; the forward refuses it before that.
+        using var caller = system.Gateway.CreateClient(this.CreateToken(tenantId: "tenant-h", accountId: "tenant-h"));
+
+        var response = await caller.PostAsJsonAsync("gateway/canned-notes", new { kind = "unknown" });
+
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.InternalServerError, text);
+    }
+
+    [Fact]
+    public async Task A_required_inner_property_the_map_hook_fills_is_absent_from_the_gateways_OpenAPI()
+    {
+        using var gateway = system.Gateway.CreateClient(system.CreateCallerToken());
+
+        var response = await gateway.GetAsync("gateway/.blueprint/openapi.json");
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, text);
+        using var document = JsonDocument.Parse(text);
+
+        FindRequestProperties(document, "/workspaces/{workspace}/templates/{id}", "get")
+            .Select(static p => p.ToLowerInvariant()).Should().BeEquivalentTo("workspace", "id");
+        FindRequestProperties(document, "/canned-notes").Should().BeEquivalentTo("kind", "source", "internalNote");
+    }
+
+    [Fact]
     public async Task Bound_and_hidden_properties_are_absent_from_the_gateways_OpenAPI()
     {
         using var gateway = system.Gateway.CreateClient(system.CreateCallerToken());
@@ -133,12 +185,12 @@ public sealed class GatewayBindingTests(SampleSystemFixture system)
     /// Gets the names of an operation's request properties from the OpenAPI document: its parameters and the properties
     /// of its request body's schema, following a <c>$ref</c> into the components.
     /// </summary>
-    private static List<string> FindRequestProperties(JsonDocument document, string path)
+    private static List<string> FindRequestProperties(JsonDocument document, string path, string method = "post")
     {
         var paths = document.RootElement.GetProperty("paths");
         var name = paths.EnumerateObject().Select(static p => p.Name)
             .Should().ContainSingle(n => string.Equals(n, path, StringComparison.OrdinalIgnoreCase), document.RootElement.GetRawText()).Which;
-        var operation = paths.GetProperty(name).GetProperty("post");
+        var operation = paths.GetProperty(name).GetProperty(method);
 
         var names = new List<string>();
         if (operation.TryGetProperty("parameters", out var parameters))

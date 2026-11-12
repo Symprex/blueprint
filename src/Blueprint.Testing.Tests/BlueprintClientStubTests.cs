@@ -1,6 +1,8 @@
 using System.Net.Http.Headers;
+using Blueprint.Http;
 using Blueprint.HttpClient;
 using Blueprint.Model;
+using Blueprint.Model.Attributes;
 using Blueprint.Runtime.Exec;
 using Blueprint.SourceGenerator.Sample.Contract.Api;
 using FluentAssertions;
@@ -337,6 +339,154 @@ public sealed class BlueprintClientStubTests
             .WhoseValue.Should().ContainSingle().Which.Should().StartWith("application/json");
     }
 
+    [Fact]
+    public async Task A_resource_event_is_written_as_the_host_writes_it_and_read_back_as_the_event()
+    {
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<IssueTemplateKeyCommand>(static c => new ResourceEvent<TemplateApiResource>(
+                ResourceEventChangeType.Created,
+                "template.keyIssued",
+                new TemplateApiResource { Id = c.TemplateId, Name = "Keyed" })
+            .WithMetadata("issuedBy", "someone"));
+
+        var resourceEvent = await provider.GetRequiredService<IStubbedTemplatesApi>().IssueTemplateKeyAsync(new IssueTemplateKeyCommand { TemplateId = "t-1" });
+
+        resourceEvent.ChangeType.Should().Be(ResourceEventChangeType.Created);
+        resourceEvent.EventId.Should().Be("template.keyIssued");
+        resourceEvent.Data!.Id.Should().Be("t-1");
+        resourceEvent.Data.Name.Should().Be("Keyed");
+        resourceEvent.Metadata.Should().ContainKey("issuedBy").WhoseValue.ToString().Should().Be("someone");
+    }
+
+    [Fact]
+    public async Task A_resource_event_is_a_200_whatever_its_change_type()
+    {
+        // Legacy, and so the host, sent every resource event as a 200, a created one included: it is read as the 200 member.
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<IssueTemplateKeyCommand>(static c => new ResourceCreated<TemplateApiResource>(new TemplateApiResource { Id = c.TemplateId, Name = "Keyed" }));
+
+        var result = await BlueprintClientTransport.Create<StubbedTemplatesApi>(provider)
+            .ForwardAsync<IssueTemplateKeyCommand, Results<OkResult<TemplateApiResource>, CreatedResult<TemplateApiResource>>>(new IssueTemplateKeyCommand { TemplateId = "t-1" });
+
+        result.IsT1.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_resource_event_result_is_written_as_the_hosts_envelope_at_its_change_types_status()
+    {
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<CreateTemplateCommand>(static c => new ResourceEventResult<TemplateApiResource>(
+                ChangeType.Created,
+                "template.created",
+                "t-9",
+                new TemplateApiResource { Id = "t-9", Name = c.Name! })
+            .WithMetadata("source", "stub")
+            .WithChangedValue("name", "Before"));
+
+        var created = await provider.GetRequiredService<IStubbedTemplatesApi>().CreateTemplateAsync(new CreateTemplateCommand { Name = "Created" });
+
+        created.ChangeType.Should().Be(ChangeType.Created);
+        created.EventId.Should().Be("template.created");
+        created.Content.Id.Should().Be("t-9");
+        created.Content.Name.Should().Be("Created");
+        created.Metadata.Should().ContainKey("source").WhoseValue.ToString().Should().Be("stub");
+        created.ChangedValues.Should().ContainKey("name").WhoseValue.ToString().Should().Be("Before");
+    }
+
+    [Fact]
+    public async Task A_resource_event_result_is_a_201_when_created_and_a_200_when_updated()
+    {
+        await using var provider = BuildProvider(out var upstream);
+        var transport = BlueprintClientTransport.Create<StubbedTemplatesApi>(provider);
+
+        upstream.Respond<CreateTemplateCommand>(static _ => new ResourceEventResult<TemplateApiResource>(ChangeType.Created, "template.created", "t-1", new TemplateApiResource { Id = "t-1", Name = "n" }));
+        var created = await transport.ForwardAsync<CreateTemplateCommand, Results<OkResult<TemplateApiResource>, CreatedResult<TemplateApiResource>>>(new CreateTemplateCommand { Name = "n" });
+
+        upstream.Respond<CreateTemplateCommand>(static _ => new ResourceEventResult<TemplateApiResource>(ChangeType.Updated, "template.updated", "t-1", new TemplateApiResource { Id = "t-1", Name = "n" }));
+        var updated = await transport.ForwardAsync<CreateTemplateCommand, Results<OkResult<TemplateApiResource>, CreatedResult<TemplateApiResource>>>(new CreateTemplateCommand { Name = "n" });
+
+        created.IsT2.Should().BeTrue();
+        updated.IsT1.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_deleted_resource_event_result_is_the_hosts_empty_204()
+    {
+        // The host writes a deleted resource event result as its status alone (TryGetBodilessStatusCode).
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<CreateTemplateCommand>(static _ => new ResourceEventResult<TemplateApiResource>(ChangeType.Deleted, "template.deleted", "t-1", new TemplateApiResource { Id = "t-1", Name = "n" }));
+
+        var result = await BlueprintClientTransport.Create<StubbedTemplatesApi>(provider)
+            .ForwardAsync<CreateTemplateCommand, Results<Blueprint.Runtime.Http.HttpNoContentResult, ResourceEventResult<TemplateApiResource>>>(new CreateTemplateCommand { Name = "n" });
+
+        result.IsT1.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_key_only_resource_event_result_is_its_change_types_status()
+    {
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<ArchiveTemplateCommand>(static c => new KeyOnlyResourceEventResult(ChangeType.Deleted, "template.archived", c.Id));
+
+        var archived = await provider.GetRequiredService<IStubbedTemplatesApi>().ArchiveTemplateAsync(new ArchiveTemplateCommand { Id = "t-1" });
+
+        // The client reads the change type back from the status alone, so only a 204 is read as deleted.
+        archived.ChangeType.Should().Be(ChangeType.Deleted);
+        upstream.Received<ArchiveTemplateCommand>().Should().ContainSingle().Which.Id.Should().Be("t-1");
+    }
+
+    [Fact]
+    public async Task A_result_the_stub_cannot_write_is_refused_without_suggesting_its_content()
+    {
+        await using var provider = BuildProvider(out var upstream);
+        upstream.Respond<GetTemplateQuery>(static _ => new UnwritableResult());
+
+        var act = () => provider.GetRequiredService<IStubbedTemplatesApi>().GetTemplateAsync(new GetTemplateQuery { Id = "t-1" });
+
+        var thrown = (await act.Should().ThrowAsync<NotSupportedException>()).Which;
+        thrown.Message.Should().Contain("UnwritableResult").And.Contain("ResourceEvent").And.NotContain("its content");
+    }
+
+    [Fact]
+    public async Task A_resource_event_results_content_is_written_with_the_clients_registered_metadata()
+    {
+        // The host writes a content type its context registers with that metadata, which cannot write an object member
+        // holding a type the context does not register; the stub once wrote it anyway through the reflection fallback.
+        await using var provider = BuildProvider(
+            out var upstream,
+            static json => json.TypeInfoResolver = StrictStubJsonContext.Default);
+        upstream.Respond<CreateTemplateCommand>(static _ => new ResourceEventResult<TaggedPayload>(
+            ChangeType.Created,
+            "payload.created",
+            "p-1",
+            new TaggedPayload { Tag = new UnregisteredArchiver("someone") }));
+
+        var act = () => BlueprintClientTransport.Create<StubbedTemplatesApi>(provider)
+            .ForwardAsync<CreateTemplateCommand, ResourceEventResult<TaggedPayload>>(new CreateTemplateCommand { Name = "n" });
+
+        (await act.Should().ThrowAsync<NotSupportedException>()).WithMessage("*UnregisteredArchiver*");
+    }
+
+    [Fact]
+    public async Task A_registered_resource_event_still_writes_an_unregistered_metadata_value()
+    {
+        // The host gives a resource event root the reflection fallback even when its context registers it, as its bags hold
+        // whatever a caller puts in them (SerializerContextTypeInfoCache.Resolve).
+        await using var provider = BuildProvider(
+            out var upstream,
+            static json => json.TypeInfoResolver = StrictStubJsonContext.Default);
+        upstream.Respond<IssueTemplateKeyCommand>(static c => new ResourceEvent<TemplateApiResource>(
+                ResourceEventChangeType.Created,
+                "template.keyIssued",
+                new TemplateApiResource { Id = c.TemplateId, Name = "Keyed" })
+            .WithMetadata("issuedBy", new UnregisteredArchiver("someone")));
+
+        var resourceEvent = await provider.GetRequiredService<IStubbedTemplatesApi>().IssueTemplateKeyAsync(new IssueTemplateKeyCommand { TemplateId = "t-1" });
+
+        resourceEvent.Data!.Id.Should().Be("t-1");
+        resourceEvent.Metadata.Should().ContainKey("issuedBy");
+    }
+
     private static ServiceProvider BuildProvider(
         out BlueprintClientStub<StubbedTemplatesApi> upstream,
         Action<System.Text.Json.JsonSerializerOptions>? configureJson = null)
@@ -364,7 +514,45 @@ public sealed class BlueprintClientStubTests
 [BlueprintClientInclude(typeof(AddTenantNoteCommand))]
 [BlueprintClientInclude(typeof(HealthCheckQuery))]
 [BlueprintClientInclude(typeof(ChangePasswordCommand))]
+[BlueprintClientInclude(typeof(CreateTemplateCommand))]
+[BlueprintClientInclude(typeof(ArchiveTemplateCommand))]
+[BlueprintClientInclude(typeof(IssueTemplateKeyCommand))]
 public partial class StubbedTemplatesApi;
+
+/// <summary>
+/// A command whose result is a legacy <see cref="ResourceEvent{TResource}"/>, the shape the stub once refused.
+/// </summary>
+[RootLink("/templates/{TemplateId}/keys")]
+[HttpPost]
+public partial class IssueTemplateKeyCommand : ICommand<ResourceEvent<TemplateApiResource>>
+{
+    /// <summary>
+    /// Gets or sets the template the key is issued for.
+    /// </summary>
+    public required string TemplateId { get; set; }
+
+    /// <summary>
+    /// Handles it for <see cref="RouteFormatTestApp"/>, which scans this assembly; the stub never calls it.
+    /// </summary>
+    /// <param name="command">The command.</param>
+    /// <returns>The event.</returns>
+    public static ResourceEvent<TemplateApiResource> Handle(IssueTemplateKeyCommand command)
+    {
+        return new ResourceCreated<TemplateApiResource>(new TemplateApiResource { Id = command.TemplateId, Name = "Keyed" });
+    }
+}
+
+/// <summary>
+/// A result no Blueprint host writes, so the stub cannot either.
+/// </summary>
+public sealed class UnwritableResult : OperationResult
+{
+    /// <inheritdoc />
+    public override Task ExecuteAsync(ApiOperationContext context)
+    {
+        throw new NotSupportedException();
+    }
+}
 
 /// <summary>
 /// An extension value no serializer context registers.
@@ -373,7 +561,22 @@ public partial class StubbedTemplatesApi;
 public sealed record UnregisteredArchiver(string Name);
 
 /// <summary>
+/// A payload the strict context registers, with a member whose value it may not.
+/// </summary>
+public sealed class TaggedPayload
+{
+    /// <summary>
+    /// Gets or sets the tag, of any type.
+    /// </summary>
+    public object? Tag { get; set; }
+}
+
+/// <summary>
 /// A context that registers only what the strict-context test reads, and not <see cref="UnregisteredArchiver"/>.
 /// </summary>
 [System.Text.Json.Serialization.JsonSerializable(typeof(TemplateApiResource))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(TaggedPayload))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(CreateTemplateCommand))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(IssueTemplateKeyCommand))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(ResourceEvent<TemplateApiResource>))]
 public sealed partial class StrictStubJsonContext : System.Text.Json.Serialization.JsonSerializerContext;

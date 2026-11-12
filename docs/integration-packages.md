@@ -585,9 +585,21 @@ public partial class AddGatewayPartnerNoteCommand : ICommand<TenantNoteApiResour
 - **Tiers.** An operation's `[Bind]` or `[Hide]` overrides the assembly's `[GatewayBind]` for the same property.
 - **Sources.** `[Bind]` sets exactly one of `FromClaim`, `FromRoute` (a placeholder every one of the gateway's own routes carries, read from the property the route fills), `FromProperty` (a property the gateway class declares, with a public getter) or `Value`. `[GatewayBind]` takes `FromClaim`.
 - **Claims.** A claim converts to the property's type by the rules route binding uses: a string, a scalar, an enum, an `IParsable<T>`, a static `TryParse` or a `[TypeConverter]`. A caller without the claim, or whose claim does not convert, is refused with 403 before anything is sent upstream.
-- **The hook.** `void OnMap(TInner inner)`, not `async`, or `ValueTask`/`Task OnMapAsync(TInner inner, …)`, an `internal` or `public` instance method. An exception it throws stops the forward, so it is the guard too.
+- **The hook.** `void OnMap(TInner inner)`, not `async`, or `ValueTask`/`Task OnMapAsync(TInner inner, …)`, an `internal` or `public` method, instance or `static`, and not `[Conditional]`, which the compiler can leave uncalled. A hook that reads nothing of the gateway operation can be `static`, as CA1822 asks, and the forward calls it on the operation type, so it needs no suppression. An exception it throws stops the forward, so it is the guard too.
 - **Inner routes.** A placeholder of the inner operation's first route, the URL the forward sends, that the gateway's route lacks has to be copied, bound or hidden (BPGW010): the inner request builder needs a value for it. A copied property satisfies it: one the gateway contributes, or declares with the inner property's type, is read from wherever the gateway's route leaves it, such as the query string, and set on `new TInner { … }`. So `GET /gateway/templates/find?id=…` can forward to `GET /templates/{Id}`. For a caller who leaves the value out to get 422 from the gateway, the gateway's property needs `[Required]`: a contributed property takes it from the inner property, but a declared one has only its own annotations, so give it `[Required]` too. Without it the forward has no URL to send. A property the gateway declares with another type is its own and is not copied, so it does not satisfy the placeholder. A defaulted placeholder (`{Kind=all}`) whose property can be `null` needs none of this, as the request builder sends its default; nor does an optional one (`{Year?}`) whose property can be `null` in the run of optional segments that ends the route, as the request builder leaves it out. An optional placeholder followed by anything else, such as `{Source?}` in `/notes/{Source?}/details`, still needs a value like any other. But where the route ends in optional segments, one the forward leaves null, being neither carried nor bound or bound to `null`, cannot come before one it can fill (BPGW029): without `Year`, `/reports/{Year?}/{Month?}` would carry `Month` in its place. Hide the earlier one when the inner operation's initialiser or `OnMap` sets it.
-- **Hide.** A property the inner operation requires, by `required` or `[Required]`, cannot be hidden (BPGW009); bind it instead.
+- **Hide.** A property the inner operation requires, by `required` or `[Required]`, can be hidden only for the operation's `OnMap` or `OnMapAsync` to fill, with no placeholder binding: the hook has to assign `inner.X` unconditionally in its own body, not under an `if`, a loop, a `try`, a lambda or a helper, nor after an early `return` or `goto` (BPGW035), and without a hook the hide is refused (BPGW009). The forward starts a `required` member at `default`, and after the hook throws rather than send it still null where null is never the value meant: a non-nullable reference type, or one marked `[Required]`, that has a public getter. A `[SetsRequiredMembers]` constructor keeps its own value until the hook runs. A `required` nullable or value-type property, such as `int? HardDeletionDays`, is sent as the hook left it.
+
+  ```csharp
+  [Expose<GetTenantTemplateQuery>]
+  [Hide(nameof(GetTenantTemplateQuery.TenantId))]   // required string TenantId on the inner operation
+  public partial class GetGatewayWorkspaceTemplateQuery : IQuery<TemplateApiResource>
+  {
+      public string Workspace { get; set; } = string.Empty;
+
+      internal void OnMap(GetTenantTemplateQuery inner) =>
+          inner.TenantId = Workspaces.GetValueOrDefault(this.Workspace) ?? throw new NotFoundException("No such workspace.");
+  }
+  ```
 - **Rules.** A contributed property's validation rule that names a bound or hidden property, such as `[RequiredIf(nameof(Enabled), true)]` with `Enabled` bound, is left to the inner operation, which applies it with the bound value in place.
 - **Declared properties.** A property the gateway class declares itself cannot be bound or hidden from anything but that declaration (BPGW021): callers would see it while the forward ignored it. Remove it, or forward it with `[Bind("X", FromProperty = "X")]`.
 
@@ -750,6 +762,9 @@ upstream.Requests.Single().RequestAuthorization.Should().Be(new AuthenticationHe
   | `NotFoundResult<T>` | A JSON 404, read as a declared `NotFoundResult<T>` member |
   | `StatusCodeResult`, `NotModifiedResult<T>` | Its status |
   | `PlainTextResult` | Its text, with its status and its own content type; at 204, 205 or 304, its status alone |
+  | `ResourceEvent<T>` (`ResourceCreated<T>` and the rest) | The event as a 200 JSON body, whatever its change type, read back as the declared event |
+  | `ResourceEventResult<T>` | The host's event envelope at 201 (created, with the content's self link as `Location`) or 200 (updated); a deleted one is an empty 204. The envelope carries no `href`, which the host fills from its own app's links |
+  | `KeyOnlyResourceEventResult` | Its change type's status alone: 201, 200 or 204 |
   | `throw new ApiException(…)` | Its problem document, named as the host names it (an extension the client's serializer context does not register is still written), raised as `BlueprintApiException` (or translated by `[TranslateError]`) |
   | `throw new ValidationException(…)` or `ValidationFailedResult` | A 422 whose keys the host's own naming produces (`form` for a form-level error), raised as `ValidationException` |
 
