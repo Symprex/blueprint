@@ -45,7 +45,9 @@ internal sealed class ToolResponse : IHttpResponseFeature, IHttpResponseBodyFeat
     public Stream Stream => this.Captured;
 
     /// <inheritdoc />
-    public PipeWriter Writer => this._writer ??= PipeWriter.Create(this.Captured, new StreamPipeWriterOptions(leaveOpen: true));
+    public PipeWriter Writer => this._writer ??= new StartingPipeWriter(
+        PipeWriter.Create(this.Captured, new StreamPipeWriterOptions(leaveOpen: true)),
+        this.StartAsync);
 
     /// <inheritdoc />
     [Obsolete("Use IHttpResponseBodyFeature.Stream instead.")]
@@ -145,5 +147,54 @@ internal sealed class ToolResponse : IHttpResponseFeature, IHttpResponseBodyFeat
         // completed writer does nothing.
         this._writer?.Complete();
         this.Captured.Dispose();
+    }
+
+    /// <summary>
+    /// The body's writer, which starts the response when it is flushed, as a server sends the headers on a flush, even
+    /// one with nothing buffered: the writer it wraps skips the body when it has nothing to write.
+    /// </summary>
+    private sealed class StartingPipeWriter(PipeWriter inner, Func<CancellationToken, Task> start) : PipeWriter
+    {
+        public override bool CanGetUnflushedBytes => inner.CanGetUnflushedBytes;
+
+        public override long UnflushedBytes => inner.UnflushedBytes;
+
+        public override void Advance(int bytes)
+        {
+            inner.Advance(bytes);
+        }
+
+        public override Memory<byte> GetMemory(int sizeHint = 0)
+        {
+            return inner.GetMemory(sizeHint);
+        }
+
+        public override Span<byte> GetSpan(int sizeHint = 0)
+        {
+            return inner.GetSpan(sizeHint);
+        }
+
+        public override void CancelPendingFlush()
+        {
+            inner.CancelPendingFlush();
+        }
+
+        public override async ValueTask<FlushResult> FlushAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await start(cancellationToken).ConfigureAwait(false);
+
+            return await inner.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        public override void Complete(Exception? exception = null)
+        {
+            inner.Complete(exception);
+        }
+
+        public override ValueTask CompleteAsync(Exception? exception = null)
+        {
+            return inner.CompleteAsync(exception);
+        }
     }
 }

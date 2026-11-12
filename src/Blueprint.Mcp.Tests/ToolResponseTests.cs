@@ -24,6 +24,38 @@ public sealed class ToolResponseTests
     }
 
     [Fact]
+    public async Task Flushing_the_body_writer_with_nothing_written_starts_the_response_and_runs_its_OnStarting_callbacks_as_a_server_does()
+    {
+        // The writer used to skip the body when it had nothing buffered, so a headers-only flush left the response
+        // unstarted and its OnStarting callbacks unrun, where Kestrel sends the headers.
+        using var response = new ToolResponse(OperationToolResult.MaxTextBytes);
+        var started = false;
+        response.OnStarting(
+            _ =>
+            {
+                started = true;
+                return Task.CompletedTask;
+            },
+            new object());
+
+        await response.Writer.FlushAsync();
+
+        response.HasStarted.Should().BeTrue();
+        started.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Bytes_written_through_the_body_writer_reach_the_body_when_it_is_flushed()
+    {
+        using var response = new ToolResponse(OperationToolResult.MaxTextBytes);
+
+        await response.Writer.WriteAsync("{}"u8.ToArray());
+
+        response.HasStarted.Should().BeTrue();
+        response.Captured.BytesWritten.Should().Be(2);
+    }
+
+    [Fact]
     public async Task A_write_or_flush_whose_token_is_cancelled_is_refused_as_a_server_refuses_it()
     {
         using var response = new ToolResponse(OperationToolResult.MaxTextBytes);

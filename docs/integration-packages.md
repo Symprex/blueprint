@@ -710,7 +710,9 @@ calls it there with the SDK's own MCP client.
   (`{Id:int:min(1)}`) and host (`RequireHost`) are evaluated as routing evaluates them, and a value or host they refuse gets routing's 404.
   The host's own routing then matches the request, and the operation runs only when routing selects its endpoint: a
   call to `/items/{Name}` with `special` where `/items/special` is mapped too is refused, as HTTP sends that request
-  to the literal route's operation.
+  to the literal route's operation. Routing is given the operation request's connection and signed-in user, so a
+  constraint or matcher policy that reads them, in a host that authenticates before it routes, decides as it does
+  over HTTP.
 - **Results are the HTTP response.** The body is the tool result's text, read in the charset its content type
   declares (UTF-8 when it declares none), and its structured content when it is a JSON object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
   problem body an HTTP caller gets, a call that fails validation the same 422.

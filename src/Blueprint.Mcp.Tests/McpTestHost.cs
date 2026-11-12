@@ -112,6 +112,9 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// Whether <see cref="App.Upper.GetFooMcpQuery"/>'s endpoint requires <see cref="EndpointResourceRequirement"/>, which
     /// only a handler given the endpoint as its resource satisfies.
     /// </param>
+    /// <param name="authenticateBeforeRouting">
+    /// Whether the host authenticates before it routes, so its route constraints read the signed-in user.
+    /// </param>
     /// <returns>The started host.</returns>
     public static async Task<McpTestHost> StartAsync(
         bool renderOnFirstRequest = false,
@@ -124,7 +127,8 @@ internal sealed class McpTestHost : IAsyncDisposable
         bool rateLimitLowerCase = false,
         bool hostRestrictUpperCase = false,
         bool mcpOnlyScheme = false,
-        bool endpointResourceUpperCase = false)
+        bool endpointResourceUpperCase = false,
+        bool authenticateBeforeRouting = false)
     {
         var builder = WebApplication.CreateSlimBuilder();
 
@@ -136,6 +140,7 @@ internal sealed class McpTestHost : IAsyncDisposable
         {
             o.SetParameterPolicy<GetOnlyRouteConstraint>("getonly");
             o.SetParameterPolicy<LoopbackOnlyRouteConstraint>("loopbackonly");
+            o.SetParameterPolicy<SignedInOnlyRouteConstraint>("signedinonly");
         });
         builder.Services.Configure<BlueprintHttpOptions>(o => o.RenderOpenApiDocumentOnFirstRequest = renderOnFirstRequest);
         builder.Services.AddAuthentication(SchemeName)
@@ -205,8 +210,18 @@ internal sealed class McpTestHost : IAsyncDisposable
             return next(context);
         });
 
-        app.UseRouting();
-        app.UseAuthentication();
+        // A host may authenticate before it routes, so its route constraints and matcher policies read the user.
+        if (authenticateBeforeRouting)
+        {
+            app.UseAuthentication();
+            app.UseRouting();
+        }
+        else
+        {
+            app.UseRouting();
+            app.UseAuthentication();
+        }
+
         app.UseAuthorization();
         app.UseRateLimiter();
 

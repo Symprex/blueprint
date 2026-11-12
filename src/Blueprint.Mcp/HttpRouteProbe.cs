@@ -42,7 +42,10 @@ internal sealed class HttpRouteProbe
     /// <summary>
     /// Finds the endpoint HTTP routing selects for <paramref name="request"/>.
     /// </summary>
-    /// <param name="request">The request, whose method, URL and headers routing reads, and whose services its constraints are given.</param>
+    /// <param name="request">
+    /// The request, whose method, URL, headers, connection and user routing reads, and whose services its constraints
+    /// are given.
+    /// </param>
     /// <returns>The host's endpoint routing selects, or <see langword="null"/> when it selects none of them.</returns>
     public async Task<Endpoint?> FindAsync(HttpContext request)
     {
@@ -63,6 +66,10 @@ internal sealed class HttpRouteProbe
         probe.Connection.LocalIpAddress = request.Connection.LocalIpAddress;
         probe.Connection.LocalPort = request.Connection.LocalPort;
         probe.Connection.ClientCertificate = request.Connection.ClientCertificate;
+
+        // And the operation request's signed-in user, not the MCP request's, which a constraint or matcher policy may read
+        // in a host that authenticates before it routes.
+        probe.User = request.User;
 
         foreach (var (name, values) in request.Request.Headers)
         {

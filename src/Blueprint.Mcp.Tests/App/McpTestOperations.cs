@@ -373,6 +373,36 @@ public sealed class LoopbackOnlyRouteConstraint : IRouteConstraint
     }
 }
 
+/// <summary>A query whose route value is admitted by a constraint that reads the user: only a signed-in caller passes it.</summary>
+[AllowAnonymous]
+[RootLink("/user-aware/{Id:signedinonly}")]
+public partial class UserAwareConstraintMcpQuery : IQuery<string>
+{
+    /// <summary>Gets or sets the route value.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Answers with the route value.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The route value.</returns>
+    public static string Handle(UserAwareConstraintMcpQuery query)
+    {
+        return query.Id;
+    }
+}
+
+/// <summary>
+/// A route constraint that matches only a request whose user is signed in, whatever the value, as one may in a host that
+/// authenticates before it routes.
+/// </summary>
+public sealed class SignedInOnlyRouteConstraint : IRouteConstraint
+{
+    /// <inheritdoc />
+    public bool Match(HttpContext? httpContext, IRouter? route, string routeKey, RouteValueDictionary values, RouteDirection routeDirection)
+    {
+        return httpContext is null || httpContext.User.Identity?.IsAuthenticated == true;
+    }
+}
+
 /// <summary>A query whose one route segment holds two values, which routing splits at the last hyphen it can.</summary>
 [AllowAnonymous]
 [RootLink("/range/{From}-{To}")]
