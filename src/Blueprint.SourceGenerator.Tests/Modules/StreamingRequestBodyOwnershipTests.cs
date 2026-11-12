@@ -333,6 +333,35 @@ public class StreamingRequestBodyOwnershipTests
     }
 
     [Fact]
+    public void When_a_getter_only_property_hides_a_base_Stream_then_the_hidden_Stream_is_not_bound()
+    {
+        // Ownership analysis skipped the getter-only property before its first-of-name rule, so it bound the base's stream
+        // the derived property hides, and the client's body builder, finding the derived one, failed descriptor generation.
+        var result = CompileDescriptor(
+            """
+            public abstract partial class ImportBase
+            {
+                [FromBody]
+                public System.IO.Stream Content { get; set; }
+            }
+
+            [RootLink("/imports")]
+            [HttpPost]
+            public partial class ImportCommand : ImportBase, ICommand<string>
+            {
+                public new string Content => "fixed";
+
+                public string Label { get; set; }
+
+                public static Task<string> HandleAsync(ImportCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Output.Select(static t => t.ToString()).Should().NotContain(static s => s.Contains("CreateStreamContent"));
+    }
+
+    [Fact]
     public void When_the_body_Stream_is_obsolete_then_the_client_body_is_still_built_from_it()
     {
         // The host still binds an obsolete property; the client's body builder used to look it up among the non-obsolete ones.

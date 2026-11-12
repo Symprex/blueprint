@@ -510,18 +510,20 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         foreach (var member in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType).OfType<IPropertySymbol>())
         {
-            if (member.IsStatic || member.IsReadOnly || member.SetMethod is null || member.DeclaredAccessibility != Accessibility.Public)
+            // Skip properties already seen in a derived type (handles new/override hiding). This comes before the setter check,
+            // so a derived property that cannot be bound still hides its base's: binding the base's instead used to bind a
+            // property C# no longer reaches through the operation, and broke the client's body builder over a hidden Stream.
+            if (member.IsStatic || !seenNames.Add(member.Name))
+            {
+                continue;
+            }
+
+            if (member.IsReadOnly || member.SetMethod is null || member.DeclaredAccessibility != Accessibility.Public)
             {
                 continue;
             }
 
             if (IsSystemProperty(member))
-            {
-                continue;
-            }
-
-            // Skip properties already seen in a derived type (handles new/override hiding)
-            if (!seenNames.Add(member.Name))
             {
                 continue;
             }
