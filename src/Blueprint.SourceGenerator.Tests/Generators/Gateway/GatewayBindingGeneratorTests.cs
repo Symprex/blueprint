@@ -1028,6 +1028,7 @@ public class GatewayBindingGeneratorTests
     [InlineData("internal int OnMapAsync(Inner.AddNoteCommand inner) => 0;")]
     [InlineData("internal static void OnMap<T>(Inner.AddNoteCommand inner) { }")]
     [InlineData("internal async void OnMap(Inner.AddNoteCommand inner) { await System.Threading.Tasks.Task.Yield(); }")]
+    [InlineData("[System.Diagnostics.Conditional(\"NOT_DEFINED\")] internal void OnMap(Inner.AddNoteCommand inner) { }")]
     public void When_the_map_hook_has_the_wrong_shape_then_BPGW014_is_reported(string hook)
     {
         var gateway = GatewaySource.Replace(

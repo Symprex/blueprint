@@ -153,6 +153,15 @@ internal static class GatewayMapHook
         return false;
     }
 
+    /// <summary>
+    /// Whether the compiler may leave out a call to the hook: a <c>[Conditional]</c> one is called only where its symbol is
+    /// defined, so the forward would send the inner operation without its mapping or guard elsewhere.
+    /// </summary>
+    private static bool IsConditional(IMethodSymbol method)
+    {
+        return method.GetAttributes().Any(static a => a.AttributeClass?.ToDisplayString() == "System.Diagnostics.ConditionalAttribute");
+    }
+
     private static bool IsValid(IMethodSymbol method, INamedTypeSymbol innerType)
     {
         // Static or instance: a hook that reads nothing of the operation can be static, which CA1822 asks for (#176).
@@ -160,7 +169,8 @@ internal static class GatewayMapHook
             || method.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
             || method.Parameters.Length == 0
             || !SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, innerType)
-            || method.Parameters.Any(static p => p.RefKind != RefKind.None))
+            || method.Parameters.Any(static p => p.RefKind != RefKind.None)
+            || IsConditional(method))
         {
             return false;
         }
