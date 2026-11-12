@@ -46,12 +46,17 @@ internal sealed record RuntimeFallbackPropertyValidationPlan(
 /// <param name="PropertyAccess">The generated-code expression used to read the property value.</param>
 /// <param name="RequiredRule">The required-like rule that must run before other rules, if one exists.</param>
 /// <param name="OtherRules">Additional non-required rules that can run after the required guard passes.</param>
+/// <param name="DisplayNameFromDescriptor">
+/// Whether the display name is read from the descriptor's cached attributes instead of
+/// <paramref name="DisplayNameExpression"/>: a resource-backed <c>[Display]</c> name, which only the attribute can resolve.
+/// </param>
 internal sealed record FastPathPropertyValidationPlan(
     string MemberName,
     string DisplayNameExpression,
     string PropertyAccess,
     ValidationFastPathRule? RequiredRule,
-    IReadOnlyList<ValidationFastPathRule> OtherRules)
+    IReadOnlyList<ValidationFastPathRule> OtherRules,
+    bool DisplayNameFromDescriptor = false)
     : PropertyValidationPlan(MemberName, PropertyAccess);
 
 /// <summary>

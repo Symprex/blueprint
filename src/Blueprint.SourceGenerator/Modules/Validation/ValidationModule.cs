@@ -712,8 +712,15 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             branch =>
             {
                 branch.WriteStatement(
-                    $"AppendValidationError(ref validationResults, {validationAttributeExpression}.FormatErrorMessage({property.DisplayNameExpression}), \"{property.MemberName}\");");
+                    $"AppendValidationError(ref validationResults, {validationAttributeExpression}.FormatErrorMessage({GetDisplayNameExpression(context, property)}), \"{property.MemberName}\");");
             });
+    }
+
+    private static string GetDisplayNameExpression(PipelineRenderContext context, FastPathPropertyValidationPlan property)
+    {
+        return property.DisplayNameFromDescriptor
+            ? $"global::Blueprint.Validation.ValidationRuntime.GetDisplayName({context.GetContextPropertyExpression("Descriptor")}.GetPropertyAttributes(\"{property.MemberName}\"), \"{property.MemberName}\")"
+            : property.DisplayNameExpression;
     }
 
     /// <summary>

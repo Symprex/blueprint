@@ -106,7 +106,7 @@ internal static class ValidationPropertyPlanner
                 && forwardedType is not null
                 && Gateway.DeclaredForward.GetInheritedRules(operationType, forwardedType, property) is { Count: > 0 } inheritedRules)
             {
-                if (TryCreateInheritedPlan(operationType, property, propertyAccess, inheritedRules, out var inheritedPlan))
+                if (TryCreateInheritedPlan(property, propertyAccess, inheritedRules, out var inheritedPlan))
                 {
                     properties.Add(inheritedPlan);
                 }
@@ -243,7 +243,7 @@ internal static class ValidationPropertyPlanner
         {
             var propertyAccess = $"operation.{ValidationSymbolHelpers.EscapeIdentifier(property.Name)}";
             if (Gateway.DeclaredForward.GetInheritedRules(operationType, forwardedType, property) is { Count: > 0 } rules
-                && TryCreateInheritedPlan(operationType, property, propertyAccess, rules, out var plan))
+                && TryCreateInheritedPlan(property, propertyAccess, rules, out var plan))
             {
                 properties.Add(plan);
             }
@@ -257,7 +257,6 @@ internal static class ValidationPropertyPlanner
     /// inner operation without taking the others with it, as it would if the whole set were planned at once.
     /// </summary>
     private static bool TryCreateInheritedPlan(
-        INamedTypeSymbol operationType,
         IPropertySymbol property,
         string propertyAccess,
         IReadOnlyList<AttributeData> rules,
@@ -278,29 +277,32 @@ internal static class ValidationPropertyPlanner
             return false;
         }
 
-        return TryCreateFastPathPlan(property, propertyAccess, supported, out plan, GetDisplayNameExpression(operationType, property));
+        var displayNameExpression = GetDisplayNameExpression(property);
+        if (!TryCreateFastPathPlan(property, propertyAccess, supported, out plan, displayNameExpression))
+        {
+            return false;
+        }
+
+        if (displayNameExpression is null)
+        {
+            plan = plan with { DisplayNameFromDescriptor = true };
+        }
+
+        return true;
     }
 
     /// <summary>
     /// Gets the C# expression of the name the runtime would give a property in its validation messages: its
-    /// <c>[Display]</c> name, resource-backed or not, else its <c>[DisplayName]</c>, else its own name, reading the
-    /// attributes an override inherits as the runtime does. Inherited checks need it because the runtime path, which
-    /// reads those attributes itself, cannot see the rules they apply.
+    /// <c>[Display]</c> name, else its <c>[DisplayName]</c>, else its own name, reading the attributes an override inherits
+    /// as the runtime does. Inherited checks need it because the runtime path, which reads those attributes itself, cannot
+    /// see the rules they apply.
     /// </summary>
-    private static IPropertySymbol GetDeclarationCarrying(IPropertySymbol property, AttributeData attribute)
-    {
-        for (var current = property; current is not null; current = current.OverriddenProperty)
-        {
-            if (current.GetAttributes().Contains(attribute))
-            {
-                return current;
-            }
-        }
-
-        return property;
-    }
-
-    private static string GetDisplayNameExpression(INamedTypeSymbol operationType, IPropertySymbol property)
+    /// <returns>
+    /// The expression, or <see langword="null"/> for a resource-backed <c>[Display]</c> name, which only the attribute can
+    /// resolve: the check reads it from the descriptor's cached attributes, so the resource type, which the pipeline class
+    /// may not be able to name, is never written out and the lookup is not repeated on every failure.
+    /// </returns>
+    private static string? GetDisplayNameExpression(IPropertySymbol property)
     {
         var attributes = Gateway.DeclaredForward.GetEffectiveAttributes(property)
             .Where(static a => ValidationSymbolHelpers.IsDisplayNameAffectingAttribute(a.AttributeClass))
@@ -340,27 +342,7 @@ internal static class ValidationPropertyPlanner
                 continue;
             }
 
-            var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(name!, quote: true);
-            if (resourceType is null)
-            {
-                return literal;
-            }
-
-            if (Planning.OperationPropertyModelBuilder.IsAccessibleFrom(resourceType, operationType.ContainingAssembly))
-            {
-                return "new global::System.ComponentModel.DataAnnotations.DisplayAttribute { Name = " + literal + ", ResourceType = typeof("
-                    + resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ") }.GetName() ?? " + fallback;
-            }
-
-            // The pipeline class cannot name a resource type private to the operation, so it reads the attribute back from
-            // the declaration that carries it.
-            var declaration = GetDeclarationCarrying(property, attribute);
-            return "(global::System.Attribute.GetCustomAttribute(typeof("
-                + declaration.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ").GetProperty("
-                + Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(declaration.Name, quote: true)
-                + ", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.DeclaredOnly)!, "
-                + "typeof(global::System.ComponentModel.DataAnnotations.DisplayAttribute), false) as global::System.ComponentModel.DataAnnotations.DisplayAttribute)?.GetName() ?? "
-                + fallback;
+            return resourceType is null ? Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(name!, quote: true) : null;
         }
 
         return fallback;

@@ -571,10 +571,7 @@ internal static class OperationPropertyModelBuilder
     /// argument, and a named type and each type containing it public, or internal to an assembly that gives
     /// <paramref name="within"/> access to its internals.
     /// </summary>
-    /// <param name="type">The type to name.</param>
-    /// <param name="within">The assembly the code naming it is in.</param>
-    /// <returns><see langword="true"/> when code there can name the type.</returns>
-    internal static bool IsAccessibleFrom(ITypeSymbol type, IAssemblySymbol within)
+    private static bool IsAccessibleFrom(ITypeSymbol type, IAssemblySymbol within)
     {
         switch (type)
         {

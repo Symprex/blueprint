@@ -667,13 +667,14 @@ public class ForwardsToGeneratorTests
 
         run.EmitErrors.Should().BeEmpty();
         ValidationBlock(run).Should().Contain(
-            "FormatErrorMessage(new global::System.ComponentModel.DataAnnotations.DisplayAttribute { Name = \"Owner\", ResourceType = typeof(global::Gateway.Labels) }.GetName() ?? \"Owner\"), \"Owner\")");
+            "FormatErrorMessage(global::Blueprint.Validation.ValidationRuntime.GetDisplayName(").And.Contain(".GetPropertyAttributes(\"Owner\"), \"Owner\")), \"Owner\")");
     }
 
     [Fact]
     public void An_inherited_check_reads_a_Display_name_backed_by_a_private_resource_type_without_naming_it()
     {
-        // The resource type was named in the pipeline class, which cannot see a private nested one: CS0122 (Copilot on #169).
+        // The resource type was named in the pipeline class, which cannot see a private nested one: CS0122. It is read from
+        // the descriptor's cached attributes, not by reflection on each failure (Copilot on #169).
         var gateway = GatewaySource
             .Replace(
                 "public string? Owner { get; set; }",
@@ -683,7 +684,8 @@ public class ForwardsToGeneratorTests
         var run = Run(gateway);
 
         run.EmitErrors.Should().BeEmpty();
-        ValidationBlock(run).Should().NotContain("Labels").And.Contain(".GetName() ?? \"Owner\"), \"Owner\")");
+        ValidationBlock(run).Should().NotContain("Labels").And.NotContain("GetCustomAttribute")
+            .And.Contain("ValidationRuntime.GetDisplayName(").And.Contain(".GetPropertyAttributes(\"Owner\"), \"Owner\")");
     }
 
     [Fact]
