@@ -167,7 +167,7 @@ These attributes inspect an item count, so they only make sense on a collection 
 | BPPO014 | Error | Stream body with another body property |
 | BPPO015 | Error | Stream or file property on an operation that answers GET |
 | BPPO016 | Error | Unsupported form field property type |
-| BPPO017 | Error | Stream or multipart body property has no public getter |
+| BPPO017 | Error | Stream or multipart body property has no public getter or setter |
 
 ## OpenAPI (BPOA)
 

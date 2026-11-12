@@ -284,6 +284,67 @@ public class StreamingRequestBodyOwnershipTests
         diagnostic.GetMessage().Should().Contain("'Content'");
     }
 
+    [Theory]
+    [InlineData("private set;")]
+    [InlineData("protected set;")]
+    public void When_a_body_Stream_has_a_setter_the_pipeline_cannot_call_then_reports_BPPO017(string setter)
+    {
+        // The generated pipeline assigns the stream from a class of its own, which used to fail with CS0272.
+        var result = CompileDescriptor(
+            $$"""
+            [RootLink("/imports")]
+            [HttpPost]
+            public partial class ImportCommand : ICommand<string>
+            {
+                [FromBody]
+                public System.IO.Stream Content { get; {{setter}} }
+
+                public static Task<string> HandleAsync(ImportCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Equal("BPPO017");
+    }
+
+    [Fact]
+    public void When_a_multipart_field_has_a_private_setter_then_reports_BPPO017()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/attachments")]
+            [HttpPost]
+            public partial class AttachCommand : ICommand<string>
+            {
+                public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+
+                public string Label { get; private set; }
+
+                public static Task<string> HandleAsync(AttachCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Equal("BPPO017");
+    }
+
+    [Fact]
+    public async Task When_a_multipart_property_is_init_only_then_the_pipeline_compiles()
+    {
+        // An init-only property is set through a generated accessor, so it needs no diagnostic.
+        await VerifyPipelineAsync(
+            """
+            [RootLink("/attachments")]
+            [HttpPost]
+            public partial class AttachInitCommand : ICommand<string>
+            {
+                public Microsoft.AspNetCore.Http.IFormFile File { get; init; }
+
+                public string Label { get; init; }
+
+                public static Task<string> HandleAsync(AttachInitCommand operation) => Task.FromResult("ok");
+            }
+            """);
+    }
+
     [Fact]
     public void When_a_multipart_field_has_no_getter_then_reports_BPPO017()
     {

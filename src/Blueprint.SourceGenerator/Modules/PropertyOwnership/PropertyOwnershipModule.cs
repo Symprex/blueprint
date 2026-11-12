@@ -771,8 +771,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             var member = membersByName[entry.PropertyName];
             var isStreamingPart = isBody && (IsStreamType(entry.TypeSymbol) || IsFormFileType(entry.TypeSymbol));
 
-            // A client builds the body from the operation's properties, so it must be able to read each one.
-            if (member.GetMethod is not { DeclaredAccessibility: Accessibility.Public })
+            // A client builds the body from the operation's properties, so it must be able to read each one; and the generated
+            // pipeline assigns each from a class of its own, so it must be able to set it (an init-only setter is reached
+            // through a generated accessor). A private or protected setter used to fail the pipeline with CS0272.
+            if (member.GetMethod is not { DeclaredAccessibility: Accessibility.Public }
+                || !(member.SetMethod is { DeclaredAccessibility: Accessibility.Public } or { IsInitOnly: true }))
             {
                 diagnostics.Add(CreatePropertyDiagnostic(
                     PropertyOwnershipDiagnosticDescriptors.UnreadableStreamingBodyProperty,
