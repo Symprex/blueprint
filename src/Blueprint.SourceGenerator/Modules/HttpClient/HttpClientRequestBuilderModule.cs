@@ -88,10 +88,14 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // Collect all public instance properties from the operation
         // Read through the shared property model (D25), so an exposed operation's contributed properties reach its URL and
         // query string although this compilation cannot see them emitted into its partial.
+        // The members come derived type first, so the first of each name is the declaration C# binds, which ownership analysis
+        // keeps too; a base property it hides used to be read as well, sending each of a hidden query array's values twice.
         var properties = Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationSymbol)
             .OfType<IPropertySymbol>()
+            .Where(static p => !p.IsStatic)
+            .GroupBy(static p => p.Name, StringComparer.Ordinal)
+            .Select(static g => g.First())
             .Where(static p => p.DeclaredAccessibility == Accessibility.Public
-                && !p.IsStatic
                 && p.GetMethod is not null
                 && !p.GetAttributes().Any(static a => a.AttributeClass?.Name is "ObsoleteAttribute"))
             .ToList();
@@ -833,12 +837,12 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             {
                 if (HasNonEmptyToString(prop.Type))
                 {
-                    parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!); sep = '&';");
+                    parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture)!); sep = '&';");
                 }
                 else
                 {
                     // A struct's ToString() may be null or empty when default (e.g. Signature365's ApiId): skip the key.
-                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
                 }
             }
             else
@@ -852,11 +856,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 }
                 else if (prop.Type.IsValueType)
                 {
-                    parts.Add($"{{ var s = {propAccess}.Value.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}.Value, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
                 }
                 else
                 {
-                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
                 }
 
                 parts.Add("}");
@@ -900,11 +904,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             {
                 if (HasNonEmptyToString(prop.Type))
                 {
-                    parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!));");
+                    parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture)!));");
                 }
                 else
                 {
-                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
                 }
             }
             else
@@ -918,11 +922,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 }
                 else if (prop.Type.IsValueType)
                 {
-                    parts.Add($"{{ var s = {propAccess}.Value.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}.Value, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
                 }
                 else
                 {
-                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
                 }
 
                 parts.Add("}");
@@ -1007,14 +1011,13 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         else if (elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated } && HasNonEmptyToString(elementType))
         {
             // Built-in value types (int, enums, etc.) — ToString() is never null or empty
-            parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(_item.ToString()!));");
+            parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(global::System.Convert.ToString(_item, global::System.Globalization.CultureInfo.InvariantCulture)!));");
         }
         else
         {
             // Reference types, nullable value types and structs whose ToString() may be null or empty — skip those.
-            // A non-nullable struct has no null to propagate, so `?.` is only valid on the others.
-            var access = elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated } ? "_item" : "_item?";
-            parts.Add($"{{ var s = {access}.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+            // Each value is written with the invariant culture, as the host parses it; a null element is written as empty.
+            parts.Add($"{{ var s = global::System.Convert.ToString(_item, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
         }
 
         parts.Add("}");

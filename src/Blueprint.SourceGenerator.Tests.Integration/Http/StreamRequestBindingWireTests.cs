@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -180,6 +181,32 @@ public sealed class StreamRequestBindingWireTests
 
         BuildRequestUrl(command).Should().Be("/stream-request/imports/folder-1?label=nightly&limit=5");
         StreamRequestImportCommand.Http.BuildUrl(command).Should().Be("/stream-request/imports/folder-1?label=nightly&limit=5");
+    }
+
+    [Fact]
+    public void A_query_property_hiding_a_base_one_is_sent_once()
+    {
+        // The query inventory used to hold the hidden base property too, so each value was sent twice.
+        var command = new StreamRequestHiddenTagsCommand { Tags = [1, 2] };
+
+        BuildRequestUrl(command).Should().Be("/stream-request/tagged?tags=1&tags=2");
+    }
+
+    [Fact]
+    public void A_decimal_query_value_is_sent_as_the_host_parses_it_whatever_the_senders_culture()
+    {
+        // The host parses query values with the invariant culture; ToString() under de-DE used to send 1,5, which binds as 15.
+        var previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+
+        try
+        {
+            BuildRequestUrl(new StreamRequestHiddenTagsCommand { Rate = 1.5m }).Should().Be("/stream-request/tagged?rate=1.5");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     [Fact]
@@ -532,5 +559,33 @@ public partial class StreamRequestHiddenTextCommand : StreamRequestStreamContent
     public static Task<string> HandleAsync(StreamRequestHiddenTextCommand command)
     {
         return Task.FromResult(command.Content ?? string.Empty);
+    }
+}
+
+/// <summary>A base whose query-bound <c>Tags</c> <see cref="StreamRequestHiddenTagsCommand"/> hides with its own.</summary>
+public abstract class StreamRequestTagsBase
+{
+    [FromQuery]
+    public int[]? Tags { get; set; }
+}
+
+/// <summary>A stream import whose query properties include one hiding its base's, and a decimal.</summary>
+[AllowAnonymous]
+[RootLink("/stream-request/tagged")]
+[HttpPost]
+public partial class StreamRequestHiddenTagsCommand : StreamRequestTagsBase, ICommand<string>
+{
+    [FromQuery]
+    public new int[]? Tags { get; set; }
+
+    [FromQuery]
+    public decimal? Rate { get; set; }
+
+    [FromBody]
+    public Stream Content { get; set; } = Stream.Null;
+
+    public static Task<string> HandleAsync(StreamRequestHiddenTagsCommand command)
+    {
+        return Task.FromResult($"tags={string.Join(",", command.Tags ?? [])};rate={command.Rate?.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
     }
 }
