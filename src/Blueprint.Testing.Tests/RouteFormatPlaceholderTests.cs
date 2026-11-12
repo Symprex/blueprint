@@ -56,6 +56,7 @@ public partial class RouteFormatTestApp : BlueprintApp;
 
 /// <summary>The serializer context this app's HTTP surface needs.</summary>
 [JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(ValidationProblemDetails))]
 public partial class RouteFormatTestAppJsonContext : JsonSerializerContext;

@@ -762,6 +762,9 @@ upstream.Requests.Single().RequestAuthorization.Should().Be(new AuthenticationHe
   | `NotFoundResult<T>` | A JSON 404, read as a declared `NotFoundResult<T>` member |
   | `StatusCodeResult`, `NotModifiedResult<T>` | Its status |
   | `PlainTextResult` | Its text, with its status and its own content type; at 204, 205 or 304, its status alone |
+  | `ResourceEvent<T>` (`ResourceCreated<T>` and the rest) | The event as a 200 JSON body, whatever its change type, read back as the declared event |
+  | `ResourceEventResult<T>` | The host's event envelope at 201 (created, with the content's self link as `Location`) or 200 (updated); a deleted one is an empty 204. The envelope carries no `href`, which the host fills from its own app's links |
+  | `KeyOnlyResourceEventResult` | Its change type's status alone: 201, 200 or 204 |
   | `throw new ApiException(…)` | Its problem document, named as the host names it (an extension the client's serializer context does not register is still written), raised as `BlueprintApiException` (or translated by `[TranslateError]`) |
   | `throw new ValidationException(…)` or `ValidationFailedResult` | A 422 whose keys the host's own naming produces (`form` for a form-level error), raised as `ValidationException` |
 
