@@ -271,6 +271,36 @@ public class GatewayBindingGeneratorTests
     }
 
     [Theory]
+    [InlineData("internal static void OnMap(Inner.AddNoteCommand inner) => inner.Priority = 5;", "global::Gateway.AddGatewayNoteCommand.OnMap(forwardInner);")]
+    [InlineData("public static System.Threading.Tasks.ValueTask OnMapAsync(Inner.AddNoteCommand inner, System.TimeProvider clock) { inner.Priority = clock.GetUtcNow().Hour; return default; }", "await global::Gateway.AddGatewayNoteCommand.OnMapAsync(forwardInner, _handlerArg_clock).ConfigureAwait(false);")]
+    public void A_static_map_hook_is_called_on_the_operation_type(string hook, string call)
+    {
+        // Symprex/blueprint#176: a hook that read no instance data used to have to be an instance method, so CA1822 fired.
+        var gateway = WithBody(GatewaySource, hook);
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW014");
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().Contain(call).And.NotContain("operation.OnMap");
+    }
+
+    [Fact]
+    public void A_static_map_hook_can_fill_a_hidden_required_inner_property()
+    {
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]"),
+            "internal static void OnMap(Inner.AddNoteCommand inner) => inner.InternalNote = \"staff\";");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], RequiredInternalNoteContract());
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW009" || d.Id == "BPGW014" || d.Id == "BPGW035");
+        run.EmitErrors.Should().BeEmpty();
+    }
+
+    [Theory]
     [InlineData("internal partial void OnMap(Inner.AddNoteCommand inner);", "internal partial void OnMap(Inner.AddNoteCommand inner) => inner.Priority = 5;", "operation.OnMap(forwardInner);")]
     [InlineData("internal partial System.Threading.Tasks.ValueTask OnMapAsync(Inner.AddNoteCommand inner);", "internal partial System.Threading.Tasks.ValueTask OnMapAsync(Inner.AddNoteCommand inner) => default;", "await operation.OnMapAsync(forwardInner)")]
     public void A_map_hook_split_across_partial_declarations_is_called(string definition, string implementation, string call)
@@ -359,7 +389,99 @@ public class GatewayBindingGeneratorTests
 
         var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW009").Which;
         diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
-        diagnostic.GetMessage().Should().Contain("InternalNote");
+        diagnostic.GetMessage().Should().Contain("InternalNote").And.Contain("OnMap");
+    }
+
+    [Theory]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) => inner.InternalNote = \"staff\";")]
+    [InlineData("internal System.Threading.Tasks.ValueTask OnMapAsync(Inner.AddNoteCommand inner, System.TimeProvider clock) { inner.InternalNote = clock.GetUtcNow().ToString(); return default; }")]
+    public void A_required_inner_property_the_map_hook_assigns_can_be_hidden(string hook)
+    {
+        // Symprex/blueprint#175: this used to need a placeholder [Bind(…, Value = "")] the hook then overwrote.
+        var contract = RequiredInternalNoteContract();
+        var gateway = WithBody(WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]"), hook);
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], contract);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW009" || d.Id == "BPGW019" || d.Id == "BPGW035");
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommand_ExposedProperties.g.cs").Should().NotContain("InternalNote");
+        run.Source("Gateway.AddGatewayNoteCommand_Descriptor.g.cs").Should().NotContain("InternalNote");
+
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().Contain("InternalNote = default!")
+            .And.Contain("if (forwardInner.InternalNote is null)");
+        pipeline.IndexOf("if (forwardInner.InternalNote is null)", StringComparison.Ordinal)
+            .Should().BeGreaterThan(pipeline.IndexOf("OnMap", pipeline.IndexOf("var forwardInner", StringComparison.Ordinal), StringComparison.Ordinal))
+            .And.BeLessThan(pipeline.IndexOf("forwardTransport.ForwardAsync", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_inner_property_with_Required_the_map_hook_assigns_can_be_hidden_and_keeps_its_inner_default()
+    {
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.Text))]"),
+            "internal void OnMap(Inner.AddNoteCommand inner) { inner.Text = \"from the gateway\"; }");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerContract.Value);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW009" || d.Id == "BPGW035");
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommand_ExposedProperties.g.cs").Should().NotContain(" Text ");
+
+        // Not a required member, so the initialiser leaves the inner default alone; [Required] still refuses a null.
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().NotContain("Text =").And.Contain("if (forwardInner.Text is null)");
+    }
+
+    [Fact]
+    public void A_required_nullable_value_the_map_hook_assigns_is_hidden_without_a_null_check()
+    {
+        // CloseTenant's shape: a required int? the hook fills from options, where null may be the value it means to send.
+        var inner = InnerSource.Replace("public int Priority { get; set; }", "public required int? Priority { get; set; }", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.Priority))]"),
+            "internal System.Threading.Tasks.Task OnMapAsync(Inner.AddNoteCommand inner, System.TimeProvider clock) { inner.Priority = clock.GetUtcNow().Hour; return System.Threading.Tasks.Task.CompletedTask; }");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], contract);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW009" || d.Id == "BPGW019" || d.Id == "BPGW035");
+        run.EmitErrors.Should().BeEmpty();
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().Contain("Priority = default!").And.NotContain("forwardInner.Priority is null");
+    }
+
+    [Theory]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) => inner.Priority = 5;")]
+    [InlineData("internal System.Threading.Tasks.ValueTask OnMapAsync(Inner.AddNoteCommand inner) { var internalNote = \"staff\"; return default; }")]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { var other = new Inner.AddNoteCommand { TenantId = \"\", Text = \"\", InternalNote = \"staff\" }; }")]
+    public void When_a_hidden_required_inner_property_is_not_assigned_by_the_map_hook_then_BPGW035_is_reported(string hook)
+    {
+        var contract = RequiredInternalNoteContract();
+        var gateway = WithBody(WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]"), hook);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([AppBindingSource, gateway], additionalReferences: [contract]);
+
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW009");
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW035").Which;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("AddGatewayNoteCommand").And.Contain("InternalNote").And.Contain(hook.Contains("OnMapAsync", StringComparison.Ordinal) ? "OnMapAsync" : "OnMap");
+    }
+
+    [Fact]
+    public async Task The_generated_forward_of_a_property_the_map_hook_fills_matches_the_snapshot()
+    {
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]"),
+            "internal void OnMap(Inner.AddNoteCommand inner) => inner.InternalNote = \"staff\";");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], RequiredInternalNoteContract());
+
+        run.EmitErrors.Should().BeEmpty();
+
+        await Verify(run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs")).UseDirectory("Snapshots");
     }
 
     [Fact]
@@ -707,7 +829,7 @@ public class GatewayBindingGeneratorTests
     [InlineData("internal void OnMap(Inner.NoteResult inner) { }")]
     [InlineData("private void OnMap(Inner.AddNoteCommand inner) { }")]
     [InlineData("internal int OnMapAsync(Inner.AddNoteCommand inner) => 0;")]
-    [InlineData("internal static void OnMap(Inner.AddNoteCommand inner) { }")]
+    [InlineData("internal static void OnMap<T>(Inner.AddNoteCommand inner) { }")]
     [InlineData("internal async void OnMap(Inner.AddNoteCommand inner) { await System.Threading.Tasks.Task.Yield(); }")]
     public void When_the_map_hook_has_the_wrong_shape_then_BPGW014_is_reported(string hook)
     {
@@ -718,7 +840,13 @@ public class GatewayBindingGeneratorTests
 
         var diagnostic = SingleDescriptorDiagnostic([AppBindingSource, gateway], "BPGW014");
 
-        diagnostic.GetMessage().Should().Contain("AddGatewayNoteCommand").And.Contain("AddNoteCommand");
+        diagnostic.GetMessage().Should().Contain("AddGatewayNoteCommand").And.Contain("AddNoteCommand").And.Contain("static");
+    }
+
+    private static MetadataReference RequiredInternalNoteContract()
+    {
+        var inner = InnerSource.Replace("public string? InternalNote { get; set; }", "public required string InternalNote { get; set; }", StringComparison.Ordinal);
+        return TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
     }
 
     private static OperationPropertyModel BuildModel(params string[] sources)

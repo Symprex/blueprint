@@ -17,6 +17,10 @@ namespace Blueprint.SourceGenerator.Generators.Pipelines.Model;
 /// bindings and before sending, or <see langword="null"/> when it has none.
 /// </param>
 /// <param name="IsMapHookAsync">Whether <paramref name="MapHookName"/> returns a task to await.</param>
+/// <param name="IsMapHookStatic">
+/// Whether <paramref name="MapHookName"/> is static, so the forward calls it on the operation type rather than the
+/// operation (#176).
+/// </param>
 public sealed record GatewayForwardModel(
     string InnerTypeName,
     string ClientTypeName,
@@ -24,4 +28,5 @@ public sealed record GatewayForwardModel(
     EquatableList<string> CopiedPropertyNames,
     EquatableList<GatewayPropertyBinding> Bindings,
     string? MapHookName,
-    bool IsMapHookAsync);
+    bool IsMapHookAsync,
+    bool IsMapHookStatic = false);

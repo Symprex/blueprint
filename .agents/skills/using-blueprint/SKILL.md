@@ -413,6 +413,7 @@ A gateway handler that sends an inner operation on unchanged calls `ForwardAsync
 - **A service-identity credential bypasses the upstream's check of the caller.** Give such an operation its own `[Resource(noun, verb)]` and register an `IResourceAuthorizationProvider` in the gateway, so the gateway refuses a caller without permission before it forwards.
 - **`[TranslateError(fromType, nameof(Factory))]`** on the gateway operation or its `BlueprintApp` answers an upstream problem whose `type` is `fromType` as the attributed class's static `ApiExceptionFactory` member. The operation's mapping wins over the app's; untranslated problems escape unchanged.
 - **Forward every field the inner operation replaces.** A forward sends a fresh `TInner`, so a property the handler leaves unset is sent as its default.
+- **An `[Expose<TInner>]` operation's `OnMap(TInner inner, …)` / `OnMapAsync`** runs on the inner operation after its bindings and before the send. It may be an instance or a `static` method; make one that reads nothing of the gateway operation `static` rather than suppressing CA1822. To fill a property the inner operation requires, `[Hide]` it and assign `inner.X` in the hook's own body: no placeholder `[Bind(…, Value = …)]`. BPGW035 fails the build when the hook does not assign it, and the forward throws rather than send it null where null cannot be meant. Full detail: `docs/integration-packages.md` (Binding inner properties).
 
 ## ASP.NET Core infrastructure (consumer responsibility)
 
