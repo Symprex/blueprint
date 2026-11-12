@@ -193,30 +193,18 @@ public sealed class BlueprintClientRegistrationTests
     }
 
     [Fact]
-    public async Task A_second_registration_registers_the_interface_once_and_runs_both_callbacks_in_order()
+    public void A_second_registration_of_the_same_client_is_refused_naming_it()
     {
-        var sent = new List<Uri>();
+        // 3.1.1 ran every registration's callback on the one named client, so which configuration applied depended on the
+        // setting: the last base address or timeout won, while a header both appended ("Bearer t, Bearer t", which the
+        // upstream answered with 401) was sent twice. Two registrations of one client are a misconfiguration.
         var services = new ServiceCollection();
-        services.AddBlueprintClient<ILocalOperationsApi, LocalOperationsApi>(static (_, client) =>
-            {
-                client.BaseAddress = _baseAddress;
-                client.DefaultRequestHeaders.Add("X-First", "1");
-            })
-            .ConfigurePrimaryHttpMessageHandler(() => RespondingWith(sent, "[]"));
-        var second = services.AddBlueprintClient<ILocalOperationsApi, LocalOperationsApi>(static (_, client) => client.BaseAddress = new Uri("https://second.example.test/"));
+        services.AddBlueprintClient<ILocalOperationsApi, LocalOperationsApi>(static (_, client) => client.BaseAddress = _baseAddress);
 
-        await using var provider = services.BuildServiceProvider();
+        var act = () => services.AddBlueprintClient<ILocalOperationsApi, LocalOperationsApi>(
+            static (_, client) => client.BaseAddress = new Uri("https://second.example.test/"));
 
-        await provider.GetRequiredService<ILocalOperationsApi>().FindTemplateCopiesAsync(new FindTemplateCopiesQuery { Id = "t-1" });
-
-        services.Count(static s => s.ServiceType == typeof(ILocalOperationsApi)).Should().Be(1);
-        second.Name.Should().Be(nameof(LocalOperationsApi), "the second call returns the builder of the same named client");
-
-        // Both callbacks configure the one named client, in registration order, so the second's base address wins and the
-        // first's header still applies.
-        sent.Should().ContainSingle().Which.Host.Should().Be("second.example.test");
-        provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(LocalOperationsApi))
-            .DefaultRequestHeaders.GetValues("X-First").Should().Equal("1");
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{nameof(LocalOperationsApi)}*already registered*");
     }
 
     [Fact]
