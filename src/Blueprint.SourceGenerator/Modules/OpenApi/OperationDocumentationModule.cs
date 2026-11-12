@@ -44,8 +44,9 @@ public sealed class OperationDocumentationModule : IBlueprintSourceGeneratorModu
 
         // D15: an undocumented gateway operation takes its inner operation's docs, where Roslyn has them: a package
         // reference's documentation file, not a project reference's, whose docs the runtime reads through the inheritdoc
-        // the operation's partial carries instead.
-        if (summary is null && remarks is null
+        // the operation's partial carries instead. Undocumented means no documentation comment at all, as for that partial:
+        // an operation's own <inheritdoc cref>, which Roslyn leaves unexpanded, gives no summary but is still its choice.
+        if (string.IsNullOrWhiteSpace(operationType.GetDocumentationCommentXml())
             && OperationPropertyModelBuilder.FindExposedType(operationType, out _) is { } innerType)
         {
             summary = ExtractSummary(innerType);

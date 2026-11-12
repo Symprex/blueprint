@@ -219,6 +219,25 @@ public class GatewayReExportGeneratorTests
     }
 
     [Fact]
+    public void An_exposed_operation_with_an_inheritdoc_of_its_own_does_not_take_the_inner_operations_summary()
+    {
+        // Roslyn leaves the inheritdoc unexpanded, so the operation has no summary of its own to read; it still chose its
+        // documentation, so the inner operation's used to replace that choice.
+        var ownInheritdoc = GatewaySource.Replace(
+            "    [Expose<Inner.RenameWidgetCommand>]",
+            "    /// <inheritdoc cref=\"Inner.WidgetResult\"/>\n    [Expose<Inner.RenameWidgetCommand>]",
+            StringComparison.Ordinal);
+        var (image, documentation) = _indexedInner.Value;
+        var reference = MetadataReference.CreateFromImage(image, documentation: XmlDocumentationProvider.CreateFromBytes(documentation));
+
+        var run = Run([ClientSource, ownInheritdoc, AppSource], reference);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().NotContain("Renames a widget.")
+            .And.NotContain("Only the name changes.");
+    }
+
+    [Fact]
     public void An_inner_factory_written_with_named_arguments_in_another_order_is_documented_by_parameter()
     {
         // Read by position, the title and type would swap, and a [TranslateError] of the real type would match nothing.
