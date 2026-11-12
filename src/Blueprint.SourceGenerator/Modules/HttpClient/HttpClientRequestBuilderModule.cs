@@ -581,19 +581,58 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             propertyLookup[prop.Name] = prop;
         }
 
+        bool CanBeNull(string name) => propertyLookup.TryGetValue(name, out var p) && RoutePlaceholderSyntax.CanBeNull(p.Type);
+
+        // A null property's placeholder sends its default ({Kind=all}), or is left out when it is one of the optional
+        // placeholders ({Ext?}) that end the template, rather than leaving the operation without a URL.
+        var omissible = RoutePlaceholderSyntax.GetOmissible(urlTemplate, CanBeNull);
+        var trailingMatches = RoutePlaceholderSyntax.GetTrailingOptional(urlTemplate, CanBeNull);
+        var trailingOptional = trailingMatches.Select(static match => match.Groups[1].Value).ToList();
+
         // Generate null checks for placeholder properties
         var nullChecks = new List<string>();
 
         foreach (var placeholder in placeholders)
         {
-            if (!propertyLookup.TryGetValue(placeholder, out var prop))
+            if (!propertyLookup.TryGetValue(placeholder, out var prop) || omissible.Contains(placeholder))
             {
                 continue;
             }
 
-            if (!prop.Type.IsValueType || prop.Type.NullableAnnotation == NullableAnnotation.Annotated)
+            if (RoutePlaceholderSyntax.CanBeNull(prop.Type))
             {
                 nullChecks.Add($"typed.{prop.Name} is null");
+            }
+        }
+
+        // An optional segment left out before one that is set would move that value into its place, so there is no URL. One
+        // after a '.' leaves its segment there, so nothing moves.
+        for (var i = 0; i + 1 < trailingOptional.Count; i++)
+        {
+            if (!RoutePlaceholderSyntax.IsWholeSegment(urlTemplate, trailingMatches[i]))
+            {
+                continue;
+            }
+
+            nullChecks.Add($"(typed.{propertyLookup[trailingOptional[i]].Name} is null && typed.{propertyLookup[trailingOptional[i + 1]].Name} is not null)");
+        }
+
+        // One after a '.' cannot be left out when a value before it in its segment has a '.' of its own: the router splits
+        // the segment at its last '.', so /files/{Name}.{Ext?} would read "abc.txt" as Name "abc" and Ext "txt". ASP.NET
+        // allows only a '.' before an optional placeholder, so the value just before it always meets that '.' directly and
+        // no literal can tell the two readings apart. For an earlier value in the segment this is stricter than the router.
+        foreach (var leftOut in trailingMatches.Where(match => !RoutePlaceholderSyntax.IsWholeSegment(urlTemplate, match)))
+        {
+            var segmentStart = urlTemplate.LastIndexOf('/', leftOut.Index - 1) + 1;
+            var before = _placeholderRegex.Matches(urlTemplate)
+                .Cast<Match>()
+                .Where(match => match.Index >= segmentStart && match.Index < leftOut.Index && propertyLookup.ContainsKey(match.Groups[1].Value))
+                .Select(match => $"(global::System.Convert.ToString(typed.{propertyLookup[match.Groups[1].Value].Name}) ?? \"\").IndexOf('.') >= 0")
+                .ToList();
+
+            if (before.Count > 0)
+            {
+                nullChecks.Add($"(typed.{propertyLookup[leftOut.Groups[1].Value].Name} is null && ({string.Join(" || ", before)}))");
             }
         }
 
@@ -615,44 +654,73 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 continue;
             }
 
-            // Add literal segment before this placeholder
-            if (match.Index > lastEnd)
+            var literal = urlTemplate.Substring(lastEnd, match.Index - lastEnd);
+            var matchEnd = match.Index + match.Length;
+            var isLeftOut = trailingOptional.Contains(name, StringComparer.OrdinalIgnoreCase);
+            var defaultValue = RoutePlaceholderSyntax.CanBeNull(prop.Type) ? RoutePlaceholderSyntax.GetDefault(match) : null;
+
+            // An optional placeholder left out takes the '.' or '/' before it along, as the router reads
+            // "/files/{Name}.{Ext?}" from "/files/abc".
+            var optionalSeparator = string.Empty;
+            if (isLeftOut && literal.Length > 0 && literal[^1] is '.' or '/')
             {
-                segments.Add($"\"{urlTemplate.Substring(lastEnd, match.Index - lastEnd)}\"");
+                optionalSeparator = literal[^1].ToString();
+                literal = literal[..^1];
+            }
+
+            // Add literal segment before this placeholder
+            if (literal.Length > 0)
+            {
+                segments.Add($"\"{literal}\"");
             }
 
             // Catch-all parameters (e.g. {*FolderPath} or {**FolderPath}) preserve slashes
             // and must not be URL-encoded. Regular parameters are escaped.
             var propertyAccess = $"typed.{prop.Name}";
+            string value;
             if (isCatchAll)
             {
                 if (prop.Type.SpecialType == SpecialType.System_String)
                 {
-                    segments.Add(propertyAccess);
+                    value = propertyAccess;
                 }
                 else if (prop.Type.IsValueType && prop.Type.NullableAnnotation == NullableAnnotation.Annotated)
                 {
-                    segments.Add($"{propertyAccess}.Value.ToString()!");
+                    value = $"{propertyAccess}.Value.ToString()!";
                 }
                 else
                 {
-                    segments.Add($"{propertyAccess}.ToString()!");
+                    value = $"{propertyAccess}.ToString()!";
                 }
             }
             else if (prop.Type.SpecialType == SpecialType.System_String)
             {
-                segments.Add($"global::System.Uri.EscapeDataString({propertyAccess})");
+                value = $"global::System.Uri.EscapeDataString({propertyAccess})";
             }
             else if (prop.Type.IsValueType && prop.Type.NullableAnnotation == NullableAnnotation.Annotated)
             {
-                segments.Add($"global::System.Uri.EscapeDataString({propertyAccess}.Value.ToString()!)");
+                value = $"global::System.Uri.EscapeDataString({propertyAccess}.Value.ToString()!)";
             }
             else
             {
-                segments.Add($"global::System.Uri.EscapeDataString({propertyAccess}.ToString()!)");
+                value = $"global::System.Uri.EscapeDataString({propertyAccess}.ToString()!)";
             }
 
-            lastEnd = match.Index + match.Length;
+            if (isLeftOut)
+            {
+                var present = optionalSeparator.Length > 0 ? $"\"{optionalSeparator}\" + {value}" : value;
+                value = $"({propertyAccess} is null ? \"\" : {present})";
+            }
+            else if (defaultValue is not null)
+            {
+                // The default goes in the URL in its place, wherever it is, so a later segment cannot move into its place.
+                var sent = isCatchAll ? defaultValue : Uri.EscapeDataString(defaultValue);
+                value = $"({propertyAccess} is null ? {SymbolDisplay.FormatLiteral(sent, quote: true)} : {value})";
+            }
+
+            segments.Add(value);
+
+            lastEnd = matchEnd;
         }
 
         // Add remaining literal after last placeholder

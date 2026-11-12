@@ -195,6 +195,18 @@ Route patterns support `{PropertyName}` syntax. The placeholder binds to the ope
 [SelfLink(typeof(TemplateApiResource), "/templates/{TemplateId:Id}")]
 ```
 
+ASP.NET's inline forms bind their property from the route too: an optional placeholder `{Ext?}`, a default `{Kind=all}`, a constraint `{Id:int}` (also with an argument, `{Tag:minlength(1)=(any)}`) and a catch-all `{*rest}`. An optional or defaulted placeholder is a path parameter with `required: false` in the OpenAPI document, keyed without its `?` or `=default` (`/files/{Name}.{Ext}`); constraints stay in the key.
+
+When the property is `null`, the generated client's URL:
+
+- sends a defaulted placeholder's default in its place (`/kinds/all`, `/sections/all/details`);
+- leaves out an optional placeholder in the run of optional segments that ends the route, with the `/` or `.` before it (`/files/abc`, `/reports/2026`), and keeps a trailing slash (`/archives/`);
+- has no URL (`BuildUrl` returns `null`) where leaving it out would move another value into its place: an optional segment before one that is set (`/reports/{Year?}/{Month?}` with only `Month`), an optional placeholder after a `.` whose segment has a value with a `.` of its own (`Name = "abc.txt"` in `/files/{Name}.{Ext?}`), or an optional placeholder followed by anything else (`/notes/{Source?}/details`), which is required.
+
+A property that cannot be `null`, such as an `int`, is always sent. A gateway forward needs a value for an inner optional or defaulted placeholder only where the client above does (BPGW010), and BPGW029 rejects a gateway that leaves an earlier optional segment `null` while it can fill a later one; `[Hide]` the earlier one if the inner operation or `OnMap` sets it.
+
+These rules are for the route and the generated client. Resource-link interpolation (`[SelfLink]` and `[Link]` URLs filled from a resource's properties) does not read `?` or `=default`, so do not declare a resource link with one.
+
 ### Link attribute — custom relations
 
 `[Link(typeof(TResource), "/route", Rel = "custom-rel")]` declares a named relation link:
