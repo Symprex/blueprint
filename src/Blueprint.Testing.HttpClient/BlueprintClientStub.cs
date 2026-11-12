@@ -138,11 +138,23 @@ public sealed class BlueprintClientStub<TClient>
             ResourceEventResult resourceEventResult => ResourceEventEnvelope(resourceEventResult, jsonOptions),
 
             // Whatever its change type, the host writes a legacy resource event as a 200 with the event itself, as legacy did.
-            ResourceEvent resourceEvent => Json(HttpStatusCode.OK, resourceEvent, SerializerContextTypeInfoCache.GetFallbackOptions(jsonOptions)),
+            ResourceEvent resourceEvent => Json(HttpStatusCode.OK, resourceEvent, BodyTypeInfo(resourceEvent.GetType(), jsonOptions).Options),
             OperationResult other => throw new NotSupportedException(
                 $"{typeof(TClient).Name}'s stub cannot answer with a {other.GetType().Name}. Answer with a value, or with an OkResult, CreatedResult, AcceptedResult, ConflictResult, NotFoundResult, StatusCodeResult, PlainTextResult, ValidationFailedResult, NoResultOperationResult, ResourceEvent, ResourceEventResult or KeyOnlyResourceEventResult."),
             _ => Json(HttpStatusCode.OK, value, jsonOptions),
         };
+    }
+
+    /// <summary>
+    /// Gets the metadata the host writes a body of <paramref name="type"/> with: the client's serializer context's own
+    /// when it covers the type, so that a member it cannot write fails as it does on the host, and otherwise the
+    /// reflection fallback the host gives an uncovered root.
+    /// </summary>
+    private static System.Text.Json.Serialization.Metadata.JsonTypeInfo BodyTypeInfo(Type type, JsonSerializerOptions jsonOptions)
+    {
+        return jsonOptions.TypeInfoResolver is not null && jsonOptions.TryGetTypeInfo(type, out var covered)
+            ? covered
+            : SerializerContextTypeInfoCache.GetFallbackOptions(jsonOptions).GetTypeInfo(type);
     }
 
     /// <summary>
@@ -164,8 +176,8 @@ public sealed class BlueprintClientStub<TClient>
     /// </summary>
     /// <remarks>
     /// The envelope has no <c>href</c>: the host fills one from its app's registered links, which a stub of the upstream
-    /// has none of, and the client reads none back into the result. The content and the metadata bags are written with the
-    /// client's options and the reflection fallback the host gives a type its serializer context does not cover.
+    /// has none of, and the client reads none back into the result. The content is written as the host writes it (see
+    /// <see cref="BodyTypeInfo"/>), and the metadata bags, whose values are open-ended, with the reflection fallback.
     /// </remarks>
     private static HttpResponseMessage ResourceEventEnvelope(ResourceEventResult result, JsonSerializerOptions jsonOptions)
     {
@@ -185,7 +197,7 @@ public sealed class BlueprintClientStub<TClient>
             ["changeType"] = result.ChangeType.ToString(),
             ["created"] = DateTimeOffset.UtcNow,
             ["resourceObject"] = ApiResource.GetTypeName(contentType),
-            ["data"] = JsonSerializer.SerializeToNode(result.Content, contentType, fallbackOptions),
+            ["data"] = JsonSerializer.SerializeToNode(result.Content, BodyTypeInfo(contentType, jsonOptions)),
         };
 
         AddBag(envelope, "metadata", result.Metadata, fallbackOptions);

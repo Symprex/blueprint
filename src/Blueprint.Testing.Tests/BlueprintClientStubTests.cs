@@ -447,6 +447,26 @@ public sealed class BlueprintClientStubTests
         thrown.Message.Should().Contain("UnwritableResult").And.Contain("ResourceEvent").And.NotContain("its content");
     }
 
+    [Fact]
+    public async Task A_resource_event_results_content_is_written_with_the_clients_registered_metadata()
+    {
+        // The host writes a content type its context registers with that metadata, which cannot write an object member
+        // holding a type the context does not register; the stub once wrote it anyway through the reflection fallback.
+        await using var provider = BuildProvider(
+            out var upstream,
+            static json => json.TypeInfoResolver = StrictStubJsonContext.Default);
+        upstream.Respond<CreateTemplateCommand>(static _ => new ResourceEventResult<TaggedPayload>(
+            ChangeType.Created,
+            "payload.created",
+            "p-1",
+            new TaggedPayload { Tag = new UnregisteredArchiver("someone") }));
+
+        var act = () => BlueprintClientTransport.Create<StubbedTemplatesApi>(provider)
+            .ForwardAsync<CreateTemplateCommand, ResourceEventResult<TaggedPayload>>(new CreateTemplateCommand { Name = "n" });
+
+        (await act.Should().ThrowAsync<NotSupportedException>()).WithMessage("*UnregisteredArchiver*");
+    }
+
     private static ServiceProvider BuildProvider(
         out BlueprintClientStub<StubbedTemplatesApi> upstream,
         Action<System.Text.Json.JsonSerializerOptions>? configureJson = null)
@@ -521,7 +541,20 @@ public sealed class UnwritableResult : OperationResult
 public sealed record UnregisteredArchiver(string Name);
 
 /// <summary>
+/// A payload the strict context registers, with a member whose value it may not.
+/// </summary>
+public sealed class TaggedPayload
+{
+    /// <summary>
+    /// Gets or sets the tag, of any type.
+    /// </summary>
+    public object? Tag { get; set; }
+}
+
+/// <summary>
 /// A context that registers only what the strict-context test reads, and not <see cref="UnregisteredArchiver"/>.
 /// </summary>
 [System.Text.Json.Serialization.JsonSerializable(typeof(TemplateApiResource))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(TaggedPayload))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(CreateTemplateCommand))]
 public sealed partial class StrictStubJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
