@@ -251,6 +251,19 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
+    /// BPGW029: an inner optional route segment the forward leaves null, being neither carried nor bound, or bound to null,
+    /// before one it can fill. Leaving the first out would move the second's value into its place, so the inner request
+    /// builder builds no URL whenever the second has a value.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnfilledOptionalSegmentBeforeFilled = new(
+        id: "BPGW029",
+        title: "An inner optional segment must be filled when a later one is",
+        messageFormat: "Gateway operation '{0}' can fill '{1}' but leaves '{2}' null, which comes before it in '{3}' ('{4}', the URL the forward sends). Without '{2}' the URL would carry '{1}' in its place, so the forward has no URL to send when '{1}' has a value. Add '{2}' to the gateway's route or bind it, hide it if the inner operation or OnMap sets it, or hide '{1}'.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// BPGW035: a <c>[Hide]</c> on a property the inner operation requires, which the operation's map hook never assigns
     /// (#175). The hook has to assign <c>inner.Property</c> in its own body, where the check can see it: one that left it
     /// to a helper, or dropped the line, would otherwise send the type's default without complaint.
