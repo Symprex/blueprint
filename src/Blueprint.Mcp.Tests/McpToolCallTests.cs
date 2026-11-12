@@ -419,24 +419,27 @@ public sealed class McpToolCallTests
         Text(result).Should().Be(overHttp);
     }
 
-    [Fact]
-    public async Task A_route_constraint_that_reads_the_user_is_given_the_operations_signed_in_user_as_HTTP_routing_gives_it()
+    [Theory]
+    [InlineData(true, 200)]
+    [InlineData(false, 404)]
+    public async Task A_route_constraint_that_reads_the_user_is_given_the_user_HTTP_routing_gives_it_in_the_hosts_middleware_order(
+        bool authenticateBeforeRouting,
+        int expectedStatus)
     {
         // The routing a call is matched by used to be given an anonymous request, so in a host that authenticates before
-        // it routes, a constraint admitting only signed-in callers refused a call the same caller makes over HTTP.
-        await using var host = await McpTestHost.StartAsync(authenticateBeforeRouting: true);
+        // it routes, a constraint admitting only signed-in callers refused a call the same caller makes over HTTP. Then
+        // it was always given the signed-in user, so in a host that routes before it authenticates, the constraint
+        // admitted a call HTTP refuses with 404.
+        await using var host = await McpTestHost.StartAsync(authenticateBeforeRouting: authenticateBeforeRouting);
         var ids = await host.GetOperationIdsAsync();
         using var http = host.CreateHttpClient(roles: "Reader");
-        using var anonymous = host.CreateHttpClient();
         await using var client = await host.ConnectAsync(roles: "Reader");
 
-        var overHttp = await http.GetStringAsync("api/user-aware/abc");
-        var anonymousOverHttp = await anonymous.GetAsync("api/user-aware/abc");
+        var overHttp = await http.GetAsync("api/user-aware/abc");
         var result = await client.CallToolAsync(ToolAt(ids, "/user-aware/"), new Dictionary<string, object?> { ["Id"] = "abc" });
 
-        anonymousOverHttp.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
-        HttpStatus(result).Should().Be(200);
-        Text(result).Should().Be(overHttp);
+        ((int)overHttp.StatusCode).Should().Be(expectedStatus);
+        HttpStatus(result).Should().Be(expectedStatus);
     }
 
     [Fact]

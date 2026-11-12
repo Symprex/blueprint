@@ -175,7 +175,14 @@ internal sealed class BlueprintOperationTool : McpServerTool
         {
             try
             {
-                await AuthenticateAsync(context).ConfigureAwait(false);
+                // Signed in before the route is matched only where the host authenticates before it routes, so a
+                // constraint or matcher policy reading the user sees what it would over HTTP: the user, or no one.
+                var authenticateBeforeRouting = RoutingOrderMatcherPolicy.AuthenticatedBeforeRouting(caller);
+
+                if (authenticateBeforeRouting)
+                {
+                    await AuthenticateAsync(context).ConfigureAwait(false);
+                }
 
                 // A request no HTTP route would match, as a value its route constraints refuse, gets routing's 404. The
                 // constraints are given the operation's request and services, as routing would give them, not the MCP
@@ -206,6 +213,11 @@ internal sealed class BlueprintOperationTool : McpServerTool
                             IsError = true,
                             Content = [new TextContentBlock { Text = $"HTTP routing sends a request for {context.Request.Path} to {routed.DisplayName}, not to the operation {endpoint.DisplayName}, so the operation is not run. Call that operation's tool instead." }],
                         };
+                }
+
+                if (!authenticateBeforeRouting)
+                {
+                    await AuthenticateAsync(context).ConfigureAwait(false);
                 }
 
                 await RunAsync(endpoint, context).ConfigureAwait(false);

@@ -1,4 +1,5 @@
 using Blueprint.Mcp;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ModelContextProtocol.AspNetCore;
 
 // ReSharper disable once CheckNamespace
@@ -37,6 +38,7 @@ public static class McpServiceCollectionExtensions
 
         services.AddSingleton<BlueprintMcpMarker>();
         services.AddHttpContextAccessor();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<MatcherPolicy, RoutingOrderMatcherPolicy>());
 
         services
             .AddMcpServer()
