@@ -25,12 +25,13 @@ public partial class AddGatewayPartnerNoteCommand : ICommand<TenantNoteApiResour
     public const string BlockedText = "blocked";
 
     /// <summary>
-    /// Runs after the generated copy and bindings, before the note is sent: trims the text, and refuses a blocked one.
+    /// Runs after the generated copy and bindings, before the note is sent: trims the text, and refuses a blocked one. It
+    /// reads nothing of the gateway operation, so it is static, which the generated forward calls on the type (#176).
     /// </summary>
     /// <param name="inner">The note about to be sent.</param>
     /// <param name="logger">Injected as a handler's parameter would be.</param>
     /// <returns>A completed task.</returns>
-    internal ValueTask OnMapAsync(AddTenantNoteCommand inner, ILogger<AddGatewayPartnerNoteCommand> logger)
+    internal static ValueTask OnMapAsync(AddTenantNoteCommand inner, ILogger<AddGatewayPartnerNoteCommand> logger)
     {
         inner.Text = inner.Text.Trim();
 
