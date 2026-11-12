@@ -177,13 +177,22 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
         // replaces the inner factory it translates (D14), so it is documented as the operation's own too.
         foreach (var property in ApiExceptionFactoryResolver.GetTranslationTargetProperties(operationType, apiExceptionFactoryType))
         {
-            if (!builder.Any(registration => registration.FieldName == property.Name)
-                && ApiExceptionFactoryResolver.TryResolve(property, context.GetSemanticModel, out var factory))
+            if (builder.Any(registration => registration.FieldName == property.Name))
+            {
+                continue;
+            }
+
+            if (ApiExceptionFactoryResolver.TryResolve(property, context.GetSemanticModel, out var factory))
             {
                 builder.Add(new ApiExceptionFactoryRegistration(
                     property.Name,
                     factory.HttpStatus,
                     RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{property.Name}")));
+            }
+            else
+            {
+                // The inner factory it answers is still left out, so say why neither status is documented, as for a field.
+                ReportNonEvaluableInitializer(context, property, property.Name, operationType);
             }
         }
 

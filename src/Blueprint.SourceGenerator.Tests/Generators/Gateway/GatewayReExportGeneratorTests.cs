@@ -673,6 +673,24 @@ public class GatewayReExportGeneratorTests
             .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Missing widget\", \"missing_widget\")");
     }
 
+    [Fact]
+    public void A_getter_backed_TranslateError_target_that_cannot_be_evaluated_is_reported()
+    {
+        // The inner 404 it answers is still dropped, and the target documents nothing, so neither status appeared and
+        // nothing said why.
+        var gateway = TranslatingGatewaySource.Replace(
+            "public static readonly ApiExceptionFactory WidgetGone = new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            "public static ApiExceptionFactory WidgetGone => Make();\n\n        private static ApiExceptionFactory Make() => new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            StringComparison.Ordinal);
+
+        var run = Run([ClientSource, gateway, AppSource], InnerReference());
+
+        run.EmitErrors.Should().BeEmpty();
+        run.GeneratorDiagnostics.Where(static d => d.Id == "BP010")
+            .Select(static d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture))
+            .Should().ContainSingle(static m => m.Contains("'WidgetGone'", StringComparison.Ordinal));
+    }
+
     private static string InnerWithGetterBackedTarget()
     {
         return InnerSource
