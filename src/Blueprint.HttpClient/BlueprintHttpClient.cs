@@ -222,15 +222,24 @@ public class BlueprintHttpClient
 
             if (!response.IsSuccessStatusCode)
             {
-                // Only a forward's reader claims a failure (a declared NotFoundResult the host wrote); any other is mapped.
-                var (claimed, value) = await reader.ReadFailureAsync(context, cancellationToken).ConfigureAwait(false);
+                using var failureRead = this.BoundFailureRead(cancellationToken);
 
-                if (claimed)
+                try
                 {
-                    return value;
-                }
+                    // Only a forward's reader claims a failure (a declared NotFoundResult the host wrote); any other is mapped.
+                    var (claimed, value) = await reader.ReadFailureAsync(context, failureRead.Token).ConfigureAwait(false);
 
-                await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
+                    if (claimed)
+                    {
+                        return value;
+                    }
+
+                    await this.EnsureSuccessOrThrowAsync(request, response, failureRead.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException e) when (failureRead.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    throw CreateTimeoutException(e);
+                }
             }
 
             var result = await reader.ReadAsync(context, cancellationToken).ConfigureAwait(false);
@@ -328,7 +337,9 @@ public class BlueprintHttpClient
     /// <remarks>
     /// A failure is mapped as <see cref="SendAsync{TOperation, TResult}"/> maps one, so a response that is not a success is
     /// read, disposed and thrown as the upstream problem rather than streamed. <see cref="System.Net.Http.HttpClient.Timeout"/>
-    /// covers the wait for the headers only; reading the body is bounded by whatever token its reader passes.
+    /// covers the wait for the headers only. A failure's body is read within a further
+    /// <see cref="System.Net.Http.HttpClient.Timeout"/>, and one that does not arrive in time is thrown as a timeout; a
+    /// success's body is bounded only by whatever token its reader passes.
     /// </remarks>
     /// <param name="request">The request, such as one <see cref="CreateRequest{TOperation}"/> built. The caller still owns it.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -346,7 +357,20 @@ public class BlueprintHttpClient
         try
         {
             response = await this._httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-            await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                using var failureRead = this.BoundFailureRead(cancellationToken);
+
+                try
+                {
+                    await this.EnsureSuccessOrThrowAsync(request, response, failureRead.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException e) when (failureRead.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    throw CreateTimeoutException(e);
+                }
+            }
 
             var success = response;
             response = null;
@@ -554,7 +578,7 @@ public class BlueprintHttpClient
     /// </remarks>
     /// <param name="exception">The cancellation the timeout raised.</param>
     /// <returns>The exception to throw.</returns>
-    private static BlueprintApiException CreateTimeoutException(TaskCanceledException exception)
+    private static BlueprintApiException CreateTimeoutException(OperationCanceledException exception)
     {
         return new BlueprintApiException(
             new BlueprintApiException.ApiProblem(
@@ -717,6 +741,26 @@ public class BlueprintHttpClient
         {
             request.Options.Set(BlueprintRequestOptions.RequestAuthorization, requestAuthorization);
         }
+    }
+
+    /// <summary>
+    /// The token a failure's body is read with: the caller's, and the client's <see cref="System.Net.Http.HttpClient.Timeout"/>
+    /// from now. A streamed send returns at the headers, outside that timeout, so an upstream that sent a failure's headers
+    /// and stalled would otherwise be waited on for as long as the caller's token allows. A buffered send has read the body
+    /// already, so the bound costs it nothing.
+    /// </summary>
+    /// <param name="cancellationToken">The caller's token.</param>
+    /// <returns>The source of the bounded token, which the caller disposes.</returns>
+    private CancellationTokenSource BoundFailureRead(CancellationToken cancellationToken)
+    {
+        var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        if (this._httpClient.Timeout != Timeout.InfiniteTimeSpan)
+        {
+            source.CancelAfter(this._httpClient.Timeout);
+        }
+
+        return source;
     }
 
     private async Task EnsureSuccessOrThrowAsync(

@@ -80,12 +80,54 @@ public class BlueprintHttpClientStreamingTests
         ((TrackedContent)upstream.Content).IsDisposed.Should().BeTrue();
     }
 
-    private static BlueprintHttpClient CreateClient(Func<HttpRequestMessage, HttpResponseMessage> handler)
+    [Theory]
+    [InlineData("forward")]
+    [InlineData("raw")]
+    public async Task When_a_streamed_failures_body_stalls_then_its_read_times_out_within_the_clients_timeout(string send)
     {
-        return new BlueprintHttpClient(new System.Net.Http.HttpClient(new FakeHttpHandler(handler))
+        // A streamed send returns at the headers, outside HttpClient.Timeout, so a failure's body that never finished used to
+        // be waited on for as long as the caller's token allowed, which was forever without one.
+        var stalled = new StalledContent();
+        var client = CreateClient(_ => new HttpResponseMessage(HttpStatusCode.BadGateway) { Content = stalled }, TimeSpan.FromMilliseconds(200));
+        using var request = client.CreateRequest(HttpMethod.Get, "templates/t-1/download", new DownloadTemplateQuery { Id = "t-1" });
+
+        Func<Task> act = send == "forward"
+            ? () => client.ForwardAsync<DownloadTemplateQuery, ProxyResult>(new DownloadTemplateQuery { Id = "t-1" })
+            : () => client.SendRawAsync(request);
+
+        var exception = (await act.Should().ThrowAsync<BlueprintApiException>().WaitAsync(TimeSpan.FromSeconds(10))).Which;
+        exception.Type.Should().Be("service_timeout");
+        exception.StatusCode.Should().Be(HttpStatusCode.RequestTimeout);
+        stalled.IsDisposed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task When_a_streamed_success_is_read_after_the_clients_timeout_then_it_is_not_cut_off()
+    {
+        // The bound is on a failure's body only: a streamed success is read for as long as its reader takes.
+        var upstream = File(HttpStatusCode.OK, "slow reader");
+        var client = CreateClient(_ => upstream, TimeSpan.FromMilliseconds(100));
+
+        using var response = await client.SendRawAsync(
+            client.CreateRequest(HttpMethod.Get, "templates/t-1/download", new DownloadTemplateQuery { Id = "t-1" }));
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+
+        (await response.Content.ReadAsStringAsync()).Should().Be("slow reader");
+    }
+
+    private static BlueprintHttpClient CreateClient(Func<HttpRequestMessage, HttpResponseMessage> handler, TimeSpan? timeout = null)
+    {
+        var httpClient = new System.Net.Http.HttpClient(new FakeHttpHandler(handler))
         {
             BaseAddress = new Uri("https://upstream.example/api/"),
-        });
+        };
+
+        if (timeout is { } value)
+        {
+            httpClient.Timeout = value;
+        }
+
+        return new BlueprintHttpClient(httpClient);
     }
 
     private static HttpResponseMessage File(HttpStatusCode status, string body)
@@ -104,6 +146,42 @@ public class BlueprintHttpClientStreamingTests
     private sealed class TrackedContent(string body, string mediaType) : StringContent(body, Encoding.UTF8, mediaType)
     {
         public bool IsDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            this.IsDisposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>
+    /// A problem body whose headers arrived but whose bytes never do, until the read is cancelled.
+    /// </summary>
+    private sealed class StalledContent : HttpContent
+    {
+        public StalledContent()
+        {
+            this.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/problem+json");
+        }
+
+        public bool IsDisposed { get; private set; }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            return this.SerializeToStreamAsync(stream, context, CancellationToken.None);
+        }
+
+        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+
+            return false;
+        }
 
         protected override void Dispose(bool disposing)
         {
