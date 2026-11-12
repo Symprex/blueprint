@@ -138,10 +138,31 @@ internal static class DeclaredForward
     /// <returns>The inner property, or <see langword="null"/> when the property has no counterpart.</returns>
     public static IPropertySymbol? FindCounterpart(INamedTypeSymbol operationType, INamedTypeSymbol innerType, IPropertySymbol property)
     {
-        return GetPairedName(property, GetRenameTargets(operationType)) is { } name
+        // A declaration the operation hides is not forwarded: only the most derived one of a name is, whose [ForwardAs]
+        // alone counts, so a hidden one pairs with nothing, even where a site lists it next to the one that hides it.
+        return IsMostDerivedDeclaration(operationType, property)
+            && GetPairedName(property, GetRenameTargets(operationType)) is { } name
             && GetSettableProperties(innerType).TryGetValue(name, out var counterpart)
                 ? counterpart
                 : null;
+    }
+
+    /// <summary>
+    /// Whether a property is the declaration of its name that code naming it on the operation reads: the first public
+    /// instance one, most derived type first, as the property model lists it.
+    /// </summary>
+    private static bool IsMostDerivedDeclaration(INamedTypeSymbol operationType, IPropertySymbol property)
+    {
+        foreach (var member in operationType.GetAllMembers())
+        {
+            if (member is IPropertySymbol { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public } candidate
+                && candidate.Name == property.Name)
+            {
+                return SymbolEqualityComparer.Default.Equals(candidate, property);
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

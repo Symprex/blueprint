@@ -191,7 +191,22 @@ public class ForwardsToGeneratorTests
             }
             """;
 
-        ForwardInitialiser(Run(gateway)).Should().Contain("Owner = operation.Owner").And.NotContain("operation.Alias");
+        var run = Run(gateway);
+
+        ForwardInitialiser(run).Should().Contain("Owner = operation.Owner").And.NotContain("operation.Alias");
+
+        // Validation lists both Alias declarations, and the hidden one's rename gave the derived Alias Owner's [Required]
+        // (Copilot on #169).
+        ValidationBlock(run).Should().NotContain("operation.Alias");
+    }
+
+    [Fact]
+    public void A_renamed_property_with_a_keyword_name_is_copied_by_its_escaped_name()
+    {
+        // The copy wrote the bare name, so SourceId = operation.event did not compile (Copilot on #169).
+        var gateway = GatewaySource.Replace("public string? ExternalId { get; init; }", "public string? @event { get; init; }", StringComparison.Ordinal);
+
+        ForwardInitialiser(Run(gateway)).Should().Contain("SourceId = operation.@event");
     }
 
     [Fact]

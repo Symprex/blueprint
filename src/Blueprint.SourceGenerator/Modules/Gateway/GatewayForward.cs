@@ -246,7 +246,11 @@ public static class GatewayForward
     public static string RenderInvocation(PipelineRenderContext context, GatewayForwardModel forward, IReadOnlyList<string> mapHookArguments)
     {
         var operation = context.GetOperationExpression();
-        var assignments = forward.CopiedProperties.Select(copied => copied.InnerName + " = " + operation + "." + copied.SourceName).ToList();
+
+        // The model holds names as metadata spells them, without the @ a keyword needs in source.
+        var assignments = forward.CopiedProperties
+            .Select(copied => ValidationSymbolHelpers.EscapeIdentifier(copied.InnerName) + " = " + operation + "." + ValidationSymbolHelpers.EscapeIdentifier(copied.SourceName))
+            .ToList();
 
         // D11: bound properties, set in the initialiser so that a required or init-only one is set too. A claim is read
         // into a local first, and a caller without it (or with one that does not convert) is refused before any send.
