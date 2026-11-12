@@ -55,7 +55,7 @@ internal static class ApiExceptionFactoryResolver
     /// <summary>
     /// Every static <c>ApiExceptionFactory</c> field of <paramref name="type"/>, whatever its accessibility, in declaration
     /// order, as legacy's <c>GetFields(Static | NonPublic | Public)</c> read them. A source auto-property is among them as
-    /// its backing field. Metadata imports no private field, so a metadata type's static properties are read instead.
+    /// its backing field. Metadata imports no private field, so a metadata type's static auto-properties are read instead.
     /// </summary>
     /// <param name="type">The type.</param>
     /// <param name="apiExceptionFactoryType">The <c>Blueprint.ApiExceptionFactory</c> type.</param>
@@ -73,7 +73,14 @@ internal static class ApiExceptionFactoryResolver
                     yield return new ApiExceptionFactoryMember(field.AssociatedSymbol is IPropertySymbol backed ? backed : field, field);
                     break;
 
-                case IPropertySymbol { IsStatic: true } property when fromMetadata && SymbolEqualityComparer.Default.Equals(property.Type, apiExceptionFactoryType):
+                // Only an auto-property, as source discovery sees one through its backing field: its accessors are compiler
+                // generated, an ordinary getter is not. Either accessor will do, as metadata does not import a private one
+                // ({ private get; set; }). A getter-backed translation target comes in through GetDocumentedMembers, from
+                // metadata as from source.
+                case IPropertySymbol { IsStatic: true } property
+                    when fromMetadata
+                    && SymbolEqualityComparer.Default.Equals(property.Type, apiExceptionFactoryType)
+                    && IsAutoProperty(property):
                     yield return new ApiExceptionFactoryMember(property, property);
                     break;
             }
@@ -276,6 +283,16 @@ internal static class ApiExceptionFactoryResolver
                     yield return property;
                 }
             }
+        }
+    }
+
+    private static bool IsAutoProperty(IPropertySymbol property)
+    {
+        return IsCompilerGenerated(property.GetMethod) || IsCompilerGenerated(property.SetMethod);
+
+        static bool IsCompilerGenerated(IMethodSymbol? accessor)
+        {
+            return accessor?.GetAttributes().Any(static a => a.AttributeClass?.ToFullMetadataName() == "System.Runtime.CompilerServices.CompilerGeneratedAttribute") == true;
         }
     }
 

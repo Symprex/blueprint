@@ -606,6 +606,26 @@ public class GatewayReExportGeneratorTests
             .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget gone\", \"widget_gone\")");
     }
 
+    [Fact]
+    public void An_inner_getter_backed_factory_no_translation_names_is_documented_neither_in_the_same_compilation_nor_from_a_reference()
+    {
+        // The inner descriptor documents fields, auto-properties and translation targets, not an ordinary getter; metadata
+        // used to take every static factory property, so only a referencing gateway advertised its 418.
+        var inner = InnerSource.Replace(
+            "public static readonly ApiExceptionFactory Conflict",
+            "public static ApiExceptionFactory Preview => new(\"Preview\", \"preview\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+            StringComparison.Ordinal);
+        var (image, _) = EmitInner(inner, withIndex: true);
+
+        var sameCompilation = Run([inner, ClientSource, GatewaySource, AppSource], innerContract: null);
+        var referenced = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        sameCompilation.EmitErrors.Should().BeEmpty();
+        referenced.EmitErrors.Should().BeEmpty();
+        sameCompilation.Source(Descriptor).Should().NotContain("OperationHttpResponseMetadata(418,");
+        referenced.Source(Descriptor).Should().NotContain("OperationHttpResponseMetadata(418,");
+    }
+
     private static string InnerWithGetterBackedTarget()
     {
         return InnerSource
