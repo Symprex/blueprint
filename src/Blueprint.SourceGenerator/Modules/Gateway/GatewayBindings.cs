@@ -440,11 +440,13 @@ internal static class GatewayBindings
 
         bool IsBoundToNull(GatewayPropertyBinding? binding) => binding is { Source: GatewayBindingSource.Value, Argument: "null" };
 
+        // Only a copied property reaches the inner operation: one in the gateway's route that the gateway declares with
+        // another type fills the gateway's own property, not the inner one.
         bool IsCarried(string placeholder)
         {
             var name = RoutePlaceholderSyntax.ResolveMemberName(innerMembers, placeholder) ?? placeholder;
 
-            return gatewayPlaceholders.Contains(name) || copied.Contains(name);
+            return copied.Contains(name);
         }
 
         bool IsAlwaysNull(string placeholder) =>

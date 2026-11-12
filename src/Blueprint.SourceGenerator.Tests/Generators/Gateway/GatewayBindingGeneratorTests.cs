@@ -474,6 +474,22 @@ public class GatewayBindingGeneratorTests
     }
 
     [Fact]
+    public void When_the_gateway_route_has_an_inner_optional_segment_its_property_does_not_copy_then_BPGW029_is_reported()
+    {
+        // The gateway's own int Source fills its route, but is not copied into the inner string? Source, so the forward
+        // still leaves that null before the copied InternalNote.
+        var inner = InnerSource.Replace("/tenants/{TenantId}/notes", "/notes/{Source?}/{InternalNote?}", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = WithBody(
+            GatewaySource.Replace("[RootLink(\"/gateway/notes\")]", "[RootLink(\"/gateway/notes/{Source}\")]", StringComparison.Ordinal),
+            "public int Source { get; set; }");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([gateway], additionalReferences: [contract]);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW029");
+    }
+
+    [Fact]
     public void When_the_gateway_binds_an_inner_optional_segment_to_null_before_one_it_fills_then_BPGW029_is_reported()
     {
         // A null value sets Source to null on every forward, so InternalNote, copied, moves into its place whenever it is set.
