@@ -173,6 +173,51 @@ public sealed class StreamRequestBindingWireTests
     }
 
     [Fact]
+    public async Task A_form_whose_files_share_one_buffered_request_body_is_sent_with_every_file_intact()
+    {
+        // With FormOptions.BufferBody, each file reads its own range of one shared stream; opening every file while the form
+        // was built used to move that stream under the first part, which then refused to be sent.
+        var bytes = Encoding.UTF8.GetBytes("first-filesecond");
+        var shared = new MemoryStream(bytes);
+        var command = new StreamRequestAttachCommand
+        {
+            FolderId = "folder-1",
+            File = new FormFile(shared, 0, 10, "file", "first.txt") { Headers = new HeaderDictionary(), ContentType = "text/plain" },
+            Thumbnail = new FormFile(shared, 10, 6, "thumbnail", "second.txt") { Headers = new HeaderDictionary(), ContentType = "text/plain" },
+        };
+
+        using var content = ((IHttpRequestBodyBuilder)command).BuildRequestBody()!;
+        using var sent = new MemoryStream();
+        await content.CopyToAsync(sent);
+
+        var text = Encoding.UTF8.GetString(sent.ToArray());
+        text.Should().Contain("first-file").And.Contain("second");
+    }
+
+    [Fact]
+    public void The_document_describes_an_operation_whose_Stream_hides_a_base_string_as_a_stream_body()
+    {
+        // Looking the property up by name alone used to throw AmbiguousMatchException over two Content properties.
+        var operation = RenderOperation("/stream-request/hidden/stream", "post");
+
+        operation.GetProperty("requestBody").GetProperty("content").EnumerateObject().Select(static p => p.Name)
+            .Should().Equal("application/octet-stream");
+    }
+
+    [Fact]
+    public void The_document_describes_an_operation_whose_string_hides_a_base_Stream_as_a_JSON_body()
+    {
+        var (operation, components) = RenderOperationAndComponents("/stream-request/hidden/text", "post");
+
+        var content = operation.GetProperty("requestBody").GetProperty("content");
+        content.EnumerateObject().Select(static p => p.Name).Should().Equal("application/json");
+
+        var reference = content.GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString()!;
+        components.GetProperty(reference["#/components/schemas/".Length..]).GetProperty("properties").GetProperty("content")
+            .GetProperty("type").GetString().Should().Be("string");
+    }
+
+    [Fact]
     public void The_document_describes_a_stream_property_as_a_binary_octet_stream_request_body()
     {
         var operation = RenderOperation("/stream-request/imports/{FolderId}", "post");
@@ -423,5 +468,47 @@ public partial class StreamRequestAttachCommand : ICommand<string>
         var hash = await SHA256.HashDataAsync(stream);
 
         return $"{file.FileName}|{file.ContentType}|{file.Length}|{Convert.ToHexString(hash)}";
+    }
+}
+
+/// <summary>A base whose <c>Content</c> is text, which <see cref="StreamRequestHiddenStreamCommand"/> hides with a stream.</summary>
+public abstract class StreamRequestTextContentBase
+{
+    public string? Content { get; set; }
+}
+
+/// <summary>An import whose stream body hides its base's text property of the same name.</summary>
+[AllowAnonymous]
+[RootLink("/stream-request/hidden/stream")]
+[HttpPost]
+public partial class StreamRequestHiddenStreamCommand : StreamRequestTextContentBase, ICommand<string>
+{
+    [FromBody]
+    public new Stream Content { get; set; } = Stream.Null;
+
+    public static Task<string> HandleAsync(StreamRequestHiddenStreamCommand command)
+    {
+        return Task.FromResult("ok");
+    }
+}
+
+/// <summary>A base whose <c>Content</c> is a stream body, which <see cref="StreamRequestHiddenTextCommand"/> hides with text.</summary>
+public abstract class StreamRequestStreamContentBase
+{
+    [FromBody]
+    public Stream Content { get; set; } = Stream.Null;
+}
+
+/// <summary>An operation whose text property hides its base's stream, so its body is JSON again.</summary>
+[AllowAnonymous]
+[RootLink("/stream-request/hidden/text")]
+[HttpPost]
+public partial class StreamRequestHiddenTextCommand : StreamRequestStreamContentBase, ICommand<string>
+{
+    public new string? Content { get; set; }
+
+    public static Task<string> HandleAsync(StreamRequestHiddenTextCommand command)
+    {
+        return Task.FromResult(command.Content ?? string.Empty);
     }
 }

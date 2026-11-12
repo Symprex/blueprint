@@ -262,7 +262,7 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             if (PropertyOwnershipModule.IsFormFileType(property.Type))
             {
                 var file = $"file_{entry.PropertyName}";
-                lines.Add($"if ({access} is {{ }} {file}) {Helpers}.AddFile(form, {name}, {file}.OpenReadStream(), {file}.FileName, {file}.ContentType);");
+                lines.Add($"if ({access} is {{ }} {file}) {Helpers}.AddFile(form, {name}, {file}.OpenReadStream, {file}.Length, {file}.FileName, {file}.ContentType);");
             }
             else if (property.Type is IArrayTypeSymbol)
             {

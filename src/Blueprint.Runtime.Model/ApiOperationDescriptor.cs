@@ -230,7 +230,7 @@ public class ApiOperationDescriptor
     private static FrozenDictionary<string, IReadOnlyList<Attribute>> CreatePropertyAttributes(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type operationType)
     {
-        return operationType.GetProperties()
+        return MostDerivedProperties.GetAll(operationType)
             .ToFrozenDictionary(
                 static property => property.Name,
                 static property => (IReadOnlyList<Attribute>)Attribute.GetCustomAttributes(property, inherit: true),

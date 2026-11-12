@@ -37,18 +37,26 @@ public static class HttpRequestBodies
     }
 
     /// <summary>
-    /// Adds a file part to a form, streamed from <paramref name="content"/> as the request is sent.
+    /// Adds a file part to a form, its content opened and streamed only when the part itself is sent.
     /// </summary>
+    /// <remarks>
+    /// An inbound form read with <c>FormOptions.BufferBody</c> gives each file a view of its own range of one shared stream,
+    /// which refuses to be read once anything else has moved it; opening every file while the form was built used to move
+    /// it under the first part, so a forward of two such files failed. Each send opens the file again, so a redirect or a
+    /// retry sends it whole.
+    /// </remarks>
     /// <param name="form">The form.</param>
     /// <param name="name">The part's name, the property's binding name.</param>
-    /// <param name="content">The file's content.</param>
+    /// <param name="openContent">Opens the file's content, as <c>IFormFile.OpenReadStream</c> does.</param>
+    /// <param name="length">The file's length in bytes.</param>
     /// <param name="fileName">The file's name, which the host's <c>IFormFile.FileName</c> gives back.</param>
     /// <param name="contentType">The file's media type, or <see langword="null"/> or empty for none.</param>
-    public static void AddFile(MultipartFormDataContent form, string name, Stream content, string? fileName, string? contentType)
+    public static void AddFile(MultipartFormDataContent form, string name, Func<Stream> openContent, long length, string? fileName, string? contentType)
     {
         ArgumentNullException.ThrowIfNull(form);
+        ArgumentNullException.ThrowIfNull(openContent);
 
-        var part = new StreamContent(content);
+        var part = new DeferredFileContent(openContent, length);
         if (!string.IsNullOrEmpty(contentType) && MediaTypeHeaderValue.TryParse(contentType, out var mediaType))
         {
             part.Headers.ContentType = mediaType;

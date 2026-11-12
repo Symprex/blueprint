@@ -465,14 +465,12 @@ public sealed partial record OpenApiOperationRenderingContext(
 
         // A multipart form's fields are described as the form binds them, not as JSON writes them, so the shape comes first.
         var isMultipartBody = ownershipData.Entries.Any(e => e.Source == PropertyBindingSource.Body
-            && descriptor.OperationType.GetProperty(e.PropertyName, BindingFlags.Public | BindingFlags.Instance)?.PropertyType
+            && MostDerivedProperties.Find(descriptor.OperationType, e.PropertyName)?.PropertyType
                 == typeof(Microsoft.AspNetCore.Http.IFormFile));
 
         foreach (var entry in ownershipData.Entries)
         {
-            var clrProperty = descriptor.OperationType.GetProperty(
-                entry.PropertyName,
-                BindingFlags.Public | BindingFlags.Instance);
+            var clrProperty = MostDerivedProperties.Find(descriptor.OperationType, entry.PropertyName);
 
             if (entry.Source == PropertyBindingSource.Body && clrProperty is not null && clrProperty.PropertyType == typeof(Stream))
             {
@@ -1199,7 +1197,7 @@ public sealed partial record OpenApiOperationRenderingContext(
                 && ownership.Entries.Any(entry => IsRequestBodyEntry(
                     descriptor,
                     entry,
-                    descriptor.OperationType.GetProperty(entry.PropertyName, BindingFlags.Public | BindingFlags.Instance),
+                    MostDerivedProperties.Find(descriptor.OperationType, entry.PropertyName),
                     naming)))
             {
                 var name = requestBodyNaming == OpenApiRequestBodyNaming.OperationType
