@@ -264,6 +264,7 @@ BPGW001 to BPGW014 and BPGW018 to BPGW021 are reported for an operation marked `
 | BPGW026 | Warning | As BPGW025, but the operation has an `OnMap` or `OnMapAsync` hook, which may supply it; the generator does not analyse the hook. Fill it with `[Bind]` where a binding can, or `[Hide]` it if the hook sets it |
 | BPGW027 | Error | `[ForwardAs]` on a property of an operation not marked `[ForwardsTo<TInner>]`, which nothing reads |
 | BPGW028 | Error | An operation is marked both `[Expose<TInner>]` and `[ForwardsTo<TInner>]` |
+| BPGW029 | Error | The inner operation's first route ends in optional segments (`/reports/{Year?}/{Month?}`), and the forward leaves one of them null (it is not in the gateway's route, copied or bound, or it is bound to `null`) but can fill a later one. Leaving the first out would move the later value into its place, so the inner request builder builds no URL whenever the later one has a value. Fill the earlier one, hide it when the inner operation's initialiser or the gateway's `OnMap` sets it (as for BPGW010), or hide the later one. An optional placeholder after a `.` shares its segment, so it does not count |
 
 ## Module system (BPMOD)
 

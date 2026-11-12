@@ -383,10 +383,19 @@ internal static class GatewayBindings
         // The inner request builder always sends the first URL, in declaration order as the link module registers it, so a
         // later route without a placeholder is no way round it.
         var innerMembers = innerType.GetAllMembers().ToList();
+
+        // The inner request builder sends a null property's default, or leaves out a trailing optional placeholder, but a
+        // property that cannot be null always sends its value, so the route's default never applies to it.
+        var omissible = RoutePlaceholderSyntax.GetOmissible(
+            innerTemplates[0],
+            name => RoutePlaceholderSyntax.ResolveMemberName(innerMembers, name) is { } member
+                && innerMembers.OfType<IPropertySymbol>().FirstOrDefault(p => p.Name == member) is { } property
+                && RoutePlaceholderSyntax.CanBeNull(property.Type));
         var required = new HashSet<string>(StringComparer.Ordinal);
         foreach (Match match in Placeholder.Matches(innerTemplates[0]))
         {
-            if (RoutePlaceholderSyntax.ResolveMemberName(innerMembers, match.Groups[1].Value) is { } name)
+            if (!omissible.Contains(match.Groups[1].Value)
+                && RoutePlaceholderSyntax.ResolveMemberName(innerMembers, match.Groups[1].Value) is { } name)
             {
                 required.Add(name);
             }
@@ -416,6 +425,55 @@ internal static class GatewayBindings
                 GatewayDiagnosticDescriptors.UnboundInnerRoutePlaceholder,
                 exposeLocation,
                 [operationType.Name, name, innerType.Name, innerTemplates[0]]));
+        }
+
+        // The inner request builder has no URL for an optional segment left out before one that is set
+        // (RoutePlaceholderSyntax.GetTrailingOptional). One the forward provably leaves null, unmentioned or bound to null,
+        // makes that so whenever a later one it can fill has a value. A hidden one is left to the inner operation's
+        // initialiser or the gateway's OnMap, which may set it, so hiding it is the opt-out, as it is for BPGW010.
+        GatewayPropertyBinding? BindingOf(string placeholder)
+        {
+            var name = RoutePlaceholderSyntax.ResolveMemberName(innerMembers, placeholder) ?? placeholder;
+
+            return bindings.FirstOrDefault(b => b.PropertyName == name);
+        }
+
+        bool IsBoundToNull(GatewayPropertyBinding? binding) => binding is { Source: GatewayBindingSource.Value, Argument: "null" };
+
+        // Only a copied property reaches the inner operation: one in the gateway's route that the gateway declares with
+        // another type fills the gateway's own property, not the inner one.
+        bool IsCarried(string placeholder)
+        {
+            var name = RoutePlaceholderSyntax.ResolveMemberName(innerMembers, placeholder) ?? placeholder;
+
+            return copied.Any(c => c.InnerName == name);
+        }
+
+        bool IsAlwaysNull(string placeholder) =>
+            !IsCarried(placeholder) && BindingOf(placeholder) is var binding && (binding is null || IsBoundToNull(binding));
+
+        bool CanFill(string placeholder) =>
+            IsCarried(placeholder)
+            || (BindingOf(placeholder) is { } binding && binding.Source != GatewayBindingSource.Hidden && !IsBoundToNull(binding));
+
+        var trailing = RoutePlaceholderSyntax.GetTrailingOptional(innerTemplates[0], name => omissible.Contains(name));
+        for (var i = 0; i < trailing.Count; i++)
+        {
+            var earlier = trailing[i].Groups[1].Value;
+            if (!RoutePlaceholderSyntax.IsWholeSegment(innerTemplates[0], trailing[i]) || !IsAlwaysNull(earlier))
+            {
+                continue;
+            }
+
+            var later = trailing.Skip(i + 1).Select(static match => match.Groups[1].Value).FirstOrDefault(CanFill);
+            if (later is not null)
+            {
+                diagnostics.Add(new DiagnosticInfo(
+                    GatewayDiagnosticDescriptors.UnfilledOptionalSegmentBeforeFilled,
+                    exposeLocation,
+                    [operationType.Name, RoutePlaceholderSyntax.ResolveMemberName(innerMembers, later) ?? later, RoutePlaceholderSyntax.ResolveMemberName(innerMembers, earlier) ?? earlier, innerType.Name, innerTemplates[0]]));
+                break;
+            }
         }
     }
 
