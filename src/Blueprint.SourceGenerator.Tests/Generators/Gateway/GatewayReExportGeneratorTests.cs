@@ -509,8 +509,83 @@ public class GatewayReExportGeneratorTests
     {
         var before = EmitInner(InnerSource.Replace("new(\"Widget not found\", \"widget_not_found\",", "new(\"Widget|not found\", \"missing\",", StringComparison.Ordinal), withIndex: true).Image;
         var after = EmitInner(InnerSource.Replace("new(\"Widget not found\", \"widget_not_found\",", "new(\"Widget\", \"not found|missing\",", StringComparison.Ordinal), withIndex: true).Image;
-        var beforeReference = MetadataReference.CreateFromImage(before);
+        RunReplacingContract(before, after).Should().Contain("OperationProblemExample(\"Widget\", \"not found|missing\")");
+    }
 
+    [Fact]
+    public void An_edit_to_a_shared_factory_a_getter_backed_translation_target_reads_re_plans_the_descriptor_on_the_same_driver()
+    {
+        const string commonErrors = """
+            namespace Gateway
+            {
+                using Blueprint;
+
+                public static class CommonErrors
+                {
+                    public static readonly ApiExceptionFactory Gone = new("Widget gone", "widget_gone", 410);
+                }
+            }
+            """;
+        var gateway = TranslatingGatewaySource.Replace(
+            "public static readonly ApiExceptionFactory WidgetGone = new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            "public static ApiExceptionFactory WidgetGone => CommonErrors.Gone;",
+            StringComparison.Ordinal);
+
+        var result = Edit(
+            [InnerSource, commonErrors, ClientSource, gateway],
+            [InnerSource, commonErrors.Replace("410", "409", StringComparison.Ordinal), ClientSource, gateway],
+            ["Inner.cs", "CommonErrors.cs", "Client.cs", "Gateway.cs"]);
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().NotContain("OperationHttpResponseMetadata(410,");
+    }
+
+    [Fact]
+    public void Making_an_inner_factorys_getter_private_re_plans_the_descriptor_when_the_contract_is_replaced()
+    {
+        // A non-constant title is read from the property at run time only while its getter is readable.
+        var readable = InnerSource
+            .Replace(
+                "public static readonly ApiExceptionFactory Conflict",
+                "public static ApiExceptionFactory Teapot { get; set; } = new(Titles.Teapot, \"teapot\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+                StringComparison.Ordinal)
+            .Replace("public class WidgetResult", TitlesClass + "\n\n    public class WidgetResult", StringComparison.Ordinal);
+        var before = EmitInner(readable, withIndex: true).Image;
+        var after = EmitInner(readable.Replace("Teapot { get; set; }", "Teapot { private get; set; }", StringComparison.Ordinal), withIndex: true).Image;
+
+        var descriptor = RunReplacingContract(before, after);
+
+        descriptor.Should().Contain("OperationHttpResponseMetadata(418,")
+            .And.NotContain("RenameWidgetCommand.Teapot");
+    }
+
+    [Fact]
+    public void An_inner_factory_aliasing_through_three_factories_in_a_referenced_assembly_is_documented_from_its_index()
+    {
+        // MissingWidget -> DomainErrors -> CommonErrors -> CoreErrors: a depth limit of two used to stop short of the constructor.
+        const string chain = """
+            public static class CoreErrors { public static readonly ApiExceptionFactory Missing = new("Widget not found", "widget_not_found", 404); }
+
+                public static class CommonErrors { public static readonly ApiExceptionFactory Missing = CoreErrors.Missing; }
+
+                public static class DomainErrors { public static readonly ApiExceptionFactory Missing = CommonErrors.Missing; }
+
+                public class WidgetResult
+            """;
+        var chained = InnerSource
+            .Replace("new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)", "DomainErrors.Missing", StringComparison.Ordinal)
+            .Replace("public class WidgetResult", chain, StringComparison.Ordinal);
+        var (image, _) = EmitInner(chained, withIndex: true);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget not found\", \"widget_not_found\")");
+    }
+
+    private static string RunReplacingContract(byte[] before, byte[] after)
+    {
+        var beforeReference = MetadataReference.CreateFromImage(before);
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var compilation = CSharpCompilation.Create(
             "Gateway",
@@ -522,8 +597,7 @@ public class GatewayReExportGeneratorTests
         driver = driver.RunGenerators(compilation);
         driver = driver.RunGenerators(compilation.ReplaceReference(beforeReference, MetadataReference.CreateFromImage(after)));
 
-        driver.GetRunResult().GeneratedTrees.Single(static t => t.FilePath.EndsWith(Descriptor, StringComparison.Ordinal)).ToString()
-            .Should().Contain("OperationProblemExample(\"Widget\", \"not found|missing\")");
+        return driver.GetRunResult().GeneratedTrees.Single(static t => t.FilePath.EndsWith(Descriptor, StringComparison.Ordinal)).ToString();
     }
 
     private static byte[] LegacyIndexedInner()

@@ -101,7 +101,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                 continue;
             }
 
-            var reference = CanName(named, operationType.ContainingAssembly)
+            var reference = ApiExceptionFactoryResolver.CanRead(named, operationType.ContainingAssembly)
                 ? $"{innerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{named.Name}"
                 : null;
 
@@ -129,62 +129,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
     /// </summary>
     private static HashSet<string> GetTranslatedProblemTypes(INamedTypeSymbol operationType)
     {
-        return new HashSet<string>(GetTranslations(operationType).Select(static t => t.FromType), StringComparer.Ordinal);
-    }
-
-    /// <summary>
-    /// The names of the operation's members its own <c>[TranslateError]</c>s answer with.
-    /// </summary>
-    private static IEnumerable<string> GetTranslationTargetNames(INamedTypeSymbol operationType)
-    {
-        return GetTranslations(operationType).Select(static t => t.To).Distinct(StringComparer.Ordinal);
-    }
-
-    private static IEnumerable<(string FromType, string To)> GetTranslations(INamedTypeSymbol operationType)
-    {
-        foreach (var attribute in operationType.GetAttributes())
-        {
-            if (attribute.AttributeClass is { Name: "TranslateErrorAttribute" } attributeClass
-                && attributeClass.IsInNamespace("Blueprint", "Model", "Attributes")
-                && attribute.ConstructorArguments is [{ Value: string fromType }, { Value: string to }])
-            {
-                yield return (fromType, to);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Whether code in <paramref name="within"/> can read <paramref name="member"/>: it, a property's getter, and every type
-    /// containing it are public, or internal to an assembly that gives <paramref name="within"/> access.
-    /// </summary>
-    private static bool CanName(ISymbol member, IAssemblySymbol within)
-    {
-        // `{ private get; set; }`: the property is public, but reading it is not (CS0271).
-        if (member is IPropertySymbol property && (property.GetMethod is null || !IsAccessible(property.GetMethod, within)))
-        {
-            return false;
-        }
-
-        for (var current = member; current is not null and not INamespaceSymbol; current = current.ContainingType)
-        {
-            if (!IsAccessible(current, within))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool IsAccessible(ISymbol symbol, IAssemblySymbol within)
-    {
-        return symbol.DeclaredAccessibility switch
-        {
-            Accessibility.Public => true,
-            Accessibility.Internal or Accessibility.ProtectedOrInternal => SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, within)
-                || symbol.ContainingAssembly.GivesAccessTo(within),
-            _ => false,
-        };
+        return new HashSet<string>(ApiExceptionFactoryResolver.GetTranslations(operationType).Select(static t => t.FromType), StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -230,24 +175,15 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
 
         // A [TranslateError] target can be a getter-backed property (`Gone => new(...)`), which has no backing field. It
         // replaces the inner factory it translates (D14), so it is documented as the operation's own too.
-        foreach (var targetName in GetTranslationTargetNames(operationType))
+        foreach (var property in ApiExceptionFactoryResolver.GetTranslationTargetProperties(operationType, apiExceptionFactoryType))
         {
-            if (builder.Any(registration => registration.FieldName == targetName))
+            if (!builder.Any(registration => registration.FieldName == property.Name)
+                && ApiExceptionFactoryResolver.TryResolve(property, context.GetSemanticModel, out var factory))
             {
-                continue;
-            }
-
-            foreach (var member in operationType.GetMembers(targetName))
-            {
-                if (member is IPropertySymbol { IsStatic: true } property
-                    && SymbolEqualityComparer.Default.Equals(property.Type, apiExceptionFactoryType)
-                    && ApiExceptionFactoryResolver.TryResolve(property, context.GetSemanticModel, out var factory))
-                {
-                    builder.Add(new ApiExceptionFactoryRegistration(
-                        property.Name,
-                        factory.HttpStatus,
-                        RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{property.Name}")));
-                }
+                builder.Add(new ApiExceptionFactoryRegistration(
+                    property.Name,
+                    factory.HttpStatus,
+                    RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{property.Name}")));
             }
         }
 

@@ -91,15 +91,15 @@ internal static class ApiExceptionFactoryResolver
     /// <returns>Whether its status is known.</returns>
     public static bool TryResolve(ISymbol member, Func<SyntaxTree, SemanticModel?> getSemanticModel, out ApiExceptionFactoryDetails factory)
     {
-        return TryResolve(member, getSemanticModel, out factory, depth: 0);
+        return TryResolve(member, getSemanticModel, out factory, new HashSet<ISymbol>(SymbolEqualityComparer.Default));
     }
 
-    private static bool TryResolve(ISymbol member, Func<SyntaxTree, SemanticModel?> getSemanticModel, out ApiExceptionFactoryDetails factory, int depth)
+    private static bool TryResolve(ISymbol member, Func<SyntaxTree, SemanticModel?> getSemanticModel, out ApiExceptionFactoryDetails factory, HashSet<ISymbol> visited)
     {
         factory = default;
 
-        // Guard against circular references or deep chains.
-        if (depth > 2)
+        // An alias chain is followed however long it is; only one that comes back to a member it passed is given up.
+        if (!visited.Add(member))
         {
             return false;
         }
@@ -166,7 +166,7 @@ internal static class ApiExceptionFactoryResolver
         if (initializerExpression is MemberAccessExpressionSyntax or IdentifierNameSyntax
             && semanticModel?.GetSymbolInfo(initializerExpression).Symbol is (IFieldSymbol or IPropertySymbol) and var referenced)
         {
-            return TryResolve(referenced, getSemanticModel, out factory, depth + 1);
+            return TryResolve(referenced, getSemanticModel, out factory, visited);
         }
 
         return false;
@@ -184,6 +184,83 @@ internal static class ApiExceptionFactoryResolver
         return member is IFieldSymbol { AssociatedSymbol: IPropertySymbol property } && member.DeclaringSyntaxReferences.Length == 0
             ? property.DeclaringSyntaxReferences
             : member.DeclaringSyntaxReferences;
+    }
+
+    /// <summary>
+    /// Whether code in <paramref name="within"/> can read <paramref name="member"/>: it, a property's getter, and every type
+    /// containing it are public, or internal to an assembly that gives <paramref name="within"/> access.
+    /// </summary>
+    /// <param name="member">The field or property.</param>
+    /// <param name="within">The assembly that would read it.</param>
+    /// <returns>Whether it can be read there.</returns>
+    public static bool CanRead(ISymbol member, IAssemblySymbol within)
+    {
+        // `{ private get; set; }`: the property is public, but reading it is not (CS0271).
+        if (member is IPropertySymbol property && (property.GetMethod is null || !IsAccessible(property.GetMethod, within)))
+        {
+            return false;
+        }
+
+        for (var current = member; current is not null and not INamespaceSymbol; current = current.ContainingType)
+        {
+            if (!IsAccessible(current, within))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The <c>[TranslateError(fromType, to)]</c>s an operation declares itself.
+    /// </summary>
+    /// <param name="operationType">The operation.</param>
+    /// <returns>Each translation's upstream problem type and the name of the member it answers with.</returns>
+    public static IEnumerable<(string FromType, string To)> GetTranslations(INamedTypeSymbol operationType)
+    {
+        foreach (var attribute in operationType.GetAttributes())
+        {
+            if (attribute.AttributeClass is { Name: "TranslateErrorAttribute" } attributeClass
+                && attributeClass.IsInNamespace("Blueprint", "Model", "Attributes")
+                && attribute.ConstructorArguments is [{ Value: string fromType }, { Value: string to }])
+            {
+                yield return (fromType, to);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The static <c>ApiExceptionFactory</c> properties of <paramref name="operationType"/> its own
+    /// <c>[TranslateError]</c>s name, such as a getter-backed <c>Gone =&gt; new(...)</c>, which has no backing field for
+    /// <see cref="GetMembers"/> to find.
+    /// </summary>
+    /// <param name="operationType">The operation.</param>
+    /// <param name="apiExceptionFactoryType">The <c>Blueprint.ApiExceptionFactory</c> type.</param>
+    /// <returns>The properties.</returns>
+    public static IEnumerable<IPropertySymbol> GetTranslationTargetProperties(INamedTypeSymbol operationType, INamedTypeSymbol apiExceptionFactoryType)
+    {
+        foreach (var targetName in GetTranslations(operationType).Select(static t => t.To).Distinct(StringComparer.Ordinal))
+        {
+            foreach (var member in operationType.GetMembers(targetName))
+            {
+                if (member is IPropertySymbol { IsStatic: true } property && SymbolEqualityComparer.Default.Equals(property.Type, apiExceptionFactoryType))
+                {
+                    yield return property;
+                }
+            }
+        }
+    }
+
+    private static bool IsAccessible(ISymbol symbol, IAssemblySymbol within)
+    {
+        return symbol.DeclaredAccessibility switch
+        {
+            Accessibility.Public => true,
+            Accessibility.Internal or Accessibility.ProtectedOrInternal => SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, within)
+                || symbol.ContainingAssembly.GivesAccessTo(within),
+            _ => false,
+        };
     }
 
     private static ExpressionSyntax? GetReturnedExpression(AccessorListSyntax accessors)

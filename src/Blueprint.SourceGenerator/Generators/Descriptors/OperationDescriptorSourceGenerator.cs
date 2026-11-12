@@ -233,17 +233,19 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             {
                 DeclarationChecksums = EquatableList<string>.TakeOwnership(checksums),
                 ExposedProperties = exposedProperties,
-                InnerErrorFacts = innerType is null ? EquatableList<string>.Empty : GetErrorFacts(innerType, compilation, cancellationToken),
+                InnerErrorFacts = innerType is null ? EquatableList<string>.Empty : GetErrorFacts(type!, innerType, compilation, cancellationToken),
                 ForwardPolicyDiagnostics = forwardPolicyDiagnostics,
             },
         };
     }
 
     /// <summary>
-    /// What a descriptor documents of a type's factories: each one's name, status, and title and type where known, resolved
-    /// through any alias and constant they read, wherever those are declared.
+    /// What an exposing operation's descriptor documents of factories declared elsewhere (D14): each inner factory's name,
+    /// status, title and type where known, and whether the operation can read it at run time; and the same for the
+    /// operation's own <c>[TranslateError]</c> targets, which may be getter-backed. Each is resolved through any alias and
+    /// constant it reads, wherever those are declared.
     /// </summary>
-    private static EquatableList<string> GetErrorFacts(INamedTypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
+    private static EquatableList<string> GetErrorFacts(INamedTypeSymbol operationType, INamedTypeSymbol innerType, Compilation compilation, CancellationToken cancellationToken)
     {
         if (compilation.GetTypeByMetadataName("Blueprint.ApiExceptionFactory") is not { } apiExceptionFactoryType)
         {
@@ -252,16 +254,28 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
 
         var facts = new List<string>();
 
-        foreach (var (named, member) in ApiExceptionFactoryResolver.GetMembers(type, apiExceptionFactoryType))
+        foreach (var (named, member) in ApiExceptionFactoryResolver.GetMembers(innerType, apiExceptionFactoryType))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            facts.Add(GetErrorFact(named, member, compilation, ApiExceptionFactoryResolver.CanRead(named, compilation.Assembly)));
+        }
 
-            facts.Add(ApiExceptionFactoryResolver.TryResolve(member, tree => compilation.ContainsSyntaxTree(tree) ? compilation.GetSemanticModel(tree) : null, out var factory)
-                ? Fingerprint.Join(named.Name, factory.HttpStatus.ToString(CultureInfo.InvariantCulture), factory.Title, factory.Type)
-                : Fingerprint.Join(named.Name));
+        foreach (var target in ApiExceptionFactoryResolver.GetTranslationTargetProperties(operationType, apiExceptionFactoryType))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            facts.Add(GetErrorFact(target, target, compilation, readable: true));
         }
 
         return EquatableList<string>.TakeOwnership(facts);
+    }
+
+    private static string GetErrorFact(ISymbol named, ISymbol member, Compilation compilation, bool readable)
+    {
+        var readability = readable ? "readable" : "unreadable";
+
+        return ApiExceptionFactoryResolver.TryResolve(member, tree => compilation.ContainsSyntaxTree(tree) ? compilation.GetSemanticModel(tree) : null, out var factory)
+            ? Fingerprint.Join(named.Name, readability, factory.HttpStatus.ToString(CultureInfo.InvariantCulture), factory.Title, factory.Type)
+            : Fingerprint.Join(named.Name, readability);
     }
 
     private static Result<DescriptorPlan> Configure(
