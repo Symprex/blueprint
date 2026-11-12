@@ -467,10 +467,10 @@ IRegionalOperationsApi api = new RegionalOperationsApi(transport, endpoints);
 
 A client is cheap, immutable and thread-safe, because `WithCredential` and `WithRequestModifier` make clones that share the transport and fields. Register it with `services.AddBlueprintClient<IItemsApi, ItemsApi>((sp, client) => client.BaseAddress = ...)`, which returns the named client's `IHttpClientBuilder` (so handlers such as retry still apply), makes the client transient, and resolves each readonly field the class declares from the container through the generated `Create` (a field declared nullable is left null where the container has none).
 
-The named client, `typeof(TImplementation).Name`, is configured on every call, but the interface is registered only once:
+The named client is `typeof(TImplementation).Name`, and each client is registered once:
 
 - **An interface already registered stands.** Where `TInterface` is in the container before `AddBlueprintClient` runs (a test double, a hand-written factory), no second registration is added, and resolving `TInterface` gives the earlier one. The named client is still given the callback, so a gateway's generated forward, which takes the named client by name through `BlueprintClientTransport.Create<TClient>` and not through `TInterface`, has its base address and handlers.
-- **A second call adds to the same named client.** Its callback runs after the first, as `IHttpClientBuilder` configuration always composes, so a base address set by both is the second's, and a header set only by the first still applies. Handlers chained on either returned builder apply to the one client.
+- **A second call for the same client throws.** Its callback would be applied to the same named client as well, so a setting both make would be the last one's and a header both append, such as the caller's forwarded bearer token, would be sent twice. Register each client in one place.
 
 #### Serializer context
 
