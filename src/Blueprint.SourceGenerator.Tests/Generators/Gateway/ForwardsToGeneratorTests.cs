@@ -671,6 +671,22 @@ public class ForwardsToGeneratorTests
     }
 
     [Fact]
+    public void An_inherited_check_reads_a_Display_name_backed_by_a_private_resource_type_without_naming_it()
+    {
+        // The resource type was named in the pipeline class, which cannot see a private nested one: CS0122 (Copilot on #169).
+        var gateway = GatewaySource
+            .Replace(
+                "public string? Owner { get; set; }",
+                "[System.ComponentModel.DataAnnotations.Display(Name = nameof(Labels.Owner), ResourceType = typeof(Labels))]\n        public string? Owner { get; set; }\n\n        private static class Labels\n        {\n            public static string Owner => \"Run owner\";\n        }",
+                StringComparison.Ordinal);
+
+        var run = Run(gateway);
+
+        run.EmitErrors.Should().BeEmpty();
+        ValidationBlock(run).Should().NotContain("Labels").And.Contain(".GetName() ?? \"Owner\"), \"Owner\")");
+    }
+
+    [Fact]
     public void A_cross_property_rule_of_a_gateway_base_property_naming_a_bound_property_is_kept()
     {
         // The bindings of declared mode made every base-class property read as one contributed by [Expose], whose rule
