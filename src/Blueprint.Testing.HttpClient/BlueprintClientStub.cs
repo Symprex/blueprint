@@ -148,11 +148,15 @@ public sealed class BlueprintClientStub<TClient>
     /// <summary>
     /// Gets the metadata the host writes a body of <paramref name="type"/> with: the client's serializer context's own
     /// when it covers the type, so that a member it cannot write fails as it does on the host, and otherwise the
-    /// reflection fallback the host gives an uncovered root.
+    /// reflection fallback the host gives an uncovered root. A resource event or problem details root always takes the
+    /// fallback, registered or not, as the host's <c>SerializerContextTypeInfoCache.Resolve</c> gives it: what its bags
+    /// hold is open by design, so no context could register it.
     /// </summary>
     private static System.Text.Json.Serialization.Metadata.JsonTypeInfo BodyTypeInfo(Type type, JsonSerializerOptions jsonOptions)
     {
-        return jsonOptions.TypeInfoResolver is not null && jsonOptions.TryGetTypeInfo(type, out var covered)
+        var openByDesign = typeof(ResourceEvent).IsAssignableFrom(type) || typeof(Microsoft.AspNetCore.Mvc.ProblemDetails).IsAssignableFrom(type);
+
+        return !openByDesign && jsonOptions.TypeInfoResolver is not null && jsonOptions.TryGetTypeInfo(type, out var covered)
             ? covered
             : SerializerContextTypeInfoCache.GetFallbackOptions(jsonOptions).GetTypeInfo(type);
     }

@@ -467,6 +467,26 @@ public sealed class BlueprintClientStubTests
         (await act.Should().ThrowAsync<NotSupportedException>()).WithMessage("*UnregisteredArchiver*");
     }
 
+    [Fact]
+    public async Task A_registered_resource_event_still_writes_an_unregistered_metadata_value()
+    {
+        // The host gives a resource event root the reflection fallback even when its context registers it, as its bags hold
+        // whatever a caller puts in them (SerializerContextTypeInfoCache.Resolve).
+        await using var provider = BuildProvider(
+            out var upstream,
+            static json => json.TypeInfoResolver = StrictStubJsonContext.Default);
+        upstream.Respond<IssueTemplateKeyCommand>(static c => new ResourceEvent<TemplateApiResource>(
+                ResourceEventChangeType.Created,
+                "template.keyIssued",
+                new TemplateApiResource { Id = c.TemplateId, Name = "Keyed" })
+            .WithMetadata("issuedBy", new UnregisteredArchiver("someone")));
+
+        var resourceEvent = await provider.GetRequiredService<IStubbedTemplatesApi>().IssueTemplateKeyAsync(new IssueTemplateKeyCommand { TemplateId = "t-1" });
+
+        resourceEvent.Data!.Id.Should().Be("t-1");
+        resourceEvent.Metadata.Should().ContainKey("issuedBy");
+    }
+
     private static ServiceProvider BuildProvider(
         out BlueprintClientStub<StubbedTemplatesApi> upstream,
         Action<System.Text.Json.JsonSerializerOptions>? configureJson = null)
@@ -557,4 +577,6 @@ public sealed class TaggedPayload
 [System.Text.Json.Serialization.JsonSerializable(typeof(TemplateApiResource))]
 [System.Text.Json.Serialization.JsonSerializable(typeof(TaggedPayload))]
 [System.Text.Json.Serialization.JsonSerializable(typeof(CreateTemplateCommand))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(IssueTemplateKeyCommand))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(ResourceEvent<TemplateApiResource>))]
 public sealed partial class StrictStubJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
