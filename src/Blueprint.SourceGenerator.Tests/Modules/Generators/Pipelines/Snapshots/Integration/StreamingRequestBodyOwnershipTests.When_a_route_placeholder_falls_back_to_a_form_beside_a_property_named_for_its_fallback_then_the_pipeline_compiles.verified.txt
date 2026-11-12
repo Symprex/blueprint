@@ -46,7 +46,7 @@ namespace Blueprint.Generated
     internal sealed partial class AttachItemCommandExecutorPipeline : Blueprint.OperationExecutorShell
     {
         static readonly string[] _appliedModuleIds =
-            ["PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "AuthenticationModule", "ApiAuthoriserModule", "UnitOfWorkModule", "HandlerExecutionModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
+            ["AuthenticationModule", "PropertyOwnershipModule", "TenantModule", "PropertyPopulationModule", "ApiAuthoriserModule", "UnitOfWorkModule", "HandlerExecutionModule", "MessageOutboxModule", "AuditingModule", "BackgroundTaskFlushModule", "LinkGenerationModule", "PipelineReturnModule"];
 
         internal AttachItemCommandExecutorPipeline(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, Blueprint.Runtime.Exec.PipelineServices pipelineServices)
             : base(loggerFactory, "AttachItemCommand", pipelineServices)
@@ -58,6 +58,11 @@ namespace Blueprint.Generated
             var operation = (global::TestNamespace.AttachItemCommand)context.Operation;
 
             var httpContext = ((Blueprint.Runtime.Http.IHttpOperationContext)context).HttpContext;
+            if (CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
+            {
+                return _authCheckResult;
+            }
+
 
             if (!context.IsNested)
             {
@@ -103,11 +108,6 @@ namespace Blueprint.Generated
             {
                 await PopulatePropertiesAsync(applicablePopulators, context).ConfigureAwait(false);
             }
-            if (CheckHttpAuthenticated(httpContext, context) is { } _authCheckResult)
-            {
-                return _authCheckResult;
-            }
-
             if (this.UserAuthorisationContextFactory != null)
             {
                 await LoadUserContextAsync(context, httpContext, this.UserAuthorisationContextFactory).ConfigureAwait(false);

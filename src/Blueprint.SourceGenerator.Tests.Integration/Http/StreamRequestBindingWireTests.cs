@@ -174,6 +174,20 @@ public sealed class StreamRequestBindingWireTests
     }
 
     [Fact]
+    public async Task A_multipart_operation_refuses_an_unauthenticated_caller_before_reading_the_form()
+    {
+        // The form used to be read, and a large file spooled to disk, before the identity check, so an anonymous caller's
+        // malformed form was a 400 rather than the 401 that shows nothing of it was read.
+        await using var host = await StreamRequestHost.StartAsync();
+        var truncated = new ByteArrayContent(Encoding.UTF8.GetBytes("--b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.txt\"\r\n\r\nhel"));
+        truncated.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data; boundary=b");
+
+        var (status, _) = await host.SendAsync(new HttpRequestMessage(HttpMethod.Post, "stream-request/secured/attachments") { Content = truncated });
+
+        status.Should().Be(401);
+    }
+
+    [Fact]
     public void A_stream_operation_is_sent_to_a_URL_that_carries_its_query_properties()
     {
         // Only a GET used to carry a query string, and a stream body has nowhere else to put them, so they were lost.
@@ -587,5 +601,18 @@ public partial class StreamRequestHiddenTagsCommand : StreamRequestTagsBase, ICo
     public static Task<string> HandleAsync(StreamRequestHiddenTagsCommand command)
     {
         return Task.FromResult($"tags={string.Join(",", command.Tags ?? [])};rate={command.Rate?.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+    }
+}
+
+/// <summary>An upload that requires an authenticated caller, whose form must not be read for one who is not.</summary>
+[RootLink("/stream-request/secured/attachments")]
+[HttpPost]
+public partial class StreamRequestSecuredAttachCommand : ICommand<string>
+{
+    public IFormFile File { get; set; } = default!;
+
+    public static Task<string> HandleAsync(StreamRequestSecuredAttachCommand command)
+    {
+        return Task.FromResult(command.File.FileName);
     }
 }

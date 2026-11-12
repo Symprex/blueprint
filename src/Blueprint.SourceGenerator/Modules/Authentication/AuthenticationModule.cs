@@ -141,9 +141,15 @@ public sealed class AuthenticationModule : IBlueprintSourceGeneratorModule, IDes
             return;
         }
 
-        // Default-on: all HTTP operations get an auth check unless [AllowAnonymous]
+        // Default-on: all HTTP operations get an auth check unless [AllowAnonymous]. A multipart operation (one with an
+        // IFormFile, #71) is checked before population instead: reading its form spools a large file to disk, which an
+        // anonymous caller could otherwise do with as many concurrent uploads as it liked before being refused.
+        var readsForm = Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType)
+            .OfType<IPropertySymbol>()
+            .Any(static p => !p.IsStatic && PropertyOwnershipModule.IsFormFileType(p.Type));
+
         context.AddRenderStep(
-            PipelineStage.Authentication,
+            readsForm ? PipelineStage.Setup : PipelineStage.Authentication,
             RenderAuthenticationCheck);
     }
 
