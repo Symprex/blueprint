@@ -173,6 +173,22 @@ public sealed class StreamRequestBindingWireTests
     }
 
     [Fact]
+    public void A_stream_operation_is_sent_to_a_URL_that_carries_its_query_properties()
+    {
+        // Only a GET used to carry a query string, and a stream body has nowhere else to put them, so they were lost.
+        var command = new StreamRequestImportCommand { FolderId = "folder-1", Label = "nightly", Limit = 5 };
+
+        BuildRequestUrl(command).Should().Be("/stream-request/imports/folder-1?label=nightly&limit=5");
+        StreamRequestImportCommand.Http.BuildUrl(command).Should().Be("/stream-request/imports/folder-1?label=nightly&limit=5");
+    }
+
+    [Fact]
+    public void A_stream_operation_with_no_query_values_is_sent_to_its_bare_URL()
+    {
+        BuildRequestUrl(new StreamRequestImportCommand { FolderId = "folder-1" }).Should().Be("/stream-request/imports/folder-1");
+    }
+
+    [Fact]
     public async Task A_form_whose_files_share_one_buffered_request_body_is_sent_with_every_file_intact()
     {
         // With FormOptions.BufferBody, each file reads its own range of one shared stream; opening every file while the form
@@ -301,6 +317,12 @@ public sealed class StreamRequestBindingWireTests
     private static JsonElement RenderOperation(string path, string method)
     {
         return RenderOperationAndComponents(path, method).Operation;
+    }
+
+    private static string? BuildRequestUrl<T>(T operation)
+        where T : IHttpRequestBuilder<T>
+    {
+        return T.BuildRequestUrl(operation);
     }
 
     private static (JsonElement Operation, JsonElement Components) RenderOperationAndComponents(string path, string method)

@@ -597,7 +597,7 @@ public static class PipelineHelpers
             return new FormReadResult(await request.ReadFormAsync(cancellationToken).ConfigureAwait(false), null);
         }
         catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException
-            || (ex is IOException io && !cancellationToken.IsCancellationRequested && !IsStorageFailure(io)))
+            || (ex is IOException io && !cancellationToken.IsCancellationRequested && IsRaisedByTheReader(io)))
         {
             // A malformed multipart body (a missing or bad boundary, a body that ends before its closing boundary, which the
             // reader fails with an IOException) or one over FormOptions' limits.
@@ -606,14 +606,20 @@ public static class PipelineHelpers
     }
 
     /// <summary>
-    /// Whether an <see cref="IOException"/> from reading a form is the server's own failure to spool a large file to disk
-    /// (a full disk or quota), which is not the request's fault and stays a 500, rather than a malformed body.
+    /// Whether an <see cref="IOException"/> from reading a form is one the reader raised itself over the body it was sent,
+    /// such as one that ends before its closing boundary, rather than the server's own failure to spool a large file to disk.
     /// </summary>
-    private static bool IsStorageFailure(IOException exception)
+    /// <remarks>
+    /// The reader, and Kestrel under it, raise a plain <see cref="IOException"/>, whose HResult is <c>COR_E_IO</c>; a file
+    /// system failure carries the operating system's own error (a Win32 HRESULT, or the raw errno on Linux) or is a subclass
+    /// with its own, as <see cref="DirectoryNotFoundException"/> is. Only a full disk's used to be told apart, so a missing
+    /// temporary directory or a file the server could not write was answered as the caller's malformed body.
+    /// </remarks>
+    private static bool IsRaisedByTheReader(IOException exception)
     {
-        // ERROR_HANDLE_DISK_FULL and ERROR_DISK_FULL as Windows HRESULTs; ENOSPC and EDQUOT, which .NET reports as the raw
-        // errno on Linux.
-        return exception.HResult is unchecked((int)0x80070027) or unchecked((int)0x80070070) or 28 or 122;
+        const int CorEIo = unchecked((int)0x80131620);
+
+        return exception.HResult == CorEIo;
     }
 
     /// <summary>

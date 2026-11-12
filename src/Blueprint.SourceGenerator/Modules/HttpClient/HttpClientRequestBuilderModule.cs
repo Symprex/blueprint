@@ -144,6 +144,16 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // build the same URL. An operation that cannot take the class (CanDeclareHttpClass) keeps the inline delegates only.
         var urlBuilderBody = BuildUrlBuilderBody(urlTemplate, placeholders, properties);
 
+        // A stream or multipart body (#71) has no room for the host's query properties and is never a GET (BPPO015), so its
+        // URL carries them itself, for every client that builds it.
+        if (bindingEntries is { BodyShape: not PropertyOwnershipModule.RequestBodyShape.Json }
+            && BuildQueryStringBody(placeholders, properties, queryBindingNames, []) is { } bodyQueryString)
+        {
+            urlBuilderBody = $"var builtUrl = BuildPath(operation); return builtUrl is null ? null : AppendQuery(operation, builtUrl); "
+                + $"static string BuildPath({operationFqn} operation) {{ {urlBuilderBody} }} "
+                + $"static string AppendQuery({operationFqn} operation, string url) {{ {bodyQueryString} }}";
+        }
+
         // A GET carries its non-URL properties as a query string rather than a body. The typed appender exists for every
         // GET; the delegate stays null when no property is query-eligible, as the runtime reads that as "append nothing".
         var queryStringBody = isQueryMethod
