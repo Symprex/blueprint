@@ -69,16 +69,21 @@ internal static class DeclaredForward
     }
 
     /// <summary>
-    /// Gets the inner property names the operation's <c>[ForwardAs]</c> attributes claim.
+    /// Gets the inner property names the operation's <c>[ForwardAs]</c> attributes claim: those on the properties the
+    /// forward reads, its public instance ones, each by its most derived declaration, as the property model lists them.
     /// </summary>
     /// <param name="operationType">The gateway operation.</param>
     /// <returns>The claimed names.</returns>
     public static HashSet<string> GetRenameTargets(INamedTypeSymbol operationType)
     {
         var targets = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in operationType.GetAllMembers())
         {
-            if (member is IPropertySymbol property && FindForwardAs(property, out var innerName) is not null && innerName is not null)
+            if (member is IPropertySymbol { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public } property
+                && seen.Add(property.Name)
+                && FindForwardAs(property, out var innerName) is not null
+                && innerName is not null)
             {
                 targets.Add(innerName);
             }

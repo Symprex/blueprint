@@ -146,6 +146,97 @@ public class ForwardsToGeneratorTests
             .And.Contain("global::System.String.IsNullOrWhiteSpace(operation.Owner)");
     }
 
+    [Theory]
+    [InlineData("[ForwardAs(\"Owner\")]\n        private string? HiddenOwner { get; set; }")]
+    [InlineData("[ForwardAs(\"Owner\")]\n        public static string? StaticOwner { get; set; }")]
+    public void A_rename_on_a_property_that_is_not_public_and_instance_claims_nothing(string member)
+    {
+        // Every member's [ForwardAs] was read, so a private or static one claimed Owner, and the public Owner stopped
+        // being forwarded or validated (Copilot on #169).
+        var gateway = GatewaySource.Replace(
+            "public string? Comment { get; set; }",
+            "public string? Comment { get; set; }\n\n        " + member,
+            StringComparison.Ordinal);
+
+        var run = Run(gateway);
+
+        ForwardInitialiser(run).Should().Contain("Owner = operation.Owner");
+        ValidationBlock(run).Should().Contain("global::System.String.IsNullOrWhiteSpace(operation.Owner)");
+        CompileDescriptors(gateway).Diagnostics.Should().NotContain(static d => d.Id == "BPGW025");
+    }
+
+    [Fact]
+    public void A_rename_on_a_base_declaration_the_operation_hides_claims_nothing()
+    {
+        var gateway = GatewaySource
+            .Replace(
+                "public partial class CreateImportRunCommand : ICommand<Inner.ImportRunResult>",
+                "public partial class CreateImportRunCommand : GatewayBase, ICommand<Inner.ImportRunResult>",
+                StringComparison.Ordinal)
+            .Replace(
+                "public string? Comment { get; set; }",
+                "public string? Comment { get; set; }\n\n        public new string? Alias { get; set; }",
+                StringComparison.Ordinal)
+            + """
+
+            namespace Gateway
+            {
+                using Blueprint.Model.Attributes;
+
+                public class GatewayBase
+                {
+                    [ForwardAs("Owner")]
+                    public string? Alias { get; set; }
+                }
+            }
+            """;
+
+        ForwardInitialiser(Run(gateway)).Should().Contain("Owner = operation.Owner").And.NotContain("operation.Alias");
+    }
+
+    [Fact]
+    public void A_class_level_validation_attribute_keeps_the_inherited_property_checks()
+    {
+        // The whole-object fallback returned before any property was planned, and it reads only the gateway's own
+        // attributes, so the inherited rules were dropped (Copilot on #169).
+        var gateway = GatewaySource
+            .Replace(
+                "[ForwardsTo<Inner.CreateImportRunCommand>]",
+                "[ForwardsTo<Inner.CreateImportRunCommand>]\n    [System.ComponentModel.DataAnnotations.CustomValidation(typeof(Checks), nameof(Checks.Check))]",
+                StringComparison.Ordinal)
+            + """
+
+            namespace Gateway
+            {
+                public static class Checks
+                {
+                    public static System.ComponentModel.DataAnnotations.ValidationResult? Check(object value) => System.ComponentModel.DataAnnotations.ValidationResult.Success;
+                }
+            }
+            """;
+
+        var run = Run(gateway);
+
+        run.EmitErrors.Should().BeEmpty();
+        ValidationBlock(run).Should().Contain("operation.SourceName.Length > 100")
+            .And.Contain("Validator.TryValidateObject(operation");
+    }
+
+    [Fact]
+    public void An_inherited_rule_without_a_fast_path_does_not_drop_the_others()
+    {
+        // [CreditCard] has no generated check, and one rule without one rejected the property's whole plan, so the
+        // inherited [Required] was dropped with it (Copilot on #169).
+        var inner = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(
+            InnerSource.Replace("[Required]\n        public string? Owner", "[Required]\n        [CreditCard]\n        public string? Owner", StringComparison.Ordinal),
+            "InnerImportContractWithCard");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, GatewaySource, AppSource], inner);
+
+        run.EmitErrors.Should().BeEmpty();
+        ValidationBlock(run).Should().Contain("global::System.String.IsNullOrWhiteSpace(operation.Owner)");
+    }
+
     [Fact]
     public void A_declared_property_with_rules_of_its_own_keeps_only_its_own()
     {

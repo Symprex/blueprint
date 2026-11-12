@@ -59,16 +59,19 @@ internal static class ValidationPropertyPlanner
     {
         // Class-level validation attributes (e.g. [CustomValidation] on the type) require full runtime fallback
         // because they may depend on cross-property state that we cannot safely decompose at compile time.
+        var forwardedType = Gateway.DeclaredForward.FindForwardedType(operationType, out _);
+
         if (ValidationSymbolHelpers.HasValidationAttribute(operationType))
         {
-            return new ValidationPipelinePlan(RequiresWholeObjectFallback: true, ImplementsIValidatableObject: false, Properties: []);
+            // The runtime validates the gateway's own attributes only, so a declared-mode operation's inherited rules (D10)
+            // are planned alongside it.
+            return new ValidationPipelinePlan(RequiresWholeObjectFallback: true, ImplementsIValidatableObject: false, Properties: PlanInheritedRulesOnly(operationType, forwardedType));
         }
 
         var implementsIValidatableObject = ValidationSymbolHelpers.ImplementsIValidatableObject(operationType);
 
         var properties = new List<PropertyValidationPlan>();
         HashSet<string>? boundNames = null;
-        var forwardedType = Gateway.DeclaredForward.FindForwardedType(operationType, out _);
 
         foreach (var property in ValidationSymbolHelpers.GetPublicInstanceProperties(operationType))
         {
@@ -103,7 +106,7 @@ internal static class ValidationPropertyPlanner
                 && forwardedType is not null
                 && Gateway.DeclaredForward.GetInheritedRules(operationType, forwardedType, property) is { Count: > 0 } inheritedRules)
             {
-                if (TryCreateFastPathPlan(property, propertyAccess, inheritedRules, out var inheritedPlan))
+                if (TryCreateInheritedPlan(property, propertyAccess, inheritedRules, out var inheritedPlan))
                 {
                     properties.Add(inheritedPlan);
                 }
@@ -222,6 +225,59 @@ internal static class ValidationPropertyPlanner
                 propertyAccess,
                 property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
         }
+    }
+
+    /// <summary>
+    /// Plans the inherited rules (D10) of a declared-mode operation whose own validation the runtime owns, because a
+    /// class-level attribute requires the whole-object fallback: those properties declare no rules the runtime would see.
+    /// </summary>
+    private static List<PropertyValidationPlan> PlanInheritedRulesOnly(INamedTypeSymbol operationType, INamedTypeSymbol? forwardedType)
+    {
+        var properties = new List<PropertyValidationPlan>();
+        if (forwardedType is null)
+        {
+            return properties;
+        }
+
+        foreach (var property in ValidationSymbolHelpers.GetPublicInstanceProperties(operationType))
+        {
+            var propertyAccess = $"operation.{ValidationSymbolHelpers.EscapeIdentifier(property.Name)}";
+            if (Gateway.DeclaredForward.GetInheritedRules(operationType, forwardedType, property) is { Count: > 0 } rules
+                && TryCreateInheritedPlan(property, propertyAccess, rules, out var plan))
+            {
+                properties.Add(plan);
+            }
+        }
+
+        return properties;
+    }
+
+    /// <summary>
+    /// Plans the inherited rules of one property that generated checks can apply. One without a fast path is left to the
+    /// inner operation without taking the others with it, as it would if the whole set were planned at once.
+    /// </summary>
+    private static bool TryCreateInheritedPlan(
+        IPropertySymbol property,
+        string propertyAccess,
+        IReadOnlyList<AttributeData> rules,
+        out FastPathPropertyValidationPlan plan)
+    {
+        var supported = new List<AttributeData>(rules.Count);
+        foreach (var rule in rules)
+        {
+            if (TryCreateFastPathPlan(property, propertyAccess, [rule], out _))
+            {
+                supported.Add(rule);
+            }
+        }
+
+        if (supported.Count == 0)
+        {
+            plan = null!;
+            return false;
+        }
+
+        return TryCreateFastPathPlan(property, propertyAccess, supported, out plan);
     }
 
     private static bool TryCreateFastPathPlan(
