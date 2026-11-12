@@ -206,6 +206,22 @@ public class GatewayReExportGeneratorTests
     }
 
     [Fact]
+    public void An_exposed_operation_with_a_Description_of_its_own_written_without_arguments_does_not_get_a_second()
+    {
+        // The parameterless constructor gives no string to read, so it used to count as no [Description], and the partial
+        // added the inner operation's: CS0579, a duplicate attribute.
+        var gateway = GatewaySource.Replace(
+            "    [Expose<Inner.RenameWidgetCommand>]",
+            "    [System.ComponentModel.Description]\n    [Expose<Inner.RenameWidgetCommand>]",
+            StringComparison.Ordinal);
+
+        var run = Run([ClientSource, gateway, AppSource], InnerReference());
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(ExposedProperties).Should().NotContain("DescriptionAttribute");
+    }
+
+    [Fact]
     public void Where_Roslyn_has_the_inner_operations_documentation_an_undocumented_exposed_operation_takes_its_summary_and_remarks()
     {
         // A package reference brings its documentation file, which Roslyn reads for the inner operation's symbol.

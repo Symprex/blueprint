@@ -429,7 +429,10 @@ internal static class OperationPropertyModelBuilder
         // D15: an operation that documents or describes itself keeps its own. Where the build writes no documentation file,
         // the comment is not parsed and so reads as none, and the inheritdoc emitted for it is ignored in turn.
         var inheritsDocumentation = string.IsNullOrWhiteSpace(operationType.GetDocumentationCommentXml());
-        var inheritedDescription = FindDescription(operationType) is null ? FindDescription(exposed) : null;
+
+        // Any [Description] of its own counts, however written: [Description] alone has no string to read, but a second one
+        // in the partial would be a duplicate (CS0579).
+        var inheritedDescription = HasDescription(operationType) ? null : FindDescription(exposed);
 
         return new ExposedOperationInfo(exposed.ToFullMetadataName(), typeName, creation, inheritsDocumentation, inheritedDescription, GetInnerDependencies(exposed));
     }
@@ -468,6 +471,15 @@ internal static class OperationPropertyModelBuilder
         dependencies.Add(exposed.GetDocumentationCommentXml() ?? string.Empty);
 
         return EquatableList<string>.TakeOwnership(dependencies);
+    }
+
+    /// <summary>
+    /// Whether a type carries a <c>[System.ComponentModel.Description]</c> of its own, with or without a string.
+    /// </summary>
+    private static bool HasDescription(INamedTypeSymbol type)
+    {
+        return type.GetAttributes().Any(static attribute => attribute.AttributeClass is { Name: "DescriptionAttribute" } attributeClass
+            && attributeClass.IsInNamespace("System", "ComponentModel"));
     }
 
     /// <summary>
