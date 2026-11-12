@@ -48,7 +48,9 @@ public class Startup
         services.AddBlueprintHttpClient<SampleBlueprintApp>(templateServiceAddress);
 
         // The typed client the [Expose<TInner>] reads forward through: their generated handlers use its named HTTP client.
-        services.AddBlueprintClient<Api.ITemplateServiceApi, Api.TemplateServiceApi>((_, client) => client.BaseAddress = templateServiceAddress);
+        // Registered for the caller, so a handler that injects ITemplateServiceApi calls upstream with the caller's
+        // Authorization header, as a forward does, and nothing is set on the shared named client.
+        services.AddCallerBlueprintClient<Api.ITemplateServiceApi, Api.TemplateServiceApi>((_, client) => client.BaseAddress = templateServiceAddress);
 
         // The strategy GetServiceTemplateQuery's [UpstreamCredential<T>] selects, resolved per forward.
         services.AddSingleton<ServiceTokenCredentialStrategy>();
