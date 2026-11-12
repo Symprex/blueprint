@@ -83,6 +83,12 @@ public sealed class TaskExecutor
 
         var result = await this._executor.ExecuteAsync(context).ConfigureAwait(false);
 
+        // The result goes no further than here, so nothing else would dispose an upstream response it holds.
+        if (result is Blueprint.Http.ProxyResult proxy)
+        {
+            proxy.DownstreamResponse.Dispose();
+        }
+
         if (result is UnhandledExceptionResult unhandled)
         {
             activity?.SetStatus(ActivityStatusCode.Error, unhandled.Exception.Message);
