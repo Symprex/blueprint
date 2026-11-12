@@ -32,6 +32,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Blueprint.SourceGenerator.Benchmarks\Blueprint.SourceGenerator.Benchmarks.csproj" Aliases="benchmarks" />
     <ProjectReference Include="..\Blueprint.SourceGenerator.Sample\Blueprint.SourceGenerator.Sample.csproj" />
+    <!-- An upstream contract in another assembly, for the gateway operations GatewayPropertyDocumentationTests exposes. -->
+    <ProjectReference Include="..\Blueprint.SourceGenerator.Tests.Integration.Upstream\Blueprint.SourceGenerator.Tests.Integration.Upstream.csproj" />
     <!-- Built first, not referenced: OpenApiBuildEmissionTests runs the gateway's build target against its output. -->
     <ProjectReference Include="..\Blueprint.SourceGenerator.Sample.Gateway\Blueprint.SourceGenerator.Sample.Gateway.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Blueprint.SourceGenerator\Blueprint.SourceGenerator.csproj" OutputItemType="Analyzer" />
