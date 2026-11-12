@@ -282,23 +282,28 @@ internal static class ValidationPropertyPlanner
 
     /// <summary>
     /// Gets the C# expression of the name the runtime would give a property in its validation messages: its
-    /// <c>[Display]</c> name, resource-backed or not, else its <c>[DisplayName]</c>, else its own name. Inherited checks
-    /// need it because the runtime path, which reads those attributes itself, cannot see the rules they apply.
+    /// <c>[Display]</c> name, resource-backed or not, else its <c>[DisplayName]</c>, else its own name, reading the
+    /// attributes an override inherits as the runtime does. Inherited checks need it because the runtime path, which
+    /// reads those attributes itself, cannot see the rules they apply.
     /// </summary>
     private static string GetDisplayNameExpression(IPropertySymbol property)
     {
-        var memberName = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(property.Name, quote: true);
-        AttributeData? displayName = null;
-        foreach (var attribute in property.GetAttributes())
-        {
-            if (!ValidationSymbolHelpers.IsDisplayNameAffectingAttribute(attribute.AttributeClass))
-            {
-                continue;
-            }
+        var attributes = Gateway.DeclaredForward.GetEffectiveAttributes(property)
+            .Where(static a => ValidationSymbolHelpers.IsDisplayNameAffectingAttribute(a.AttributeClass))
+            .ToList();
 
+        // As ValidationRuntime.GetDisplayName: a blank label is no label, so the search goes on.
+        var fallback = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(property.Name, quote: true);
+        if (attributes.FirstOrDefault(static a => a.AttributeClass!.Name != "DisplayAttribute"
+            && a.ConstructorArguments is [{ Value: string label }] && !string.IsNullOrWhiteSpace(label)) is { ConstructorArguments: [{ Value: string displayName }] })
+        {
+            fallback = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(displayName, quote: true);
+        }
+
+        foreach (var attribute in attributes)
+        {
             if (attribute.AttributeClass!.Name != "DisplayAttribute")
             {
-                displayName ??= attribute;
                 continue;
             }
 
@@ -316,21 +321,19 @@ internal static class ValidationPropertyPlanner
                 }
             }
 
-            if (name is null)
+            if (string.IsNullOrWhiteSpace(name))
             {
-                return memberName;
+                continue;
             }
 
-            var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(name, quote: true);
+            var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(name!, quote: true);
             return resourceType is null
                 ? literal
                 : "new global::System.ComponentModel.DataAnnotations.DisplayAttribute { Name = " + literal + ", ResourceType = typeof("
-                    + resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ") }.GetName() ?? " + memberName;
+                    + resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ") }.GetName() ?? " + fallback;
         }
 
-        return displayName is { ConstructorArguments: [{ Value: string label }] }
-            ? Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(label, quote: true)
-            : memberName;
+        return fallback;
     }
 
     private static bool TryCreateFastPathPlan(

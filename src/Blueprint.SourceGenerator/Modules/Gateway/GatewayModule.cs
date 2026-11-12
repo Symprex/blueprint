@@ -74,9 +74,20 @@ public sealed class GatewayModule : IBlueprintSourceGeneratorModule, IDescriptor
     /// </summary>
     private static void ReportRenamesWithoutForwardsTo(DescriptorContributorContext context, INamedTypeSymbol operationType)
     {
-        foreach (var member in operationType.GetMembers())
+        // The operation's own declarations, then the public ones it inherits; the most derived declaration of a name stands
+        // for it, and an override carries the rename of the declaration it overrides.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var member in operationType.GetAllMembers())
         {
-            if (member is IPropertySymbol property && DeclaredForward.FindForwardAs(property, out _) is { } forwardAs)
+            if (member is not IPropertySymbol property
+                || !seen.Add(property.Name)
+                || (!SymbolEqualityComparer.Default.Equals(property.ContainingType, operationType)
+                    && (property.IsStatic || property.DeclaredAccessibility != Accessibility.Public)))
+            {
+                continue;
+            }
+
+            if (DeclaredForward.FindForwardAs(property, out _) is { } forwardAs)
             {
                 var location = forwardAs.ApplicationSyntaxReference is { } reference
                     ? LocationInfo.CreateFrom(reference.GetSyntax())

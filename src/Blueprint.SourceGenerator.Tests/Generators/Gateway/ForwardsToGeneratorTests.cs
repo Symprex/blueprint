@@ -776,6 +776,115 @@ public class ForwardsToGeneratorTests
     /// base one, and whose <c>Region</c> overrides a base declaration marked <c>[Required, MaxLength(20)]</c> without
     /// repeating its rules.
     /// </summary>
+    [Fact]
+    public void A_rename_an_operation_without_ForwardsTo_inherits_reports_BPGW027_once_per_property()
+    {
+        // Only the operation's own declarations were read, so an inherited rename went unreported (Copilot on #169).
+        var gateway = """
+            namespace Gateway
+            {
+                using Blueprint.Model;
+                using Blueprint.Model.Attributes;
+
+                public class PlainBase
+                {
+                    [ForwardAs("SourceId")]
+                    public string? ExternalId { get; set; }
+
+                    [ForwardAs("Owner")]
+                    public virtual string? StartedBy { get; set; }
+                }
+
+                [AllowAnonymous]
+                [RootLink("/plain")]
+                public partial class PlainQuery : PlainBase, IQuery<Inner.ImportRunResult>
+                {
+                    public override string? StartedBy { get; set; }
+
+                    public Inner.ImportRunResult Invoke() => new();
+                }
+            }
+            """;
+
+        var diagnostics = CompileDescriptors(gateway).Diagnostics.Where(static d => d.Id == "BPGW027").Select(static d => d.GetMessage()).ToList();
+
+        diagnostics.Should().HaveCount(2);
+        diagnostics.Should().ContainSingle(static m => m.Contains("'ExternalId'", StringComparison.Ordinal));
+        diagnostics.Should().ContainSingle(static m => m.Contains("'StartedBy'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_descriptor_documents_a_renamed_property_by_its_own_declaration_not_the_base_one_it_hides()
+    {
+        // Every declaration of the name was enumerated, so a hidden base declaration's summary replaced the inherited
+        // one (Copilot on #169).
+        var gateway = GatewaySource
+            .Replace(
+                "public partial class CreateImportRunCommand : ICommand<Inner.ImportRunResult>",
+                "public partial class CreateImportRunCommand : GatewayBase, ICommand<Inner.ImportRunResult>",
+                StringComparison.Ordinal)
+            .Replace("public string? ExternalId { get; init; }", "public new string? ExternalId { get; init; }", StringComparison.Ordinal)
+            + """
+
+            namespace Gateway
+            {
+                public class GatewayBase
+                {
+                    /// <summary>The base declaration's own text.</summary>
+                    public string? ExternalId { get; init; }
+                }
+            }
+            """;
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([InnerSource, AppBindingSource, gateway]);
+
+        var descriptor = result.Output.Single(static t => t.FilePath.EndsWith("Gateway.CreateImportRunCommand_Descriptor.g.cs", StringComparison.Ordinal)).ToString();
+        descriptor.Should().Contain("The source's own identifier.").And.NotContain("The base declaration's own text.");
+    }
+
+    [Fact]
+    public void An_inherited_check_names_an_override_by_the_label_of_the_declaration_it_overrides()
+    {
+        // Only the override's own attributes were read, so the base label was lost (Copilot on #169).
+        var gateway = GatewaySource
+            .Replace(
+                "public partial class CreateImportRunCommand : ICommand<Inner.ImportRunResult>",
+                "public partial class CreateImportRunCommand : GatewayBase, ICommand<Inner.ImportRunResult>",
+                StringComparison.Ordinal)
+            .Replace("public string? Owner { get; set; }", "public override string? Owner { get; set; }", StringComparison.Ordinal)
+            + """
+
+            namespace Gateway
+            {
+                public class GatewayBase
+                {
+                    [System.ComponentModel.DisplayName("Run owner")]
+                    public virtual string? Owner { get; set; }
+                }
+            }
+            """;
+
+        var run = Run(gateway);
+
+        run.EmitErrors.Should().BeEmpty();
+        ValidationBlock(run).Should().Contain("FormatErrorMessage(\"Run owner\"), \"Owner\")");
+    }
+
+    [Fact]
+    public void An_inherited_check_falls_back_to_DisplayName_when_Display_gives_no_name()
+    {
+        // A [Display] without a Name stopped the search, where the runtime goes on to [DisplayName] (Copilot on #169).
+        var gateway = GatewaySource.Replace(
+            "public string? Owner { get; set; }",
+            "[System.ComponentModel.DataAnnotations.Display(Description = \"Who\")]\n        [System.ComponentModel.DisplayName(\"Run owner\")]\n        public string? Owner { get; set; }",
+            StringComparison.Ordinal);
+
+        var run = Run(gateway);
+
+        run.EmitErrors.Should().BeEmpty();
+        ValidationBlock(run).Should().Contain("FormatErrorMessage(\"Run owner\"), \"Owner\")");
+    }
+
     private static AllGeneratorsRun RunWithInnerBase(string gateway)
     {
         return RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerWithBase.Value);
