@@ -201,4 +201,16 @@ internal static class PropertyOwnershipDiagnosticDescriptors
         category: "PropertyOwnership",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO017: A client sends a stream or multipart body built from the operation's own properties, the stream it holds or
+    /// each file and field, so every property read from that body needs a public getter.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnreadableStreamingBodyProperty = new(
+        id: "BPPO017",
+        title: "Stream or multipart body property has no public getter",
+        messageFormat: "Property '{0}' on operation '{1}' is read from a stream or multipart/form-data body, which a client builds from the operation's properties, but it has no public getter. Give it a public getter.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net.Http.Headers;
 
@@ -65,10 +67,11 @@ public static class HttpRequestBodies
     /// <summary>
     /// Adds a field to a form for a value, or nothing when it is <see langword="null"/>.
     /// </summary>
+    /// <typeparam name="T">The property's type, whose TypeConverter writes a value no other rule does.</typeparam>
     /// <param name="form">The form.</param>
     /// <param name="name">The field's name, the property's binding name.</param>
     /// <param name="value">The value.</param>
-    public static void AddField(MultipartFormDataContent form, string name, object? value)
+    public static void AddField<T>(MultipartFormDataContent form, string name, T? value)
     {
         ArgumentNullException.ThrowIfNull(form);
 
@@ -100,7 +103,12 @@ public static class HttpRequestBodies
         }
     }
 
-    private static string? FormatField(object? value)
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code",
+        Justification = "The host's generated binding looks up the same TypeConverter for the property's type to read the field back, so the type and its converter are already preserved.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2087", Justification = "As above: the host preserves the property's type for its own converter lookup.")]
+    private static string? FormatField<T>(T? value)
     {
         return value switch
         {
@@ -113,7 +121,10 @@ public static class HttpRequestBodies
             // TimeOnly's default invariant format is HH:mm, which would drop the seconds.
             TimeOnly timeOnly => timeOnly.ToString("O", CultureInfo.InvariantCulture),
             IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
-            _ => value.ToString(),
+
+            // The host parses any other field with its TypeConverter's ConvertFromInvariantString, so it is written with the
+            // same converter; a type without one of its own gets the default, which is ToString().
+            _ => TypeDescriptor.GetConverter(typeof(T)).ConvertToInvariantString(value),
         };
     }
 }

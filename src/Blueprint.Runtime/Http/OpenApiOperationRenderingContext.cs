@@ -345,6 +345,11 @@ public sealed record OpenApiOperationRenderingContext(
         // files are binary strings. The generator allows neither beside anything that would contradict that (BPPO014-016).
         var bodyMediaType = OpenApiRequestBodyMediaTypes.Json;
 
+        // A multipart form's fields are described as the form binds them, not as JSON writes them, so the shape comes first.
+        var isMultipartBody = ownershipData.Entries.Any(e => e.Source == PropertyBindingSource.Body
+            && descriptor.OperationType.GetProperty(e.PropertyName, BindingFlags.Public | BindingFlags.Instance)?.PropertyType
+                == typeof(Microsoft.AspNetCore.Http.IFormFile));
+
         foreach (var entry in ownershipData.Entries)
         {
             var clrProperty = descriptor.OperationType.GetProperty(
@@ -365,9 +370,14 @@ public sealed record OpenApiOperationRenderingContext(
                 bodyMediaType = OpenApiRequestBodyMediaTypes.MultipartFormData;
             }
 
+            // A form binds a byte array from a field per byte, where JSON writes it as one base64 string.
+            var isFormByteArray = isMultipartBody && entry.Source == PropertyBindingSource.Body && clrProperty?.PropertyType == typeof(byte[]);
+
             // Prefer CLR type-based mapping when property info is available for accurate collection/dictionary support.
             var (schemaType, schemaFormat) = isFormFile
                 ? ("string", "binary")
+                : isFormByteArray
+                ? ("array", (string?)null)
                 : clrProperty is not null
                     ? MapClrTypeToOpenApiSchema(clrProperty.PropertyType)
                     : MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
@@ -611,6 +621,10 @@ public sealed record OpenApiOperationRenderingContext(
 
                 case PropertyBindingSource.Body:
                     var (bodyItemsType, bodyItemsFormat, bodyItemsSchemaRef, _, bodyAdditionalType, bodyAdditionalFormat, bodyAdditionalSchemaRef) = ResolveCollectionSchema(clrProperty, schemaNamesByType);
+                    if (isFormByteArray)
+                    {
+                        (bodyItemsType, bodyItemsFormat) = ("integer", "int32");
+                    }
 
                     // Legacy documented a dictionary's open value as any value, and a value as nullable when its
                     // annotation said so.
@@ -634,7 +648,7 @@ public sealed record OpenApiOperationRenderingContext(
                         MinLength = OpenApiValidationConstraints.GetDocumentedMinLength(
                             constraints.MinLength,
                             constraints.RequiresNonEmptyString,
-                            isNonEnumString: schemaType == "string" && enumValues.IsDefaultOrEmpty && enumSchemaRef is null,
+                            isNonEnumString: schemaType == "string" && !isFormFile && enumValues.IsDefaultOrEmpty && enumSchemaRef is null,
                             hasStringLengthAttribute: constraints.HasStringLengthAttribute,
                             useLegacyStringLengthZero: naming == OpenApiSchemaNaming.Legacy),
                         MaxLength = constraints.MaxLength,

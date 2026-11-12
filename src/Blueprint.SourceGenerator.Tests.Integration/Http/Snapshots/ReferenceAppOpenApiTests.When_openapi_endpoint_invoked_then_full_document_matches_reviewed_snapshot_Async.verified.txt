@@ -2270,6 +2270,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -2836,8 +2846,7 @@
           "file": {
             "type": "string",
             "format": "binary",
-            "description": "The file to attach.",
-            "minLength": 1
+            "description": "The file to attach."
           }
         },
         "additionalProperties": false

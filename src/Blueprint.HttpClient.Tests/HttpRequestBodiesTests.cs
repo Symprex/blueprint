@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 using Blueprint.Model;
@@ -48,12 +49,70 @@ public class HttpRequestBodiesTests
         TimeOnly.Parse(text, CultureInfo.InvariantCulture).Should().Be(value);
     }
 
+    [Fact]
+    public async Task A_field_with_a_TypeConverter_is_written_as_its_converter_writes_it()
+    {
+        // The host reads such a field with ConvertFromInvariantString; ToString() used to send the CLR type name instead.
+        using var form = new MultipartFormDataContent();
+
+        HttpRequestBodies.AddField(form, "id", new ConvertedId("abc-123"));
+
+        var text = await form.Single().ReadAsStringAsync();
+        text.Should().Be("abc-123");
+        TypeDescriptor.GetConverter(typeof(ConvertedId)).ConvertFromInvariantString(text).Should().Be(new ConvertedId("abc-123"));
+    }
+
     private static async Task<string> SendAsync(HttpContent content)
     {
         using var destination = new MemoryStream();
         await content.CopyToAsync(destination);
 
         return Encoding.UTF8.GetString(destination.ToArray());
+    }
+
+    /// <summary>An identifier bound through a <see cref="TypeConverter"/>, with no <see cref="object.ToString"/> of its own.</summary>
+    [TypeConverter(typeof(ConvertedIdConverter))]
+    private sealed class ConvertedId(string value) : IEquatable<ConvertedId>
+    {
+        public string Value { get; } = value;
+
+        public bool Equals(ConvertedId? other)
+        {
+            return other is not null && other.Value == this.Value;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return this.Equals(obj as ConvertedId);
+        }
+
+        public override int GetHashCode()
+        {
+            return this.Value.GetHashCode(StringComparison.Ordinal);
+        }
+    }
+
+    private sealed class ConvertedIdConverter : TypeConverter
+    {
+        public override bool CanConvertFrom(ITypeDescriptorContext? context, Type sourceType)
+        {
+            return sourceType == typeof(string);
+        }
+
+        public override bool CanConvertTo(ITypeDescriptorContext? context, Type? destinationType)
+        {
+            return destinationType == typeof(string);
+        }
+
+        public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture, object value)
+        {
+            return new ConvertedId((string)value);
+        }
+
+        public override object? ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture, object? value, Type destinationType)
+        {
+            return destinationType == typeof(string) && value is ConvertedId id ? id.Value : base.ConvertTo(context, culture, value, destinationType);
+        }
     }
 
     /// <summary>A stream that cannot seek, as a request body.</summary>

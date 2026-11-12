@@ -106,6 +106,7 @@ Current property ownership IDs in active use:
 - `BPPO014`: a body-owned `Stream` property is handed the whole request body (#71), so no other property of the operation can be read from the body — not a JSON property, a file or a route placeholder that falls back to the body (error).
 - `BPPO015`: a `Stream` or `IFormFile` property on an operation that also answers GET, which has no body to read it from (error).
 - `BPPO016`: a body property of an operation with an `IFormFile` property is a `multipart/form-data` field, parsed as a query-string value is, so its type must be one the query string can carry: a scalar, an enum or an array of either (error).
+- `BPPO017`: a property read from a stream or `multipart/form-data` body has no public getter, so a generated client, which builds that body from the operation's properties, cannot send it (error).
 
 ### Operation discovery and host diagnostics
 

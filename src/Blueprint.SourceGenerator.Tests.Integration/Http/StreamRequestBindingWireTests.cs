@@ -184,7 +184,32 @@ public sealed class StreamRequestBindingWireTests
         schema.GetProperty("type").GetString().Should().Be("string");
         schema.GetProperty("format").GetString().Should().Be("binary");
 
-        ParameterNames(operation).Should().BeEquivalentTo("FolderId", "label");
+        ParameterNames(operation).Should().BeEquivalentTo("FolderId", "label", "limit");
+    }
+
+    [Fact]
+    public async Task A_stream_operation_answers_a_query_value_that_does_not_parse_with_400()
+    {
+        await using var host = await StreamRequestHost.StartAsync();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "stream-request/imports/folder-1?limit=bad")
+        {
+            Content = new ByteArrayContent([1, 2, 3]),
+        };
+
+        var (status, _) = await host.SendAsync(request);
+
+        status.Should().Be(400);
+    }
+
+    [Fact]
+    public void The_document_gives_a_stream_operation_with_a_fallible_query_property_a_400_but_no_415()
+    {
+        // Suppressing a stream's 415, since it reads any media type, used to drop its query property's 400 with it.
+        var operation = RenderOperation("/stream-request/imports/{FolderId}", "post");
+
+        var statuses = operation.GetProperty("responses").EnumerateObject().Select(static p => p.Name).ToList();
+        statuses.Should().Contain("400").And.NotContain("415");
     }
 
     [Fact]
@@ -199,13 +224,33 @@ public sealed class StreamRequestBindingWireTests
         var properties = components.GetProperty(reference["#/components/schemas/".Length..]).GetProperty("properties");
 
         properties.EnumerateObject().Select(static p => p.Name)
-            .Should().BeEquivalentTo("description", "priority", "tags", "file", "thumbnail");
+            .Should().BeEquivalentTo("description", "priority", "tags", "digest", "file", "thumbnail");
         properties.GetProperty("file").GetProperty("type").GetString().Should().Be("string");
         properties.GetProperty("file").GetProperty("format").GetString().Should().Be("binary");
         properties.GetProperty("thumbnail").GetProperty("format").GetString().Should().Be("binary");
         properties.GetProperty("priority").GetProperty("type").GetString().Should().Be("integer");
 
         ParameterNames(operation).Should().Equal("FolderId");
+    }
+
+    [Fact]
+    public void The_document_describes_a_multipart_byte_array_as_the_repeated_integer_fields_it_is_bound_from()
+    {
+        // The JSON mapping, a base64 string, used to be applied to a form field, which is bound one byte per value.
+        var properties = RenderMultipartSchemaProperties();
+
+        var digest = properties.GetProperty("digest");
+        digest.GetProperty("type").GetString().Should().Be("array");
+        digest.GetProperty("items").GetProperty("type").GetString().Should().Be("integer");
+    }
+
+    private static JsonElement RenderMultipartSchemaProperties()
+    {
+        var (operation, components) = RenderOperationAndComponents("/stream-request/folders/{FolderId}/attachments", "post");
+        var reference = operation.GetProperty("requestBody").GetProperty("content").GetProperty("multipart/form-data")
+            .GetProperty("schema").GetProperty("$ref").GetString()!;
+
+        return components.GetProperty(reference["#/components/schemas/".Length..]).GetProperty("properties");
     }
 
     private static JsonElement RenderOperation(string path, string method)
@@ -318,6 +363,9 @@ public partial class StreamRequestImportCommand : ICommand<string>
     [FromQuery]
     public string? Label { get; set; }
 
+    [FromQuery]
+    public int? Limit { get; set; }
+
     [FromBody]
     public Stream Content { get; set; } = default!;
 
@@ -351,6 +399,8 @@ public partial class StreamRequestAttachCommand : ICommand<string>
     public int Priority { get; set; }
 
     public string[]? Tags { get; set; }
+
+    public byte[]? Digest { get; set; }
 
     public IFormFile File { get; set; } = default!;
 

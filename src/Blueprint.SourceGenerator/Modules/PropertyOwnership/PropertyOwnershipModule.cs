@@ -77,13 +77,19 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
-        // A stream is handed the body unread, so nothing about it can fail to bind or be of an unsupported media type.
-        var hasBodyBinding = GetRequestBodyShape(entries) != RequestBodyShape.Stream && entries.Any(static e =>
+        // A stream is handed the body unread, so nothing about it can fail to bind or be of an unsupported media type; its
+        // route and query properties still can, and with no parsed body beside them to account for the 400 they need their own.
+        var isStreamBody = GetRequestBodyShape(entries) == RequestBodyShape.Stream;
+        var hasBodyBinding = !isStreamBody && entries.Any(static e =>
             e.Source == PropertyOwnershipSource.Body || e.FallbackSource == PropertyOwnershipSource.Body);
         var hasHeaderOrCookieBinding = entries.Any(static e =>
             e.Source is PropertyOwnershipSource.Header or PropertyOwnershipSource.Cookie);
+        var hasRouteOrQueryBesideStream = isStreamBody && entries.Any(static e =>
+            e.Source is PropertyOwnershipSource.Route or PropertyOwnershipSource.Query);
 
-        context.AddMetadata(new BindingDescriptorRegistration(hasBodyBinding, hasHeaderOrCookieBinding));
+        context.AddMetadata(new BindingDescriptorRegistration(
+            CanFailToBind: hasBodyBinding || hasHeaderOrCookieBinding || hasRouteOrQueryBesideStream,
+            RejectsUnsupportedMediaType: hasBodyBinding));
         context.AddMetadata(new PropertyBindingEntriesMetadata(
             entries.Select(static e => new PropertyBindingEntriesMetadata.Entry(
                 e.PropertyName,
@@ -448,12 +454,13 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// <summary>
     /// Whether a multipart body's field can carry a property of <paramref name="type"/>: a type the query string can carry,
     /// but not an array of nullable values, which the shared array reader would build as an array of the underlying type
-    /// (see <see cref="IsQueryOnGet"/>'s remarks).
+    /// (see <see cref="IsQueryOnGet"/>'s remarks), nor a multidimensional array, which that reader cannot build at all.
     /// </summary>
     private static bool IsSupportedFormFieldType(ITypeSymbol type)
     {
         return IsSupportedQueryType(type)
-            && type is not IArrayTypeSymbol { ElementType.OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+            && type is not IArrayTypeSymbol { ElementType.OriginalDefinition.SpecialType: SpecialType.System_Nullable_T }
+            && type is not IArrayTypeSymbol { Rank: > 1 };
     }
 
     /// <summary>
@@ -761,6 +768,15 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
             var member = membersByName[entry.PropertyName];
             var isStreamingPart = isBody && (IsStreamType(entry.TypeSymbol) || IsFormFileType(entry.TypeSymbol));
+
+            // A client builds the body from the operation's properties, so it must be able to read each one.
+            if (member.GetMethod is not { DeclaredAccessibility: Accessibility.Public })
+            {
+                diagnostics.Add(CreatePropertyDiagnostic(
+                    PropertyOwnershipDiagnosticDescriptors.UnreadableStreamingBodyProperty,
+                    member,
+                    operationType));
+            }
 
             if (isStreamingPart && answersGet)
             {

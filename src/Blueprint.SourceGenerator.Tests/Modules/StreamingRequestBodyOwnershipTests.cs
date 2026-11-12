@@ -237,6 +237,76 @@ public class StreamingRequestBodyOwnershipTests
     }
 
     [Fact]
+    public void When_a_multipart_field_is_a_multidimensional_array_then_reports_BPPO016()
+    {
+        // A form field array is parsed into a one-dimensional array, which cannot be assigned to int[,].
+        var result = CompileDescriptor(
+            """
+            [RootLink("/attachments")]
+            [HttpPost]
+            public partial class AttachCommand : ICommand<string>
+            {
+                public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+
+                public int[,] Grid { get; set; }
+
+                public static Task<string> HandleAsync(AttachCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle().Which;
+        diagnostic.Id.Should().Be("BPPO016");
+        diagnostic.GetMessage().Should().Contain("'Grid'");
+    }
+
+    [Fact]
+    public void When_a_body_Stream_has_no_getter_then_reports_BPPO017()
+    {
+        // A client sends the stream it reads from the property; one it cannot read used to generate a builder that did not compile.
+        var result = CompileDescriptor(
+            """
+            [RootLink("/imports")]
+            [HttpPost]
+            public partial class ImportCommand : ICommand<string>
+            {
+                private System.IO.Stream _content;
+
+                [FromBody]
+                public System.IO.Stream Content { set => _content = value; }
+
+                public static Task<string> HandleAsync(ImportCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle().Which;
+        diagnostic.Id.Should().Be("BPPO017");
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("'Content'");
+    }
+
+    [Fact]
+    public void When_a_multipart_field_has_no_getter_then_reports_BPPO017()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/attachments")]
+            [HttpPost]
+            public partial class AttachCommand : ICommand<string>
+            {
+                private string _label;
+
+                public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+
+                public string Label { set => _label = value; }
+
+                public static Task<string> HandleAsync(AttachCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Equal("BPPO017");
+    }
+
+    [Fact]
     public void When_a_Stream_hides_a_base_property_of_the_same_name_then_the_client_body_is_built_from_the_Stream()
     {
         // The derived property is the one bound; the client's body builder used to look the name up and find the base's.
