@@ -496,7 +496,9 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         }
 
         // One after a '.' cannot be left out when a value before it in its segment has a '.' of its own: the router splits
-        // the segment at its last '.', so /files/{Name}.{Ext?} would read "abc.txt" as Name "abc" and Ext "txt".
+        // the segment at its last '.', so /files/{Name}.{Ext?} would read "abc.txt" as Name "abc" and Ext "txt". ASP.NET
+        // allows only a '.' before an optional placeholder, so the value just before it always meets that '.' directly and
+        // no literal can tell the two readings apart. For an earlier value in the segment this is stricter than the router.
         foreach (var leftOut in trailingMatches.Where(match => !RoutePlaceholderSyntax.IsWholeSegment(urlTemplate, match)))
         {
             var segmentStart = urlTemplate.LastIndexOf('/', leftOut.Index - 1) + 1;
