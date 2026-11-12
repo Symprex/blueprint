@@ -443,6 +443,40 @@ public sealed class McpToolCallTests
     }
 
     [Fact]
+    public async Task The_hosts_global_rate_limiter_limits_the_operations_request_as_it_limits_the_operations_HTTP_request()
+    {
+        // The global limiter used to see only the MCP request, so a quota it keeps per operation path was never spent by
+        // a tool call: the same caller could call the operation through MCP as often as it liked.
+        await using var host = await McpTestHost.StartAsync(globalLimiterPerPath: true);
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+        var arguments = new Dictionary<string, object?> { ["Id"] = "abc" };
+
+        var first = await client.CallToolAsync(ToolAt(ids, "/connection-aware/"), arguments);
+        var second = await client.CallToolAsync(ToolAt(ids, "/connection-aware/"), arguments);
+        var overHttp = await http.GetAsync("api/connection-aware/abc");
+
+        HttpStatus(first).Should().Be(200);
+        HttpStatus(second).Should().Be(429);
+        ((int)overHttp.StatusCode).Should().Be(429);
+    }
+
+    [Fact]
+    public async Task The_hosts_global_rate_limiter_does_not_limit_an_operation_whose_endpoint_disables_rate_limiting()
+    {
+        await using var host = await McpTestHost.StartAsync(globalLimiterPerPath: true);
+        var ids = await host.GetOperationIdsAsync();
+        await using var client = await host.ConnectAsync();
+
+        var first = await client.CallToolAsync(ids[("get", "/client-certificate")], new Dictionary<string, object?>());
+        var second = await client.CallToolAsync(ids[("get", "/client-certificate")], new Dictionary<string, object?>());
+
+        HttpStatus(first).Should().Be(200);
+        HttpStatus(second).Should().Be(200);
+    }
+
+    [Fact]
     public async Task A_route_constraint_that_reads_the_request_is_given_the_operations_request_not_the_MCP_request()
     {
         await using var host = await McpTestHost.StartAsync();

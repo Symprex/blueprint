@@ -259,6 +259,10 @@ internal sealed class BlueprintOperationTool : McpServerTool
         var requirementData = metadata.GetOrderedMetadata<IAuthorizationRequirementData>();
         var services = context.RequestServices;
 
+        // The endpoint runs within the host's global rate limiter, which the rate-limiting middleware applies once the
+        // authorisation middleware has let the caller through.
+        var run = GlobalRateLimiting.Apply(endpoint, services);
+
         if (services.GetService<IAuthorizationPolicyProvider>() is not { } policyProvider)
         {
             // A host without authorisation has no policy to apply, but an endpoint that asks for one is refused, as the
@@ -270,7 +274,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
                     + "registered. Call services.AddAuthorization().");
             }
 
-            await endpoint.RequestDelegate!(context).ConfigureAwait(false);
+            await run(context).ConfigureAwait(false);
             return;
         }
 
@@ -290,7 +294,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
 
         if (policy is null)
         {
-            await endpoint.RequestDelegate!(context).ConfigureAwait(false);
+            await run(context).ConfigureAwait(false);
             return;
         }
 
@@ -302,7 +306,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
 
         if (metadata.GetMetadata<IAllowAnonymous>() is not null)
         {
-            await endpoint.RequestDelegate!(context).ConfigureAwait(false);
+            await run(context).ConfigureAwait(false);
             return;
         }
 
@@ -314,7 +318,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
 
         var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, resource).ConfigureAwait(false);
 
-        await resultHandler.HandleAsync(endpoint.RequestDelegate!, context, policy, authorizeResult).ConfigureAwait(false);
+        await resultHandler.HandleAsync(run, context, policy, authorizeResult).ConfigureAwait(false);
     }
 
     /// <summary>

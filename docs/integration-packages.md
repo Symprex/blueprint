@@ -724,7 +724,11 @@ calls it there with the SDK's own MCP client.
 - Listing tools needs no authentication, as reading the OpenAPI document needs none. Add `.RequireAuthorization()` to
   the builder `MapBlueprintMcp` returns to require it.
 - An operation whose endpoint requires rate limiting (`RequireRateLimiting`) is refused as a tool: the rate-limiting
-  middleware, which a tool call does not go through, offers no way to apply a named policy outside it.
+  middleware, which a tool call does not go through, offers no way to apply a named policy outside it. The host's
+  global limiter (`RateLimiterOptions.GlobalLimiter`) is applied to the operation's request, once the caller is
+  authorised and unless its endpoint disables rate limiting, so a quota it keeps per path or per user is spent by a
+  tool call as by the HTTP request; the MCP request is limited too, as any request to the MCP endpoint is. It is
+  applied wherever one is configured, so configure one only in a host that calls `UseRateLimiter`.
 - A caller signed in by anything but the `Authorization` header, such as a cookie, is anonymous to the operation: the
   operation's request is signed in from that header alone.
 - Only the `Authorization` header is carried from the MCP request; any other header an operation reads must be a tool

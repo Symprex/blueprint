@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Threading.RateLimiting;
 using Blueprint.Authorization;
 using Blueprint.Mcp.Tests.App;
 using Blueprint.Model;
@@ -115,6 +116,10 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// <param name="authenticateBeforeRouting">
     /// Whether the host authenticates before it routes, so its route constraints read the signed-in user.
     /// </param>
+    /// <param name="globalLimiterPerPath">
+    /// Whether the host has a global rate limiter allowing one request a minute to each path but the MCP endpoint's, and
+    /// <see cref="ClientCertificateMcpQuery"/>'s endpoint disables rate limiting.
+    /// </param>
     /// <returns>The started host.</returns>
     public static async Task<McpTestHost> StartAsync(
         bool renderOnFirstRequest = false,
@@ -128,7 +133,8 @@ internal sealed class McpTestHost : IAsyncDisposable
         bool hostRestrictUpperCase = false,
         bool mcpOnlyScheme = false,
         bool endpointResourceUpperCase = false,
-        bool authenticateBeforeRouting = false)
+        bool authenticateBeforeRouting = false,
+        bool globalLimiterPerPath = false)
     {
         var builder = WebApplication.CreateSlimBuilder();
 
@@ -169,6 +175,16 @@ internal sealed class McpTestHost : IAsyncDisposable
                 w.PermitLimit = 1;
                 w.Window = TimeSpan.FromMinutes(1);
             });
+
+            if (globalLimiterPerPath)
+            {
+                o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(static context =>
+                    context.Request.Path.StartsWithSegments("/api/mcp")
+                        ? RateLimitPartition.GetNoLimiter("mcp")
+                        : RateLimitPartition.GetFixedWindowLimiter(
+                            context.Request.Path.Value ?? string.Empty,
+                            static _ => new FixedWindowRateLimiterOptions { PermitLimit = 1, Window = TimeSpan.FromMinutes(1) }));
+            }
         });
 
         if (mapSampleApp || mapSampleAppBetween)
@@ -254,6 +270,12 @@ internal sealed class McpTestHost : IAsyncDisposable
                     && endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(App.Lower.GetfooMcpQuery)))
                 {
                     endpoint.Metadata.Add(new EnableRateLimitingAttribute("api"));
+                }
+
+                if (globalLimiterPerPath
+                    && endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(ClientCertificateMcpQuery)))
+                {
+                    endpoint.Metadata.Add(new DisableRateLimitingAttribute());
                 }
 
                 if (endpoint.Metadata.OfType<ApiOperationDescriptor>().Any(static d => d.OperationType == typeof(WhoAmIMcpQuery)))
