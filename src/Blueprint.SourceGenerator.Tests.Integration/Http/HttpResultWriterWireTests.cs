@@ -209,6 +209,37 @@ public sealed class HttpResultWriterWireTests
         (await Task.WhenAny(disposed, Task.Delay(TimeSpan.FromSeconds(10)))).Should().BeSameAs(disposed, "the upstream response is disposed with the request");
     }
 
+    [Fact]
+    public async Task A_proxy_result_whose_save_fails_outside_a_request_still_has_its_upstream_response_disposed()
+    {
+        // Outside an HTTP request there is no request to dispose the response with, and the exception result that replaces
+        // the handler's ProxyResult never reaches the caller, so the response used to be left undisposed.
+        await using var host = await ResultWriterHost.StartAsync(static b => b.Services.AddScoped<Blueprint.Persistence.IUnitOfWork, FailingSaveUnitOfWork>());
+        const string key = "save-fails-no-request";
+        var disposed = ResultWriterProxyQuery.Track(key);
+
+        var result = await host.Services.GetRequiredService<BlueprintAppExecutor>()
+            .ExecuteWithNewScopeAsync(new UnroutedProxyQuery { Key = key }, host.Services);
+
+        result.Should().BeOfType<UnhandledExceptionResult>().Which.Exception.Should().BeOfType<TimeoutException>();
+        disposed.IsCompleted.Should().BeTrue("the abandoned upstream response is disposed before the failure is returned");
+    }
+
+    [Fact]
+    public async Task A_proxy_result_returned_outside_a_request_is_left_to_its_caller()
+    {
+        await using var host = await ResultWriterHost.StartAsync(static _ => { });
+        const string key = "returned-no-request";
+        var disposed = ResultWriterProxyQuery.Track(key);
+
+        var result = await host.Services.GetRequiredService<BlueprintAppExecutor>()
+            .ExecuteWithNewScopeAsync(new UnroutedProxyQuery { Key = key }, host.Services);
+
+        disposed.IsCompleted.Should().BeFalse("the caller owns the returned response");
+        result.Should().BeOfType<Blueprint.Http.ProxyResult>().Which.DownstreamResponse.Dispose();
+        disposed.IsCompleted.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData("throws")]
     [InlineData("faulted")]
@@ -753,6 +784,26 @@ public partial class ResultWriterProxyQuery : Blueprint.Model.IQuery<Blueprint.H
 
             base.Dispose(disposing);
         }
+    }
+}
+
+/// <summary>
+/// As <see cref="ResultWriterProxyQuery"/>, but with no HTTP route, so it is executed only outside an HTTP request, as a
+/// background task or a nested call executes an operation.
+/// </summary>
+[Blueprint.Model.Attributes.AllowAnonymous]
+[Blueprint.Auditing.DoNotAudit]
+public partial class UnroutedProxyQuery : Blueprint.Model.IQuery<Blueprint.Http.ProxyResult>
+{
+    /// <summary>Gets or sets the key the upstream content's disposal is reported under.</summary>
+    public string Key { get; set; } = string.Empty;
+
+    /// <summary>Simulates an upstream response handed over unread, as a forward hands one over.</summary>
+    /// <param name="query">The query, naming the key to report disposal under.</param>
+    /// <returns>A proxy result owning the simulated upstream response.</returns>
+    public static Task<Blueprint.Http.ProxyResult> HandleAsync(UnroutedProxyQuery query)
+    {
+        return Task.FromResult(ResultWriterProxyQuery.CreateProxy(query.Key));
     }
 }
 

@@ -34,13 +34,27 @@ public static class PipelineHelpers
     /// unit of work's save) replaces the result, and nothing would then see or dispose the response. Disposing it twice,
     /// once the result has also been written, is harmless.
     /// </summary>
-    /// <param name="context">The operation's context; outside an HTTP request there is no request to dispose it with.</param>
+    /// <remarks>
+    /// Outside an HTTP request there is no request to dispose it with. The result is kept on the context instead, and
+    /// <see cref="OperationExecutorShell"/> disposes its response only if a later stage fails, so a caller handed the
+    /// result still owns it.
+    /// </remarks>
+    /// <param name="context">The operation's context.</param>
     /// <param name="result">The handler's result.</param>
     public static void DisposeWithRequest(ApiOperationContext context, OperationResult result)
     {
-        if (result is ProxyResult proxy)
+        if (result is not ProxyResult proxy)
         {
-            context.HttpContext?.Response.RegisterForDispose(proxy.DownstreamResponse);
+            return;
+        }
+
+        if (context.HttpContext is { } httpContext)
+        {
+            httpContext.Response.RegisterForDispose(proxy.DownstreamResponse);
+        }
+        else
+        {
+            context.UnownedProxyResult = proxy;
         }
     }
 
