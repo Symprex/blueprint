@@ -155,7 +155,8 @@ public static class BlueprintHttpClientServiceCollectionExtensions
     /// which this registers if nothing has, and given to the client as a <see cref="CallerAuthorizationCredential"/> through
     /// the generated <see cref="IBlueprintClient{TSelf}.WithCredential"/>. Nothing is set on the named
     /// <see cref="System.Net.Http.HttpClient"/>, so concurrent callers never see each other's token; a client resolved outside
-    /// a request, or for a caller that sent no <c>Authorization</c> header, sends none.
+    /// a request, or for a caller that sent no <c>Authorization</c> header, adds no credential of its own: an
+    /// <c>Authorization</c> header the named client's defaults, a call's options or a request modifier set is sent as it is.
     /// </para>
     /// <para>
     /// The credential is applied after every other step that shapes a request, so it replaces an <c>Authorization</c> header
