@@ -115,6 +115,17 @@ internal sealed class BlueprintOperationTool : McpServerTool
             };
         }
 
+        // The operation's request is limited by the host's global limiter, so the MCP request must not be: one call would
+        // hold a permit while it waits for another, and where both share a concurrency partition wait on itself.
+        if (GlobalRateLimiting.NestsWithinMcpRequest(endpoint, caller))
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content = [new TextContentBlock { Text = $"The host's global rate limiter applies to the MCP endpoint {caller.GetEndpoint()?.DisplayName} as well as to the operation {this._operation.Name}, so the call would take a second permit while its MCP request holds one, and it is not run. Exempt the MCP endpoint with DisableRateLimiting() on the builder MapBlueprintMcp returns; each call's operation request is still limited." }],
+            };
+        }
+
         // The method the schema describes: of an operation answering GET and POST, the one that reads its body.
         var method = this._schema.HttpMethod
                      ?? endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.FirstOrDefault()

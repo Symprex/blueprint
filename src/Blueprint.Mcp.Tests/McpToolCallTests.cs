@@ -463,6 +463,23 @@ public sealed class McpToolCallTests
     }
 
     [Fact]
+    public async Task A_call_is_refused_rather_than_wait_on_itself_when_the_global_rate_limiter_also_limits_the_MCP_endpoint()
+    {
+        // The operation's request used to ask the global limiter for a permit while the MCP request held one, so where
+        // both fell in one concurrency partition the call waited for its own MCP request to end, and never did.
+        await using var host = await McpTestHost.StartAsync(globalConcurrencyLimiter: true);
+        var ids = await host.GetOperationIdsAsync();
+        await using var client = await host.ConnectAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var call = client.CallToolAsync(ToolAt(ids, "/connection-aware/"), new Dictionary<string, object?> { ["Id"] = "abc" }, cancellationToken: timeout.Token);
+        var result = await call.AsTask().WaitAsync(TimeSpan.FromSeconds(15));
+
+        result.IsError.Should().BeTrue();
+        Text(result).Should().Contain("DisableRateLimiting");
+    }
+
+    [Fact]
     public async Task The_hosts_global_rate_limiter_does_not_limit_an_operation_whose_endpoint_disables_rate_limiting()
     {
         await using var host = await McpTestHost.StartAsync(globalLimiterPerPath: true);
