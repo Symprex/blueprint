@@ -162,22 +162,7 @@ public class GatewayReExportGeneratorTests
     {
         // An inner contract built by an earlier generator indexes the status only. The field is public, so the descriptor
         // reads its title and type at run time, as it does a factory the operation declares.
-        const string legacyIndex = """
-            namespace Blueprint.Model.Attributes
-            {
-                [System.AttributeUsage(System.AttributeTargets.Assembly, AllowMultiple = true)]
-                internal sealed class BlueprintApiExceptionStatusAttribute : System.Attribute
-                {
-                    public BlueprintApiExceptionStatusAttribute(string containingTypeMetadataName, string fieldName, int httpStatusCode) { }
-                }
-            }
-            """;
-        var source = "[assembly: Blueprint.Model.Attributes.BlueprintApiExceptionStatus(\"Inner.RenameWidgetCommand\", \"NotFound\", 404)]\n"
-            + "[assembly: Blueprint.Model.Attributes.BlueprintApiExceptionStatus(\"Inner.RenameWidgetCommand\", \"Conflict\", 409)]\n"
-            + legacyIndex + InnerSource;
-        var (image, _) = EmitInner(source, withIndex: false);
-
-        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(LegacyIndexedInner()));
 
         run.EmitErrors.Should().BeEmpty();
         run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(global::Inner.RenameWidgetCommand.NotFound.Title, global::Inner.RenameWidgetCommand.NotFound.Type)");
@@ -297,13 +282,140 @@ public class GatewayReExportGeneratorTests
         UpdatedDescriptor(result).Should().Contain("\"Renames a widget, keeping its id.\"");
     }
 
+    [Fact]
+    public void An_edit_to_a_shared_factory_an_inner_factory_aliases_re_plans_the_exposing_operations_descriptor_on_the_same_driver()
+    {
+        // Only CommonErrors.cs changes: neither the inner operation's file nor the gateway's does.
+        const string commonErrors = """
+            namespace Inner
+            {
+                using Blueprint;
+
+                public static class CommonErrors
+                {
+                    public static readonly ApiExceptionFactory NotFound = new("Widget not found", "widget_not_found", 404);
+                }
+            }
+            """;
+        var aliasingInner = InnerSource.Replace(
+            "new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)",
+            "CommonErrors.NotFound",
+            StringComparison.Ordinal);
+
+        var result = Edit(
+            [aliasingInner, commonErrors, ClientSource, GatewaySource],
+            [aliasingInner, commonErrors.Replace("404", "410", StringComparison.Ordinal), ClientSource, GatewaySource],
+            ["Inner.cs", "CommonErrors.cs", "Client.cs", "Gateway.cs"]);
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().Contain("OperationHttpResponseMetadata(410,")
+            .And.NotContain("OperationHttpResponseMetadata(404,");
+    }
+
+    [Fact]
+    public void An_inner_factory_with_a_non_constant_title_keeps_its_constant_type_so_a_TranslateError_still_answers_it()
+    {
+        // The title is read from a static field, so it is not a constant; the type is. Discarding the type with the title
+        // used to leave the translated factory documented at its original 404.
+        var nonConstantTitleInner = InnerSource
+            .Replace(
+                "new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)",
+                "new(Titles.NotFound, \"widget_not_found\", HttpStatusCode.NotFound)",
+                StringComparison.Ordinal)
+            .Replace(
+                "public class WidgetResult",
+                "public static class Titles { public static readonly string NotFound = \"Widget not found\"; }\n\n    public class WidgetResult",
+                StringComparison.Ordinal);
+        var (image, _) = EmitInner(nonConstantTitleInner, withIndex: true);
+
+        var translated = Run([ClientSource, TranslatingGatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        translated.EmitErrors.Should().BeEmpty();
+        translated.Source(Descriptor).Should().NotContain("widget_not_found")
+            .And.NotContain("OperationHttpResponseMetadata(404,");
+
+        // Untranslated, the known type is a literal and the title is read from the field at run time.
+        var untranslated = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        untranslated.EmitErrors.Should().BeEmpty();
+        untranslated.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(global::Inner.RenameWidgetCommand.NotFound.Title, \"widget_not_found\")");
+    }
+
+    [Fact]
+    public void An_inner_factory_its_assembly_indexed_by_status_alone_is_reported_where_a_TranslateError_may_answer_it()
+    {
+        // The problem type is known only at run time, so whether the translation answers the factory cannot be decided here.
+        var run = Run([ClientSource, TranslatingGatewaySource, AppSource], MetadataReference.CreateFromImage(LegacyIndexedInner()));
+
+        run.EmitErrors.Should().BeEmpty();
+
+        // One for each factory of unknown type: the index has neither type.
+        run.GeneratorDiagnostics.Where(static d => d.Id == "BPGW030")
+            .Select(static d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture))
+            .Should().HaveCount(2)
+            .And.Contain(static m => m.Contains("'Inner.RenameWidgetCommand.NotFound'", StringComparison.Ordinal) && m.Contains("'InnerContract'", StringComparison.Ordinal))
+            .And.Contain(static m => m.Contains("'Inner.RenameWidgetCommand.Conflict'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_inner_factory_its_assembly_indexed_by_status_alone_is_not_reported_when_the_gateway_translates_nothing()
+    {
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(LegacyIndexedInner()));
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW030");
+    }
+
+    [Fact]
+    public void An_inner_factory_declared_as_a_static_auto_property_in_a_referenced_assembly_is_documented_from_that_assemblys_index()
+    {
+        // Metadata gives the property, not its private backing field.
+        var propertyInner = InnerSource.Replace(
+            "public static readonly ApiExceptionFactory NotFound = new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound);",
+            "public static ApiExceptionFactory NotFound { get; } = new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound);",
+            StringComparison.Ordinal);
+        var (image, _) = EmitInner(propertyInner, withIndex: true);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(404, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget not found\", \"widget_not_found\")");
+    }
+
+    private static byte[] LegacyIndexedInner()
+    {
+        const string legacyIndex = """
+            namespace Blueprint.Model.Attributes
+            {
+                [System.AttributeUsage(System.AttributeTargets.Assembly, AllowMultiple = true)]
+                internal sealed class BlueprintApiExceptionStatusAttribute : System.Attribute
+                {
+                    public BlueprintApiExceptionStatusAttribute(string containingTypeMetadataName, string fieldName, int httpStatusCode) { }
+                }
+            }
+            """;
+        var source = "[assembly: Blueprint.Model.Attributes.BlueprintApiExceptionStatus(\"Inner.RenameWidgetCommand\", \"NotFound\", 404)]\n"
+            + "[assembly: Blueprint.Model.Attributes.BlueprintApiExceptionStatus(\"Inner.RenameWidgetCommand\", \"Conflict\", 409)]\n"
+            + legacyIndex + InnerSource;
+
+        return EmitInner(source, withIndex: false).Image;
+    }
+
     private static MultiGeneratorEditResult EditInner(string updatedInner)
     {
-        var result = TestHelpers.CompileWithTrackedGeneratorsAfterEdit(
-            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+        return Edit(
             [InnerSource, ClientSource, GatewaySource],
             [updatedInner, ClientSource, GatewaySource],
             ["Inner.cs", "Client.cs", "Gateway.cs"]);
+    }
+
+    private static MultiGeneratorEditResult Edit(string[] initial, string[] updated, string[] paths)
+    {
+        var result = TestHelpers.CompileWithTrackedGeneratorsAfterEdit(
+            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+            initial,
+            updated,
+            paths);
 
         result.Updated.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
         return result;

@@ -218,9 +218,8 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         // where no checksum above reaches (a rebuilt contract assembly has no file here), so its property model is part of
         // the key too.
         var type = compilation.GetTypeByMetadataName(operation.FullClassName);
-        var exposedProperties = type is not null && OperationPropertyModelBuilder.FindExposedType(type, out _) is not null
-            ? OperationPropertyModelBuilder.Build(type)
-            : null;
+        var innerType = type is null ? null : OperationPropertyModelBuilder.FindExposedType(type, out _);
+        var exposedProperties = innerType is not null ? OperationPropertyModelBuilder.Build(type!) : null;
 
         // D7, D8: the credential strategy and translation factories the operation names can be declared in other files.
         var forwardPolicyDiagnostics = type is null
@@ -233,9 +232,35 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             {
                 DeclarationChecksums = EquatableList<string>.TakeOwnership(checksums),
                 ExposedProperties = exposedProperties,
+                InnerErrorFacts = innerType is null ? EquatableList<string>.Empty : GetErrorFacts(innerType, compilation, cancellationToken),
                 ForwardPolicyDiagnostics = forwardPolicyDiagnostics,
             },
         };
+    }
+
+    /// <summary>
+    /// What a descriptor documents of a type's factories: each one's name, status, and title and type where known, resolved
+    /// through any alias and constant they read, wherever those are declared.
+    /// </summary>
+    private static EquatableList<string> GetErrorFacts(INamedTypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
+    {
+        if (compilation.GetTypeByMetadataName("Blueprint.ApiExceptionFactory") is not { } apiExceptionFactoryType)
+        {
+            return EquatableList<string>.Empty;
+        }
+
+        var facts = new List<string>();
+
+        foreach (var (named, member) in ApiExceptionFactoryResolver.GetMembers(type, apiExceptionFactoryType))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            facts.Add(ApiExceptionFactoryResolver.TryResolve(member, tree => compilation.ContainsSyntaxTree(tree) ? compilation.GetSemanticModel(tree) : null, out var factory)
+                ? $"{named.Name}|{factory.HttpStatus}|{factory.Title}|{factory.Type}"
+                : named.Name);
+        }
+
+        return EquatableList<string>.TakeOwnership(facts);
     }
 
     private static Result<DescriptorPlan> Configure(
@@ -455,6 +480,12 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         /// the inner operation re-plans the descriptor although no file of the operation changed.
         /// </summary>
         public OperationPropertyModel? ExposedProperties { get; init; }
+
+        /// <summary>
+        /// Gets the inner operation's <c>ApiExceptionFactory</c> members as <see cref="ApiExceptionFactoryModule"/> resolves
+        /// them (D14), so an edit to a factory one aliases, in a file of neither operation, re-plans the descriptor.
+        /// </summary>
+        public EquatableList<string> InnerErrorFacts { get; init; } = EquatableList<string>.Empty;
 
         /// <summary>
         /// Gets what <see cref="UpstreamForwardPolicyAnalysis"/> reports for the operation, so an edit to the credential

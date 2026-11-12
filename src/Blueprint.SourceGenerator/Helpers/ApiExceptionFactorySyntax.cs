@@ -67,27 +67,27 @@ internal static class ApiExceptionFactorySyntax
     }
 
     /// <summary>
-    /// Reads a metadata field's entry in the <c>[assembly: BlueprintApiExceptionStatus(...)]</c> index of the assembly that
-    /// declares it. An assembly built by an earlier generator indexes the status alone, so its title and type are
-    /// <see langword="null"/>.
+    /// Reads a metadata field's or property's entry in the <c>[assembly: BlueprintApiExceptionStatus(...)]</c> index of the
+    /// assembly that declares it. The title and type are each indexed only where they are constants; an assembly built by an
+    /// earlier generator indexes the status alone.
     /// </summary>
-    /// <param name="field">The field.</param>
+    /// <param name="member">The field or property.</param>
     /// <param name="status">The indexed HTTP status.</param>
     /// <param name="title">The indexed title, or <see langword="null"/>.</param>
     /// <param name="type">The indexed problem type, or <see langword="null"/>.</param>
-    /// <returns>Whether the field is indexed.</returns>
-    public static bool TryReadStatusIndex(IFieldSymbol field, out int status, out string? title, out string? type)
+    /// <returns>Whether the member is indexed.</returns>
+    public static bool TryReadStatusIndex(ISymbol member, out int status, out string? title, out string? type)
     {
         status = 0;
         title = null;
         type = null;
 
-        if (field.ContainingAssembly is not { } assembly)
+        if (member.ContainingAssembly is not { } assembly || member.ContainingType is null)
         {
             return false;
         }
 
-        var containingTypeMetadataName = field.ContainingType.ToFullMetadataName();
+        var containingTypeMetadataName = member.ContainingType.ToFullMetadataName();
 
         foreach (var attribute in assembly.GetAttributes())
         {
@@ -100,15 +100,15 @@ internal static class ApiExceptionFactorySyntax
             if (attribute.ConstructorArguments[0].Value is string indexedType
                 && string.Equals(indexedType, containingTypeMetadataName, StringComparison.Ordinal)
                 && attribute.ConstructorArguments[1].Value is string indexedField
-                && string.Equals(indexedField, field.Name, StringComparison.Ordinal)
+                && string.Equals(indexedField, member.Name, StringComparison.Ordinal)
                 && attribute.ConstructorArguments[2].Value is int indexedStatus)
             {
                 status = indexedStatus;
 
-                if (attribute.ConstructorArguments is [_, _, _, { Value: string indexedTitle }, { Value: string indexedProblemType }])
+                if (attribute.ConstructorArguments is [_, _, _, var indexedTitle, var indexedProblemType])
                 {
-                    title = indexedTitle;
-                    type = indexedProblemType;
+                    title = indexedTitle.Value as string;
+                    type = indexedProblemType.Value as string;
                 }
 
                 return true;
