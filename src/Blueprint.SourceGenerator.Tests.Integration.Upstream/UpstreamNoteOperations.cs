@@ -9,7 +9,7 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Upstream;
 /// </summary>
 [RootLink("/notes/{NoteId}")]
 [HttpPut]
-public partial class RenameUpstreamNoteCommand : ICommand<UpstreamNoteApiResource>
+public partial class RenameUpstreamNoteCommand : UpstreamNoteCommandBase, ICommand<UpstreamNoteApiResource>, IUpstreamPinnable
 {
     /// <summary>
     /// The note to rename, from the route.
@@ -21,6 +21,34 @@ public partial class RenameUpstreamNoteCommand : ICommand<UpstreamNoteApiResourc
     /// two lines, Tom &amp; Jerry.
     /// </summary>
     public string Title { get; set; } = string.Empty;
+
+    /// <inheritdoc/>
+    public override string? Colour { get; set; }
+
+    /// <inheritdoc/>
+    public bool Pinned { get; set; }
+}
+
+/// <summary>
+/// What every note command has, documented here rather than on the command that overrides it.
+/// </summary>
+public abstract class UpstreamNoteCommandBase
+{
+    /// <summary>
+    /// The note's colour, documented on the base.
+    /// </summary>
+    public abstract string? Colour { get; set; }
+}
+
+/// <summary>
+/// A note that can be pinned, documented here rather than on the command that implements it.
+/// </summary>
+public interface IUpstreamPinnable
+{
+    /// <summary>
+    /// Whether the note is pinned, documented on the interface.
+    /// </summary>
+    bool Pinned { get; set; }
 }
 
 /// <summary>

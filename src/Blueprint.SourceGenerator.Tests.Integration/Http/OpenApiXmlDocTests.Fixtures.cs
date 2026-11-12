@@ -78,6 +78,22 @@ public class XmlDocBase
     public string BaseOnly { get; set; } = string.Empty;
 }
 
+/// <summary>A type whose cref names a member with nothing to inherit, so its base type's documentation is used.</summary>
+public class XmlDocCrefFallsThrough : XmlDocBase
+{
+    /// <inheritdoc cref="XmlDocNothingToInherit.Value"/>
+    public override string FromBase { get; set; } = string.Empty;
+}
+
+/// <summary>A type whose member inherits documentation it has nowhere to inherit from.</summary>
+public class XmlDocNothingToInherit
+{
+#pragma warning disable SA1648 // Nothing to inherit is the point.
+    /// <inheritdoc/>
+    public string Value { get; set; } = string.Empty;
+#pragma warning restore SA1648
+}
+
 /// <summary>An interface.</summary>
 public interface IXmlDocShape
 {

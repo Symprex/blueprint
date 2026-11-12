@@ -49,6 +49,19 @@ public sealed class GatewayPropertyDocumentationTests
         BodyPropertyDescription(document, CommandPath, "put", "title").Should().Be("The note's new title, over\ntwo lines, Tom & Jerry.");
     }
 
+    [Theory]
+    [InlineData("colour", "The note's colour, documented on the base.")]
+    [InlineData("pinned", "Whether the note is pinned, documented on the interface.")]
+    public void A_contributed_property_whose_inner_property_inherits_its_documentation_is_described_by_what_it_inherits(string property, string expected)
+    {
+        // The inner property is documented only by a cref-less <inheritdoc/>, on an override or an interface
+        // implementation: what it inherits is resolved from the inner property's own base type and interfaces, in the
+        // upstream assembly, not from the gateway operation's.
+        using var document = Render();
+
+        BodyPropertyDescription(document, CommandPath, "put", property).Should().Be(expected);
+    }
+
     [Fact]
     public void A_contributed_property_reads_the_inner_assemblys_documentation_file_through_its_inheritdoc_cref()
     {

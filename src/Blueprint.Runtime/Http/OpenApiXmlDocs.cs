@@ -28,6 +28,9 @@ namespace Blueprint.Runtime.Http;
 /// </remarks>
 internal static class OpenApiXmlDocs
 {
+    // How many crefs one inheritdoc follows, so documentation whose crefs form a cycle still ends.
+    private const int MaximumCrefDepth = 5;
+
     // Each assembly's documented members by their documentation id, or null when it has no documentation file. The
     // elements are never changed: an inheritdoc is resolved on a copy.
     private static readonly ConcurrentDictionary<string, IReadOnlyDictionary<string, XElement>?> _membersByAssembly = new(StringComparer.OrdinalIgnoreCase);
@@ -89,7 +92,7 @@ internal static class OpenApiXmlDocs
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Legacy treated documentation it could not read, for whatever reason, as none.")]
-    private static XElement? GetElement(MemberInfo member)
+    private static XElement? GetElement(MemberInfo member, int depth = 0)
     {
         try
         {
@@ -101,7 +104,7 @@ internal static class OpenApiXmlDocs
             }
 
             var copy = new XElement(element);
-            ReplaceInheritdocElements(member, copy);
+            ReplaceInheritdocElements(member, copy, depth);
 
             return copy;
         }
@@ -191,17 +194,17 @@ internal static class OpenApiXmlDocs
     // base type's member of the same name, or failing that an interface's. A property [Expose<TInner>] contributes carries
     // the inner property's cref, which no base type or interface of the gateway operation has (Symprex/blueprint#174).
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Documentation of a base or interface member that has been trimmed away is none, as for any member without documentation.")]
-    private static void ReplaceInheritdocElements(MemberInfo member, XElement element)
+    private static void ReplaceInheritdocElements(MemberInfo member, XElement element, int depth)
     {
         foreach (var child in element.Nodes().ToList().OfType<XElement>())
         {
-            if (!IsInheritdoc(child) || ReplaceInheritdocFromCref(member.Module.Assembly, child, depth: 0))
+            if (!IsInheritdoc(child) || ReplaceInheritdocFromCref(member.Module.Assembly, child, depth))
             {
                 continue;
             }
 
             var baseMember = member.DeclaringType!.GetTypeInfo().BaseType?.GetTypeInfo().DeclaredMembers.SingleOrDefault(m => m.Name == member.Name);
-            var baseElement = baseMember is null ? null : GetElement(baseMember);
+            var baseElement = baseMember is null ? null : GetElement(baseMember, depth);
 
             if (baseElement is not null)
             {
@@ -209,7 +212,7 @@ internal static class OpenApiXmlDocs
             }
             else
             {
-                ReplaceInheritdocFromInterfaces(member, child);
+                ReplaceInheritdocFromInterfaces(member, child, depth);
             }
         }
     }
@@ -223,30 +226,94 @@ internal static class OpenApiXmlDocs
     /// Replaces an <c>&lt;inheritdoc cref="..."/&gt;</c> with every node of the member its cref names, as the compiler
     /// writes it (<c>P:Ns.Type.Property</c>), looked for in the documentation of <paramref name="assembly"/> and then of each
     /// assembly it references: an inner operation is usually in an upstream contract's assembly, whose file the gateway's
-    /// does not repeat. An inheritdoc with a cref in those nodes is resolved in turn, from the assembly they came from.
+    /// does not repeat. The named member's own inheritdocs are resolved as its own: a cref-less one from its base type or an
+    /// interface, in the assembly that declares it, and one with a cref in turn, each cref one step deeper.
     /// </summary>
-    /// <returns>Whether the inheritdoc was replaced; one without a cref, or naming a member no documentation has, is not.</returns>
+    /// <returns>
+    /// Whether the inheritdoc was replaced. One without a cref, past the depth limit, naming a member no documentation has,
+    /// or naming one whose own inheritdoc cannot be resolved either, is not, so the caller looks elsewhere.
+    /// </returns>
     private static bool ReplaceInheritdocFromCref(Assembly assembly, XElement inheritdoc, int depth)
     {
-        const int maximumDepth = 4;
-
-        if (depth > maximumDepth
+        if (depth >= MaximumCrefDepth
             || inheritdoc.Attribute("cref")?.Value is not { Length: > 2 } cref
             || FindDocumentedMember(assembly, cref) is not ({ } target, { } targetAssembly))
         {
             return false;
         }
 
-        var copy = new XElement(target);
+        XElement? resolved;
 
-        foreach (var nested in copy.Descendants().Where(IsInheritdoc).ToList())
+        if (FindMember(targetAssembly, cref) is { } targetMember)
         {
-            ReplaceInheritdocFromCref(targetAssembly, nested, depth + 1);
+            resolved = GetElement(targetMember, depth + 1);
+        }
+        else
+        {
+            resolved = new XElement(target);
+
+            foreach (var nested in resolved.Descendants().Where(IsInheritdoc).ToList())
+            {
+                ReplaceInheritdocFromCref(targetAssembly, nested, depth + 1);
+            }
         }
 
-        inheritdoc.ReplaceWith(copy.Nodes().ToArray());
+        if (resolved is null || resolved.Descendants().Any(IsInheritdoc))
+        {
+            return false;
+        }
+
+        inheritdoc.ReplaceWith(resolved.Nodes().ToArray());
 
         return true;
+    }
+
+    /// <summary>
+    /// The type or property a documentation id names (<c>T:Ns.Outer.Nested</c>, <c>P:Ns.Type.Property</c>) in
+    /// <paramref name="assembly"/>, or <see langword="null"/> for any other kind of member, or one it cannot find.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "A property that has been trimmed away has no documentation to inherit, as for any member without documentation.")]
+    private static MemberInfo? FindMember(Assembly assembly, string documentationId)
+    {
+        var name = documentationId[2..];
+
+        switch (documentationId[0])
+        {
+            case 'T':
+                return FindType(assembly, name);
+
+            case 'P' when name.LastIndexOf('.') is > 0 and var lastDot:
+                return FindType(assembly, name[..lastDot])?.GetProperty(
+                    name[(lastDot + 1)..],
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly);
+
+            default:
+                return null;
+        }
+    }
+
+    // A documentation id writes a nested type's '+' as '.', so each '.' from the right may be either.
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "A type that has been trimmed away has no documentation to inherit, as for any member without documentation.")]
+    private static Type? FindType(Assembly assembly, string name)
+    {
+        var candidate = name;
+
+        while (true)
+        {
+            if (assembly.GetType(candidate) is { } type)
+            {
+                return type;
+            }
+
+            var lastDot = candidate.LastIndexOf('.');
+
+            if (lastDot < 0)
+            {
+                return null;
+            }
+
+            candidate = string.Concat(candidate.AsSpan(0, lastDot), "+", candidate.AsSpan(lastDot + 1));
+        }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "A referenced assembly that cannot be loaded has no documentation, as for any assembly without a documentation file.")]
@@ -281,12 +348,12 @@ internal static class OpenApiXmlDocs
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Documentation of an interface member that has been trimmed away is none, as for any member without documentation.")]
-    private static void ReplaceInheritdocFromInterfaces(MemberInfo member, XElement inheritdoc)
+    private static void ReplaceInheritdocFromInterfaces(MemberInfo member, XElement inheritdoc, int depth)
     {
         foreach (var implemented in member.DeclaringType!.GetTypeInfo().ImplementedInterfaces)
         {
             var interfaceMember = implemented.GetTypeInfo().DeclaredMembers.SingleOrDefault(m => m.Name == member.Name);
-            var interfaceElement = interfaceMember is null ? null : GetElement(interfaceMember);
+            var interfaceElement = interfaceMember is null ? null : GetElement(interfaceMember, depth);
 
             if (interfaceElement is not null)
             {
