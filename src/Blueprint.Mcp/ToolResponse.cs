@@ -107,9 +107,11 @@ internal sealed class ToolResponse : IHttpResponseFeature, IHttpResponseBodyFeat
     {
         await this.StartAsync().ConfigureAwait(false);
 
+        // Completing the writer writes what it has buffered and returns the pooled buffers it rents, as a server
+        // completes the response's writer once the response has ended.
         if (this._writer is not null)
         {
-            await this._writer.FlushAsync().ConfigureAwait(false);
+            await this._writer.CompleteAsync().ConfigureAwait(false);
         }
     }
 
@@ -139,6 +141,9 @@ internal sealed class ToolResponse : IHttpResponseFeature, IHttpResponseBodyFeat
     /// <inheritdoc />
     public void Dispose()
     {
+        // A response never completed, as when the operation threw, still returns the writer's buffers. Completing a
+        // completed writer does nothing.
+        this._writer?.Complete();
         this.Captured.Dispose();
     }
 }

@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace Blueprint.Mcp.Tests;
 
 public sealed class ToolResponseTests
@@ -49,6 +51,34 @@ public sealed class ToolResponseTests
         response.Captured.IsText.Should().BeFalse();
         result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Single().Text.Should().Be(
             "The operation returned 4 bytes of application/json, which a tool result does not carry.");
+    }
+
+    [Fact]
+    public async Task Completing_the_response_writes_the_writers_buffered_bytes_and_completes_it_returning_its_buffers()
+    {
+        // The writer used to be flushed but never completed, so the pooled buffers it rents were never returned.
+        using var response = new ToolResponse(OperationToolResult.MaxTextBytes);
+        response.Writer.Write("{}"u8);
+
+        await response.CompleteAsync();
+
+        response.Captured.BytesWritten.Should().Be(2);
+        var write = () => response.Writer.GetMemory();
+        write.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Disposing_a_response_never_completed_completes_its_writer_returning_its_buffers()
+    {
+        // As when the operation throws, so the response is not completed.
+        var response = new ToolResponse(OperationToolResult.MaxTextBytes);
+        var writer = response.Writer;
+        writer.Write("{}"u8);
+
+        response.Dispose();
+
+        var write = () => writer.GetMemory();
+        write.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
