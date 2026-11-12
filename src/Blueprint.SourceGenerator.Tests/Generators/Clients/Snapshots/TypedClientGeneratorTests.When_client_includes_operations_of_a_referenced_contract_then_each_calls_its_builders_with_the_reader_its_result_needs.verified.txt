@@ -510,6 +510,15 @@ namespace Client
             return new ItemsApi(this, credential, this._requestModifier);
         }
 
+        /// <inheritdoc />
+        static ItemsApi global::Blueprint.HttpClient.IBlueprintClient<ItemsApi>.WithCredential(ItemsApi client, global::Blueprint.HttpClient.IUpstreamCredential credential)
+        {
+            global::System.ArgumentNullException.ThrowIfNull(client);
+            global::System.ArgumentNullException.ThrowIfNull(credential);
+
+            return new ItemsApi(client, credential, client._requestModifier);
+        }
+
         /// <summary>
         /// Makes a client that also runs a modifier on every request, after the call's own modifier and any this client already has,
         /// and before the credential. This client is unchanged.
