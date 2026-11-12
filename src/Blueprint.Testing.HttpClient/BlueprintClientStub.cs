@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Blueprint.Http;
 using Blueprint.HttpClient;
 using Blueprint.Model;
 using Blueprint.Runtime.Exec;
@@ -29,7 +30,10 @@ namespace Blueprint.Testing;
 /// <see cref="OkResult"/>, <see cref="CreatedResult"/>, <see cref="AcceptedResult"/>, <see cref="ConflictResult"/> or
 /// <see cref="NotFoundResult"/> as its content with its status, so that a declared <see cref="NotFoundResult{T}"/> is read as
 /// that member; a <see cref="PlainTextResult"/> as its text with its own content type; a <see cref="StatusCodeResult"/> or
-/// <see cref="NotModifiedResult{T}"/> as its status; a <see cref="NoResultOperationResult"/> as an empty 200; a <see cref="ValidationFailedResult"/>, or a thrown
+/// <see cref="NotModifiedResult{T}"/> as its status; a <see cref="NoResultOperationResult"/> as an empty 200; a legacy
+/// <see cref="ResourceEvent"/> as the event, a 200 whatever its change type; a <see cref="ResourceEventResult"/> as the
+/// host's event envelope with its change type's status, a deleted one as an empty 204; a <see cref="KeyOnlyResourceEventResult"/>
+/// as its change type's status alone; a <see cref="ValidationFailedResult"/>, or a thrown
 /// <see cref="Validation.ValidationException"/>, as a 422 the client raises as a <see cref="Validation.ValidationException"/>;
 /// and a thrown <see cref="ApiException"/> as its problem document, which the client raises as a
 /// <see cref="BlueprintApiException"/>. <see langword="null"/> is a 204.
@@ -130,10 +134,87 @@ public sealed class BlueprintClientStub<TClient>
             PlainTextResult text => PlainText(text),
             StatusCodeResult status => new HttpResponseMessage((HttpStatusCode)status.StatusCode),
             ValidationFailedResult failed => ValidationProblem(failed, jsonOptions),
+            KeyOnlyResourceEventResult keyOnly => new HttpResponseMessage(ChangeTypeStatus(keyOnly.ChangeType)),
+            ResourceEventResult resourceEventResult => ResourceEventEnvelope(resourceEventResult, jsonOptions),
+
+            // Whatever its change type, the host writes a legacy resource event as a 200 with the event itself, as legacy did.
+            ResourceEvent resourceEvent => Json(HttpStatusCode.OK, resourceEvent, SerializerContextTypeInfoCache.GetFallbackOptions(jsonOptions)),
             OperationResult other => throw new NotSupportedException(
-                $"{typeof(TClient).Name}'s stub cannot answer with a {other.GetType().Name}. Answer with its content, or with an OkResult, CreatedResult, AcceptedResult, ConflictResult, NotFoundResult, StatusCodeResult, PlainTextResult or ValidationFailedResult."),
+                $"{typeof(TClient).Name}'s stub cannot answer with a {other.GetType().Name}. Answer with a value, or with an OkResult, CreatedResult, AcceptedResult, ConflictResult, NotFoundResult, StatusCodeResult, PlainTextResult, ValidationFailedResult, NoResultOperationResult, ResourceEvent, ResourceEventResult or KeyOnlyResourceEventResult."),
             _ => Json(HttpStatusCode.OK, value, jsonOptions),
         };
+    }
+
+    /// <summary>
+    /// Gets the status the host writes a resource event result of <paramref name="changeType"/> with.
+    /// </summary>
+    private static HttpStatusCode ChangeTypeStatus(ChangeType changeType)
+    {
+        return changeType switch
+        {
+            ChangeType.Created => HttpStatusCode.Created,
+            ChangeType.Deleted => HttpStatusCode.NoContent,
+            _ => HttpStatusCode.OK,
+        };
+    }
+
+    /// <summary>
+    /// Writes a <see cref="ResourceEventResult"/> as the host's event envelope at its change type's status, a created one
+    /// with its content's self link as the <c>Location</c>, and a deleted one as an empty 204, as the host writes it.
+    /// </summary>
+    /// <remarks>
+    /// The envelope has no <c>href</c>: the host fills one from its app's registered links, which a stub of the upstream
+    /// has none of, and the client reads none back into the result. The content and the metadata bags are written with the
+    /// client's options and the reflection fallback the host gives a type its serializer context does not cover.
+    /// </remarks>
+    private static HttpResponseMessage ResourceEventEnvelope(ResourceEventResult result, JsonSerializerOptions jsonOptions)
+    {
+        var status = ChangeTypeStatus(result.ChangeType);
+
+        if (status == HttpStatusCode.NoContent)
+        {
+            return new HttpResponseMessage(status);
+        }
+
+        var fallbackOptions = SerializerContextTypeInfoCache.GetFallbackOptions(jsonOptions);
+        var contentType = result.Content.GetType();
+        var envelope = new JsonObject
+        {
+            ["$object"] = "event",
+            ["eventId"] = result.EventId,
+            ["changeType"] = result.ChangeType.ToString(),
+            ["created"] = DateTimeOffset.UtcNow,
+            ["resourceObject"] = ApiResource.GetTypeName(contentType),
+            ["data"] = JsonSerializer.SerializeToNode(result.Content, contentType, fallbackOptions),
+        };
+
+        AddBag(envelope, "metadata", result.Metadata, fallbackOptions);
+        AddBag(envelope, "secureData", result.SecureData, fallbackOptions);
+        AddBag(envelope, "changedValues", result.ChangedValues, fallbackOptions);
+
+        if (result.CorrelationId is not null)
+        {
+            envelope["correlationId"] = result.CorrelationId;
+        }
+
+        var body = new StringContent(envelope.ToJsonString(), Encoding.UTF8);
+        body.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+        var response = new HttpResponseMessage(status) { Content = body };
+
+        if (status == HttpStatusCode.Created && result.Content is ILinkableResource { Links: { } links } && links.TryGetValue("self", out var self))
+        {
+            response.Headers.TryAddWithoutValidation("Location", self.Href);
+        }
+
+        return response;
+
+        static void AddBag(JsonObject envelope, string name, Dictionary<string, object>? bag, JsonSerializerOptions options)
+        {
+            if (bag is not null)
+            {
+                envelope[name] = JsonSerializer.SerializeToNode(bag, options);
+            }
+        }
     }
 
     private static HttpResponseMessage Json(HttpStatusCode status, object content, JsonSerializerOptions jsonOptions)
