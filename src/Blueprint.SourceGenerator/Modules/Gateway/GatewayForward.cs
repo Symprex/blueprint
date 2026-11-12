@@ -198,7 +198,8 @@ public static class GatewayForward
                 copied,
                 bindings,
                 mapHook?.Name,
-                mapHook?.Name == GatewayMapHook.AsyncName)));
+                mapHook?.Name == GatewayMapHook.AsyncName,
+                mapHook?.IsStatic == true)));
     }
 
     private static IEnumerable<string> GetRequiredMemberNames(INamedTypeSymbol type)
@@ -264,6 +265,11 @@ public static class GatewayForward
                 case GatewayBindingSource.Value:
                     assignments.Add(binding.PropertyName + " = " + binding.Argument);
                     break;
+                case GatewayBindingSource.MapHook when binding.IsRequiredMember:
+                    // Only so that `new TInner { … }` compiles (CS9035): the hook assigns the value, and the check after it
+                    // refuses a null left behind.
+                    assignments.Add(binding.PropertyName + " = default!");
+                    break;
             }
         }
 
@@ -272,8 +278,22 @@ public static class GatewayForward
 
         if (forward.MapHookName is not null)
         {
-            var call = operation + "." + forward.MapHookName + "(" + string.Join(", ", new[] { "forwardInner" }.Concat(mapHookArguments)) + ")";
+            var target = forward.IsMapHookStatic ? context.GetOperationTypeFullName() : operation;
+            var call = target + "." + forward.MapHookName + "(" + string.Join(", ", new[] { "forwardInner" }.Concat(mapHookArguments)) + ")";
             context.WriteStatement(forward.IsMapHookAsync ? "await " + call + ".ConfigureAwait(false);" : call + ";");
+
+            // #175: a required property the hook fills is never sent as a null the hook did not mean.
+            foreach (var binding in forward.Bindings)
+            {
+                if (binding is { Source: GatewayBindingSource.MapHook, IsNullRefused: true })
+                {
+                    context.If(
+                        "forwardInner." + binding.PropertyName + " is null",
+                        then => then.Throw(
+                            "new global::System.InvalidOperationException(\"" + forward.MapHookName + " left " + binding.PropertyName
+                            + " null, but " + forward.InnerTypeName.Replace("global::", string.Empty) + " requires it, so the forward was not sent.\")"));
+                }
+            }
         }
 
         context.DeclareVariable(
