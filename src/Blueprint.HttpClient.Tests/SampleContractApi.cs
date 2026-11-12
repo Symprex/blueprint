@@ -15,6 +15,8 @@ namespace Blueprint.HttpClient.Tests;
 /// </remarks>
 [BlueprintClient]
 [BlueprintClientInclude(typeof(ArchiveTemplateCommand))]
+[BlueprintClientInclude(typeof(AttachTemplateFileCommand))]
+[BlueprintClientInclude(typeof(ImportTemplateSourceCommand))]
 [BlueprintClientInclude(typeof(BulkArchiveTemplatesCommand))]
 [BlueprintClientInclude(typeof(ChangePasswordCommand))]
 [BlueprintClientInclude(typeof(CloneTemplateCommand))]

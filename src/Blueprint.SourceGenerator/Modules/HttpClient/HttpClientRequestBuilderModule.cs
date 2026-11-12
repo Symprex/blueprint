@@ -193,10 +193,97 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             });
         }
 
+        // A host that reads a stream or a multipart body is sent one (#71, D19), by every client, through the operation itself.
+        if (bindingEntries is { BodyShape: not PropertyOwnershipModule.RequestBodyShape.Json } streamingEntries)
+        {
+            var requestBodyLines = BuildRequestBodyLines(streamingEntries, properties);
+            context.AddOperationMemberStep(operationClass => AddRequestBodyBuilderInterface(operationClass, requestBodyLines));
+        }
+
         context.AddRenderStep(codeWriter =>
         {
             RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlBuilderBody, queryStringBody, emitHttpClass);
         });
+    }
+
+    /// <summary>
+    /// Builds the body of the operation's <c>IHttpRequestBodyBuilder.BuildRequestBody</c>: its stream as the whole content, or
+    /// a form of its files and of its other body properties as fields, each under the name the host's binding reads it by.
+    /// </summary>
+    private static List<string> BuildRequestBodyLines(PropertyBindingEntriesMetadata bindingEntries, List<IPropertySymbol> properties)
+    {
+        const string Helpers = "global::Blueprint.Model.HttpRequestBodies";
+        var propertiesByName = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
+        foreach (var property in properties)
+        {
+            propertiesByName[property.Name] = property;
+        }
+
+        if (bindingEntries.BodyShape == PropertyOwnershipModule.RequestBodyShape.Stream)
+        {
+            // BPPO014 leaves the stream the only body property.
+            var stream = bindingEntries.Entries.First(e =>
+                e.Source == PropertyOwnershipModule.PropertyOwnershipSource.Body
+                && propertiesByName.TryGetValue(e.PropertyName, out var property)
+                && PropertyOwnershipModule.IsStreamType(property.Type));
+
+            return [$"return {Helpers}.CreateStreamContent(this.{stream.PropertyName});"];
+        }
+
+        var lines = new List<string> { "var form = new global::System.Net.Http.MultipartFormDataContent();" };
+
+        foreach (var entry in bindingEntries.Entries)
+        {
+            var isBody = entry.Source == PropertyOwnershipModule.PropertyOwnershipSource.Body;
+            if ((!isBody && entry.FallbackSource != PropertyOwnershipModule.PropertyOwnershipSource.Body)
+                || !propertiesByName.TryGetValue(entry.PropertyName, out var property)
+                || property.GetMethod is null)
+            {
+                continue;
+            }
+
+            // A route placeholder in only some links is read from the body as its camel-case name (ToFallbackBodyEntry).
+            var name = SymbolDisplay.FormatLiteral(isBody ? entry.BindingName ?? entry.PropertyName : entry.PropertyName.Camelize(), quote: true);
+            var access = $"this.{entry.PropertyName}";
+
+            if (PropertyOwnershipModule.IsFormFileType(property.Type))
+            {
+                var file = $"file_{entry.PropertyName}";
+                lines.Add($"if ({access} is {{ }} {file}) {Helpers}.AddFile(form, {name}, {file}.OpenReadStream(), {file}.FileName, {file}.ContentType);");
+            }
+            else if (property.Type is IArrayTypeSymbol)
+            {
+                lines.Add($"{Helpers}.AddFields(form, {name}, {access});");
+            }
+            else
+            {
+                lines.Add($"{Helpers}.AddField(form, {name}, {access});");
+            }
+        }
+
+        lines.Add("return form;");
+
+        return lines;
+    }
+
+    /// <summary>
+    /// Implements <c>IHttpRequestBodyBuilder</c> on the operation's generated partial, explicitly, so it adds no member name to
+    /// the operation's own, and <c>BlueprintHttpClient</c> sends the content it builds instead of the operation as JSON.
+    /// </summary>
+    private static void AddRequestBodyBuilderInterface(ClassBuilder operationClass, List<string> requestBodyLines)
+    {
+        const string BuilderInterface = "global::Blueprint.Model.IHttpRequestBodyBuilder";
+
+        operationClass.AddInterface(BuilderInterface);
+        operationClass.AddMethod(BuilderInterface + ".BuildRequestBody")
+            .WithReturnType("global::System.Net.Http.HttpContent")
+            .WithBody(codeWriter =>
+            {
+                foreach (var line in requestBodyLines)
+                {
+                    codeWriter.AppendLine(line);
+                }
+            });
     }
 
     /// <summary>

@@ -1,0 +1,254 @@
+using System.Text;
+using Blueprint.SourceGenerator.Generators.Descriptors;
+using Blueprint.SourceGenerator.Generators.Pipelines;
+using FluentAssertions;
+using Microsoft.CodeAnalysis;
+
+namespace Blueprint.SourceGenerator.Tests.Modules;
+
+/// <summary>
+/// Tests <see cref="Blueprint.SourceGenerator.Modules.PropertyOwnershipModule"/>'s two request bodies besides JSON (#71, D19):
+/// a body-owned <c>Stream</c> handed the request body unread, and a <c>multipart/form-data</c> body for an operation with an
+/// <c>IFormFile</c> property, with the diagnostics that keep each coherent (BPPO014-016).
+/// </summary>
+public class StreamingRequestBodyOwnershipTests
+{
+    // The test compilation references the assemblies this process has loaded; IFormFile's must be one of them.
+    private static readonly Type _formFileType = typeof(Microsoft.AspNetCore.Http.IFormFile);
+
+    [Fact]
+    public async Task When_a_FromBody_Stream_is_declared_then_the_pipeline_hands_it_the_request_body()
+    {
+        await VerifyPipelineAsync(
+            """
+            [RootLink("/imports/{FolderId}")]
+            [HttpPost]
+            public partial class ImportCommand : ICommand<string>
+            {
+                public string FolderId { get; set; }
+
+                [FromQuery]
+                public int? Limit { get; set; }
+
+                [FromBody]
+                public System.IO.Stream Content { get; set; }
+
+                public static Task<string> HandleAsync(ImportCommand operation) => Task.FromResult("ok");
+            }
+            """);
+    }
+
+    [Fact]
+    public async Task When_an_IFormFile_is_declared_then_the_pipeline_reads_files_and_fields_from_the_form()
+    {
+        await VerifyPipelineAsync(
+            """
+            [RootLink("/folders/{FolderId}/attachments")]
+            [HttpPost]
+            public partial class AttachCommand : ICommand<string>
+            {
+                public string FolderId { get; set; }
+                public string Description { get; set; }
+                public int Priority { get; set; }
+                public System.Guid[] Related { get; set; }
+                public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+
+                public static Task<string> HandleAsync(AttachCommand operation) => Task.FromResult("ok");
+            }
+            """);
+    }
+
+    [Fact]
+    public void When_a_Stream_is_body_owned_by_convention_then_it_takes_the_body_without_a_diagnostic()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/imports")]
+            [HttpPut]
+            public partial class ImportCommand : ICommand<string>
+            {
+                public System.IO.Stream Content { get; set; }
+
+                public static Task<string> HandleAsync(ImportCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void When_a_Stream_body_has_another_body_property_then_reports_BPPO014()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/imports")]
+            [HttpPost]
+            public partial class ImportCommand : ICommand<string>
+            {
+                [FromBody]
+                public System.IO.Stream Content { get; set; }
+
+                public string Label { get; set; }
+
+                public static Task<string> HandleAsync(ImportCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle().Which;
+        diagnostic.Id.Should().Be("BPPO014");
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().Should().Contain("'Content'").And.Contain("'Label'");
+    }
+
+    [Fact]
+    public void When_a_Stream_body_has_a_file_property_then_reports_BPPO014()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/imports")]
+            [HttpPost]
+            public partial class ImportCommand : ICommand<string>
+            {
+                [FromBody]
+                public System.IO.Stream Content { get; set; }
+
+                public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+
+                public static Task<string> HandleAsync(ImportCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Equal("BPPO014");
+    }
+
+    [Fact]
+    public void When_a_Stream_body_has_a_route_placeholder_in_only_some_links_then_reports_BPPO014()
+    {
+        // A placeholder missing from one link falls back to the body through that link, which a stream leaves nothing of.
+        var result = CompileDescriptor(
+            """
+            [RootLink("/folders/{FolderId}/imports")]
+            [RootLink("/imports")]
+            [HttpPost]
+            public partial class ImportCommand : ICommand<string>
+            {
+                public string FolderId { get; set; }
+
+                [FromBody]
+                public System.IO.Stream Content { get; set; }
+
+                public static Task<string> HandleAsync(ImportCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        result.Diagnostics.Select(static d => d.Id).Should().Equal("BPPO014");
+    }
+
+    [Fact]
+    public void When_a_Stream_or_file_is_on_an_operation_that_also_answers_GET_then_reports_BPPO015()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/attachments")]
+            [HttpGet]
+            [HttpPost]
+            public partial class AttachCommand : ICommand<string>
+            {
+                public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+
+                public static Task<string> HandleAsync(AttachCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        // BPOA002 warns about the two methods themselves; BPPO015 is the error that stops the build.
+        var diagnostic = result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().ContainSingle().Which;
+        diagnostic.Id.Should().Be("BPPO015");
+        diagnostic.GetMessage().Should().Contain("'File'");
+    }
+
+    [Fact]
+    public void When_a_multipart_operation_has_a_property_no_form_field_can_carry_then_reports_BPPO016()
+    {
+        var result = CompileDescriptor(
+            """
+            [RootLink("/attachments")]
+            [HttpPost]
+            public partial class AttachCommand : ICommand<string>
+            {
+                public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+
+                public System.Collections.Generic.Dictionary<string, string> Metadata { get; set; }
+
+                public static Task<string> HandleAsync(AttachCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle().Which;
+        diagnostic.Id.Should().Be("BPPO016");
+        diagnostic.GetMessage().Should().Contain("'Metadata'");
+    }
+
+    [Fact]
+    public void When_a_multipart_operation_has_scalar_enum_and_array_fields_then_reports_nothing()
+    {
+        var result = CompileDescriptor(
+            """
+            public enum Kind { A, B }
+
+            [RootLink("/attachments")]
+            [HttpPost]
+            public partial class AttachCommand : ICommand<string>
+            {
+                public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+                public Microsoft.AspNetCore.Http.IFormFile Thumbnail { get; set; }
+                public string Name { get; set; }
+                public Kind Kind { get; set; }
+                public System.DateTimeOffset? Taken { get; set; }
+                public string[] Tags { get; set; }
+
+                public static Task<string> HandleAsync(AttachCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
+    private static GenerationResult CompileDescriptor(string source)
+    {
+        _ = _formFileType;
+
+        return TestHelpers.Compile<OperationDescriptorSourceGenerator>(
+            "using Blueprint.Model;\nusing Blueprint.Model.Attributes;\nusing System.Threading.Tasks;\n\n"
+            + "namespace TestNamespace;\n\n" + source);
+    }
+
+    private static async Task VerifyPipelineAsync(string operationSource)
+    {
+        _ = _formFileType;
+
+        var source = "using Blueprint;\nusing Blueprint.Model;\nusing Blueprint.Model.Attributes;\nusing System.Threading.Tasks;\n\n"
+            + "namespace TestNamespace;\n\n[BlueprintAppScan]\npublic partial class TestApp : BlueprintApp { }\n\n" + operationSource;
+
+        var result = TestHelpers.CompileWithTrackedGenerators(
+            [
+                TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+                TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+            ],
+            [source],
+            ["Input0.cs"]);
+
+        result.Diagnostics.Should().BeEmpty("the compilation should have no diagnostics");
+
+        var outputText = new StringBuilder();
+        foreach (var generated in result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)))
+        {
+            outputText.AppendLine(generated.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(generated.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Generators/Pipelines/Snapshots/Integration/");
+    }
+}

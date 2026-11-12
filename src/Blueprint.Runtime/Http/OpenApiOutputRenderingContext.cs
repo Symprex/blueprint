@@ -712,13 +712,19 @@ public sealed record OpenApiOutputRenderingContext(
 
         writer.WritePropertyName("content");
         writer.WriteStartObject();
-        writer.WritePropertyName("application/json");
+        writer.WritePropertyName(requestBody.MediaType);
         writer.WriteStartObject();
 
         writer.WritePropertyName("schema");
         writer.WriteStartObject();
 
-        if (!requestBody.Properties.IsEmpty)
+        if (requestBody.MediaType == OpenApiRequestBodyMediaTypes.OctetStream)
+        {
+            // A Stream property is handed the whole body: one binary string, with no properties to reference.
+            writer.WriteString("type", "string");
+            writer.WriteString("format", "binary");
+        }
+        else if (!requestBody.Properties.IsEmpty)
         {
             // Emit a $ref to the corresponding component schema, keyed by the body's schema name or else the operation name.
             // The request body schema component is assembled in OpenApiDocumentRenderingContext.

@@ -77,7 +77,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             return;
         }
 
-        var hasBodyBinding = entries.Any(static e =>
+        // A stream is handed the body unread, so nothing about it can fail to bind or be of an unsupported media type.
+        var hasBodyBinding = GetRequestBodyShape(entries) != RequestBodyShape.Stream && entries.Any(static e =>
             e.Source == PropertyOwnershipSource.Body || e.FallbackSource == PropertyOwnershipSource.Body);
         var hasHeaderOrCookieBinding = entries.Any(static e =>
             e.Source is PropertyOwnershipSource.Header or PropertyOwnershipSource.Cookie);
@@ -89,7 +90,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 e.Source,
                 e.BindingName,
                 e.FallbackSource,
-                QueryOnGetBindingName: e.QueryOnGet ? GetCamelCaseName(e.PropertyName) : null)).ToList()));
+                QueryOnGetBindingName: e.QueryOnGet ? GetCamelCaseName(e.PropertyName) : null)).ToList(),
+            GetRequestBodyShape(entries)));
         context.AddRenderStep(writer => RenderDescriptorFeatureData(writer, entries));
     }
 
@@ -131,7 +133,9 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         // TypeDescriptor.GetConverter() lookup (~50-500ns per call depending on cache state).
         var converterFieldMap = EmitCachedTypeConverterFields(context, entries);
 
-        context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulation(renderContext, entries, converterFieldMap));
+        var bodyShape = GetRequestBodyShape(entries);
+
+        context.AddRenderStep(PipelineStage.Population, renderContext => RenderPopulation(renderContext, entries, converterFieldMap, bodyShape));
 
         // Single-pass partition: collect claim-mapped, init-only, and body entries in one traversal
         // instead of three separate Where().ToList/ToArray() scans.
@@ -182,7 +186,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 WriteUnsafeAccessorSetters(pipelineClass, operationTypeFull, initEntries));
         }
 
-        if (bodyEntries is not null)
+        // A stream or multipart body is bound inline by RenderPopulation, with no JSON reader.
+        if (bodyEntries is not null && bodyShape == RequestBodyShape.Json)
         {
             var operationTypeFull = operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
@@ -483,6 +488,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         var entries = new List<PropertyOwnershipEntry>();
         var isGetOnly = IsGetOnlyMethod(httpMethods);
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
+        var membersByName = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
 
         foreach (var member in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType).OfType<IPropertySymbol>())
         {
@@ -502,6 +508,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 continue;
             }
 
+            membersByName[member.Name] = member;
             var isInitOnly = member.SetMethod.IsInitOnly;
 
             // Step 1 — detect explicit [FromX] attributes (namespace-qualified to avoid MVC collisions)
@@ -702,7 +709,122 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             }
         }
 
+        if (diagnostics != null)
+        {
+            ValidateStreamingBody(operationType, entries, membersByName, httpMethods, diagnostics);
+        }
+
         return entries;
+    }
+
+    /// <summary>
+    /// Validates an operation whose body is not JSON (<see cref="GetRequestBodyShape"/>): a stream owns the whole body
+    /// (BPPO014), neither a stream nor a file can be read from a GET (BPPO015), and every other property of a multipart body
+    /// is a form field, which only a type the query string can carry can be parsed from (BPPO016).
+    /// </summary>
+    private static void ValidateStreamingBody(
+        INamedTypeSymbol operationType,
+        List<PropertyOwnershipEntry> entries,
+        Dictionary<string, IPropertySymbol> membersByName,
+        string[] httpMethods,
+        List<DiagnosticInfo> diagnostics)
+    {
+        var shape = GetRequestBodyShape(entries);
+        if (shape == RequestBodyShape.Json)
+        {
+            return;
+        }
+
+        var answersGet = httpMethods.Contains("GET", StringComparer.OrdinalIgnoreCase);
+        var stream = shape == RequestBodyShape.Stream
+            ? entries.First(static e => e.Source == PropertyOwnershipSource.Body && IsStreamType(e.TypeSymbol))
+            : null;
+
+        foreach (var entry in entries)
+        {
+            var isBody = entry.Source == PropertyOwnershipSource.Body;
+            if (!isBody && entry.FallbackSource != PropertyOwnershipSource.Body)
+            {
+                continue;
+            }
+
+            var member = membersByName[entry.PropertyName];
+            var isStreamingPart = isBody && (IsStreamType(entry.TypeSymbol) || IsFormFileType(entry.TypeSymbol));
+
+            if (isStreamingPart && answersGet)
+            {
+                diagnostics.Add(CreatePropertyDiagnostic(
+                    PropertyOwnershipDiagnosticDescriptors.StreamingBodyOnGet,
+                    member,
+                    operationType,
+                    entry.TypeSymbol.ToDisplayString()));
+            }
+
+            if (stream is not null && !ReferenceEquals(entry, stream))
+            {
+                var location = member.Locations.FirstOrDefault(static l => l.IsInSource);
+                diagnostics.Add(new DiagnosticInfo(
+                    PropertyOwnershipDiagnosticDescriptors.StreamBodyWithOtherBodyProperty,
+                    location is not null ? LocationInfo.CreateFrom(location) : null,
+                    [stream.PropertyName, operationType.Name, entry.PropertyName]));
+            }
+            else if (stream is null && !isStreamingPart && !IsSupportedQueryType(entry.TypeSymbol))
+            {
+                diagnostics.Add(CreatePropertyDiagnostic(
+                    PropertyOwnershipDiagnosticDescriptors.UnsupportedFormFieldPropertyType,
+                    member,
+                    operationType,
+                    entry.TypeSymbol.ToDisplayString()));
+            }
+        }
+    }
+
+    /// <summary>
+    /// The request body an operation's body-owned properties are read from (#71, D19). A <c>Stream</c> property is handed
+    /// the body itself, unread; an <c>IFormFile</c> property makes the body <c>multipart/form-data</c>, its files read by
+    /// name and its other body properties from its fields; otherwise it is JSON, as every body was before.
+    /// </summary>
+    /// <param name="entries">The operation's ownership entries.</param>
+    /// <returns>The body's shape.</returns>
+    internal static RequestBodyShape GetRequestBodyShape(IEnumerable<PropertyOwnershipEntry> entries)
+    {
+        var shape = RequestBodyShape.Json;
+
+        foreach (var entry in entries)
+        {
+            if (entry.Source != PropertyOwnershipSource.Body)
+            {
+                continue;
+            }
+
+            if (IsStreamType(entry.TypeSymbol))
+            {
+                return RequestBodyShape.Stream;
+            }
+
+            if (IsFormFileType(entry.TypeSymbol))
+            {
+                shape = RequestBodyShape.Multipart;
+            }
+        }
+
+        return shape;
+    }
+
+    /// <summary>Whether <paramref name="type"/> is <c>System.IO.Stream</c>, the type a raw request body is bound to.</summary>
+    /// <param name="type">The property's type.</param>
+    /// <returns><see langword="true"/> for <c>Stream</c>, nullable or not.</returns>
+    internal static bool IsStreamType(ITypeSymbol type)
+    {
+        return type.Name == "Stream" && type.IsInNamespace("System", "IO");
+    }
+
+    /// <summary>Whether <paramref name="type"/> is ASP.NET Core's <c>IFormFile</c>, a file part of a multipart body.</summary>
+    /// <param name="type">The property's type.</param>
+    /// <returns><see langword="true"/> for <c>IFormFile</c>, nullable or not.</returns>
+    internal static bool IsFormFileType(ITypeSymbol type)
+    {
+        return type.Name == "IFormFile" && type.IsInNamespace("Microsoft", "AspNetCore", "Http");
     }
 
     private static void HandleExplicitFromRoute(
@@ -1198,9 +1320,14 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     {
         var converterFieldMap = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        // A multipart body's fields are parsed as the query string's are (WriteMultipartBodyRead).
+        var hasFormFields = GetRequestBodyShape(entries) == RequestBodyShape.Multipart;
+
         foreach (var entry in entries)
         {
-            if (entry.Source is not (PropertyOwnershipSource.Route or PropertyOwnershipSource.Query) && !entry.QueryOnGet)
+            if (entry.Source is not (PropertyOwnershipSource.Route or PropertyOwnershipSource.Query)
+                && !entry.QueryOnGet
+                && !(hasFormFields && entry.Source == PropertyOwnershipSource.Body))
             {
                 continue;
             }
@@ -1312,7 +1439,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// header, cookie) in a single pipeline stage. Blank lines separate logical sections for readability
     /// in the generated output.
     /// </summary>
-    private static void RenderPopulation(PipelineRenderContext context, List<PropertyOwnershipEntry> entries, Dictionary<string, string> converterFieldMap)
+    private static void RenderPopulation(PipelineRenderContext context, List<PropertyOwnershipEntry> entries, Dictionary<string, string> converterFieldMap, RequestBodyShape bodyShape)
     {
         // Single-pass partitioning by source avoids scanning the entries collection 5 times.
         List<PropertyOwnershipEntry>? bodyEntries = null;
@@ -1383,7 +1510,24 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             // body of every request but a GET (IsBodyMethod's remarks). A GET reads the body only for what it still owns there
             // (an explicit [FromBody], or a type no query string can carry), through PopulateFromJsonBodyOnGet, and not at
             // all when nothing is left, so a body it would ignore cannot fail its binding.
-            if (bodyEntries is { Count: > 0 })
+            //
+            // A stream or multipart body (#71) is never read on a GET (BPPO015), so it has no GET branch.
+            if (bodyEntries is { Count: > 0 } && bodyShape == RequestBodyShape.Stream)
+            {
+                // Handed over unread: the handler, or a forward's StreamContent, reads it as it arrives, never buffered.
+                foreach (var entry in bodyEntries)
+                {
+                    bindingBranch.WriteStatement(FormatPropertyAssignment(operationExpr, entry, "httpContext.Request.Body"));
+                }
+
+                bindingBranch.WriteBlankLine();
+            }
+            else if (bodyEntries is { Count: > 0 } && bodyShape == RequestBodyShape.Multipart)
+            {
+                WriteMultipartBodyRead(bindingBranch, operationExpr, bodyEntries, converterFieldMap);
+                bindingBranch.WriteBlankLine();
+            }
+            else if (bodyEntries is { Count: > 0 })
             {
                 var hasQueryOnGetBody = bodyEntries.Any(static e => e.QueryOnGet);
                 var hasGetBody = bodyEntries.Any(static e => !e.QueryOnGet);
@@ -1666,12 +1810,23 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
     private static void WriteQueryExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry, Dictionary<string, string> converterFieldMap)
     {
+        WriteValueExtraction(context, operationExpr, entry, converterFieldMap, ValueSource.Query);
+    }
+
+    /// <summary>
+    /// Emits the read of a property from a collection of text values, the query string or a multipart body's fields, which
+    /// are parsed alike: a string as it is, a <c>TypeConverter</c> type through its converter, any other scalar through its
+    /// <c>TryParse</c>, and an array from every value of its name.
+    /// </summary>
+    private static void WriteValueExtraction(PipelineRenderContext context, string operationExpr, PropertyOwnershipEntry entry, Dictionary<string, string> converterFieldMap, ValueSource source)
+    {
         var typeSymbol = entry.TypeSymbol;
         var queryParamName = entry.BindingName!;
+        var tag = source.VariableTag;
 
         if (typeSymbol is IArrayTypeSymbol arrayType)
         {
-            WriteArrayQueryExtraction(context, operationExpr, entry, arrayType, queryParamName);
+            WriteArrayValueExtraction(context, operationExpr, entry, arrayType, queryParamName, source);
             return;
         }
 
@@ -1686,8 +1841,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         if (effectiveDisplay.SpecialType == SpecialType.System_String)
         {
-            var queryVar = $"_qv_{entry.VariableName}";
-            context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
+            var queryVar = $"_{tag}qv_{entry.VariableName}";
+            context.WriteStatement($"var {queryVar} = {source.Collection}[\"{queryParamName}\"];");
 
             context.If($"{queryVar}.Count > 0", ifCtx =>
             {
@@ -1696,11 +1851,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
         else if (IsTypeConverterOnlyType(effectiveType))
         {
-            var queryVar = $"_qv_{entry.VariableName}";
+            var queryVar = $"_{tag}qv_{entry.VariableName}";
             var fqType = effectiveType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var converterFieldName = converterFieldMap[fqType];
 
-            context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
+            context.WriteStatement($"var {queryVar} = {source.Collection}[\"{queryParamName}\"];");
 
             context.If($"{queryVar}.Count > 0", ifCtx =>
             {
@@ -1714,19 +1869,19 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 });
                 ifCtx.Catch("System.Exception", catchCtx =>
                 {
-                    catchCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid query parameter '{entry.BindingName}'\")");
+                    catchCtx.Return($"new Blueprint.Runtime.Exec.BindingFailureResult(\"Invalid {source.Noun} '{entry.BindingName}'\")");
                 });
             });
         }
         else
         {
             var lambda = TypeConversionHelpers.GetTryParseLambda(effectiveType);
-            var errVar = $"_qvErr_{entry.VariableName}";
-            var parsedVar = $"_parsed_{entry.VariableName}";
-            var foundVar = $"_qvFound_{entry.VariableName}";
+            var errVar = $"_{tag}qvErr_{entry.VariableName}";
+            var parsedVar = $"_{tag}parsed_{entry.VariableName}";
+            var foundVar = $"_{tag}qvFound_{entry.VariableName}";
 
             context.WriteStatement(
-                $"var {errVar} = BindQueryValue(httpContext.Request.Query, \"{queryParamName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
+                $"var {errVar} = {source.ValueHelper}({source.Collection}, \"{queryParamName}\", out var {parsedVar}, out var {foundVar}, {lambda});");
 
             context.If($"{errVar} != null", errCtx =>
             {
@@ -1740,19 +1895,21 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         }
     }
 
-    private static void WriteArrayQueryExtraction(
+    private static void WriteArrayValueExtraction(
         PipelineRenderContext context,
         string operationExpr,
         PropertyOwnershipEntry entry,
         IArrayTypeSymbol arrayType,
-        string queryParamName)
+        string queryParamName,
+        ValueSource source)
     {
         var elementType = arrayType.ElementType;
+        var tag = source.VariableTag;
 
         if (elementType.WithNullableAnnotation(NullableAnnotation.NotAnnotated).SpecialType == SpecialType.System_String)
         {
-            var queryVar = $"_qv_{entry.VariableName}";
-            context.WriteStatement($"var {queryVar} = httpContext.Request.Query[\"{queryParamName}\"];");
+            var queryVar = $"_{tag}qv_{entry.VariableName}";
+            context.WriteStatement($"var {queryVar} = {source.Collection}[\"{queryParamName}\"];");
 
             context.If($"{queryVar}.Count > 0", ifCtx =>
             {
@@ -1762,11 +1919,11 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         else
         {
             var lambda = TypeConversionHelpers.GetTryParseLambda(elementType);
-            var errVar = $"_qaErr_{entry.VariableName}";
-            var arrVar = $"_arr_{entry.VariableName}";
+            var errVar = $"_{tag}qaErr_{entry.VariableName}";
+            var arrVar = $"_{tag}arr_{entry.VariableName}";
 
             context.WriteStatement(
-                $"var {errVar} = BindQueryArray(httpContext.Request.Query, \"{queryParamName}\", out var {arrVar}, {lambda});");
+                $"var {errVar} = {source.ArrayHelper}({source.Collection}, \"{queryParamName}\", out var {arrVar}, {lambda});");
 
             context.If($"{errVar} != null", errCtx =>
             {
@@ -1778,6 +1935,43 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 foundCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, arrVar));
             });
         }
+    }
+
+    /// <summary>
+    /// Emits the read of a <c>multipart/form-data</c> body (#71, D19) through <c>PipelineHelpers.ReadFormAsync</c>: a file
+    /// property is set to the part of its name, when there is one, and every other body property is parsed from the field of
+    /// its name as a query-string value is (<see cref="WriteValueExtraction"/>). A request with no body leaves the operation as
+    /// it was, as a JSON body does; one of another media type is refused with a 415.
+    /// </summary>
+    private static void WriteMultipartBodyRead(PipelineRenderContext context, string operationExpr, List<PropertyOwnershipEntry> bodyEntries, Dictionary<string, string> converterFieldMap)
+    {
+        context.WriteStatement("var _formRead = await ReadFormAsync(httpContext, context.OperationCancelled).ConfigureAwait(false);");
+        context.If("_formRead.Failure != null", failureCtx =>
+        {
+            failureCtx.Return("_formRead.Failure");
+        });
+
+        context.If("_formRead.Form != null", formCtx =>
+        {
+            formCtx.WriteStatement("var _form = _formRead.Form;");
+
+            foreach (var entry in bodyEntries)
+            {
+                if (IsFormFileType(entry.TypeSymbol))
+                {
+                    var fileVar = $"_file_{entry.VariableName}";
+                    formCtx.WriteStatement($"var {fileVar} = _form.Files.GetFile(\"{entry.BindingName}\");");
+                    formCtx.If($"{fileVar} != null", fileCtx =>
+                    {
+                        fileCtx.WriteStatement(FormatPropertyAssignment(operationExpr, entry, fileVar));
+                    });
+                }
+                else
+                {
+                    WriteValueExtraction(formCtx, operationExpr, entry, converterFieldMap, ValueSource.Form);
+                }
+            }
+        });
     }
 
     /// <summary>
@@ -1950,6 +2144,25 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     }
 
     /// <summary>
+    /// A collection of text values a property is parsed from by <see cref="WriteValueExtraction"/>, and the runtime helpers
+    /// that parse it.
+    /// </summary>
+    /// <param name="Collection">The expression of the collection, indexed by name to its <c>StringValues</c>.</param>
+    /// <param name="ValueHelper">The <c>PipelineHelpers</c> method that parses a scalar from it.</param>
+    /// <param name="ArrayHelper">The <c>PipelineHelpers</c> method that parses an array from it.</param>
+    /// <param name="Noun">What a value of it is called in a binding failure's reason.</param>
+    /// <param name="VariableTag">
+    /// The tag in the generated locals' names; the form's differ from the query string's, as its reads sit in a block nested in
+    /// the one the query string's and route's are declared in, where an equal name would not compile (CS0136).
+    /// </param>
+    private sealed record ValueSource(string Collection, string ValueHelper, string ArrayHelper, string Noun, string VariableTag)
+    {
+        public static readonly ValueSource Query = new("httpContext.Request.Query", "BindQueryValue", "BindQueryArray", "query parameter", string.Empty);
+
+        public static readonly ValueSource Form = new("_form", "BindFormValue", "BindFormArray", "form field", "f");
+    }
+
+    /// <summary>
     /// Internal model used during analysis. Not exposed to consumers — the feature data record uses string-based source names.
     /// </summary>
     internal sealed record PropertyOwnershipEntry(
@@ -1997,5 +2210,20 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
 
         /// <summary>Property is populated by the runtime.</summary>
         System,
+    }
+
+    /// <summary>
+    /// The request body an operation's body-owned properties are read from; see <see cref="GetRequestBodyShape"/>.
+    /// </summary>
+    internal enum RequestBodyShape
+    {
+        /// <summary>A JSON object, each body property one of its members.</summary>
+        Json,
+
+        /// <summary>The raw body, handed unread to the operation's one body property, a <c>Stream</c>.</summary>
+        Stream,
+
+        /// <summary>A <c>multipart/form-data</c> body: files by name, every other body property a form field.</summary>
+        Multipart,
     }
 }

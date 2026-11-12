@@ -349,7 +349,8 @@ public sealed record OpenApiSchemaProjectionContext(
             foreach (var entry in ownership.Entries)
             {
                 if (operation.Operation.OperationType.GetProperty(entry.PropertyName, BindingFlags.Public | BindingFlags.Instance) is { } property
-                    && OpenApiOperationRenderingContext.IsRequestBodyEntry(operation.Operation, entry, property, naming))
+                    && OpenApiOperationRenderingContext.IsRequestBodyEntry(operation.Operation, entry, property, naming)
+                    && !OpenApiOperationRenderingContext.IsStreamingBodyType(property.PropertyType))
                 {
                     yield return property.PropertyType;
                 }

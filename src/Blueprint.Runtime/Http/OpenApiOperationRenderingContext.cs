@@ -341,16 +341,36 @@ public sealed record OpenApiOperationRenderingContext(
         var bodyPropertyNamesByClrName = new Dictionary<string, string>(StringComparer.Ordinal);
         var nullabilityContext = new NullabilityInfoContext();
 
+        // #71 (D19): a body-owned Stream is handed the whole body, and an IFormFile makes the body a multipart form, whose
+        // files are binary strings. The generator allows neither beside anything that would contradict that (BPPO014-016).
+        var bodyMediaType = OpenApiRequestBodyMediaTypes.Json;
+
         foreach (var entry in ownershipData.Entries)
         {
             var clrProperty = descriptor.OperationType.GetProperty(
                 entry.PropertyName,
                 BindingFlags.Public | BindingFlags.Instance);
 
+            if (entry.Source == PropertyBindingSource.Body && clrProperty is not null && clrProperty.PropertyType == typeof(Stream))
+            {
+                bodyMediaType = OpenApiRequestBodyMediaTypes.OctetStream;
+                continue;
+            }
+
+            var isFormFile = entry.Source == PropertyBindingSource.Body
+                && clrProperty?.PropertyType == typeof(Microsoft.AspNetCore.Http.IFormFile);
+
+            if (isFormFile)
+            {
+                bodyMediaType = OpenApiRequestBodyMediaTypes.MultipartFormData;
+            }
+
             // Prefer CLR type-based mapping when property info is available for accurate collection/dictionary support.
-            var (schemaType, schemaFormat) = clrProperty is not null
-                ? MapClrTypeToOpenApiSchema(clrProperty.PropertyType)
-                : MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
+            var (schemaType, schemaFormat) = isFormFile
+                ? ("string", "binary")
+                : clrProperty is not null
+                    ? MapClrTypeToOpenApiSchema(clrProperty.PropertyType)
+                    : MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
             var constraints = OpenApiValidationConstraints.ExtractFromProperty(clrProperty, includeComparisonBounds: naming != OpenApiSchemaNaming.Legacy);
 
             // R44: legacy generated a parameter's schema by reflection alone (generator.Generate(property.PropertyType)),
@@ -690,8 +710,11 @@ public sealed record OpenApiOperationRenderingContext(
 
                 // Legacy's NJsonSchema described the body's schema by the operation type, as it did any other.
                 Description = OpenApiSchemaProjectionContext.GetTypeDescription(descriptor.OperationType) ?? docData?.Summary,
+                MediaType = bodyMediaType,
             }
-            : null;
+            : bodyMediaType == OpenApiRequestBodyMediaTypes.OctetStream
+                ? new OpenApiRequestBodyModel(Required: true, []) { MediaType = bodyMediaType }
+                : null;
 
         return (orderedParameters, requestBody);
     }
@@ -973,6 +996,17 @@ public sealed record OpenApiOperationRenderingContext(
     /// act on: a property whose type the app's serializer context does not describe.
     /// </summary>
     internal ImmutableArray<string> Warnings { get; init; } = [];
+
+    /// <summary>
+    /// Whether a body property of <paramref name="type"/> is a stream or a file (#71, D19), described as a binary string
+    /// rather than as a schema of its own type's members.
+    /// </summary>
+    /// <param name="type">The property's type.</param>
+    /// <returns><see langword="true"/> for <see cref="Stream"/> and <c>IFormFile</c>.</returns>
+    internal static bool IsStreamingBodyType(Type type)
+    {
+        return type == typeof(Stream) || type == typeof(Microsoft.AspNetCore.Http.IFormFile);
+    }
 
     /// <summary>
     /// Whether <paramref name="entry"/> is a property of the operation's request body: one the ownership plan gives the body

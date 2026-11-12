@@ -1,0 +1,116 @@
+using System.Globalization;
+using System.Net.Http.Headers;
+
+namespace Blueprint.Model;
+
+/// <summary>
+/// The pieces a generated <see cref="IHttpRequestBodyBuilder"/> builds a stream or multipart request body from, so each
+/// operation's implementation is only the list of its own properties.
+/// </summary>
+/// <remarks>
+/// The source generator calls these; they are not meant to be called by hand. A field is written as the host's generated
+/// binding parses it back (<c>PipelineHelpers.BindFormValue</c>), with the invariant culture, so a number, a date or a
+/// <see langword="bool"/> round-trips whatever the sending machine's culture.
+/// </remarks>
+public static class HttpRequestBodies
+{
+    /// <summary>
+    /// Creates the content of an operation whose <c>[FromBody]</c> <see cref="Stream"/> property is its whole body.
+    /// </summary>
+    /// <remarks>
+    /// The stream is sent a read at a time, each read written and flushed before the next is made, so a forward passes an
+    /// inbound body upstream as it arrives. A <see cref="StreamContent"/> leaves the copy to the stream's own
+    /// <see cref="Stream.CopyToAsync(Stream, int, CancellationToken)"/>, and over Kestrel's request body stream that used to
+    /// hold a 24 MB upload through a gateway back from the inner service until the caller had sent all of it
+    /// (<c>StreamRequestTests</c> in <c>Blueprint.EndToEnd.Tests</c>).
+    /// </remarks>
+    /// <param name="body">The stream, read as the request is sent; <see langword="null"/> sends an empty body.</param>
+    /// <returns>The content, typed <c>application/octet-stream</c>.</returns>
+    public static HttpContent CreateStreamContent(Stream? body)
+    {
+        var content = new ForwardingStreamContent(body ?? Stream.Null);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        return content;
+    }
+
+    /// <summary>
+    /// Adds a file part to a form, streamed from <paramref name="content"/> as the request is sent.
+    /// </summary>
+    /// <param name="form">The form.</param>
+    /// <param name="name">The part's name, the property's binding name.</param>
+    /// <param name="content">The file's content.</param>
+    /// <param name="fileName">The file's name, which the host's <c>IFormFile.FileName</c> gives back.</param>
+    /// <param name="contentType">The file's media type, or <see langword="null"/> or empty for none.</param>
+    public static void AddFile(MultipartFormDataContent form, string name, Stream content, string? fileName, string? contentType)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+
+        var part = new StreamContent(content);
+        if (!string.IsNullOrEmpty(contentType) && MediaTypeHeaderValue.TryParse(contentType, out var mediaType))
+        {
+            part.Headers.ContentType = mediaType;
+        }
+
+        if (string.IsNullOrEmpty(fileName))
+        {
+            form.Add(part, name);
+        }
+        else
+        {
+            form.Add(part, name, fileName);
+        }
+    }
+
+    /// <summary>
+    /// Adds a field to a form for a value, or nothing when it is <see langword="null"/>.
+    /// </summary>
+    /// <param name="form">The form.</param>
+    /// <param name="name">The field's name, the property's binding name.</param>
+    /// <param name="value">The value.</param>
+    public static void AddField(MultipartFormDataContent form, string name, object? value)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+
+        if (FormatField(value) is { } text)
+        {
+            form.Add(new StringContent(text), name);
+        }
+    }
+
+    /// <summary>
+    /// Adds a field to a form for each value of a collection, which the host reads back as one array.
+    /// </summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="form">The form.</param>
+    /// <param name="name">The fields' name, the property's binding name.</param>
+    /// <param name="values">The values, or <see langword="null"/> for none.</param>
+    public static void AddFields<T>(MultipartFormDataContent form, string name, IEnumerable<T>? values)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+
+        if (values is null)
+        {
+            return;
+        }
+
+        foreach (var value in values)
+        {
+            AddField(form, name, value);
+        }
+    }
+
+    private static string? FormatField(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            string text => text,
+            bool flag => flag ? "true" : "false",
+            DateTime dateTime => dateTime.ToString("O", CultureInfo.InvariantCulture),
+            DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+            _ => value.ToString(),
+        };
+    }
+}

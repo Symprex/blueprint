@@ -1251,6 +1251,113 @@
         ]
       }
     },
+    "/templates/{Id}/attachments": {
+      "post": {
+        "operationId": "AttachTemplateFile",
+        "summary": "Attach a file to a template.",
+        "tags": [
+          "Templates"
+        ],
+        "parameters": [
+          {
+            "name": "Id",
+            "in": "path",
+            "required": true,
+            "description": "The unique identifier of the template.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachTemplateFile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateUploadApiResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/templates/{Id}/clone": {
       "post": {
         "operationId": "CloneTemplate",
@@ -2123,6 +2230,94 @@
         ]
       }
     },
+    "/templates/{Id}/source": {
+      "put": {
+        "operationId": "ImportTemplateSource",
+        "summary": "Import a template\u0027s source from the request body.",
+        "tags": [
+          "Templates"
+        ],
+        "parameters": [
+          {
+            "name": "Id",
+            "in": "path",
+            "required": true,
+            "description": "The unique identifier of the template.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateUploadApiResource"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/templates/{Id}/validate": {
       "post": {
         "operationId": "ValidateTemplate",
@@ -2621,6 +2816,28 @@
             "type": "string",
             "nullable": true,
             "description": "A note for staff only."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AttachTemplateFile": {
+        "title": "AttachTemplateFile",
+        "description": "Attach a file to a template.",
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "What the attached file is."
+          },
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "The file to attach.",
+            "minLength": 1
           }
         },
         "additionalProperties": false
@@ -3567,6 +3784,65 @@
           "CreatedDate",
           "LastModified"
         ]
+      },
+      "TemplateUploadApiResource": {
+        "title": "TemplateUploadApiResource",
+        "description": "What a template upload received, AttachTemplateFileCommand\u0027s file or ImportTemplateSourceCommand\u0027s\nbody: enough to prove the bytes arrived intact.",
+        "type": "object",
+        "properties": {
+          "$links": {
+            "type": "object",
+            "description": "The links for this resource, other endpoints that apply to this resource\nin it\u0027s current state.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Link"
+            },
+            "readOnly": true
+          },
+          "$object": {
+            "type": "string",
+            "description": "The object type of this resource, used to indicate to clients what they\nare dealing with (i.e. \u0027user\u0027, \u0027account\u0027, \u0027group\u0027).",
+            "readOnly": true
+          },
+          "$partial": {
+            "type": "boolean",
+            "description": "Gets or sets a value indicating whether or not this resource is \u0027partial\u0027, an indication that not all properties have been\npopulated for performance reasons and a client should reload from the \u0027self\u0027 link to retrieve all values."
+          },
+          "ContentType": {
+            "type": "string",
+            "nullable": true,
+            "description": "The uploaded content\u0027s media type, when it had one.",
+            "readOnly": true
+          },
+          "Description": {
+            "type": "string",
+            "nullable": true,
+            "description": "The upload\u0027s description, when it had one.",
+            "readOnly": true
+          },
+          "FileName": {
+            "type": "string",
+            "nullable": true,
+            "description": "The uploaded file\u0027s name, or null for a raw body.",
+            "readOnly": true
+          },
+          "Length": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many bytes arrived.",
+            "readOnly": true
+          },
+          "Sha256": {
+            "type": "string",
+            "description": "The upper-case hex SHA-256 of the bytes that arrived.",
+            "readOnly": true
+          },
+          "TemplateId": {
+            "type": "string",
+            "description": "The template the upload was for.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
       },
       "TemplateVersionApiResource": {
         "title": "TemplateVersionApiResource",
