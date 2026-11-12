@@ -15,7 +15,7 @@ namespace Blueprint.Runtime.Http;
 /// </summary>
 /// <param name="ResponseObjects">The previously rendered response-object context that owns operation ordering.</param>
 /// <param name="Operations">The rendered OpenAPI-style operations for later path/document assembly.</param>
-public sealed record OpenApiOperationRenderingContext(
+public sealed partial record OpenApiOperationRenderingContext(
     OpenApiResponseObjectRenderingContext ResponseObjects,
     ImmutableArray<OpenApiOperationModel> Operations)
 {
@@ -316,9 +316,16 @@ public sealed record OpenApiOperationRenderingContext(
     {
         var path = "/" + urlFormat.TrimStart('/');
 
-        return RoutePlaceholder.Replace(path, static match =>
+        // Only an optional marker or a default is left out, and without a '?' or '=' there is neither.
+        if (path.AsSpan().IndexOfAny('?', '=') < 0)
         {
-            var marker = match.Groups["optional"].Success ? match.Groups["optional"] : match.Groups["default"];
+            return path;
+        }
+
+        return RoutePlaceholder().Replace(path, static match =>
+        {
+            var isOptional = match.Groups["optional"].Success;
+            var marker = isOptional ? match.Groups["optional"] : match.Groups["default"];
 
             if (!marker.Success)
             {
@@ -326,7 +333,7 @@ public sealed record OpenApiOperationRenderingContext(
             }
 
             // A default's '=' is just before its value, which may be empty.
-            var markerStart = marker == match.Groups["optional"] ? marker.Index : marker.Index - 1;
+            var markerStart = isOptional ? marker.Index : marker.Index - 1;
 
             return string.Concat(
                 match.Value.AsSpan(0, markerStart - match.Index),
@@ -344,17 +351,29 @@ public sealed record OpenApiOperationRenderingContext(
     /// default or the end, so an <c>=</c> inside it (<c>{Code:regex(^a=b$)}</c>) is no default, and a default may be in
     /// parentheses (<c>{Kind=(none)}</c>).
     /// </remarks>
-    private static readonly System.Text.RegularExpressions.Regex RoutePlaceholder = new(
+    [System.Text.RegularExpressions.GeneratedRegex(
         @"\{\*{0,2}(?<name>[A-Za-z0-9_]+)(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?(?::[^:=?(){}]*(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?)*(?:(?<optional>\?)|=(?<default>(?:\}\}|[^}])*))?\}",
-        System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.ExplicitCapture);
+        System.Text.RegularExpressions.RegexOptions.ExplicitCapture)]
+    private static partial System.Text.RegularExpressions.Regex RoutePlaceholder();
 
     /// <summary>
     /// Returns the names of the route parameters a request may leave out: optional (<c>{Ext?}</c>) or defaulted
     /// (<c>{Kind=all}</c>) in every one of the operation's URL formats that has them.
     /// </summary>
-    private static HashSet<string> BuildOptionalParameterNames(ApiOperationDescriptor descriptor)
+    private static IReadOnlySet<string> BuildOptionalParameterNames(ApiOperationDescriptor descriptor)
     {
-        return GetOptionalRouteParameterNames(descriptor.Urls.Select(static url => url.UrlFormat));
+        var urls = descriptor.Urls;
+
+        // Most operations have none, so their URL formats are not copied out to look.
+        for (var i = 0; i < urls.Count; i++)
+        {
+            if (urls[i].UrlFormat.AsSpan().IndexOfAny('?', '=') >= 0)
+            {
+                return GetOptionalRouteParameterNames([.. urls.Select(static url => url.UrlFormat)]);
+            }
+        }
+
+        return FrozenSet<string>.Empty;
     }
 
     /// <summary>
@@ -363,22 +382,46 @@ public sealed record OpenApiOperationRenderingContext(
     /// </summary>
     /// <param name="urlFormats">The route templates of one operation.</param>
     /// <returns>The parameter names, compared ignoring case.</returns>
-    internal static HashSet<string> GetOptionalRouteParameterNames(IEnumerable<string> urlFormats)
+    /// <remarks>
+    /// Most operations have no optional or defaulted placeholder, so nothing is allocated until a URL format with a
+    /// <c>?</c> or <c>=</c> has one, and the required names are read only to take them out of a set that is not empty.
+    /// </remarks>
+    internal static IReadOnlySet<string> GetOptionalRouteParameterNames(IReadOnlyList<string> urlFormats)
     {
-        var optional = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string>? optional = null;
 
         foreach (var urlFormat in urlFormats)
         {
-            foreach (System.Text.RegularExpressions.Match placeholder in RoutePlaceholder.Matches(urlFormat))
+            if (urlFormat.AsSpan().IndexOfAny('?', '=') < 0)
             {
-                var isOptional = placeholder.Groups["optional"].Success || placeholder.Groups["default"].Success;
+                continue;
+            }
 
-                (isOptional ? optional : required).Add(placeholder.Groups["name"].Value);
+            foreach (System.Text.RegularExpressions.Match placeholder in RoutePlaceholder().Matches(urlFormat))
+            {
+                if (placeholder.Groups["optional"].Success || placeholder.Groups["default"].Success)
+                {
+                    (optional ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(placeholder.Groups["name"].Value);
+                }
             }
         }
 
-        optional.ExceptWith(required);
+        if (optional is null)
+        {
+            return FrozenSet<string>.Empty;
+        }
+
+        // A name optional in one URL format but required in another is required.
+        foreach (var urlFormat in urlFormats)
+        {
+            foreach (System.Text.RegularExpressions.Match placeholder in RoutePlaceholder().Matches(urlFormat))
+            {
+                if (!placeholder.Groups["optional"].Success && !placeholder.Groups["default"].Success)
+                {
+                    optional.Remove(placeholder.Groups["name"].Value);
+                }
+            }
+        }
 
         return optional;
     }
