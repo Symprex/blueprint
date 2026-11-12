@@ -368,6 +368,41 @@ public sealed class McpToolCallTests
     }
 
     [Fact]
+    public async Task A_catch_all_value_with_dot_segments_reaches_the_operation_as_HTTP_gives_it()
+    {
+        // The value used to reach the operation as written (a/../b), a path no HTTP request reaches it with: the client
+        // and the server both remove dot segments.
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        await using var client = await host.ConnectAsync();
+
+        var overHttp = await http.GetStringAsync("api/folders/a/../b");
+        var result = await client.CallToolAsync(ToolAt(ids, "/folders/"), new Dictionary<string, object?> { ["FolderPath"] = "a/../b" });
+
+        overHttp.Should().Be("\"b\"");
+        Text(result).Should().Be(overHttp);
+    }
+
+    [Fact]
+    public async Task The_operation_is_given_the_client_certificate_the_callers_connection_carries_as_HTTP_gives_it()
+    {
+        // The operation's request used to carry the caller's addresses and ports but not its client certificate, so an
+        // operation reading it saw none where the same caller's HTTP request carries it.
+        await using var host = await McpTestHost.StartAsync();
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient();
+        http.DefaultRequestHeaders.Add(McpTestHost.ClientCertificateHeader, "mcp-caller");
+        await using var client = await host.ConnectAsync(clientCertificate: "mcp-caller");
+
+        var overHttp = await http.GetStringAsync("api/client-certificate");
+        var result = await client.CallToolAsync(ids[("get", "/client-certificate")], new Dictionary<string, object?>());
+
+        overHttp.Should().Be("\"CN=mcp-caller\"");
+        Text(result).Should().Be(overHttp);
+    }
+
+    [Fact]
     public async Task A_route_constraint_that_reads_the_connection_is_given_the_callers_connection_as_HTTP_routing_gives_it()
     {
         // The routing a call is matched by used to be given a request without the caller's connection, so a constraint

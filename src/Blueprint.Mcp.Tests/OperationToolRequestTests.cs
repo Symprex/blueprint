@@ -107,6 +107,40 @@ public sealed class OperationToolRequestTests
         request.Path.Should().Be("/files/a/b c");
     }
 
+    [Theory]
+    [InlineData("a/../b", "/files/b", "b")]
+    [InlineData("a/./b", "/files/a/b", "a/b")]
+    [InlineData("a/b/..", "/files/a/", "a/")]
+    [InlineData("a/.b/..c", "/files/a/.b/..c", "a/.b/..c")]
+    public void Dot_segments_a_catch_all_argument_makes_are_removed_as_a_server_removes_them(string value, string path, string routeValue)
+    {
+        // They used to reach the operation as written, where a server removes them from the path before routing reads it.
+        var request = Create(
+            "files/{**Path}",
+            [new OperationInputProperty("Path", OperationInputLocation.Path)],
+            $$"""{ "Path": "{{value}}" }""");
+
+        request.Path.Should().Be(path);
+        request.RouteValues["Path"].Should().Be(routeValue);
+    }
+
+    [Theory]
+    [InlineData("..")]
+    [InlineData(".")]
+    public void A_dot_segment_argument_makes_no_request_as_no_HTTP_request_reaches_the_route_with_it(string value)
+    {
+        // A server removes the segment, leaving a path the route does not match.
+        var request = OperationToolRequest.Create(
+            RoutePatternFactory.Parse("api/templates/{Id}"),
+            Schema([new OperationInputProperty("Id", OperationInputLocation.Path)]),
+            Arguments($$"""{ "Id": "{{value}}" }"""),
+            null,
+            out var error);
+
+        request.Should().BeNull();
+        error.Should().Contain("No route");
+    }
+
     [Fact]
     public void A_missing_path_argument_makes_no_request_and_says_which_argument_is_missing()
     {

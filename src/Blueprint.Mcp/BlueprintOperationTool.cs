@@ -417,6 +417,13 @@ internal sealed class BlueprintOperationTool : McpServerTool
             LocalPort = caller.Connection.LocalPort,
         });
 
+        // The client certificate the caller's connection presented, which an HTTP request on that connection carries. Only
+        // the certificate: the operation's request cannot renegotiate the MCP request's connection for one.
+        if (caller.Connection.ClientCertificate is { } certificate)
+        {
+            features.Set<ITlsConnectionFeature>(new TlsConnectionFeature { ClientCertificate = certificate });
+        }
+
         var context = new DefaultHttpContext(features)
         {
             RequestServices = services,

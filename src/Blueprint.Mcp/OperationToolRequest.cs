@@ -136,6 +136,8 @@ internal sealed class OperationToolRequest
             return null;
         }
 
+        path = RemoveDotSegments(path);
+
         // The route values are those routing reads from the path, not the arguments as given: a segment holding two
         // values ({From}-{To}) may split differently from how they were written into it, and binding, validation and
         // authorisation must see what an HTTP request for the same path would give them.
@@ -179,6 +181,49 @@ internal sealed class OperationToolRequest
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Removes the dot segments (<c>.</c> and <c>..</c>) from <paramref name="path"/>, as a server removes them before
+    /// routing reads the path (RFC 3986, section 5.2.4), so no operation is given a path no HTTP request reaches it with.
+    /// An escaped slash (<c>%2F</c>) separates no segments, as it separates none for a server.
+    /// </summary>
+    private static string RemoveDotSegments(string path)
+    {
+        if (!path.Contains("/.", StringComparison.Ordinal))
+        {
+            return path;
+        }
+
+        var segments = path.Split('/');
+        var kept = new List<string>(segments.Length);
+
+        // The path starts with a slash, so the first segment is the empty one before it.
+        for (var i = 1; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+            var isLast = i == segments.Length - 1;
+
+            if (segment is "." or "..")
+            {
+                if (segment == ".." && kept.Count > 0)
+                {
+                    kept.RemoveAt(kept.Count - 1);
+                }
+
+                // A dot segment at the end leaves the path ending in a slash (a/b/.. is a/).
+                if (isLast)
+                {
+                    kept.Add(string.Empty);
+                }
+
+                continue;
+            }
+
+            kept.Add(segment);
+        }
+
+        return "/" + string.Join('/', kept);
     }
 
     private static string? WritePath(RoutePattern route, RouteValueDictionary routeValues, out string? error)

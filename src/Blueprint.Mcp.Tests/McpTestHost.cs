@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Blueprint.Authorization;
@@ -9,6 +11,7 @@ using Blueprint.SourceGenerator.Sample;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
@@ -44,6 +47,9 @@ internal sealed class McpTestHost : IAsyncDisposable
 
     /// <summary>The header <see cref="McpOnlyScheme"/> reads.</summary>
     public const string McpOnlyRolesHeader = "X-Mcp-Roles";
+
+    /// <summary>The header naming the subject of the client certificate the host gives a request's connection.</summary>
+    public const string ClientCertificateHeader = "X-Client-Certificate";
 
     private const string SchemeName = "Test";
 
@@ -187,6 +193,18 @@ internal sealed class McpTestHost : IAsyncDisposable
             }
         });
 
+        // Gives a request the client certificate its X-Client-Certificate header names, as a connection over TLS that
+        // presented one carries it, without the tests needing TLS.
+        app.Use((context, next) =>
+        {
+            if (context.Request.Headers[ClientCertificateHeader] is [{ } subject])
+            {
+                context.Features.Set<ITlsConnectionFeature>(new TlsConnectionFeature { ClientCertificate = CreateCertificate(subject) });
+            }
+
+            return next(context);
+        });
+
         app.UseRouting();
         app.UseAuthentication();
         app.UseAuthorization();
@@ -303,12 +321,17 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// <see langword="null"/>.
     /// </param>
     /// <param name="mcpOnlyRoles">The roles the client's <see cref="McpOnlyRolesHeader"/> names, or <see langword="null"/>.</param>
+    /// <param name="clientCertificate">
+    /// The subject of the client certificate the host gives the client's connection (<see cref="ClientCertificateHeader"/>),
+    /// or <see langword="null"/> for none.
+    /// </param>
     /// <returns>The connected client.</returns>
     public async Task<McpClient> ConnectAsync(
         string path = "api/mcp",
         string? roles = null,
         string? authorization = null,
-        string? mcpOnlyRoles = null)
+        string? mcpOnlyRoles = null,
+        string? clientCertificate = null)
     {
         var options = new HttpClientTransportOptions
         {
@@ -326,6 +349,11 @@ internal sealed class McpTestHost : IAsyncDisposable
         if (mcpOnlyRoles is not null)
         {
             headers[McpOnlyRolesHeader] = mcpOnlyRoles;
+        }
+
+        if (clientCertificate is not null)
+        {
+            headers[ClientCertificateHeader] = clientCertificate;
         }
 
         options.AdditionalHeaders = headers;
@@ -348,6 +376,14 @@ internal sealed class McpTestHost : IAsyncDisposable
                 .Where(static method => method.Value.ValueKind == JsonValueKind.Object && method.Value.TryGetProperty("operationId", out _))
                 .Select(method => (Key: (method.Name, path.Name), Id: method.Value.GetProperty("operationId").GetString()!)))
             .ToDictionary(static e => e.Key, static e => e.Id);
+    }
+
+    private static X509Certificate2 CreateCertificate(string subject)
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=" + subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
     }
 
     /// <inheritdoc />

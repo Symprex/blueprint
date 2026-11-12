@@ -690,7 +690,7 @@ calls it there with the SDK's own MCP client.
   through the operation's own endpoint, so the ASP.NET Core authorisation the middleware would apply to that endpoint
   (its policies, `[Authorize]` data and requirements, or the fallback policy when it has none), binding, validation,
   authentication and authorisation are those of HTTP. It carries the MCP request's `Authorization` header, scheme, host
-  and path base (so links point at the HTTP API), and is signed in from that header by the host's default
+  and path base (so links point at the HTTP API), its connection's addresses, ports and client certificate, and is signed in from that header by the host's default
   authentication scheme, as the authentication middleware signs in an HTTP request. It is not given the MCP request's
   `HttpContext.User`, which the MCP endpoint may have signed in with a scheme of its own that the API does not use. It
   has its own service scope and execution context, as an HTTP request has, carrying only the MCP request's tracing
@@ -704,7 +704,9 @@ calls it there with the SDK's own MCP client.
   `MapBlueprintMcp` refuses to map when that call was another app's, rather than serve its schemas and policies.
 - **Route values are HTTP's.** They are read back from the path the arguments make, as routing reads them, so a segment holding two values (`{From}-{To}`) splits as it does over HTTP. An empty path argument is refused as missing, as no HTTP route matches an empty
   segment, except a catch-all's, which matches an empty remainder, and a defaulted parameter's, which is given its
-  default. A slash within one reaches the operation escaped (`a%2Fb`), as routing gives it. The route's constraints
+  default. A slash within one reaches the operation escaped (`a%2Fb`), as routing gives it. Dot segments are removed
+  from the path, as a server removes them, so a catch-all given `a/../b` is given `b`, and a value of `..` alone leaves
+  a path the route does not match. The route's constraints
   (`{Id:int:min(1)}`) and host (`RequireHost`) are evaluated as routing evaluates them, and a value or host they refuse gets routing's 404.
   The host's own routing then matches the request, and the operation runs only when routing selects its endpoint: a
   call to `/items/{Name}` with `special` where `/items/special` is mapped too is refused, as HTTP sends that request

@@ -48,6 +48,26 @@ public class AccessorPathMcpQueryHandler(IHttpContextAccessor accessor)
     }
 }
 
+/// <summary>A query that answers with the subject of the client certificate its request's connection carries.</summary>
+[AllowAnonymous]
+[RootLink("/client-certificate")]
+public partial class ClientCertificateMcpQuery : IQuery<string>
+{
+}
+
+/// <summary>Handles <see cref="ClientCertificateMcpQuery"/> from the ambient request's connection.</summary>
+/// <param name="accessor">The accessor the handler reads the connection from.</param>
+public class ClientCertificateMcpQueryHandler(IHttpContextAccessor accessor)
+{
+    /// <summary>Answers with the client certificate's subject.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The subject, or <c>none</c>.</returns>
+    public string Handle(ClientCertificateMcpQuery query)
+    {
+        return accessor.HttpContext?.Connection.ClientCertificate?.Subject ?? "none";
+    }
+}
+
 /// <summary>
 /// A query Blueprint lets anyone run, whose endpoint the tests' host guards with an ASP.NET Core policy instead.
 /// </summary>
