@@ -460,6 +460,9 @@ public class GatewayBindingGeneratorTests
     [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { if (inner.Priority > 0) inner.InternalNote = \"staff\"; }")]
     [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { System.Action set = () => inner.InternalNote = \"staff\"; }")]
     [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { void Set() => inner.InternalNote = \"staff\"; }")]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { if (inner.Priority > 0) { return; } inner.InternalNote = \"staff\"; }")]
+    [InlineData("internal System.Threading.Tasks.Task OnMapAsync(Inner.AddNoteCommand inner) { if (inner.Priority > 0) return System.Threading.Tasks.Task.CompletedTask; inner.InternalNote = \"staff\"; return System.Threading.Tasks.Task.CompletedTask; }")]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { inner = new Inner.AddNoteCommand { TenantId = \"\", Text = \"\", InternalNote = \"\" }; inner.InternalNote = \"staff\"; }")]
     public void When_a_hidden_required_inner_property_is_not_assigned_by_the_map_hook_then_BPGW035_is_reported(string hook)
     {
         var contract = RequiredInternalNoteContract();
@@ -491,6 +494,7 @@ public class GatewayBindingGeneratorTests
     [Theory]
     [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { if (inner.Priority < 0) { throw new System.InvalidOperationException(); } inner.InternalNote = null; }")]
     [InlineData("internal System.Threading.Tasks.Task OnMapAsync(Inner.AddNoteCommand inner) { { inner.InternalNote ??= \"staff\"; } return System.Threading.Tasks.Task.CompletedTask; }")]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { System.Func<int> one = () => { return 1; }; inner.InternalNote = \"staff\"; }")]
     public void An_unconditional_assignment_after_a_guard_or_in_a_nested_block_satisfies_the_map_hook_check(string hook)
     {
         var gateway = WithBody(WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]"), hook);

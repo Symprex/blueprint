@@ -70,7 +70,8 @@ internal static class GatewayMapHook
     /// <remarks>
     /// Syntax only. An assignment counts when it is the hook's expression body or a statement of its body, directly or in a
     /// nested plain block, so it runs whenever the hook returns normally. One under an <c>if</c>, a loop, a <c>try</c>, a
-    /// lambda or a local function might never run, and a call to a helper cannot be seen, so neither counts: a required
+    /// lambda or a local function, or after a <c>return</c> of the hook's own, might never run, and a call to a helper cannot
+    /// be seen, so neither counts; nor does any, where the hook rebinds its parameter to another instance: a required
     /// property with no null check behind it, such as a <c>required int?</c>, would otherwise be sent as its initial value.
     /// </remarks>
     /// <param name="hook">The hook <see cref="Find"/> returned.</param>
@@ -87,7 +88,15 @@ internal static class GatewayMapHook
                 continue;
             }
 
-            foreach (var assignment in declaration.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+            // A hook that rebinds its parameter may assign another instance than the one the forward sends, so none of its
+            // assignments counts.
+            var assignments = declaration.DescendantNodes().OfType<AssignmentExpressionSyntax>().ToList();
+            if (assignments.Any(a => a.Left is IdentifierNameSyntax rebound && rebound.Identifier.ValueText == parameterName))
+            {
+                return false;
+            }
+
+            foreach (var assignment in assignments)
             {
                 if (assignment.Left is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax target, Name: var name }
                     && target.Identifier.ValueText == parameterName
@@ -104,6 +113,15 @@ internal static class GatewayMapHook
 
     private static bool AlwaysRuns(AssignmentExpressionSyntax assignment, MethodDeclarationSyntax declaration)
     {
+        // A return of the hook's own before the assignment may leave without it; a lambda's or local function's may not.
+        var earlyReturn = declaration.DescendantNodes(static n => n is not (AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax))
+            .OfType<ReturnStatementSyntax>()
+            .Any(r => r.SpanStart < assignment.SpanStart);
+        if (earlyReturn)
+        {
+            return false;
+        }
+
         if (assignment.Parent == declaration.ExpressionBody)
         {
             return true;
