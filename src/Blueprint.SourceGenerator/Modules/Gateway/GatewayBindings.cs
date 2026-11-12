@@ -34,6 +34,13 @@ public enum GatewayBindingSource
     /// Nothing: the property is left unset, <c>[Hide]</c>.
     /// </summary>
     Hidden,
+
+    /// <summary>
+    /// The operation's <c>OnMap</c> or <c>OnMapAsync</c>: a <c>[Hide]</c> of a property the inner operation requires, which
+    /// the hook assigns (#175). The forward starts it at <c>default</c> so that a <c>required</c> member compiles, and
+    /// refuses to send it still <see langword="null"/> where null can never be the value meant.
+    /// </summary>
+    MapHook,
 }
 
 /// <summary>
@@ -80,6 +87,14 @@ public enum GatewayClaimConversion
 /// For <see cref="GatewayClaimConversion.TryParse"/>, the parse expression with <c>__value__</c> for the claim's value and
 /// <c>__parsed__</c> for the parsed variable.
 /// </param>
+/// <param name="IsRequiredMember">
+/// For <see cref="GatewayBindingSource.MapHook"/>, whether the inner property has the <c>required</c> modifier, so the
+/// forward's initialiser has to set it before the hook runs.
+/// </param>
+/// <param name="IsNullRefused">
+/// For <see cref="GatewayBindingSource.MapHook"/>, whether the forward fails when the hook leaves the property
+/// <see langword="null"/>: a non-nullable reference type, or one the inner operation marks <c>[Required]</c>.
+/// </param>
 public sealed record GatewayPropertyBinding(
     string PropertyName,
     GatewayBindingSource Source,
@@ -87,7 +102,9 @@ public sealed record GatewayPropertyBinding(
     bool IsAppTier,
     string TargetTypeName,
     GatewayClaimConversion ClaimConversion,
-    string? TryParseFormat);
+    string? TryParseFormat,
+    bool IsRequiredMember = false,
+    bool IsNullRefused = false);
 
 /// <summary>
 /// D11's binding tiers: reads an operation's <c>[Bind]</c> and <c>[Hide]</c>, and its assembly's <c>[GatewayBind]</c>, into
@@ -151,6 +168,7 @@ internal static class GatewayBindings
         var declared = GetDeclaredProperties(operationType);
         var result = new List<GatewayPropertyBinding>();
         var bound = new HashSet<string>(StringComparer.Ordinal);
+        IMethodSymbol? mapHook = null;
 
         foreach (var attribute in operationType.GetAttributes())
         {
@@ -186,10 +204,37 @@ internal static class GatewayBindings
             {
                 if (IsRequired(innerProperty))
                 {
-                    diagnostics?.Add(new DiagnosticInfo(
-                        GatewayDiagnosticDescriptors.HiddenPropertyIsRequired,
-                        location,
-                        [operationType.Name, propertyName, innerType.Name]));
+                    // A required property can be hidden only for the operation's map hook to fill, and only where the hook
+                    // visibly does: otherwise removing the assignment would send the type's default without complaint.
+                    mapHook ??= GatewayMapHook.Find(operationType, innerType, diagnostics: null);
+                    if (mapHook is null)
+                    {
+                        diagnostics?.Add(new DiagnosticInfo(
+                            GatewayDiagnosticDescriptors.HiddenPropertyIsRequired,
+                            location,
+                            [operationType.Name, propertyName, innerType.Name]));
+                        continue;
+                    }
+
+                    // A hook read from a referenced assembly has no syntax to check; that assembly's own build checked it.
+                    if (!mapHook.DeclaringSyntaxReferences.IsEmpty && !GatewayMapHook.Assigns(mapHook, propertyName))
+                    {
+                        diagnostics?.Add(new DiagnosticInfo(
+                            GatewayDiagnosticDescriptors.HiddenRequiredPropertyNotAssignedByMapHook,
+                            location,
+                            [operationType.Name, propertyName, innerType.Name, mapHook.Name]));
+                        continue;
+                    }
+
+                    // A [SetsRequiredMembers] constructor needs no initialiser, and a placeholder would replace its value.
+                    var constructorSetsRequired = OperationPropertyModelBuilder.FindArgumentlessConstructor(innerType) is { } constructor
+                        && OperationPropertyModelBuilder.SetsRequiredMembers(constructor);
+                    var filled = Create(innerProperty, GatewayBindingSource.MapHook, mapHook.Name, isAppTier: false) with
+                    {
+                        IsRequiredMember = innerProperty.IsRequired && !constructorSetsRequired,
+                        IsNullRefused = IsNullRefused(innerProperty),
+                    };
+                    AddUnlessDeclared(filled, operationType, declared, location, result, diagnostics);
                     continue;
                 }
 
@@ -581,9 +626,32 @@ internal static class GatewayBindings
     /// </summary>
     private static bool IsRequired(IPropertySymbol property)
     {
-        return property.IsRequired
-            || DeclaredForward.GetEffectiveAttributes(property).Any(static a => a.AttributeClass?.InheritsFrom("System.ComponentModel.DataAnnotations.RequiredAttribute") == true
-                || a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.RequiredAttribute");
+        return property.IsRequired || HasRequiredAttribute(property);
+    }
+
+    /// <summary>
+    /// Whether null can never be what a map hook meant to send: the property is a reference type that is not nullable, or
+    /// <c>[Required]</c>, which the inner operation's validation would refuse anyway. A nullable value or reference type
+    /// that is only <c>required</c> may be meant to be null, and a non-nullable value type has no null to check.
+    /// </summary>
+    private static bool IsNullRefused(IPropertySymbol property)
+    {
+        // The check reads the property from the pipeline, which a getter that is not public does not allow (CS0271, CS0154);
+        // BPGW035's check that the hook assigns it is then the only one.
+        var type = property.Type;
+        var canBeNull = type.IsReferenceType || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+        if (!canBeNull || property.GetMethod is not { DeclaredAccessibility: Accessibility.Public })
+        {
+            return false;
+        }
+
+        return (type.IsReferenceType && property.NullableAnnotation == NullableAnnotation.NotAnnotated) || HasRequiredAttribute(property);
+    }
+
+    private static bool HasRequiredAttribute(IPropertySymbol property)
+    {
+        return DeclaredForward.GetEffectiveAttributes(property).Any(static a => a.AttributeClass?.InheritsFrom("System.ComponentModel.DataAnnotations.RequiredAttribute") == true
+            || a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.RequiredAttribute");
     }
 
     private static bool IsSameType(ITypeSymbol source, ITypeSymbol target)
