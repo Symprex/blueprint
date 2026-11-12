@@ -1205,8 +1205,9 @@ placeholder that ends the route, with the `.` or `/` before it (`/files/abc`). W
 value into its place, as `/reports/{Year?}/{Month?}` with only `Month` set would, it builds no URL. A gateway's inner
 placeholder that is optional or defaulted but binds a property that cannot be `null`, such as an `int`, still needs a
 value (BPGW010), since the forward would send `0` rather than the route's default. A gateway that can fill an inner
-optional segment but never fills one before it, such as `Month` but not `Year` in `/reports/{Year?}/{Month?}`, fails
-the build too (BPGW022), since the forward would have no URL to send.
+optional segment but leaves one before it null, such as `Month` but not `Year` in `/reports/{Year?}/{Month?}`, fails the
+build too (BPGW022), since the forward would have no URL to send; `[Hide]` the earlier one if the inner operation or
+`OnMap` sets it.
 
 **Behaviour change (v1.0.3).** A client registered with `AddBlueprintClient<TInterface, TImplementation>` (since the next major release `TImplementation` must be a generated `[BlueprintClient]`; see [Migrating Signature 365 service clients](#migrating-signature-365-service-clients-to-blueprint-clients)) serialises and
 deserialises through the app's configured `BlueprintJsonOptions` (`services.AddOptions<BlueprintJsonOptions>()` or

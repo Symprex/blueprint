@@ -458,14 +458,29 @@ public class GatewayBindingGeneratorTests
         result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW022");
     }
 
-    [Fact]
-    public void When_the_gateway_hides_an_inner_optional_segment_before_one_it_fills_then_BPGW022_is_reported()
+    [Theory]
+    [InlineData("[Hide(nameof(Inner.AddNoteCommand.Source))]")]
+    [InlineData("[Hide(nameof(Inner.AddNoteCommand.Source))]\n    [Bind(nameof(Inner.AddNoteCommand.InternalNote), Value = null)]")]
+    public void When_the_gateway_hides_an_inner_optional_segment_or_binds_the_later_one_to_null_then_BPGW022_is_not_reported(string attributes)
     {
-        // Hiding leaves Source null, which is the gap itself, so it does not satisfy the earlier segment as it does BPGW010.
+        // Hiding leaves Source to the inner operation's initialiser or the gateway's OnMap, which may set it, as it does for
+        // BPGW010; and InternalNote bound to null is never set, so nothing moves into Source's place.
         var inner = InnerSource.Replace("/tenants/{TenantId}/notes", "/notes/{Source?}/{InternalNote?}", StringComparison.Ordinal);
         var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
 
-        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.Source))]")], additionalReferences: [contract]);
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([WithAttributes(GatewaySource, attributes)], additionalReferences: [contract]);
+
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW022");
+    }
+
+    [Fact]
+    public void When_the_gateway_binds_an_inner_optional_segment_to_null_before_one_it_fills_then_BPGW022_is_reported()
+    {
+        // A null value sets Source to null on every forward, so InternalNote, copied, moves into its place whenever it is set.
+        var inner = InnerSource.Replace("/tenants/{TenantId}/notes", "/notes/{Source?}/{InternalNote?}", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([WithAttributes(GatewaySource, "[Bind(nameof(Inner.AddNoteCommand.Source), Value = null)]")], additionalReferences: [contract]);
 
         result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW022");
     }

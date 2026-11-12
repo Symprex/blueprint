@@ -250,14 +250,14 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPGW022: an inner optional route segment the forward always leaves out, before one it can fill. Leaving the first
-    /// out would move the second's value into its place, so the inner request builder builds no URL whenever the second
-    /// has a value.
+    /// BPGW022: an inner optional route segment the forward leaves null, being neither carried nor bound, or bound to null,
+    /// before one it can fill. Leaving the first out would move the second's value into its place, so the inner request
+    /// builder builds no URL whenever the second has a value.
     /// </summary>
     public static readonly DiagnosticDescriptor UnfilledOptionalSegmentBeforeFilled = new(
         id: "BPGW022",
         title: "An inner optional segment must be filled when a later one is",
-        messageFormat: "Gateway operation '{0}' can fill '{1}' but never fills '{2}', which comes before it in '{3}' ('{4}', the URL the forward sends). Without '{2}' the URL would carry '{1}' in its place, so the forward has no URL to send when '{1}' has a value. Add '{2}' to the gateway's route or bind it, or hide '{1}'.",
+        messageFormat: "Gateway operation '{0}' can fill '{1}' but leaves '{2}' null, which comes before it in '{3}' ('{4}', the URL the forward sends). Without '{2}' the URL would carry '{1}' in its place, so the forward has no URL to send when '{1}' has a value. Add '{2}' to the gateway's route or bind it, hide it if the inner operation or OnMap sets it, or hide '{1}'.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

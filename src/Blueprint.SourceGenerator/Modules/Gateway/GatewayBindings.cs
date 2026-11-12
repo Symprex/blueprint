@@ -428,22 +428,37 @@ internal static class GatewayBindings
         }
 
         // The inner request builder has no URL for an optional segment left out before one that is set
-        // (RoutePlaceholderSyntax.GetTrailingOptional). One the forward never fills, as a hidden one, is always left out, so
-        // a later one it can fill makes that so whenever the later one has a value.
-        bool CanFill(string placeholder)
+        // (RoutePlaceholderSyntax.GetTrailingOptional). One the forward provably leaves null, unmentioned or bound to null,
+        // makes that so whenever a later one it can fill has a value. A hidden one is left to the inner operation's
+        // initialiser or the gateway's OnMap, which may set it, so hiding it is the opt-out, as it is for BPGW010.
+        GatewayPropertyBinding? BindingOf(string placeholder)
         {
             var name = RoutePlaceholderSyntax.ResolveMemberName(innerMembers, placeholder) ?? placeholder;
 
-            return gatewayPlaceholders.Contains(name)
-                || copied.Contains(name)
-                || bindings.Any(b => b.PropertyName == name && b.Source != GatewayBindingSource.Hidden);
+            return bindings.FirstOrDefault(b => b.PropertyName == name);
         }
+
+        bool IsBoundToNull(GatewayPropertyBinding? binding) => binding is { Source: GatewayBindingSource.Value, Argument: "null" };
+
+        bool IsCarried(string placeholder)
+        {
+            var name = RoutePlaceholderSyntax.ResolveMemberName(innerMembers, placeholder) ?? placeholder;
+
+            return gatewayPlaceholders.Contains(name) || copied.Contains(name);
+        }
+
+        bool IsAlwaysNull(string placeholder) =>
+            !IsCarried(placeholder) && BindingOf(placeholder) is var binding && (binding is null || IsBoundToNull(binding));
+
+        bool CanFill(string placeholder) =>
+            IsCarried(placeholder)
+            || (BindingOf(placeholder) is { } binding && binding.Source != GatewayBindingSource.Hidden && !IsBoundToNull(binding));
 
         var trailing = RoutePlaceholderSyntax.GetTrailingOptional(innerTemplates[0], name => omissible.Contains(name));
         for (var i = 0; i < trailing.Count; i++)
         {
             var earlier = trailing[i].Groups[1].Value;
-            if (!RoutePlaceholderSyntax.IsWholeSegment(innerTemplates[0], trailing[i]) || CanFill(earlier))
+            if (!RoutePlaceholderSyntax.IsWholeSegment(innerTemplates[0], trailing[i]) || !IsAlwaysNull(earlier))
             {
                 continue;
             }
