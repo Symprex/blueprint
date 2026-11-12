@@ -236,7 +236,7 @@ public class ApiExceptionStatusIndexGeneratorTests
     }
 
     [Fact]
-    public void When_factory_field_is_not_public_then_not_emitted()
+    public void When_factory_field_is_private_then_not_emitted_but_an_internal_one_is()
     {
         const string source = """
             using System.Net;
@@ -268,10 +268,12 @@ public class ApiExceptionStatusIndexGeneratorTests
 
         result.Diagnostics.Should().BeEmpty();
 
-        // No assembly attributes should be emitted for non-public fields
+        // A private field no other assembly can see is not indexed; an internal one is, as InternalsVisibleTo can admit a
+        // gateway that documents it (Symprex/blueprint#170).
         var statusesSource = result.GetGeneratedSources(nameof(ApiExceptionStatusIndexGenerator))
-            .FirstOrDefault(s => s.HintName.Contains("ApiExceptionStatuses"));
-        statusesSource.Should().BeNull("non-public fields should not be indexed");
+            .Single(s => s.HintName.Contains("ApiExceptionStatuses")).SourceText;
+        statusesSource.Should().Contain("BlueprintApiExceptionStatus(\"TestNamespace.ApiExceptions\", \"Internal\", 400, \"Internal only\", \"internal_only\")")
+            .And.NotContain("Secret");
     }
 
     [Fact]

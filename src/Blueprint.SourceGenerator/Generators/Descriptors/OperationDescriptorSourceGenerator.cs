@@ -242,8 +242,8 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
     /// <summary>
     /// What an exposing operation's descriptor documents of factories declared elsewhere (D14): each inner factory's name,
     /// status, title and type where known, and whether the operation can read it at run time; and the same for the
-    /// operation's own <c>[TranslateError]</c> targets, which may be getter-backed. Each is resolved through any alias and
-    /// constant it reads, wherever those are declared.
+    /// operation's own factories, its <c>[TranslateError]</c> targets among them, which may be getter-backed. Each is
+    /// resolved through any alias and constant it reads, wherever those are declared.
     /// </summary>
     private static EquatableList<string> GetErrorFacts(INamedTypeSymbol operationType, INamedTypeSymbol innerType, Compilation compilation, CancellationToken cancellationToken)
     {
@@ -260,10 +260,12 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             facts.Add(GetErrorFact(named, member, compilation, ApiExceptionFactoryResolver.CanRead(named, compilation.Assembly)));
         }
 
-        foreach (var target in ApiExceptionFactoryResolver.GetTranslationTargetProperties(operationType, apiExceptionFactoryType))
+        // The operation's own factories too, whose aliases reach into other files: a [TranslateError] target, field or
+        // property, documents the status that replaces an inner one.
+        foreach (var (named, member) in ApiExceptionFactoryResolver.GetDocumentedMembers(operationType, apiExceptionFactoryType))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            facts.Add(GetErrorFact(target, target, compilation, readable: true));
+            facts.Add(GetErrorFact(named, member, compilation, readable: true));
         }
 
         return EquatableList<string>.TakeOwnership(facts);

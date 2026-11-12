@@ -9,8 +9,8 @@ using Microsoft.CodeAnalysis.Text;
 namespace Blueprint.SourceGenerator.Generators.ApiExceptionStatusIndex;
 
 /// <summary>
-/// Lightweight incremental generator that scans all <c>public static ApiExceptionFactory</c> fields and
-/// <c>public static ApiExceptionFactory</c> auto-properties in the compilation and emits assembly-level attributes recording
+/// Lightweight incremental generator that scans all public and internal <c>static ApiExceptionFactory</c> fields and
+/// properties in the compilation and emits assembly-level attributes recording
 /// their HTTP status codes, and their titles and types where they are constants. Downstream compilations (via project
 /// references) can then read these attributes to resolve cross-assembly references without needing syntax access, as a
 /// gateway operation does to document the factories of the inner operation it exposes (Symprex/blueprint#67).
@@ -72,21 +72,22 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
                 SourceText.From(attributeSource, Encoding.UTF8));
         });
 
-        // Public static ApiExceptionFactory fields and auto-properties: metadata exposes an auto-property, not its backing
-        // field, so a consumer looks it up by the property's name.
+        // Static ApiExceptionFactory fields and properties another assembly can see: public, or internal for one that
+        // InternalsVisibleTo admits. Metadata exposes an auto-property, not its backing field, so a consumer looks it up by
+        // the property's name.
         var fieldEntries = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (s, _) => s switch
                 {
                     // Readonly or not: a consumer reads any static field, as legacy's GetFields did.
                     FieldDeclarationSyntax { Modifiers: var mods, Declaration.Type: var type } =>
-                        mods.Any(SyntaxKind.PublicKeyword)
+                        CanBeReferenced(mods)
                         && mods.Any(SyntaxKind.StaticKeyword)
                         && type.ToString().Contains("ApiExceptionFactory"),
 
                     // An auto-property's initialiser or a getter-backed property's body, such as a [TranslateError] target.
                     PropertyDeclarationSyntax { Modifiers: var mods, Type: var type } =>
-                        mods.Any(SyntaxKind.PublicKeyword)
+                        CanBeReferenced(mods)
                         && mods.Any(SyntaxKind.StaticKeyword)
                         && type.ToString().Contains("ApiExceptionFactory"),
                     _ => false,
@@ -98,6 +99,11 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
             .WithTrackingName(Stages.Collected);
 
         context.RegisterSourceOutput(fieldEntries, static (spc, entries) => EmitAssemblyAttributes(spc, entries));
+    }
+
+    private static bool CanBeReferenced(SyntaxTokenList modifiers)
+    {
+        return modifiers.Any(SyntaxKind.PublicKeyword) || modifiers.Any(SyntaxKind.InternalKeyword);
     }
 
     private static ImmutableArray<ApiExceptionFieldEntry> TransformMember(GeneratorSyntaxContext ctx, CancellationToken ct)

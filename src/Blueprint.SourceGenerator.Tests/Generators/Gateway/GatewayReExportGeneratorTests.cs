@@ -626,6 +626,53 @@ public class GatewayReExportGeneratorTests
         referenced.Source(Descriptor).Should().NotContain("OperationHttpResponseMetadata(418,");
     }
 
+    [Fact]
+    public void An_edit_to_a_shared_factory_a_field_backed_translation_target_aliases_re_plans_the_descriptor_on_the_same_driver()
+    {
+        const string commonErrors = """
+            namespace Gateway
+            {
+                using Blueprint;
+
+                public static class CommonErrors
+                {
+                    public static readonly ApiExceptionFactory Gone = new("Widget gone", "widget_gone", 410);
+                }
+            }
+            """;
+        var gateway = TranslatingGatewaySource.Replace(
+            "public static readonly ApiExceptionFactory WidgetGone = new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            "public static readonly ApiExceptionFactory WidgetGone = CommonErrors.Gone;",
+            StringComparison.Ordinal);
+
+        var result = Edit(
+            [InnerSource, commonErrors, ClientSource, gateway],
+            [InnerSource, commonErrors.Replace("410", "409", StringComparison.Ordinal), ClientSource, gateway],
+            ["Inner.cs", "CommonErrors.cs", "Client.cs", "Gateway.cs"]);
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().Contain("OperationHttpResponseMetadata(409,")
+            .And.NotContain("OperationHttpResponseMetadata(410,");
+    }
+
+    [Fact]
+    public void An_internal_inner_factory_its_contract_gives_the_gateway_access_to_is_documented_from_its_index()
+    {
+        // The inner descriptor documents a factory of any accessibility, and InternalsVisibleTo lets the gateway see this one,
+        // but the index used to take public members only, so its custom name resolved to nothing.
+        var inner = "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"Gateway\")]\n" + InnerSource.Replace(
+            "public static readonly ApiExceptionFactory Conflict",
+            "internal static readonly ApiExceptionFactory MissingWidget = new(\"Missing widget\", \"missing_widget\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+            StringComparison.Ordinal);
+        var (image, _) = EmitInner(inner, withIndex: true);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(418, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Missing widget\", \"missing_widget\")");
+    }
+
     private static string InnerWithGetterBackedTarget()
     {
         return InnerSource
