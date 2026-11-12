@@ -149,17 +149,17 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
             _ => null,
         };
 
-        if (argumentList is { Arguments.Count: >= 3 })
+        if (ApiExceptionFactorySyntax.TryGetArguments(argumentList, out var titleArgument, out var typeArgument, out var statusArgument))
         {
             // Indexed only when both are constants; a consumer otherwise reads them from the field, which it can name.
-            if (semanticModel.GetConstantValue(argumentList.Arguments[0].Expression).Value is string constantTitle
-                && semanticModel.GetConstantValue(argumentList.Arguments[1].Expression).Value is string constantType)
+            if (semanticModel.GetConstantValue(titleArgument!).Value is string constantTitle
+                && semanticModel.GetConstantValue(typeArgument!).Value is string constantType)
             {
                 title = constantTitle;
                 type = constantType;
             }
 
-            return TryResolveStatusCodeFromExpression(argumentList.Arguments[2].Expression, out httpStatus);
+            return TryResolveStatusCodeFromExpression(statusArgument!, out httpStatus);
         }
 
         // Follow one-hop field references within the same compilation
@@ -172,15 +172,21 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
                 var refSyntax = referencedField.DeclaringSyntaxReferences[0].GetSyntax();
                 if (refSyntax is VariableDeclaratorSyntax { Initializer.Value: var refInit })
                 {
-                    return TryResolveFromInitializer(refInit, semanticModel, out httpStatus, out title, out type);
+                    // The referenced field can be declared in another file, which needs that file's semantic model.
+                    var referencedModel = refInit.SyntaxTree == semanticModel.SyntaxTree
+                        ? semanticModel
+                        : semanticModel.Compilation.GetSemanticModel(refInit.SyntaxTree);
+
+                    return TryResolveFromInitializer(refInit, referencedModel, out httpStatus, out title, out type);
                 }
             }
 
-            // Cross-assembly fallback: name-based heuristic
+            // Cross-assembly: the referenced assembly's own index, else a name-based heuristic.
             if (symbolInfo.Symbol is IFieldSymbol crossAssemblyField
                 && crossAssemblyField.DeclaringSyntaxReferences.Length == 0)
             {
-                return WellKnownHttpStatusCodes.TryGetValue(crossAssemblyField.Name, out httpStatus);
+                return ApiExceptionFactorySyntax.TryReadStatusIndex(crossAssemblyField, out httpStatus, out title, out type)
+                    || WellKnownHttpStatusCodes.TryGetValue(crossAssemblyField.Name, out httpStatus);
             }
         }
 

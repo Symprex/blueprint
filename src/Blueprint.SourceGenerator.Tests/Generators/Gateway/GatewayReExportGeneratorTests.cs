@@ -231,10 +231,96 @@ public class GatewayReExportGeneratorTests
         run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationDocumentationFeatureData(\"Renames a widget.\", \"Only the name changes.\"");
     }
 
-    private static ExposeGeneratorTests.AllGeneratorsRun Run(string[] sources, MetadataReference? innerContract)
+    [Fact]
+    public void An_inner_factory_written_with_named_arguments_in_another_order_is_documented_by_parameter()
+    {
+        // Read by position, the title and type would swap, and a [TranslateError] of the real type would match nothing.
+        var namedInner = InnerSource.Replace(
+            "new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)",
+            "new(type: \"widget_not_found\", httpStatus: HttpStatusCode.NotFound, title: \"Widget not found\")",
+            StringComparison.Ordinal);
+
+        var run = Run([namedInner, ClientSource, GatewaySource, AppSource], innerContract: null);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget not found\", \"widget_not_found\")")
+            .And.Contain("OperationHttpResponseMetadata(404,");
+    }
+
+    [Fact]
+    public void An_inner_factory_aliasing_a_custom_named_factory_of_a_third_assembly_is_documented_from_that_assemblys_index()
+    {
+        // Shared errors -> inner contract -> gateway: the inner contract's index has to follow the alias into the shared
+        // assembly's index, as no HttpStatusCode is named MissingStripeAccount.
+        const string sharedSource = """
+            namespace SharedErrors
+            {
+                using System.Net;
+                using Blueprint;
+
+                public static class BillingApiExceptions
+                {
+                    public static readonly ApiExceptionFactory MissingStripeAccount = new("Missing Stripe account", "missing_stripe_account", HttpStatusCode.NotFound);
+                }
+            }
+            """;
+        var (sharedImage, _) = EmitInner(sharedSource, withIndex: true, assemblyName: "SharedErrors");
+        var shared = MetadataReference.CreateFromImage(sharedImage);
+
+        var aliasingInner = InnerSource.Replace(
+            "new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)",
+            "SharedErrors.BillingApiExceptions.MissingStripeAccount",
+            StringComparison.Ordinal);
+        var (innerImage, _) = EmitInner(aliasingInner, withIndex: true, references: [shared]);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(innerImage), shared);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(\"Missing Stripe account\", \"missing_stripe_account\")");
+    }
+
+    [Fact]
+    public void An_edit_to_an_inner_factorys_title_in_another_file_re_plans_the_exposing_operations_descriptor_on_the_same_driver()
+    {
+        var result = EditInner(InnerSource.Replace("\"Widget not found\"", "\"Widget is missing\"", StringComparison.Ordinal));
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().Contain("OperationProblemExample(\"Widget is missing\", \"widget_not_found\")");
+    }
+
+    [Fact]
+    public void An_edit_to_an_inner_operations_summary_in_another_file_re_plans_the_exposing_operations_descriptor_on_the_same_driver()
+    {
+        var result = EditInner(InnerSource.Replace("Renames a widget.", "Renames a widget, keeping its id.", StringComparison.Ordinal));
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().Contain("\"Renames a widget, keeping its id.\"");
+    }
+
+    private static MultiGeneratorEditResult EditInner(string updatedInner)
+    {
+        var result = TestHelpers.CompileWithTrackedGeneratorsAfterEdit(
+            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+            [InnerSource, ClientSource, GatewaySource],
+            [updatedInner, ClientSource, GatewaySource],
+            ["Inner.cs", "Client.cs", "Gateway.cs"]);
+
+        result.Updated.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        return result;
+    }
+
+    private static string UpdatedDescriptor(MultiGeneratorEditResult result)
+    {
+        return result.Updated.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator)).Single(static s => s.HintName == Descriptor).SourceText;
+    }
+
+    private static ExposeGeneratorTests.AllGeneratorsRun Run(string[] sources, MetadataReference? innerContract, params MetadataReference[] additionalReferences)
     {
         // The inner operation in source still needs a reference standing in for the default inner contract.
-        return ExposeGeneratorTests.RunAllGenerators(sources, innerContract ?? TestHelpers.CreateReferenceFromSource("namespace Unused { public class Nothing; }", "InnerContract"));
+        return ExposeGeneratorTests.RunAllGenerators(
+            sources,
+            innerContract ?? TestHelpers.CreateReferenceFromSource("namespace Unused { public class Nothing; }", "InnerContract"),
+            additionalReferences);
     }
 
     private static MetadataReference InnerReference()
@@ -246,13 +332,13 @@ public class GatewayReExportGeneratorTests
     /// Builds the inner contract as a consumer's is built: with the descriptor generator, the status index generator when
     /// <paramref name="withIndex"/> is set, and its documentation file.
     /// </summary>
-    private static (byte[] Image, byte[] Documentation) EmitInner(string source, bool withIndex)
+    private static (byte[] Image, byte[] Documentation) EmitInner(string source, bool withIndex, string assemblyName = "InnerContract", MetadataReference[]? references = null)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Diagnose);
         var compilation = CSharpCompilation.Create(
-            "InnerContract",
+            assemblyName,
             [CSharpSyntaxTree.ParseText(source, parseOptions)],
-            TestHelpers.CreateMetadataReferences(),
+            TestHelpers.CreateMetadataReferences().Concat(references ?? []),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 
         IIncrementalGenerator[] generators = withIndex

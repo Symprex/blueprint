@@ -86,12 +86,19 @@ public sealed record OperationPropertyModel(
 /// The inner operation's <c>[Description]</c>, which the partial carries when the exposing operation declares none of its
 /// own, or <see langword="null"/>.
 /// </param>
+/// <param name="InnerDependencies">
+/// What the exposing operation's descriptor reads from the inner operation beyond its properties, its errors (D14) and its
+/// docs (D15), so the descriptor's incremental key changes when they do: the checksum of each file declaring an inner
+/// operation in this compilation, or, for one in metadata, its assembly's <c>[BlueprintApiExceptionStatus]</c> entries for
+/// it and its documentation. Empty when not built.
+/// </param>
 public sealed record ExposedOperationInfo(
     string MetadataName,
     string TypeName,
     string? DefaultsCreation,
     bool InheritsDocumentation = false,
-    string? InheritedDescription = null);
+    string? InheritedDescription = null,
+    EquatableList<string>? InnerDependencies = null);
 
 /// <summary>
 /// One property of an <see cref="OperationPropertyModel"/>.

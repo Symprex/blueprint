@@ -303,18 +303,17 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             _ => null,
         };
 
-        if (argumentList is { Arguments.Count: >= 3 })
+        if (ApiExceptionFactorySyntax.TryGetArguments(argumentList, out var titleArgument, out var typeArgument, out var statusArgument))
         {
-            var statusArgExpression = argumentList.Arguments[2].Expression;
-            if (!TryResolveStatusCodeFromExpression(statusArgExpression, field, out var httpStatus))
+            if (!TryResolveStatusCodeFromExpression(statusArgument!, field, out var httpStatus))
             {
                 return false;
             }
 
             // The title and type are known only when both are constants.
             var constantsModel = context.GetSemanticModel(initializerExpression.SyntaxTree);
-            var title = constantsModel?.GetConstantValue(argumentList.Arguments[0].Expression).Value as string;
-            var type = constantsModel?.GetConstantValue(argumentList.Arguments[1].Expression).Value as string;
+            var title = constantsModel?.GetConstantValue(titleArgument!).Value as string;
+            var type = constantsModel?.GetConstantValue(typeArgument!).Value as string;
 
             factory = title is not null && type is not null
                 ? new FactoryDetails(httpStatus, title, type)
@@ -416,38 +415,13 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
     /// </summary>
     private static bool TryResolveFromAssemblyAttributes(IFieldSymbol field, out FactoryDetails factory)
     {
+        if (ApiExceptionFactorySyntax.TryReadStatusIndex(field, out var status, out var title, out var type))
+        {
+            factory = new FactoryDetails(status, title, type);
+            return true;
+        }
+
         factory = default;
-
-        var assembly = field.ContainingAssembly;
-        if (assembly is null)
-        {
-            return false;
-        }
-
-        var containingTypeMetadataName = field.ContainingType.ToFullMetadataName();
-
-        foreach (var attr in assembly.GetAttributes())
-        {
-            if (attr.AttributeClass?.Name != "BlueprintApiExceptionStatusAttribute"
-                || attr.ConstructorArguments.Length is not (3 or 5))
-            {
-                continue;
-            }
-
-            var typeArg = attr.ConstructorArguments[0].Value as string;
-            var fieldArg = attr.ConstructorArguments[1].Value as string;
-
-            if (string.Equals(typeArg, containingTypeMetadataName, StringComparison.Ordinal)
-                && string.Equals(fieldArg, field.Name, StringComparison.Ordinal)
-                && attr.ConstructorArguments[2].Value is int statusCode)
-            {
-                factory = attr.ConstructorArguments is [_, _, _, { Value: string title }, { Value: string type }]
-                    ? new FactoryDetails(statusCode, title, type)
-                    : new FactoryDetails(statusCode, null, null);
-                return true;
-            }
-        }
-
         return false;
     }
 

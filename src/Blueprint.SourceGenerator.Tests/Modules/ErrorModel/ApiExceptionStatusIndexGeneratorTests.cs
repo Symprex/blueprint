@@ -102,6 +102,63 @@ public class ApiExceptionStatusIndexGeneratorTests
     }
 
     [Fact]
+    public void Named_constructor_arguments_are_indexed_by_parameter_whatever_their_order()
+    {
+        const string source = """
+            using Blueprint;
+
+            namespace TestNamespace
+            {
+                public static class ApiExceptions
+                {
+                    public static readonly ApiExceptionFactory WidgetMissing = new(type: "widget_missing", httpStatus: 404, title: "Widget missing");
+                }
+            }
+            """;
+
+        var result = TestHelpers.CompileWithTrackedGenerators([TestHelpers.CreateTrackedGenerator<ApiExceptionStatusIndexGenerator>()], [source], ["Input0.cs"]);
+
+        result.GetGeneratedSources(nameof(ApiExceptionStatusIndexGenerator))
+            .Single(static s => s.HintName.Contains("ApiExceptionStatuses")).SourceText.ToString()
+            .Should().Contain("(\"TestNamespace.ApiExceptions\", \"WidgetMissing\", 404, \"Widget missing\", \"widget_missing\")");
+    }
+
+    [Fact]
+    public void A_field_referencing_a_factory_declared_in_another_file_is_indexed_with_that_factorys_title_and_type()
+    {
+        const string common = """
+            using System.Net;
+            using Blueprint;
+
+            namespace TestNamespace
+            {
+                public static class CommonApiExceptions
+                {
+                    public static readonly ApiExceptionFactory NotFound = new("Not found", "not_found", HttpStatusCode.NotFound);
+                }
+            }
+            """;
+        const string domain = """
+            using Blueprint;
+
+            namespace TestNamespace
+            {
+                public static class DomainApiExceptions
+                {
+                    public static readonly ApiExceptionFactory MissingThing = CommonApiExceptions.NotFound;
+                }
+            }
+            """;
+
+        var result = TestHelpers.CompileWithTrackedGenerators([TestHelpers.CreateTrackedGenerator<ApiExceptionStatusIndexGenerator>()], [common, domain], ["Common.cs", "Domain.cs"]);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.GetGeneratedSources(nameof(ApiExceptionStatusIndexGenerator))
+            .Single(static s => s.HintName.Contains("ApiExceptionStatuses")).SourceText.ToString()
+            .Should().Contain("(\"TestNamespace.DomainApiExceptions\", \"MissingThing\", 404, \"Not found\", \"not_found\")");
+    }
+
+    [Fact]
     public void When_factory_uses_int_literal_status_then_emits_attribute()
     {
         const string source = """

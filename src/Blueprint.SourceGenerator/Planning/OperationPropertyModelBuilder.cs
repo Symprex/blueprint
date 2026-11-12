@@ -431,7 +431,43 @@ internal static class OperationPropertyModelBuilder
         var inheritsDocumentation = string.IsNullOrWhiteSpace(operationType.GetDocumentationCommentXml());
         var inheritedDescription = FindDescription(operationType) is null ? FindDescription(exposed) : null;
 
-        return new ExposedOperationInfo(exposed.ToFullMetadataName(), typeName, creation, inheritsDocumentation, inheritedDescription);
+        return new ExposedOperationInfo(exposed.ToFullMetadataName(), typeName, creation, inheritsDocumentation, inheritedDescription, GetInnerDependencies(exposed));
+    }
+
+    /// <summary>
+    /// Fingerprints what a descriptor reads from the inner operation beyond its properties: its factories and its docs. A
+    /// source inner operation is covered by the checksums of the files declaring it, as WithDeclarationChecksums covers the
+    /// exposing operation's own; a metadata one by its assembly's index entries for it and its documentation.
+    /// </summary>
+    private static EquatableList<string> GetInnerDependencies(INamedTypeSymbol exposed)
+    {
+        var dependencies = new List<string>();
+
+        foreach (var reference in exposed.DeclaringSyntaxReferences)
+        {
+            // Cached on the file's text, which an unedited file keeps.
+            dependencies.Add(reference.SyntaxTree.FilePath + ":" + Convert.ToBase64String(reference.SyntaxTree.GetText().GetChecksum().ToArray()));
+        }
+
+        if (dependencies.Count > 0)
+        {
+            return EquatableList<string>.TakeOwnership(dependencies);
+        }
+
+        var metadataName = exposed.ToFullMetadataName();
+        foreach (var attribute in exposed.ContainingAssembly.GetAttributes())
+        {
+            if (attribute.AttributeClass?.Name == "BlueprintApiExceptionStatusAttribute"
+                && attribute.ConstructorArguments is [{ Value: string indexedType }, ..]
+                && string.Equals(indexedType, metadataName, StringComparison.Ordinal))
+            {
+                dependencies.Add(string.Join("|", attribute.ConstructorArguments.Select(static a => Convert.ToString(a.Value, CultureInfo.InvariantCulture))));
+            }
+        }
+
+        dependencies.Add(exposed.GetDocumentationCommentXml() ?? string.Empty);
+
+        return EquatableList<string>.TakeOwnership(dependencies);
     }
 
     /// <summary>
