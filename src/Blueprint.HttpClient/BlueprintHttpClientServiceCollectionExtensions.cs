@@ -121,12 +121,15 @@ public static class BlueprintHttpClientServiceCollectionExtensions
     /// </param>
     /// <returns>
     /// An <see cref="IHttpClientBuilder"/> for the named client (named for <typeparamref name="TImplementation"/>), for further
-    /// configuration such as a primary handler or retry. The named client is given <paramref name="configureClient"/> on every
-    /// call. Where <typeparamref name="TInterface"/> is already registered, by this method or anything else, that registration
-    /// stands and no other is added, but the named client is still configured, so that a gateway's generated forward through
-    /// <typeparamref name="TImplementation"/>, which takes the named client by name, has its base address. A second call for
-    /// the same client adds its callback to the same named client: both run, in registration order.
+    /// configuration such as a primary handler or retry. Where <typeparamref name="TInterface"/> is already registered by
+    /// anything else, that registration stands and no other is added, but the named client is still configured, so that a
+    /// gateway's generated forward through <typeparamref name="TImplementation"/>, which takes the named client by name, has
+    /// its base address.
     /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// <typeparamref name="TImplementation"/> is already registered by this method. Each client is registered once, since a
+    /// second registration's <paramref name="configureClient"/> would be applied to the same named client as well.
+    /// </exception>
     public static IHttpClientBuilder AddBlueprintClient<TInterface, TImplementation>(
         this IServiceCollection services,
         Action<IServiceProvider, System.Net.Http.HttpClient> configureClient)
@@ -135,8 +138,19 @@ public static class BlueprintHttpClientServiceCollectionExtensions
     {
         var httpClientName = typeof(TImplementation).Name;
 
-        // The named client is configured on every call, whoever registered the interface: a gateway's generated forward
-        // (BlueprintClientTransport) takes it by name, not through TInterface.
+        // One registration per client: a second's callback would run on the same named client too, so a setting both make
+        // would be the last one's while a header both append would be sent twice. The named client is configured whoever
+        // registered the interface, because a gateway's generated forward (BlueprintClientTransport) takes it by name, not
+        // through TInterface.
+        if (services.Any(static s => s.ServiceType == typeof(RegisteredBlueprintClient<TImplementation>)))
+        {
+            throw new InvalidOperationException(
+                $"The Blueprint client {typeof(TImplementation).FullName} is already registered by AddBlueprintClient. Register " +
+                "each client once: a second registration's configuration would be applied to the same named client as well.");
+        }
+
+        services.AddSingleton<RegisteredBlueprintClient<TImplementation>>();
+
         var builder = services.AddHttpClient(httpClientName, (sp, client) =>
         {
             configureClient(sp, client);
@@ -161,4 +175,11 @@ public static class BlueprintHttpClientServiceCollectionExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// Marks, in the service collection, that <c>AddBlueprintClient</c> has registered <typeparamref name="TImplementation"/>,
+    /// so that a second call for it is refused.
+    /// </summary>
+    /// <typeparam name="TImplementation">The generated typed client class.</typeparam>
+    private sealed class RegisteredBlueprintClient<TImplementation>;
 }
