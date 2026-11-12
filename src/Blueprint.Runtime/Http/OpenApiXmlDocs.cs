@@ -190,56 +190,73 @@ internal static class OpenApiXmlDocs
         return File.Exists(inCurrentDirectory) ? inCurrentDirectory : Path.Combine(currentDirectory, "bin", fileName);
     }
 
-    // An <inheritdoc cref="..."/> takes every node of the member its cref names. One without a cref takes every node of the
-    // base type's member of the same name, or failing that an interface's. A property [Expose<TInner>] contributes carries
-    // the inner property's cref, which no base type or interface of the gateway operation has (Symprex/blueprint#174).
-    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Documentation of a base or interface member that has been trimmed away is none, as for any member without documentation.")]
+    // An <inheritdoc/> anywhere in a member's documentation takes what the member it inherits from documents: the member its
+    // cref names or, without a cref or when that names nothing usable, the base type's member of the same name, or failing
+    // that an interface's. One that stands alone takes each tag the member does not document itself; one inside a tag, such
+    // as <summary>, takes that tag's content. A property [Expose<TInner>] contributes carries the inner property's cref,
+    // which no base type or interface of the gateway operation has (Symprex/blueprint#174). One that inherits nothing stays,
+    // and reads as nothing, so the rest of the documentation is still used.
     private static void ReplaceInheritdocElements(MemberInfo member, XElement element, int depth)
     {
-        foreach (var child in element.Nodes().ToList().OfType<XElement>())
+        foreach (var inheritdoc in element.Descendants().Where(IsInheritdoc).ToList())
         {
-            if (!IsInheritdoc(child) || ReplaceInheritdocFromCref(member.Module.Assembly, child, depth))
+            if (GetInheritedElement(member, inheritdoc, depth) is { } inherited)
             {
-                continue;
-            }
-
-            var baseMember = member.DeclaringType!.GetTypeInfo().BaseType?.GetTypeInfo().DeclaredMembers.SingleOrDefault(m => m.Name == member.Name);
-            var baseElement = baseMember is null ? null : GetElement(baseMember, depth);
-
-            if (baseElement is not null)
-            {
-                child.ReplaceWith(baseElement.Nodes().ToArray());
-            }
-            else
-            {
-                ReplaceInheritdocFromInterfaces(member, child, depth);
+                ReplaceWithInherited(element, inheritdoc, inherited);
             }
         }
     }
 
-    private static bool IsInheritdoc(XElement element)
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Documentation of a base or interface member that has been trimmed away is none, as for any member without documentation.")]
+    private static XElement? GetInheritedElement(MemberInfo member, XElement inheritdoc, int depth)
     {
-        return string.Equals(element.Name.LocalName, "inheritdoc", StringComparison.OrdinalIgnoreCase);
+        if (inheritdoc.Attribute("cref")?.Value is { Length: > 2 } cref && GetCrefElement(member.Module.Assembly, cref, depth) is { } named)
+        {
+            return named;
+        }
+
+        // A type has no member of its own name on its base to inherit from.
+        if (member is Type)
+        {
+            return null;
+        }
+
+        var baseMember = member.DeclaringType!.GetTypeInfo().BaseType?.GetTypeInfo().DeclaredMembers.SingleOrDefault(m => m.Name == member.Name);
+
+        if (baseMember is not null && GetElement(baseMember, depth) is { } baseElement && IsUsable(baseElement))
+        {
+            return baseElement;
+        }
+
+        foreach (var implemented in member.DeclaringType!.GetTypeInfo().ImplementedInterfaces)
+        {
+            var interfaceMember = implemented.GetTypeInfo().DeclaredMembers.SingleOrDefault(m => m.Name == member.Name);
+
+            if (interfaceMember is not null && GetElement(interfaceMember, depth) is { } interfaceElement && IsUsable(interfaceElement))
+            {
+                return interfaceElement;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
-    /// Replaces an <c>&lt;inheritdoc cref="..."/&gt;</c> with every node of the member its cref names, as the compiler
-    /// writes it (<c>P:Ns.Type.Property</c>), looked for in the documentation of <paramref name="assembly"/> and then of each
-    /// assembly it references: an inner operation is usually in an upstream contract's assembly, whose file the gateway's
-    /// does not repeat. The named member's own inheritdocs are resolved as its own: a cref-less one from its base type or an
-    /// interface, in the assembly that declares it, and one with a cref in turn, each cref one step deeper.
+    /// The documentation of the member a cref names, as the compiler writes it (<c>P:Ns.Type.Property</c>), looked for in the
+    /// documentation of <paramref name="assembly"/> and then of each assembly it references: an inner operation is usually
+    /// in an upstream contract's assembly, whose file the gateway's does not repeat. The named member's own inheritdocs are
+    /// resolved as its own: a cref-less one from its base type or an interface, in the assembly that declares it, and one
+    /// with a cref in turn, each cref one step deeper.
     /// </summary>
     /// <returns>
-    /// Whether the inheritdoc was replaced. One without a cref, past the depth limit, naming a member no documentation has,
-    /// or naming one whose own inheritdoc cannot be resolved either, is not, so the caller looks elsewhere.
+    /// The documentation, or <see langword="null"/> past the depth limit, for a member no documentation has, or for one
+    /// whose documentation has nothing usable once resolved, so the caller looks elsewhere.
     /// </returns>
-    private static bool ReplaceInheritdocFromCref(Assembly assembly, XElement inheritdoc, int depth)
+    private static XElement? GetCrefElement(Assembly assembly, string cref, int depth)
     {
-        if (depth >= MaximumCrefDepth
-            || inheritdoc.Attribute("cref")?.Value is not { Length: > 2 } cref
-            || FindDocumentedMember(assembly, cref) is not ({ } target, { } targetAssembly))
+        if (depth >= MaximumCrefDepth || FindDocumentedMember(assembly, cref) is not ({ } target, { } targetAssembly))
         {
-            return false;
+            return null;
         }
 
         XElement? resolved;
@@ -250,22 +267,49 @@ internal static class OpenApiXmlDocs
         }
         else
         {
+            // A member reflection is not used to find, such as a method: only the crefs of its inheritdocs can be followed.
             resolved = new XElement(target);
 
             foreach (var nested in resolved.Descendants().Where(IsInheritdoc).ToList())
             {
-                ReplaceInheritdocFromCref(targetAssembly, nested, depth + 1);
+                if (nested.Attribute("cref")?.Value is { Length: > 2 } nestedCref && GetCrefElement(targetAssembly, nestedCref, depth + 1) is { } inherited)
+                {
+                    ReplaceWithInherited(resolved, nested, inherited);
+                }
             }
         }
 
-        if (resolved is null || resolved.Descendants().Any(IsInheritdoc))
+        return resolved is not null && IsUsable(resolved) ? resolved : null;
+    }
+
+    // An inheritdoc directly in the member's documentation takes each of the inherited tags the member does not document
+    // itself; one inside a tag takes the inherited tag of the same name's content.
+    private static void ReplaceWithInherited(XElement documentation, XElement inheritdoc, XElement inherited)
+    {
+        var nodes = inheritdoc.Parent == documentation
+            ? inherited.Elements().Where(tag => documentation.Element(tag.Name) is null).ToArray<XNode>()
+            : inherited.Element(inheritdoc.Parent!.Name)?.Nodes().ToArray() ?? [];
+
+        if (nodes.Length > 0)
         {
-            return false;
+            inheritdoc.ReplaceWith(nodes);
         }
+    }
 
-        inheritdoc.ReplaceWith(resolved.Nodes().ToArray());
+    // Documentation with something to describe once its unresolved inheritdocs, which read as nothing, are set aside.
+    private static bool IsUsable(XElement documentation)
+    {
+        return documentation.DescendantNodes().Any(static node => node switch
+        {
+            XText text => !string.IsNullOrWhiteSpace(text.Value),
+            XElement element => !IsInheritdoc(element) && element.HasAttributes,
+            _ => false,
+        });
+    }
 
-        return true;
+    private static bool IsInheritdoc(XElement element)
+    {
+        return string.Equals(element.Name.LocalName, "inheritdoc", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -345,21 +389,6 @@ internal static class OpenApiXmlDocs
         }
 
         return (null, null);
-    }
-
-    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Documentation of an interface member that has been trimmed away is none, as for any member without documentation.")]
-    private static void ReplaceInheritdocFromInterfaces(MemberInfo member, XElement inheritdoc, int depth)
-    {
-        foreach (var implemented in member.DeclaringType!.GetTypeInfo().ImplementedInterfaces)
-        {
-            var interfaceMember = implemented.GetTypeInfo().DeclaredMembers.SingleOrDefault(m => m.Name == member.Name);
-            var interfaceElement = interfaceMember is null ? null : GetElement(interfaceMember, depth);
-
-            if (interfaceElement is not null)
-            {
-                inheritdoc.ReplaceWith(interfaceElement.Nodes().ToArray());
-            }
-        }
     }
 
     private static string ToContent(XElement? element, bool escapeText)

@@ -27,6 +27,36 @@ public partial class RenameUpstreamNoteCommand : UpstreamNoteCommandBase, IComma
 
     /// <inheritdoc/>
     public bool Pinned { get; set; }
+
+    /// <summary><inheritdoc cref="UpstreamNoteWording.Subtitle"/></summary>
+    /// <remarks>The command's own remarks.</remarks>
+    public string? Subtitle { get; set; }
+
+#pragma warning disable SA1648 // Inheriting what is not there is the point: the summary beside it is still used.
+    /// <summary>
+    /// The note's mood, with remarks it cannot inherit.
+    /// </summary>
+    /// <remarks><inheritdoc/></remarks>
+    public string? Mood { get; set; }
+
+    /// <summary>
+    /// The note's shade, beside documentation it cannot inherit.
+    /// </summary>
+    /// <inheritdoc/>
+    public string? Shade { get; set; }
+#pragma warning restore SA1648
+}
+
+/// <summary>
+/// Wording another member's documentation refers to.
+/// </summary>
+public static class UpstreamNoteWording
+{
+    /// <summary>
+    /// The subtitle shown under the title.
+    /// </summary>
+    /// <remarks>Remarks a summary that refers here does not take.</remarks>
+    public static string Subtitle => string.Empty;
 }
 
 /// <summary>
