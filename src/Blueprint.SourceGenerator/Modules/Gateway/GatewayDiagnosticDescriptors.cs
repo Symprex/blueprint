@@ -99,12 +99,13 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPGW009: a <c>[Hide]</c> on a property the inner operation requires (D11, edge cases).
+    /// BPGW009: a <c>[Hide]</c> on a property the inner operation requires, on an operation with no map hook to fill it
+    /// (D11, edge cases). With one, BPGW035 checks the hook assigns it instead.
     /// </summary>
     public static readonly DiagnosticDescriptor HiddenPropertyIsRequired = new(
         id: "BPGW009",
         title: "A required inner property cannot be hidden",
-        messageFormat: "Gateway operation '{0}' hides '{1}', which '{2}' requires. Bind it with [Bind] instead.",
+        messageFormat: "Gateway operation '{0}' hides '{1}', which '{2}' requires. Bind it with [Bind] instead, or assign it in an OnMap or OnMapAsync hook.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -160,7 +161,7 @@ internal static class GatewayDiagnosticDescriptors
     public static readonly DiagnosticDescriptor InvalidMapHook = new(
         id: "BPGW014",
         title: "A gateway operation's map hook has the wrong shape",
-        messageFormat: "'{0}.{1}' is not a map hook the generated forward can call: it must be a single internal or public instance method whose first parameter is '{2}', and OnMap returns void without being async while OnMapAsync returns ValueTask or Task",
+        messageFormat: "'{0}.{1}' is not a map hook the generated forward can call: it must be a single internal or public method, instance or static, whose first parameter is '{2}', not [Conditional], and OnMap returns void without being async while OnMapAsync returns ValueTask or Task",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -274,5 +275,22 @@ internal static class GatewayDiagnosticDescriptors
         messageFormat: "Gateway operation '{0}' declares [TranslateError]s, but the problem type of '{1}' (in '{2}') is known only at run time, so it is documented with its own status whether or not a translation answers it. Give it a constant type and, if '{2}' is a reference built by an earlier Blueprint, rebuild it with this one.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW035: a <c>[Hide]</c> on a property the inner operation requires, which the operation's map hook never assigns
+    /// (#175). The hook has to assign <c>inner.Property</c> unconditionally in its own body, where the check can see it: one
+    /// that left it to a helper, a branch or a lambda, or dropped the line, would otherwise send the type's default without
+    /// complaint.
+    /// </summary>
+    /// <remarks>
+    /// BPGW022 to BPGW034 are taken or reserved by other gateway work.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor HiddenRequiredPropertyNotAssignedByMapHook = new(
+        id: "BPGW035",
+        title: "A required inner property a gateway hides must be assigned by its map hook",
+        messageFormat: "Gateway operation '{0}' hides '{1}', which '{2}' requires, but its {3} does not always assign it. Assign inner.{1} in {3}'s own body, not under an if, a loop, a try or a lambda, or bind it with [Bind].",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 }
