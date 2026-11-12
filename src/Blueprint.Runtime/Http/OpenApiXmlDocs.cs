@@ -283,12 +283,13 @@ internal static class OpenApiXmlDocs
     }
 
     // An inheritdoc directly in the member's documentation takes each of the inherited tags the member does not document
-    // itself; one inside a tag takes the inherited tag of the same name's content.
+    // itself; one inside a tag, however deep (<summary><para><inheritdoc/></para></summary>), takes the content of the
+    // inherited tag of the same name as the member-level tag it is in.
     private static void ReplaceWithInherited(XElement documentation, XElement inheritdoc, XElement inherited)
     {
         var nodes = inheritdoc.Parent == documentation
             ? inherited.Elements().Where(tag => documentation.Element(tag.Name) is null).ToArray<XNode>()
-            : inherited.Element(inheritdoc.Parent!.Name)?.Nodes().ToArray() ?? [];
+            : inherited.Element(inheritdoc.Ancestors().First(tag => tag.Parent == documentation).Name)?.Nodes().ToArray() ?? [];
 
         if (nodes.Length > 0)
         {

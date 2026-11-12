@@ -53,6 +53,7 @@ public sealed class GatewayPropertyDocumentationTests
     [InlineData("colour", "The note's colour, documented on the base.")]
     [InlineData("pinned", "Whether the note is pinned, documented on the interface.")]
     [InlineData("subtitle", "The subtitle shown under the title.")]
+    [InlineData("caption", "The subtitle shown under the title.")]
     [InlineData("mood", "The note's mood, with remarks it cannot inherit.")]
     [InlineData("shade", "The note's shade, beside documentation it cannot inherit.")]
     public void A_contributed_property_whose_inner_property_inherits_its_documentation_is_described_by_what_it_inherits(string property, string expected)

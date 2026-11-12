@@ -32,6 +32,9 @@ public partial class RenameUpstreamNoteCommand : UpstreamNoteCommandBase, IComma
     /// <remarks>The command's own remarks.</remarks>
     public string? Subtitle { get; set; }
 
+    /// <summary><para><inheritdoc cref="UpstreamNoteWording.Subtitle"/></para></summary>
+    public string? Caption { get; set; }
+
 #pragma warning disable SA1648 // Inheriting what is not there is the point: the summary beside it is still used.
     /// <summary>
     /// The note's mood, with remarks it cannot inherit.
