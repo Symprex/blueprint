@@ -93,7 +93,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
     {
         var translatedTypes = GetTranslatedProblemTypes(operationType);
 
-        foreach (var (named, member) in ApiExceptionFactoryResolver.GetMembers(innerType, apiExceptionFactoryType))
+        foreach (var (named, member) in ApiExceptionFactoryResolver.GetDocumentedMembers(innerType, apiExceptionFactoryType))
         {
             if (!ApiExceptionFactoryResolver.TryResolve(member, context.GetSemanticModel, out var factory)
                 || (factory.Type is { } type && translatedTypes.Contains(type)))

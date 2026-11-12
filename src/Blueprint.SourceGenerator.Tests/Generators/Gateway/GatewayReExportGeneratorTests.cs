@@ -583,6 +583,42 @@ public class GatewayReExportGeneratorTests
         run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget not found\", \"widget_not_found\")");
     }
 
+    [Fact]
+    public void An_inner_operations_getter_backed_translation_target_in_the_same_compilation_is_documented_by_the_gateway()
+    {
+        // The inner operation documents its own target as one of its errors, so the gateway re-exports it with the rest.
+        var run = Run([InnerWithGetterBackedTarget(), ClientSource, GatewaySource, AppSource], innerContract: null);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(410, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget gone\", \"widget_gone\")");
+    }
+
+    [Fact]
+    public void An_inner_operations_getter_backed_translation_target_in_a_referenced_assembly_is_documented_from_its_index()
+    {
+        var (image, _) = EmitInner(InnerWithGetterBackedTarget(), withIndex: true);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(410, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget gone\", \"widget_gone\")");
+    }
+
+    private static string InnerWithGetterBackedTarget()
+    {
+        return InnerSource
+            .Replace(
+                "    [Description(\"Rename a widget.\")]",
+                "    [Description(\"Rename a widget.\")]\n    [TranslateError(\"upstream_gone\", nameof(Gone))]",
+                StringComparison.Ordinal)
+            .Replace(
+                "public static readonly ApiExceptionFactory Conflict",
+                "public static ApiExceptionFactory Gone => new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);\n\n        public static readonly ApiExceptionFactory Conflict",
+                StringComparison.Ordinal);
+    }
+
     private static string RunReplacingContract(byte[] before, byte[] after)
     {
         var beforeReference = MetadataReference.CreateFromImage(before);

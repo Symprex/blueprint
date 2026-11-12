@@ -83,7 +83,9 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
                         mods.Any(SyntaxKind.PublicKeyword)
                         && mods.Any(SyntaxKind.StaticKeyword)
                         && type.ToString().Contains("ApiExceptionFactory"),
-                    PropertyDeclarationSyntax { Modifiers: var mods, Type: var type, Initializer: not null } =>
+
+                    // An auto-property's initialiser or a getter-backed property's body, such as a [TranslateError] target.
+                    PropertyDeclarationSyntax { Modifiers: var mods, Type: var type } =>
                         mods.Any(SyntaxKind.PublicKeyword)
                         && mods.Any(SyntaxKind.StaticKeyword)
                         && type.ToString().Contains("ApiExceptionFactory"),

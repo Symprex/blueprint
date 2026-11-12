@@ -254,7 +254,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
 
         var facts = new List<string>();
 
-        foreach (var (named, member) in ApiExceptionFactoryResolver.GetMembers(innerType, apiExceptionFactoryType))
+        foreach (var (named, member) in ApiExceptionFactoryResolver.GetDocumentedMembers(innerType, apiExceptionFactoryType))
         {
             cancellationToken.ThrowIfCancellationRequested();
             facts.Add(GetErrorFact(named, member, compilation, ApiExceptionFactoryResolver.CanRead(named, compilation.Assembly)));

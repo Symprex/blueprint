@@ -81,6 +81,33 @@ internal static class ApiExceptionFactoryResolver
     }
 
     /// <summary>
+    /// The factories <paramref name="type"/>'s own descriptor documents: its <see cref="GetMembers"/>, then the getter-backed
+    /// properties its own <c>[TranslateError]</c>s answer with (<see cref="GetTranslationTargetProperties"/>), which a gateway
+    /// exposing it re-exports with the rest (D14).
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <param name="apiExceptionFactoryType">The <c>Blueprint.ApiExceptionFactory</c> type.</param>
+    /// <returns>The members, each once.</returns>
+    public static IEnumerable<ApiExceptionFactoryMember> GetDocumentedMembers(INamedTypeSymbol type, INamedTypeSymbol apiExceptionFactoryType)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var member in GetMembers(type, apiExceptionFactoryType))
+        {
+            names.Add(member.Named.Name);
+            yield return member;
+        }
+
+        foreach (var property in GetTranslationTargetProperties(type, apiExceptionFactoryType))
+        {
+            if (names.Add(property.Name))
+            {
+                yield return new ApiExceptionFactoryMember(property, property);
+            }
+        }
+    }
+
+    /// <summary>
     /// Resolves a factory member: from its initialiser in this compilation, following a reference to another factory
     /// (<c>NotFound = CommonApiExceptions.NotFound</c>), or, for one in metadata, from its assembly's
     /// <c>[BlueprintApiExceptionStatus]</c> index, failing that from a member named after an <c>HttpStatusCode</c>.
