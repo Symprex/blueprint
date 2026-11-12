@@ -464,9 +464,8 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // A null property's placeholder sends its default ({Kind=all}), or is left out when it is one of the optional
         // placeholders ({Ext?}) that end the template, rather than leaving the operation without a URL.
         var omissible = RoutePlaceholderSyntax.GetOmissible(urlTemplate, CanBeNull);
-        var trailingOptional = RoutePlaceholderSyntax.GetTrailingOptional(urlTemplate, CanBeNull)
-            .Select(static match => match.Groups[1].Value)
-            .ToList();
+        var trailingMatches = RoutePlaceholderSyntax.GetTrailingOptional(urlTemplate, CanBeNull);
+        var trailingOptional = trailingMatches.Select(static match => match.Groups[1].Value).ToList();
 
         // Generate null checks for placeholder properties
         var nullChecks = new List<string>();
@@ -484,9 +483,15 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             }
         }
 
-        // An optional placeholder left out before one that is set would move that value into its place, so there is no URL.
+        // An optional segment left out before one that is set would move that value into its place, so there is no URL. One
+        // after a '.' leaves its segment there, so nothing moves.
         for (var i = 0; i + 1 < trailingOptional.Count; i++)
         {
+            if (!RoutePlaceholderSyntax.IsWholeSegment(urlTemplate, trailingMatches[i]))
+            {
+                continue;
+            }
+
             nullChecks.Add($"(typed.{propertyLookup[trailingOptional[i]].Name} is null && typed.{propertyLookup[trailingOptional[i + 1]].Name} is not null)");
         }
 

@@ -792,13 +792,16 @@ public class PropertyOwnershipModuleTests
         descriptorSource.Should().NotContain("PropertyBindingSource.Query");
     }
 
-    [Fact]
-    public void When_placeholder_has_a_legacy_format_then_the_operation_property_is_route_owned()
+    [Theory]
+    [InlineData("{Id(D)}")]
+    [InlineData("{Id(0.00;(0.00))}")]
+    public void When_placeholder_has_a_legacy_format_then_the_operation_property_is_route_owned(string placeholder)
     {
         // Legacy's grammar also allowed a format, {propName(format)}, routed as {propName} too (ApiOperationLink.cs:29, :72-76).
+        // A format may itself hold parentheses, which the placeholder pattern once stopped at, leaving Id query-bound.
         var result = CompileDescriptor(
             """
-            [SelfLink(typeof(ItemResource), "/items/{Id(D)}")]
+            [SelfLink(typeof(ItemResource), "/items/PLACEHOLDER")]
             public partial class GetItemQuery : IQuery<string>
             {
                 public string Id { get; set; }
@@ -814,7 +817,7 @@ public class PropertyOwnershipModuleTests
                 public override string Object => "item";
                 public string Id { get; set; }
             }
-            """);
+            """.Replace("PLACEHOLDER", placeholder, StringComparison.Ordinal));
 
         result.Diagnostics.Should().BeEmpty();
 

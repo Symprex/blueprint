@@ -140,6 +140,45 @@ public sealed class InlineRoutePlaceholderWireTests
     }
 
     [Theory]
+    [InlineData(null, null, "/inline-placeholders/revisions/abc")]
+    [InlineData("txt", null, "/inline-placeholders/revisions/abc.txt")]
+    [InlineData(null, "2", "/inline-placeholders/revisions/abc/2")]
+    [InlineData("txt", "2", "/inline-placeholders/revisions/abc.txt/2")]
+    public void The_typed_client_leaves_out_an_optional_placeholder_that_shares_its_segment_before_one_that_is_set(string? ext, string? revision, string expected)
+    {
+        // Name keeps the segment, so Revision cannot move into Ext's place; /revisions/abc/2 used to build no URL.
+        var url = InlinePlaceholderRevisionQuery.Http.BuildUrl(new InlinePlaceholderRevisionQuery { Name = "abc", Ext = ext, Revision = revision });
+
+        url.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(null, "2", "name=abc;ext=(none);revision=2")]
+    [InlineData("txt", "2", "name=abc;ext=txt;revision=2")]
+    public async Task A_url_the_typed_client_builds_without_an_optional_placeholder_in_a_shared_segment_reaches_the_handler(string? ext, string? revision, string expected)
+    {
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var url = InlinePlaceholderRevisionQuery.Http.BuildUrl(new InlinePlaceholderRevisionQuery { Name = "abc", Ext = ext, Revision = revision });
+        var (status, body) = await host.GetAsync(url!.TrimStart('/'));
+
+        status.Should().Be(200);
+        body.Should().Be("\"" + expected + "\"");
+    }
+
+    [Fact]
+    public async Task A_legacy_format_with_parentheses_binds_its_property_from_the_path()
+    {
+        // The placeholder pattern used to stop at the format's first ')', so Price was bound from the query string instead.
+        await using var host = await InlinePlaceholderHost.StartAsync();
+
+        var (status, body) = await host.GetAsync("inline-placeholders/prices/1.50");
+
+        status.Should().Be(200);
+        body.Should().Be("\"price=1.50\"");
+    }
+
+    [Theory]
     [InlineData(null, "/inline-placeholders/labels/%28any%29")]
     [InlineData("x", "/inline-placeholders/labels/x")]
     public void The_typed_client_reads_a_default_in_parentheses(string? label, string expected)
@@ -422,6 +461,44 @@ public partial class InlinePlaceholderSectionQuery : IQuery<string>
     {
         return "section=" + (query.Kind ?? "(none)");
     }
+}
+
+/// <summary>A GET with an optional placeholder after a period, then an optional segment.</summary>
+[AllowAnonymous]
+[RootLink("/inline-placeholders/revisions/{Name}.{Ext?}/{Revision?}")]
+public partial class InlinePlaceholderRevisionQuery : IQuery<string>
+{
+    public string Name { get; set; } = null!;
+
+    public string? Ext { get; set; }
+
+    public string? Revision { get; set; }
+
+    public static string Handle(InlinePlaceholderRevisionQuery query)
+    {
+        return "name=" + query.Name + ";ext=" + (query.Ext ?? "(none)") + ";revision=" + (query.Revision ?? "(none)");
+    }
+}
+
+/// <summary>A GET whose self link formats its placeholder with a legacy format that holds parentheses.</summary>
+[AllowAnonymous]
+[SelfLink(typeof(InlinePlaceholderPriceResource), "/inline-placeholders/prices/{Price(0.00;(0.00))}")]
+public partial class InlinePlaceholderPriceQuery : IQuery<string>
+{
+    public string Price { get; set; } = null!;
+
+    public static string Handle(InlinePlaceholderPriceQuery query)
+    {
+        return "price=" + query.Price;
+    }
+}
+
+/// <summary>The resource <see cref="InlinePlaceholderPriceQuery"/> links to.</summary>
+public sealed class InlinePlaceholderPriceResource : ApiResource
+{
+    public override string Object => "inline_placeholder_price";
+
+    public decimal Price { get; set; }
 }
 
 /// <summary>A GET whose last two segments are optional placeholders.</summary>

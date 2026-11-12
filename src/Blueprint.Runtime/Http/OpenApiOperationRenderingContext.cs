@@ -345,7 +345,7 @@ public sealed record OpenApiOperationRenderingContext(
     /// parentheses (<c>{Kind=(none)}</c>).
     /// </remarks>
     private static readonly System.Text.RegularExpressions.Regex RoutePlaceholder = new(
-        @"\{\*{0,2}(?<name>[A-Za-z0-9_]+)(?:\([^)]*\))?(?::[^:=?(){}]*(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?)*(?:(?<optional>\?)|=(?<default>(?:\}\}|[^}])*))?\}",
+        @"\{\*{0,2}(?<name>[A-Za-z0-9_]+)(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?(?::[^:=?(){}]*(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?)*(?:(?<optional>\?)|=(?<default>(?:\}\}|[^}])*))?\}",
         System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.ExplicitCapture);
 
     /// <summary>

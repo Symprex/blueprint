@@ -43,13 +43,13 @@ internal static class RoutePlaceholderSyntax
     /// </summary>
     /// <remarks>
     /// After the name come legacy's <c>(format)</c>, then any number of <c>:constraint</c>s, each with an optional
-    /// argument in parentheses. As ASP.NET's own parser does, an argument runs to the first <c>)</c> that is followed by
-    /// another constraint, the default or the end, so an <c>=</c> or <c>)</c> inside it (<c>{Code:regex(^a=b$)}</c>) is
-    /// part of the argument, and a default may itself be in parentheses (<c>{Kind=(none)}</c>). A brace inside an
-    /// argument or default is doubled, as ASP.NET escapes it.
+    /// argument in parentheses. As ASP.NET's own parser does, an argument, like a format, runs to the first <c>)</c> that is
+    /// followed by another constraint, the default or the end. So an <c>=</c> or <c>)</c> inside one is part of it
+    /// (<c>{Code:regex(^a=b$)}</c>, <c>{Price(0.00;(0.00))}</c>), and a default may itself be in parentheses
+    /// (<c>{Kind=(none)}</c>). A brace inside an argument or default is doubled, as ASP.NET escapes it.
     /// </remarks>
     public static Regex Placeholder { get; } = new(
-        @"\{\*{0,2}([A-Za-z0-9_]+)(?:\([^)]*\))?(?::[^:=?(){}]*(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?)*(?:(?<optional>\?)|=(?<default>(?:\}\}|[^}])*))?\}",
+        @"\{\*{0,2}([A-Za-z0-9_]+)(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?(?::[^:=?(){}]*(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?)*(?:(?<optional>\?)|=(?<default>(?:\}\}|[^}])*))?\}",
         RegexOptions.Compiled);
 
     /// <summary>
@@ -83,9 +83,11 @@ internal static class RoutePlaceholderSyntax
     /// </summary>
     /// <remarks>
     /// One followed by anything else cannot be left out: <c>/items/{Page?}/details</c> without <c>Page</c> would be
-    /// <c>/items/details</c>, which the route does not match. Within the run, one can be left out only when every one after
-    /// it is too, or a later value would move into its place: <c>/reports/{Year?}/{Month?}</c> without <c>Year</c> would
-    /// be <c>/reports/12</c>, which binds <c>12</c> to <c>Year</c>.
+    /// <c>/items/details</c>, which the route does not match. Within the run, one that is a whole segment can be left out
+    /// only when the next one is too, or a later value would move into its place: <c>/reports/{Year?}/{Month?}</c> without
+    /// <c>Year</c> would be <c>/reports/12</c>, which binds <c>12</c> to <c>Year</c>. One after a <c>.</c> shares its segment
+    /// with what comes before it, which keeps the segment there: <c>/files/{Name}.{Ext?}/{Revision?}</c> without <c>Ext</c>
+    /// is <c>/files/abc/2</c> (<see cref="IsWholeSegment"/>).
     /// </remarks>
     /// <param name="template">The route template.</param>
     /// <param name="canBeNull">Whether the property a placeholder names can be <see langword="null"/>.</param>
@@ -110,6 +112,18 @@ internal static class RoutePlaceholderSyntax
         }
 
         return trailing;
+    }
+
+    /// <summary>
+    /// Returns whether a placeholder of <paramref name="template"/> is a segment of its own, so leaving it out removes the
+    /// segment, rather than following a <c>.</c> in a segment it shares.
+    /// </summary>
+    /// <param name="template">The route template.</param>
+    /// <param name="placeholder">A match of <see cref="Placeholder"/> in <paramref name="template"/>.</param>
+    /// <returns><see langword="true"/> when the placeholder starts its segment.</returns>
+    public static bool IsWholeSegment(string template, Match placeholder)
+    {
+        return placeholder.Index == 0 || template[placeholder.Index - 1] == '/';
     }
 
     /// <summary>
