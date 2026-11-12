@@ -582,7 +582,7 @@ internal static class GatewayBindings
     private static bool IsRequired(IPropertySymbol property)
     {
         return property.IsRequired
-            || property.GetAttributes().Any(static a => a.AttributeClass?.InheritsFrom("System.ComponentModel.DataAnnotations.RequiredAttribute") == true
+            || DeclaredForward.GetEffectiveAttributes(property).Any(static a => a.AttributeClass?.InheritsFrom("System.ComponentModel.DataAnnotations.RequiredAttribute") == true
                 || a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.RequiredAttribute");
     }
 

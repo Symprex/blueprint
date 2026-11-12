@@ -55,7 +55,8 @@ internal static class DeclaredForward
     /// <returns>The attribute, or <see langword="null"/> when the property has none.</returns>
     public static AttributeData? FindForwardAs(IPropertySymbol property, out string? innerName)
     {
-        foreach (var attribute in property.GetAttributes())
+        // An override keeps the rename of the declaration it overrides, as [ForwardAs] is inherited; a hiding one does not.
+        foreach (var attribute in GetEffectiveAttributes(property))
         {
             if (attribute.AttributeClass?.ToFullMetadataName() == ForwardAsAttributeMetadataName)
             {
@@ -196,7 +197,7 @@ internal static class DeclaredForward
     public static IReadOnlyList<AttributeData> GetInheritedRules(INamedTypeSymbol operationType, INamedTypeSymbol? innerType, IPropertySymbol property)
     {
         if (innerType is null
-            || ValidationSymbolHelpers.HasValidationAttribute(property)
+            || GetEffectiveAttributes(property).Any(static a => ValidationSymbolHelpers.IsValidationAttribute(a.AttributeClass))
             || FindCounterpart(operationType, innerType, property) is not { } counterpart
             || !HasCounterpartType(property, counterpart))
         {
@@ -219,11 +220,11 @@ internal static class DeclaredForward
     }
 
     /// <summary>
-    /// Gets the attributes the runtime reads on an inner property: its own, then those of each declaration it overrides
+    /// Gets the attributes the runtime reads on a property: its own, then those of each declaration it overrides
     /// that the attribute's <c>[AttributeUsage]</c> lets it inherit, as <c>TypeDescriptor</c>, and so DataAnnotations
     /// validation, collects them. A single-use attribute the property already has replaces the overridden one's.
     /// </summary>
-    /// <param name="property">The inner operation's property.</param>
+    /// <param name="property">The property.</param>
     /// <returns>The property's effective attributes.</returns>
     public static IReadOnlyList<AttributeData> GetEffectiveAttributes(IPropertySymbol property)
     {

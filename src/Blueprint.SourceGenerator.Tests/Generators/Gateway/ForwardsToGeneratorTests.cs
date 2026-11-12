@@ -277,7 +277,7 @@ public class ForwardsToGeneratorTests
         // [CreditCard] has no generated check, and one rule without one rejected the property's whole plan, so the
         // inherited [Required] was dropped with it (Copilot on #169).
         var inner = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(
-            InnerSource.Replace("[Required]\n        public string? Owner", "[Required]\n        [CreditCard]\n        public string? Owner", StringComparison.Ordinal),
+            InnerSource.Replace("public string? Owner { get; set; }", "[CreditCard]\n        public string? Owner { get; set; }", StringComparison.Ordinal),
             "InnerImportContractWithCard");
 
         var run = RunAllGenerators([ClientSource, AppBindingSource, GatewaySource, AppSource], inner);
@@ -700,6 +700,75 @@ public class ForwardsToGeneratorTests
 
         run.EmitErrors.Should().BeEmpty();
         ValidationBlock(run).Should().Contain("\"ConfirmOwner\"");
+    }
+
+    [Fact]
+    public void An_override_keeps_the_rename_of_the_declaration_it_overrides()
+    {
+        // Only the override's own attributes were read, so the base [ForwardAs("SourceId")] was lost and the value was
+        // not forwarded (Copilot on #169).
+        var gateway = GatewaySource
+            .Replace(
+                "public partial class CreateImportRunCommand : ICommand<Inner.ImportRunResult>",
+                "public partial class CreateImportRunCommand : GatewayBase, ICommand<Inner.ImportRunResult>",
+                StringComparison.Ordinal)
+            .Replace("[ForwardAs(\"SourceId\")]", string.Empty, StringComparison.Ordinal)
+            .Replace("public string? ExternalId { get; init; }", "public override string? ExternalId { get; init; }", StringComparison.Ordinal)
+            + """
+
+            namespace Gateway
+            {
+                using Blueprint.Model.Attributes;
+
+                public class GatewayBase
+                {
+                    [ForwardAs("SourceId")]
+                    public virtual string? ExternalId { get; init; }
+                }
+            }
+            """;
+
+        var run = Run(gateway);
+
+        run.EmitErrors.Should().BeEmpty();
+        ForwardInitialiser(run).Should().Contain("SourceId = operation.ExternalId");
+    }
+
+    [Fact]
+    public void An_override_whose_overridden_declaration_has_rules_takes_none_from_the_inner_property()
+    {
+        // The override had no rules of its own, so it took the inner [Required] beside the base's (Copilot on #169).
+        var gateway = GatewaySource
+            .Replace(
+                "public partial class CreateImportRunCommand : ICommand<Inner.ImportRunResult>",
+                "public partial class CreateImportRunCommand : GatewayBase, ICommand<Inner.ImportRunResult>",
+                StringComparison.Ordinal)
+            .Replace("public string? Owner { get; set; }", "public override string? Owner { get; set; }", StringComparison.Ordinal)
+            + """
+
+            namespace Gateway
+            {
+                public class GatewayBase
+                {
+                    [System.ComponentModel.DataAnnotations.MaxLength(10)]
+                    public virtual string? Owner { get; set; }
+                }
+            }
+            """;
+
+        ValidationBlock(Run(gateway)).Should().NotContain("global::System.String.IsNullOrWhiteSpace(operation.Owner)");
+    }
+
+    [Fact]
+    public void Hiding_an_inner_override_whose_overridden_declaration_is_marked_Required_reports_BPGW009()
+    {
+        // The hide read only the override's own attributes, so it hid a required property unreported (Copilot on #169).
+        var gateway = GatewaySource.Replace(
+            "[ForwardsTo<Inner.CreateImportRunCommand>]",
+            "[ForwardsTo<Inner.CreateImportRunCommand>]\n    [Hide(\"Region\")]",
+            StringComparison.Ordinal);
+
+        RunWithInnerBase(gateway).GeneratorDiagnostics.Should().Contain(static d => d.Id == "BPGW009");
     }
 
     /// <summary>
