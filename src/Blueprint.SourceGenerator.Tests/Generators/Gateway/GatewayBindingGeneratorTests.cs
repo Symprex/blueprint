@@ -427,6 +427,49 @@ public class GatewayBindingGeneratorTests
         result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW010");
     }
 
+    [Fact]
+    public void When_the_gateway_fills_an_inner_optional_segment_but_not_one_before_it_then_BPGW022_is_reported()
+    {
+        // Source is the gateway's own int, so the forward leaves the inner Source null while InternalNote, copied, may be
+        // set: /notes/{InternalNote} would bind InternalNote's value to Source, so the inner client builds no URL.
+        var inner = InnerSource.Replace("/tenants/{TenantId}/notes", "/notes/{Source?}/{InternalNote?}", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([WithBody(GatewaySource, "public int Source { get; set; }")], additionalReferences: [contract]);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW022").Which;
+        diagnostic.GetMessage().Should().Contain("'Source'").And.Contain("'InternalNote'").And.Contain("/notes/{Source?}/{InternalNote?}");
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW010");
+    }
+
+    [Theory]
+    [InlineData("/notes/{Source?}/{InternalNote?}", "")]
+    [InlineData("/notes/{Text}.{Source?}/{InternalNote?}", "public int Source { get; set; }")]
+    [InlineData("/notes/{Source?}/{InternalNote?}", "public int Source { get; set; }\n    public int InternalNote { get; set; }")]
+    public void When_every_inner_optional_segment_before_one_the_gateway_fills_can_be_filled_too_then_BPGW022_is_not_reported(string route, string body)
+    {
+        // Copied, both can be set; after a '.', Source leaves its segment there; and with neither filled, nothing moves.
+        var inner = InnerSource.Replace("/tenants/{TenantId}/notes", route, StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = body.Length == 0 ? GatewaySource : WithBody(GatewaySource, body);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([gateway], additionalReferences: [contract]);
+
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW022");
+    }
+
+    [Fact]
+    public void When_the_gateway_hides_an_inner_optional_segment_before_one_it_fills_then_BPGW022_is_reported()
+    {
+        // Hiding leaves Source null, which is the gap itself, so it does not satisfy the earlier segment as it does BPGW010.
+        var inner = InnerSource.Replace("/tenants/{TenantId}/notes", "/notes/{Source?}/{InternalNote?}", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.Source))]")], additionalReferences: [contract]);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW022");
+    }
+
     [Theory]
     [InlineData(AppBindingSource, "")]
     [InlineData("", "[Hide(nameof(Inner.AddNoteCommand.TenantId))]")]

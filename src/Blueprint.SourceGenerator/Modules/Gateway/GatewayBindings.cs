@@ -426,6 +426,38 @@ internal static class GatewayBindings
                 exposeLocation,
                 [operationType.Name, name, innerType.Name, innerTemplates[0]]));
         }
+
+        // The inner request builder has no URL for an optional segment left out before one that is set
+        // (RoutePlaceholderSyntax.GetTrailingOptional). One the forward never fills, as a hidden one, is always left out, so
+        // a later one it can fill makes that so whenever the later one has a value.
+        bool CanFill(string placeholder)
+        {
+            var name = RoutePlaceholderSyntax.ResolveMemberName(innerMembers, placeholder) ?? placeholder;
+
+            return gatewayPlaceholders.Contains(name)
+                || copied.Contains(name)
+                || bindings.Any(b => b.PropertyName == name && b.Source != GatewayBindingSource.Hidden);
+        }
+
+        var trailing = RoutePlaceholderSyntax.GetTrailingOptional(innerTemplates[0], name => omissible.Contains(name));
+        for (var i = 0; i < trailing.Count; i++)
+        {
+            var earlier = trailing[i].Groups[1].Value;
+            if (!RoutePlaceholderSyntax.IsWholeSegment(innerTemplates[0], trailing[i]) || CanFill(earlier))
+            {
+                continue;
+            }
+
+            var later = trailing.Skip(i + 1).Select(static match => match.Groups[1].Value).FirstOrDefault(CanFill);
+            if (later is not null)
+            {
+                diagnostics.Add(new DiagnosticInfo(
+                    GatewayDiagnosticDescriptors.UnfilledOptionalSegmentBeforeFilled,
+                    exposeLocation,
+                    [operationType.Name, RoutePlaceholderSyntax.ResolveMemberName(innerMembers, later) ?? later, RoutePlaceholderSyntax.ResolveMemberName(innerMembers, earlier) ?? earlier, innerType.Name, innerTemplates[0]]));
+                break;
+            }
+        }
     }
 
     private static GatewayPropertyBinding Create(IPropertySymbol innerProperty, GatewayBindingSource source, string? argument, bool isAppTier)
