@@ -88,6 +88,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.HttpClient.Reflec
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.Testing.HttpClient", "src\Blueprint.Testing.HttpClient\Blueprint.Testing.HttpClient.csproj", "{D79F81F0-0037-42D3-A75A-6C3B98E9BE27}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blueprint.SourceGenerator.Tests.Integration.Upstream", "src\Blueprint.SourceGenerator.Tests.Integration.Upstream\Blueprint.SourceGenerator.Tests.Integration.Upstream.csproj", "{592709C7-F157-4C83-96CB-AD5BB6928CE2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -566,6 +568,18 @@ Global
 		{D79F81F0-0037-42D3-A75A-6C3B98E9BE27}.Release|x64.Build.0 = Release|Any CPU
 		{D79F81F0-0037-42D3-A75A-6C3B98E9BE27}.Release|x86.ActiveCfg = Release|Any CPU
 		{D79F81F0-0037-42D3-A75A-6C3B98E9BE27}.Release|x86.Build.0 = Release|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Debug|x64.Build.0 = Debug|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Debug|x86.Build.0 = Debug|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Release|x64.ActiveCfg = Release|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Release|x64.Build.0 = Release|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Release|x86.ActiveCfg = Release|Any CPU
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -603,5 +617,6 @@ Global
 		{7BCCA4E4-3E53-4E3D-A569-37BA98E00DE2} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 		{0D82876B-644F-4BF6-9A9B-A7D8CD4AD442} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 		{D79F81F0-0037-42D3-A75A-6C3B98E9BE27} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
+		{592709C7-F157-4C83-96CB-AD5BB6928CE2} = {6A6D0D4D-3EAE-4F88-94AD-9ABE41050A24}
 	EndGlobalSection
 EndGlobal
