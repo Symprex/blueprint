@@ -353,12 +353,10 @@ internal static class OperationPropertyModelBuilder
             bound.Add(binding.PropertyName);
         }
 
-        return exposedType.GetAllMembers()
-            .OfType<IPropertySymbol>()
-            .Where(member => IsPublicInstanceProperty(member)
-                && member.SetMethod is { DeclaredAccessibility: Accessibility.Public }
-                && !IsObsolete(member)
-                && !bound.Contains(member.Name));
+        // Only the declaration an initialiser sets counts: a base one a getter-only or static declaration hides would be
+        // published and its value never forwarded.
+        return DeclaredForward.GetSettableProperties(exposedType).Values
+            .Where(member => !IsObsolete(member) && !bound.Contains(member.Name));
     }
 
     /// <summary>

@@ -118,13 +118,15 @@ internal static class DeclaredForward
     /// <returns>The properties a forward can set.</returns>
     public static Dictionary<string, IPropertySymbol> GetSettableProperties(INamedTypeSymbol innerType)
     {
-        // A getter-only declaration hiding a settable base one leaves the name unsettable: C# resolves the derived one.
+        // A getter-only or static declaration hiding a settable base one leaves the name unsettable: C# resolves the
+        // derived one, so every public declaration claims its name before the instance and setter checks.
         var properties = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in innerType.GetAllMembers().OfType<IPropertySymbol>())
         {
-            if (member is { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public }
+            if (member is { IsIndexer: false, DeclaredAccessibility: Accessibility.Public }
                 && seen.Add(member.Name)
+                && !member.IsStatic
                 && member.SetMethod?.DeclaredAccessibility == Accessibility.Public)
             {
                 properties.Add(member.Name, member);

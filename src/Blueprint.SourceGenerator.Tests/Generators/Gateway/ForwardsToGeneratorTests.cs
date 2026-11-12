@@ -112,6 +112,9 @@ public class ForwardsToGeneratorTests
         /// <summary>A note the run keeps.</summary>
                 public new string? Note { get; }
 
+                /// <summary>The run's source, shared by every run.</summary>
+                public static new string? Source { get; set; }
+
                 /// <summary>The region the run imports into.</summary>
                 public override string? Region { get; set; }
 
@@ -122,6 +125,8 @@ public class ForwardsToGeneratorTests
         public class ImportRunBase
             {
                 public string? Note { get; set; }
+
+                public string? Source { get; set; }
 
                 [Required]
                 [MaxLength(20)]
@@ -901,6 +906,78 @@ public class ForwardsToGeneratorTests
 
         run.EmitErrors.Should().BeEmpty();
         ValidationBlock(run).Should().Contain("FormatErrorMessage(\"Run owner\"), \"Owner\")");
+    }
+
+    [Fact]
+    public void A_rename_onto_an_inner_property_a_static_declaration_hides_reports_BPGW023()
+    {
+        // A static declaration was skipped before it claimed the name, so the base instance one it hides read as settable
+        // and the initialiser failed with CS1914 (Copilot on #169).
+        var gateway = GatewayWithRegion().Replace("[ForwardAs(\"SourceId\")]", "[ForwardAs(\"Source\")]", StringComparison.Ordinal);
+
+        var run = RunWithInnerBase(gateway);
+
+        run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW023").Which.GetMessage().Should().Contain("'Source'");
+        run.EmitErrors.Should().NotContain(static e => e.Contains("CS1914", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_gateway_route_placeholder_renamed_onto_another_inner_property_does_not_fill_the_inner_one()
+    {
+        // The gateway's own {TenantId} hid BPGW010, though [ForwardAs] sends its value to SourceId and leaves the inner
+        // TenantId unset (Copilot on #169).
+        var gateway = """
+            namespace Gateway
+            {
+                using Blueprint.Model;
+                using Blueprint.Model.Attributes;
+
+                [ForwardsTo<Inner.CreateImportRunCommand>]
+                [MustBeAuthenticated]
+                [RootLink("/v1/{TenantId}/importRuns")]
+                [HttpPost]
+                public partial class CreateImportRunCommand : ICommand<Inner.ImportRunResult>
+                {
+                    public required string SourceName { get; init; }
+
+                    [ForwardAs("SourceId")]
+                    public string? TenantId { get; init; }
+
+                    public string? Owner { get; set; }
+                }
+            }
+            """;
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([gateway], additionalReferences: [_innerContract.Value]);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW010").Which.GetMessage().Should().Contain("TenantId");
+    }
+
+    [Fact]
+    public void An_exposed_operation_does_not_publish_an_inner_property_a_getter_only_declaration_hides()
+    {
+        // The contributed properties were every settable declaration, so the hidden base Note was published and its value
+        // silently dropped by the forward (Copilot on #169).
+        var gateway = """
+            namespace Gateway
+            {
+                using Blueprint.Model;
+                using Blueprint.Model.Attributes;
+
+                [Expose<Inner.CreateImportRunCommand>]
+                [MustBeAuthenticated]
+                [RootLink("/v1/importRuns")]
+                [HttpPost]
+                public partial class CreateImportRunCommand : ICommand<Inner.ImportRunResult>;
+            }
+            """;
+
+        var run = RunWithInnerBase(gateway);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Sources.Values.Should().Contain(static s => s.Contains("Region { get", StringComparison.Ordinal))
+            .And.NotContain(static s => s.Contains("Note { get", StringComparison.Ordinal))
+            .And.NotContain(static s => s.Contains("Source { get", StringComparison.Ordinal));
     }
 
     private static AllGeneratorsRun RunWithInnerBase(string gateway)

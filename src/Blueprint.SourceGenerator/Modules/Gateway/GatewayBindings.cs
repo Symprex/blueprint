@@ -446,22 +446,14 @@ internal static class GatewayBindings
             }
         }
 
-        var gatewayPlaceholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var template in GetRouteTemplates(operationType))
-        {
-            foreach (Match match in Placeholder.Matches(template))
-            {
-                gatewayPlaceholders.Add(match.Groups[1].Value);
-            }
-        }
-
         // A copied property gives the inner request builder its value wherever the gateway reads it from, the query string
-        // included (#161). A declared one of another type is the gateway's own, so it does not.
+        // included (#161). A declared one of another type is the gateway's own, so it does not, and nor does a gateway route
+        // placeholder whose property a rename sends to another inner property.
         var copied = GatewayForward.GetCopiedProperties(operationType, innerType, bindings, out _);
 
         foreach (var name in required)
         {
-            if (gatewayPlaceholders.Contains(name) || copied.Any(c => c.InnerName == name) || bindings.Any(b => b.PropertyName == name))
+            if (copied.Any(c => c.InnerName == name) || bindings.Any(b => b.PropertyName == name))
             {
                 continue;
             }
