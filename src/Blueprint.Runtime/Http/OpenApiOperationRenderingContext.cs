@@ -15,7 +15,7 @@ namespace Blueprint.Runtime.Http;
 /// </summary>
 /// <param name="ResponseObjects">The previously rendered response-object context that owns operation ordering.</param>
 /// <param name="Operations">The rendered OpenAPI-style operations for later path/document assembly.</param>
-public sealed record OpenApiOperationRenderingContext(
+public sealed partial record OpenApiOperationRenderingContext(
     OpenApiResponseObjectRenderingContext ResponseObjects,
     ImmutableArray<OpenApiOperationModel> Operations)
 {
@@ -299,14 +299,131 @@ public sealed record OpenApiOperationRenderingContext(
     /// leading slash, as legacy keyed it (<c>"/" + route.RoutingUrl</c>, R149), whether the link that declares it wrote one.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This is applied where an operation's URL formats are read, before paths are grouped, so a route declared with and
     /// without its slash is one path rather than two keys of which one is invalid.
+    /// </para>
+    /// <para>
+    /// A placeholder's optional marker (<c>{Ext?}</c>) or default (<c>{Kind=all}</c>) is left out; the parameter says
+    /// whether it is required. Its catch-all stars and constraints are kept, as the document has always keyed them
+    /// (<c>/folders/{**FolderPath}</c>, <c>/items/{Id:int}</c>): routes that differ only by constraint are different
+    /// routes, which one key would merge into one path with one of their operations.
+    /// </para>
     /// </remarks>
     /// <param name="urlFormat">The route template as its link declares it.</param>
     /// <returns>The path key.</returns>
     internal static string ToPathKey(string urlFormat)
     {
-        return "/" + urlFormat.TrimStart('/');
+        var path = "/" + urlFormat.TrimStart('/');
+
+        // Only an optional marker or a default is left out, and without a '?' or '=' there is neither.
+        if (path.AsSpan().IndexOfAny('?', '=') < 0)
+        {
+            return path;
+        }
+
+        return RoutePlaceholder().Replace(path, static match =>
+        {
+            var isOptional = match.Groups["optional"].Success;
+            var marker = isOptional ? match.Groups["optional"] : match.Groups["default"];
+
+            if (!marker.Success)
+            {
+                return match.Value;
+            }
+
+            // A default's '=' is just before its value, which may be empty.
+            var markerStart = isOptional ? marker.Index : marker.Index - 1;
+
+            return string.Concat(
+                match.Value.AsSpan(0, markerStart - match.Index),
+                match.Value.AsSpan(marker.Index + marker.Length - match.Index));
+        });
+    }
+
+    /// <summary>
+    /// Matches one route placeholder, as the source generator's <c>RoutePlaceholderSyntax.Placeholder</c> does: the
+    /// <c>name</c> group, after any catch-all stars, then legacy's <c>(format)</c> and any <c>:constraint</c>s, then an
+    /// <c>optional</c> <c>?</c> or a <c>default</c> after <c>=</c>.
+    /// </summary>
+    /// <remarks>
+    /// As ASP.NET's own parser does, a constraint's argument runs to the first <c>)</c> followed by another constraint, the
+    /// default or the end, so an <c>=</c> inside it (<c>{Code:regex(^a=b$)}</c>) is no default, and a default may be in
+    /// parentheses (<c>{Kind=(none)}</c>).
+    /// </remarks>
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"\{\*{0,2}(?<name>[A-Za-z0-9_]+)(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?(?::[^:=?(){}]*(?:\((?:\}\}|[^}])*?\)(?=[:=]|\??\}))?)*(?:(?<optional>\?)|=(?<default>(?:\}\}|[^}])*))?\}",
+        System.Text.RegularExpressions.RegexOptions.ExplicitCapture)]
+    private static partial System.Text.RegularExpressions.Regex RoutePlaceholder();
+
+    /// <summary>
+    /// Returns the names of the route parameters a request may leave out: optional (<c>{Ext?}</c>) or defaulted
+    /// (<c>{Kind=all}</c>) in every one of the operation's URL formats that has them.
+    /// </summary>
+    private static IReadOnlySet<string> BuildOptionalParameterNames(ApiOperationDescriptor descriptor)
+    {
+        var urls = descriptor.Urls;
+
+        // Most operations have none, so their URL formats are not copied out to look.
+        for (var i = 0; i < urls.Count; i++)
+        {
+            if (urls[i].UrlFormat.AsSpan().IndexOfAny('?', '=') >= 0)
+            {
+                return GetOptionalRouteParameterNames([.. urls.Select(static url => url.UrlFormat)]);
+            }
+        }
+
+        return FrozenSet<string>.Empty;
+    }
+
+    /// <summary>
+    /// Returns the names of the route parameters that are optional (<c>{Ext?}</c>) or defaulted (<c>{Kind=all}</c>) in
+    /// every one of <paramref name="urlFormats"/> that has them.
+    /// </summary>
+    /// <param name="urlFormats">The route templates of one operation.</param>
+    /// <returns>The parameter names, compared ignoring case.</returns>
+    /// <remarks>
+    /// Most operations have no optional or defaulted placeholder, so nothing is allocated until a URL format with a
+    /// <c>?</c> or <c>=</c> has one, and the required names are read only to take them out of a set that is not empty.
+    /// </remarks>
+    internal static IReadOnlySet<string> GetOptionalRouteParameterNames(IReadOnlyList<string> urlFormats)
+    {
+        HashSet<string>? optional = null;
+
+        foreach (var urlFormat in urlFormats)
+        {
+            if (urlFormat.AsSpan().IndexOfAny('?', '=') < 0)
+            {
+                continue;
+            }
+
+            foreach (System.Text.RegularExpressions.Match placeholder in RoutePlaceholder().Matches(urlFormat))
+            {
+                if (placeholder.Groups["optional"].Success || placeholder.Groups["default"].Success)
+                {
+                    (optional ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(placeholder.Groups["name"].Value);
+                }
+            }
+        }
+
+        if (optional is null)
+        {
+            return FrozenSet<string>.Empty;
+        }
+
+        // A name optional in one URL format but required in another is required.
+        foreach (var urlFormat in urlFormats)
+        {
+            foreach (System.Text.RegularExpressions.Match placeholder in RoutePlaceholder().Matches(urlFormat))
+            {
+                if (!placeholder.Groups["optional"].Success && !placeholder.Groups["default"].Success)
+                {
+                    optional.Remove(placeholder.Groups["name"].Value);
+                }
+            }
+        }
+
+        return optional;
     }
 
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
@@ -331,6 +448,7 @@ public sealed record OpenApiOperationRenderingContext(
 
         // Pre-compute which route parameter names are catch-all (contain slashes/reserved chars).
         var catchAllNames = BuildCatchAllParameterNames(descriptor);
+        var optionalRouteNames = BuildOptionalParameterNames(descriptor);
 
         var parameters = ImmutableArray.CreateBuilder<OpenApiParameterModel>();
         var bodyProperties = ImmutableArray.CreateBuilder<OpenApiRequestBodyPropertyModel>();
@@ -443,10 +561,12 @@ public sealed record OpenApiOperationRenderingContext(
             {
                 case PropertyBindingSource.Route:
                     var bindingName = entry.BindingName ?? entry.PropertyName;
+
+                    // OpenAPI requires every path parameter, but one the route may leave out is described as it is bound.
                     parameters.Add(new OpenApiParameterModel(
                         bindingName,
                         "path",
-                        Required: true,
+                        Required: !optionalRouteNames.Contains(bindingName),
                         schemaType,
                         parameterFormat)
                     {
