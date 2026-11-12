@@ -101,6 +101,7 @@ public class AppModelOpenApiSchemaProjectionContextTests
             "SystemTypeApiResource",
             "TypedIdWidgetApiResource",
             "UnexposedFixtureApiResource",
+            "UpstreamNoteApiResource",
             "ValidationProblemDetails",
             "XmlDocChild",
             "XmlDocDerived",

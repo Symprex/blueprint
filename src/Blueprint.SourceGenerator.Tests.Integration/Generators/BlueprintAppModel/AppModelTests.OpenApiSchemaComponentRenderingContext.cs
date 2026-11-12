@@ -101,6 +101,7 @@ public class AppModelOpenApiSchemaComponentRenderingContextTests
             "SystemTypeApiResource",
             "TypedIdWidgetApiResource",
             "UnexposedFixtureApiResource",
+            "UpstreamNoteApiResource",
             "ValidationProblemDetails",
             "XmlDocChild",
             "XmlDocDerived",

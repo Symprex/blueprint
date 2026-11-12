@@ -36,6 +36,7 @@ public sealed class OpenApiXmlDocTests
     [InlineData("XmlDocShape", "FromBase", "Base summary.")]
     [InlineData("XmlDocShape", "BaseOnly", "Declared on the base only.")]
     [InlineData("XmlDocShape", "FromInterface", "Interface summary.")]
+    [InlineData("XmlDocShape", "FromCref", "The name.")]
     [InlineData("XmlDocShape", "BothDescribed", "The attribute.")]
     [InlineData("XmlDocShape", "WithRemarks", "The summary.")]
     [InlineData("XmlDocShape", "Undocumented", null)]
@@ -121,6 +122,14 @@ public sealed class OpenApiXmlDocTests
         using var document = Render();
 
         Description(Schema(document, component, property)).Should().Be(expected);
+    }
+
+    [Fact]
+    public void An_inheritdoc_whose_cref_names_a_member_with_nothing_to_inherit_falls_back_to_the_base_member()
+    {
+        var property = typeof(XmlDocCrefFallsThrough).GetProperty(nameof(XmlDocCrefFallsThrough.FromBase))!;
+
+        OpenApiXmlDocs.GetSchemaSummary(property).Should().Be("Base summary.");
     }
 
     private static JsonDocument Render()
