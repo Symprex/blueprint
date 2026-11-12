@@ -262,6 +262,48 @@ public class StreamingRequestBodyOwnershipTests
         result.Output.Select(static t => t.ToString()).Should().Contain(static s => s.Contains("CreateStreamContent(this.Content)"));
     }
 
+    [Fact]
+    public void When_the_body_Stream_is_obsolete_then_the_client_body_is_still_built_from_it()
+    {
+        // The host still binds an obsolete property; the client's body builder used to look it up among the non-obsolete ones.
+        var result = CompileDescriptor(
+            """
+            [RootLink("/imports")]
+            [HttpPost]
+            public partial class ImportCommand : ICommand<string>
+            {
+                [System.Obsolete("Use the new import.")]
+                [FromBody]
+                public System.IO.Stream Content { get; set; }
+
+                public static Task<string> HandleAsync(ImportCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Output.Select(static t => t.ToString()).Should().Contain(static s => s.Contains("CreateStreamContent(this.Content)"));
+    }
+
+    [Fact]
+    public async Task When_a_route_placeholder_falls_back_to_a_form_beside_a_property_named_for_its_fallback_then_the_pipeline_compiles()
+    {
+        // {Name} is in only one link, so it also falls back to the form, as the variables of a property named NameFallback.
+        await VerifyPipelineAsync(
+            """
+            [RootLink("/items/{Name}")]
+            [RootLink("/items")]
+            [HttpPost]
+            public partial class AttachItemCommand : ICommand<string>
+            {
+                public string Name { get; set; }
+                public string NameFallback { get; set; }
+                public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+
+                public static Task<string> HandleAsync(AttachItemCommand operation) => Task.FromResult("ok");
+            }
+            """);
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         _ = _formFileType;

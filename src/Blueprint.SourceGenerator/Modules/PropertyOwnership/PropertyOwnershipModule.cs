@@ -1962,6 +1962,14 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
             failureCtx.Return("_formRead.Failure");
         });
 
+        // A fallback entry's locals are named for its property plus "Fallback" (ToFallbackBodyEntry), which a real property of
+        // that name shares, and the form's locals all sit in one block: number every entry's locals when any two would clash.
+        var variableNames = new HashSet<string>(StringComparer.Ordinal);
+        if (!bodyEntries.All(e => variableNames.Add(e.VariableName)))
+        {
+            bodyEntries = bodyEntries.Select(static (e, i) => e with { VariableSuffix = $"{e.VariableName}_{i}" }).ToList();
+        }
+
         context.If("_formRead.Form != null", formCtx =>
         {
             formCtx.WriteStatement("var _form = _formRead.Form;");

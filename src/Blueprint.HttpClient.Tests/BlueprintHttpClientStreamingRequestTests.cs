@@ -117,6 +117,20 @@ public class BlueprintHttpClientStreamingRequestTests
             static options => options.WithoutStrictOrdering());
     }
 
+    [Fact]
+    public async Task A_derived_operation_that_hides_its_bases_stream_with_text_is_sent_as_JSON()
+    {
+        // It inherited the base's generated body builder, which used to send the base's (empty) stream instead.
+        CapturedRequest? sent = null;
+        var client = CreateClient(request => sent = Capture(request));
+
+        await client.ForwardAsync<GatewayImportTemplateSourceTextCommand, TemplateUploadApiResource>(
+            new GatewayImportTemplateSourceTextCommand { Id = "t-1", Content = "<p>text</p>" });
+
+        sent!.MediaType.Should().Be("application/json");
+        sent.Body.Should().Contain("\"content\":\"<p>text</p>\"");
+    }
+
     private static BlueprintHttpClient CreateClient(Action<HttpRequestMessage> onRequest)
     {
         return new BlueprintHttpClient(CreateHttpClient(onRequest));

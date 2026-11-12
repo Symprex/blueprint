@@ -22,6 +22,11 @@ public interface IHttpRequestBodyBuilder
     /// <summary>
     /// Builds the request's content from the operation's current property values.
     /// </summary>
-    /// <returns>The content, which the request it is sent with owns.</returns>
-    HttpContent BuildRequestBody();
+    /// <remarks>
+    /// An operation derived from one that implements this inherits its implementation, so a derived operation whose body is
+    /// JSON again, because it hides the base's stream or file with a property of its own, implements it once more to return
+    /// <see langword="null"/>.
+    /// </remarks>
+    /// <returns>The content, which the request it is sent with owns; or <see langword="null"/> to send the operation as JSON.</returns>
+    HttpContent? BuildRequestBody();
 }

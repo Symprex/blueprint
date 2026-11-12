@@ -196,8 +196,14 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // A host that reads a stream or a multipart body is sent one (#71, D19), by every client, through the operation itself.
         if (bindingEntries is { BodyShape: not PropertyOwnershipModule.RequestBodyShape.Json } streamingEntries)
         {
-            var requestBodyLines = BuildRequestBodyLines(streamingEntries, properties);
+            var requestBodyLines = BuildRequestBodyLines(streamingEntries, operationSymbol);
             context.AddOperationMemberStep(operationClass => AddRequestBodyBuilderInterface(operationClass, requestBodyLines));
+        }
+        else if (InheritsStreamingBodyProperty(operationSymbol))
+        {
+            // A JSON operation derived from a stream or multipart one, whose property it hides, inherits the base's body
+            // builder; implementing it again to build none sends this operation as JSON, as its host reads it.
+            context.AddOperationMemberStep(static operationClass => AddRequestBodyBuilderInterface(operationClass, ["return null;"]));
         }
 
         context.AddRenderStep(codeWriter =>
@@ -210,15 +216,17 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
     /// Builds the body of the operation's <c>IHttpRequestBodyBuilder.BuildRequestBody</c>: its stream as the whole content, or
     /// a form of its files and of its other body properties as fields, each under the name the host's binding reads it by.
     /// </summary>
-    private static List<string> BuildRequestBodyLines(PropertyBindingEntriesMetadata bindingEntries, List<IPropertySymbol> properties)
+    private static List<string> BuildRequestBodyLines(PropertyBindingEntriesMetadata bindingEntries, INamedTypeSymbol operationSymbol)
     {
         const string Helpers = "global::Blueprint.Model.HttpRequestBodies";
         var propertiesByName = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
-        foreach (var property in properties)
+
+        // Every property ownership analysis may bind, an obsolete one included, which the host still binds.
+        foreach (var property in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationSymbol).OfType<IPropertySymbol>())
         {
             // The derived type's members come first: keep the first of each name, the one ownership analysis bound, not a
             // base property it hides.
-            if (!propertiesByName.ContainsKey(property.Name))
+            if (!property.IsStatic && !propertiesByName.ContainsKey(property.Name))
             {
                 propertiesByName[property.Name] = property;
             }
@@ -269,6 +277,28 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         lines.Add("return form;");
 
         return lines;
+    }
+
+    /// <summary>
+    /// Whether a base type of the operation declares a <c>Stream</c> or <c>IFormFile</c> property, so may implement
+    /// <c>IHttpRequestBodyBuilder</c> for a body this operation, whose own body is JSON, does not have. The base's generated
+    /// implementation cannot be seen from its own compilation, so the property is what is looked for.
+    /// </summary>
+    private static bool InheritsStreamingBodyProperty(INamedTypeSymbol operationSymbol)
+    {
+        for (var baseType = operationSymbol.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            foreach (var member in baseType.GetMembers())
+            {
+                if (member is IPropertySymbol { IsStatic: false } property
+                    && (PropertyOwnershipModule.IsStreamType(property.Type) || PropertyOwnershipModule.IsFormFileType(property.Type)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

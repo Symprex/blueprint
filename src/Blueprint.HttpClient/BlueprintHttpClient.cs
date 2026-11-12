@@ -604,8 +604,8 @@ public class BlueprintHttpClient
             // An operation whose host reads a stream or a multipart body builds that body itself (#71), streaming what it holds.
             // The declared type's metadata writes none of a derived type's own members, so an instance of one is written as its
             // run-time type, as an operation without metadata is.
-            request.Content = operation is IHttpRequestBodyBuilder bodyBuilder
-                ? bodyBuilder.BuildRequestBody()
+            request.Content = operation is IHttpRequestBodyBuilder bodyBuilder && bodyBuilder.BuildRequestBody() is { } body
+                ? body
                 : operationTypeInfo is not null && operation.GetType() == typeof(TOperation)
                     ? JsonContent.Create(operation, operationTypeInfo)
                     : JsonContent.Create(operation, operation.GetType(), options: this._jsonOptions);
