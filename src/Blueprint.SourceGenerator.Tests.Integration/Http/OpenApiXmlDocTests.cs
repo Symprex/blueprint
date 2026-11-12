@@ -36,6 +36,7 @@ public sealed class OpenApiXmlDocTests
     [InlineData("XmlDocShape", "FromBase", "Base summary.")]
     [InlineData("XmlDocShape", "BaseOnly", "Declared on the base only.")]
     [InlineData("XmlDocShape", "FromInterface", "Interface summary.")]
+    [InlineData("XmlDocShape", "FromCref", "The name.")]
     [InlineData("XmlDocShape", "BothDescribed", "The attribute.")]
     [InlineData("XmlDocShape", "WithRemarks", "The summary.")]
     [InlineData("XmlDocShape", "Undocumented", null)]

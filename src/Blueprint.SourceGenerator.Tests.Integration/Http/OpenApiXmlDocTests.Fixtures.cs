@@ -39,6 +39,9 @@ public class XmlDocShape : XmlDocBase, IXmlDocShape
     /// <inheritdoc/>
     public string FromInterface { get; set; } = string.Empty;
 
+    /// <inheritdoc cref="XmlDocChild.Name"/>
+    public string FromCref { get; set; } = string.Empty;
+
     /// <summary>The summary.</summary>
     [Description("The attribute.")]
     public string BothDescribed { get; set; } = string.Empty;
