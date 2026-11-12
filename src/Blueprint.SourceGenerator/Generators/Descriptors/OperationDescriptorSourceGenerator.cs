@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.ApiResources;
@@ -256,8 +257,8 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             cancellationToken.ThrowIfCancellationRequested();
 
             facts.Add(ApiExceptionFactoryResolver.TryResolve(member, tree => compilation.ContainsSyntaxTree(tree) ? compilation.GetSemanticModel(tree) : null, out var factory)
-                ? $"{named.Name}|{factory.HttpStatus}|{factory.Title}|{factory.Type}"
-                : named.Name);
+                ? Fingerprint.Join(named.Name, factory.HttpStatus.ToString(CultureInfo.InvariantCulture), factory.Title, factory.Type)
+                : Fingerprint.Join(named.Name));
         }
 
         return EquatableList<string>.TakeOwnership(facts);

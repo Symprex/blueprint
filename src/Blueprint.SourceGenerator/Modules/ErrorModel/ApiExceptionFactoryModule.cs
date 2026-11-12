@@ -80,8 +80,9 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
     /// <remarks>
     /// A factory's title and type are each documented as a literal where known at compile time: from its initialiser in
     /// this compilation, or from its assembly's <c>[BlueprintApiExceptionStatus]</c> index. Otherwise it is read from the
-    /// member at run time, as the operation's own are, when the operation can name it. A factory whose initialiser cannot be
-    /// evaluated is left out, as the inner operation's own descriptor reports it.
+    /// member at run time, as the operation's own are, when the operation can read it; when it cannot, the response is
+    /// documented without an example. A factory whose initialiser cannot be evaluated is left out, as the inner operation's
+    /// own descriptor reports it.
     /// </remarks>
     private static IEnumerable<ApiExceptionFactoryRegistration> DiscoverInnerFactoryFields(
         INamedTypeSymbol operationType,
@@ -107,11 +108,6 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             var title = factory.Title is { } knownTitle ? CSharpSymbolDisplay.FormatLiteral(knownTitle, quote: true) : reference is null ? null : $"{reference}.Title";
             var problemType = factory.Type is { } knownType ? CSharpSymbolDisplay.FormatLiteral(knownType, quote: true) : reference is null ? null : $"{reference}.Type";
 
-            if (title is null || problemType is null)
-            {
-                continue;
-            }
-
             if (factory.Type is null && translatedTypes.Count > 0)
             {
                 context.AddDiagnostic(new DiagnosticInfo(
@@ -120,7 +116,11 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                     new EquatableList<string>([operationType.ToDisplayString(), $"{innerType.ToDisplayString()}.{named.Name}", innerType.ContainingAssembly.Name])));
             }
 
-            yield return new ApiExceptionFactoryRegistration(named.Name, factory.HttpStatus, RenderProblemExample(title, problemType));
+            // Its status is known, so its response is documented even where its example cannot be rendered.
+            yield return new ApiExceptionFactoryRegistration(
+                named.Name,
+                factory.HttpStatus,
+                title is null || problemType is null ? null : RenderProblemExample(title, problemType));
         }
     }
 
@@ -129,44 +129,62 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
     /// </summary>
     private static HashSet<string> GetTranslatedProblemTypes(INamedTypeSymbol operationType)
     {
-        var types = new HashSet<string>(StringComparer.Ordinal);
+        return new HashSet<string>(GetTranslations(operationType).Select(static t => t.FromType), StringComparer.Ordinal);
+    }
 
+    /// <summary>
+    /// The names of the operation's members its own <c>[TranslateError]</c>s answer with.
+    /// </summary>
+    private static IEnumerable<string> GetTranslationTargetNames(INamedTypeSymbol operationType)
+    {
+        return GetTranslations(operationType).Select(static t => t.To).Distinct(StringComparer.Ordinal);
+    }
+
+    private static IEnumerable<(string FromType, string To)> GetTranslations(INamedTypeSymbol operationType)
+    {
         foreach (var attribute in operationType.GetAttributes())
         {
             if (attribute.AttributeClass is { Name: "TranslateErrorAttribute" } attributeClass
                 && attributeClass.IsInNamespace("Blueprint", "Model", "Attributes")
-                && attribute.ConstructorArguments is [{ Value: string fromType }, _])
+                && attribute.ConstructorArguments is [{ Value: string fromType }, { Value: string to }])
             {
-                types.Add(fromType);
+                yield return (fromType, to);
             }
         }
-
-        return types;
     }
 
     /// <summary>
-    /// Whether code in <paramref name="within"/> can name <paramref name="member"/>: it and every type containing it are
-    /// public, or internal to an assembly that gives <paramref name="within"/> access.
+    /// Whether code in <paramref name="within"/> can read <paramref name="member"/>: it, a property's getter, and every type
+    /// containing it are public, or internal to an assembly that gives <paramref name="within"/> access.
     /// </summary>
     private static bool CanName(ISymbol member, IAssemblySymbol within)
     {
+        // `{ private get; set; }`: the property is public, but reading it is not (CS0271).
+        if (member is IPropertySymbol property && (property.GetMethod is null || !IsAccessible(property.GetMethod, within)))
+        {
+            return false;
+        }
+
         for (var current = member; current is not null and not INamespaceSymbol; current = current.ContainingType)
         {
-            var accessible = current.DeclaredAccessibility switch
-            {
-                Accessibility.Public => true,
-                Accessibility.Internal or Accessibility.ProtectedOrInternal => SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, within)
-                    || current.ContainingAssembly.GivesAccessTo(within),
-                _ => false,
-            };
-
-            if (!accessible)
+            if (!IsAccessible(current, within))
             {
                 return false;
             }
         }
 
         return true;
+    }
+
+    private static bool IsAccessible(ISymbol symbol, IAssemblySymbol within)
+    {
+        return symbol.DeclaredAccessibility switch
+        {
+            Accessibility.Public => true,
+            Accessibility.Internal or Accessibility.ProtectedOrInternal => SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, within)
+                || symbol.ContainingAssembly.GivesAccessTo(within),
+            _ => false,
+        };
     }
 
     /// <summary>
@@ -207,6 +225,29 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             else
             {
                 ReportNonEvaluableInitializer(context, member, named.Name, operationType);
+            }
+        }
+
+        // A [TranslateError] target can be a getter-backed property (`Gone => new(...)`), which has no backing field. It
+        // replaces the inner factory it translates (D14), so it is documented as the operation's own too.
+        foreach (var targetName in GetTranslationTargetNames(operationType))
+        {
+            if (builder.Any(registration => registration.FieldName == targetName))
+            {
+                continue;
+            }
+
+            foreach (var member in operationType.GetMembers(targetName))
+            {
+                if (member is IPropertySymbol { IsStatic: true } property
+                    && SymbolEqualityComparer.Default.Equals(property.Type, apiExceptionFactoryType)
+                    && ApiExceptionFactoryResolver.TryResolve(property, context.GetSemanticModel, out var factory))
+                {
+                    builder.Add(new ApiExceptionFactoryRegistration(
+                        property.Name,
+                        factory.HttpStatus,
+                        RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{property.Name}")));
+                }
             }
         }
 

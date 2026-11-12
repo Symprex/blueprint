@@ -123,11 +123,14 @@ internal static class ApiExceptionFactoryResolver
             return false;
         }
 
-        // A field's initialiser, or, for an auto-property or its backing field, the property's.
+        // A field's initialiser; for an auto-property or its backing field, the property's; for a getter-backed property,
+        // what its getter returns (`X => new(...)`, `get => new(...)` or `get { return new(...); }`).
         var initializerExpression = declaringSyntaxReferences[0].GetSyntax() switch
         {
             VariableDeclaratorSyntax { Initializer.Value: var value } => value,
             PropertyDeclarationSyntax { Initializer.Value: var propertyValue } => propertyValue,
+            PropertyDeclarationSyntax { ExpressionBody.Expression: var expressionBody } => expressionBody,
+            PropertyDeclarationSyntax { AccessorList: { } accessors } => GetReturnedExpression(accessors),
             _ => null,
         };
 
@@ -181,6 +184,18 @@ internal static class ApiExceptionFactoryResolver
         return member is IFieldSymbol { AssociatedSymbol: IPropertySymbol property } && member.DeclaringSyntaxReferences.Length == 0
             ? property.DeclaringSyntaxReferences
             : member.DeclaringSyntaxReferences;
+    }
+
+    private static ExpressionSyntax? GetReturnedExpression(AccessorListSyntax accessors)
+    {
+        var getter = accessors.Accessors.FirstOrDefault(static a => a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.GetAccessorDeclaration));
+
+        return getter switch
+        {
+            { ExpressionBody.Expression: var expression } => expression,
+            { Body.Statements: [ReturnStatementSyntax { Expression: var returned }] } => returned,
+            _ => null,
+        };
     }
 
     private static bool TryResolveStatusCode(ExpressionSyntax expression, ISymbol member, out int httpStatus)

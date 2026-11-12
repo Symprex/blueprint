@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.Text;
 namespace Blueprint.SourceGenerator.Generators.ApiExceptionStatusIndex;
 
 /// <summary>
-/// Lightweight incremental generator that scans all <c>public static readonly ApiExceptionFactory</c> fields and
+/// Lightweight incremental generator that scans all <c>public static ApiExceptionFactory</c> fields and
 /// <c>public static ApiExceptionFactory</c> auto-properties in the compilation and emits assembly-level attributes recording
 /// their HTTP status codes, and their titles and types where they are constants. Downstream compilations (via project
 /// references) can then read these attributes to resolve cross-assembly references without needing syntax access, as a
@@ -78,10 +78,10 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
             .CreateSyntaxProvider(
                 predicate: static (s, _) => s switch
                 {
+                    // Readonly or not: a consumer reads any static field, as legacy's GetFields did.
                     FieldDeclarationSyntax { Modifiers: var mods, Declaration.Type: var type } =>
                         mods.Any(SyntaxKind.PublicKeyword)
                         && mods.Any(SyntaxKind.StaticKeyword)
-                        && mods.Any(SyntaxKind.ReadOnlyKeyword)
                         && type.ToString().Contains("ApiExceptionFactory"),
                     PropertyDeclarationSyntax { Modifiers: var mods, Type: var type, Initializer: not null } =>
                         mods.Any(SyntaxKind.PublicKeyword)

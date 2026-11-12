@@ -260,7 +260,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         {
             responses.Add(CreateResponse(factory.HttpStatus, true, "Blueprint.ApiException", problemDetailsBody) with
             {
-                ProblemExamples = ImmutableArray.Create(factory.ProblemExample),
+                ProblemExamples = factory.ProblemExample is { } example ? ImmutableArray.Create(example) : ImmutableArray<string>.Empty,
             });
         }
 

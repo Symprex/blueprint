@@ -461,7 +461,7 @@ internal static class OperationPropertyModelBuilder
                 && attribute.ConstructorArguments is [{ Value: string indexedType }, ..]
                 && string.Equals(indexedType, metadataName, StringComparison.Ordinal))
             {
-                dependencies.Add(string.Join("|", attribute.ConstructorArguments.Select(static a => Convert.ToString(a.Value, CultureInfo.InvariantCulture))));
+                dependencies.Add(Fingerprint.Join(attribute.ConstructorArguments.Select(static a => a.Value is null ? null : Convert.ToString(a.Value, CultureInfo.InvariantCulture)).ToArray()));
             }
         }
 

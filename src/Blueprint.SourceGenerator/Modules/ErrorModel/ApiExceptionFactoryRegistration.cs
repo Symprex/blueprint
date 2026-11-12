@@ -10,9 +10,11 @@ namespace Blueprint.SourceGenerator.Modules;
 /// <param name="ProblemExample">
 /// The C# construction of the <c>OperationProblemExample</c> documenting the factory: reading the title and type from the
 /// field itself (<c>global::Ns.Operation.Field.Title</c>), as legacy's convention read the field's value, or, for an inner
-/// operation's factory, from the constants its initialiser or its assembly's index records.
+/// operation's factory, from the constants its initialiser or its assembly's index records. <see langword="null"/> for an
+/// inner factory whose title or type is neither known nor readable from the gateway, whose response is documented without
+/// an example.
 /// </param>
 internal sealed record ApiExceptionFactoryRegistration(
     string FieldName,
     int HttpStatus,
-    string ProblemExample);
+    string? ProblemExample);

@@ -123,6 +123,8 @@ public class GatewayReExportGeneratorTests
     private const string Descriptor = "Gateway.RenameGatewayWidgetCommand_Descriptor.g.cs";
     private const string ExposedProperties = "Gateway.RenameGatewayWidgetCommand_ExposedProperties.g.cs";
 
+    private const string TitlesClass = "public static class Titles { public static readonly string Teapot = \"I am a teapot\"; }";
+
     private static readonly Lazy<(byte[] Image, byte[] Documentation)> _indexedInner = new(static () => EmitInner(InnerSource, withIndex: true));
 
     [Fact]
@@ -380,6 +382,129 @@ public class GatewayReExportGeneratorTests
         run.EmitErrors.Should().BeEmpty();
         run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(404, true")
             .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget not found\", \"widget_not_found\")");
+    }
+
+    [Fact]
+    public void A_TranslateError_naming_a_getter_backed_factory_documents_that_factory_in_place_of_the_inner_one()
+    {
+        // An expression-bodied property has no backing field, so it used to be left out while the inner 404 it replaces
+        // was still dropped: the gateway documented neither.
+        var getterBacked = TranslatingGatewaySource.Replace(
+            "public static readonly ApiExceptionFactory WidgetGone = new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            "public static ApiExceptionFactory WidgetGone => new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            StringComparison.Ordinal);
+
+        var run = Run([ClientSource, getterBacked, AppSource], InnerReference());
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().NotContain("OperationHttpResponseMetadata(404,")
+            .And.Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(410, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(global::Gateway.RenameGatewayWidgetCommand.WidgetGone.Title, global::Gateway.RenameGatewayWidgetCommand.WidgetGone.Type)");
+    }
+
+    [Fact]
+    public void An_inner_factory_whose_example_cannot_be_rendered_still_documents_its_status()
+    {
+        // Private, with a non-constant title: the gateway can neither write the title nor read it from the field, but the
+        // status is known, so the response stays and only its example goes.
+        var inner = InnerSource
+            .Replace(
+                "public static readonly ApiExceptionFactory Conflict",
+                "private static readonly ApiExceptionFactory Teapot = new(Titles.Teapot, \"teapot\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+                StringComparison.Ordinal)
+            .Replace("public class WidgetResult", TitlesClass + "\n\n    public class WidgetResult", StringComparison.Ordinal);
+
+        var run = Run([inner, ClientSource, GatewaySource, AppSource], innerContract: null);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(418, true, global::System.Collections.Immutable.ImmutableArray.Create<string>(\"Blueprint.ApiException\"), global::System.Collections.Immutable.ImmutableArray.Create<string>(\"Microsoft.AspNetCore.Mvc.ProblemDetails\"))")
+            .And.NotContain("Teapot");
+    }
+
+    [Fact]
+    public void An_inner_auto_property_factory_with_a_private_getter_is_not_read_at_run_time()
+    {
+        // The property is public but its getter is not, so the gateway cannot read Inner.Teapot.Title (CS0271).
+        var inner = InnerSource
+            .Replace(
+                "public static readonly ApiExceptionFactory Conflict",
+                "public static ApiExceptionFactory Teapot { private get; set; } = new(Titles.Teapot, \"teapot\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+                StringComparison.Ordinal)
+            .Replace("public class WidgetResult", TitlesClass + "\n\n    public class WidgetResult", StringComparison.Ordinal);
+
+        var run = Run([inner, ClientSource, GatewaySource, AppSource], innerContract: null);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("OperationHttpResponseMetadata(418,")
+            .And.NotContain("RenameWidgetCommand.Teapot");
+    }
+
+    [Fact]
+    public void A_public_static_factory_field_that_is_not_readonly_in_a_referenced_assembly_is_documented_from_its_index()
+    {
+        var inner = InnerSource.Replace(
+            "public static readonly ApiExceptionFactory Conflict",
+            "public static ApiExceptionFactory MissingWidget = new(\"Missing widget\", \"missing_widget\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+            StringComparison.Ordinal);
+        var (image, _) = EmitInner(inner, withIndex: true);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(418, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Missing widget\", \"missing_widget\")");
+    }
+
+    [Fact]
+    public void Moving_a_delimiter_between_a_shared_factorys_title_and_type_re_plans_the_exposing_operations_descriptor_on_the_same_driver()
+    {
+        // ("Widget|not found", "missing") and ("Widget", "not found|missing") used to fingerprint alike.
+        const string commonErrors = """
+            namespace Inner
+            {
+                using Blueprint;
+
+                public static class CommonErrors
+                {
+                    public static readonly ApiExceptionFactory NotFound = new("Widget|not found", "missing", 404);
+                }
+            }
+            """;
+        var aliasingInner = InnerSource.Replace(
+            "new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)",
+            "CommonErrors.NotFound",
+            StringComparison.Ordinal);
+        var moved = commonErrors.Replace("new(\"Widget|not found\", \"missing\", 404)", "new(\"Widget\", \"not found|missing\", 404)", StringComparison.Ordinal);
+
+        var result = Edit(
+            [aliasingInner, commonErrors, ClientSource, GatewaySource],
+            [aliasingInner, moved, ClientSource, GatewaySource],
+            ["Inner.cs", "CommonErrors.cs", "Client.cs", "Gateway.cs"]);
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().Contain("OperationProblemExample(\"Widget\", \"not found|missing\")");
+    }
+
+    [Fact]
+    public void Moving_a_delimiter_between_an_inner_factorys_indexed_title_and_type_re_plans_the_descriptor_when_the_contract_is_replaced()
+    {
+        var before = EmitInner(InnerSource.Replace("new(\"Widget not found\", \"widget_not_found\",", "new(\"Widget|not found\", \"missing\",", StringComparison.Ordinal), withIndex: true).Image;
+        var after = EmitInner(InnerSource.Replace("new(\"Widget not found\", \"widget_not_found\",", "new(\"Widget\", \"not found|missing\",", StringComparison.Ordinal), withIndex: true).Image;
+        var beforeReference = MetadataReference.CreateFromImage(before);
+
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var compilation = CSharpCompilation.Create(
+            "Gateway",
+            [CSharpSyntaxTree.ParseText(ClientSource, parseOptions, "Client.cs"), CSharpSyntaxTree.ParseText(GatewaySource, parseOptions, "Gateway.cs")],
+            TestHelpers.CreateMetadataReferences().Append(beforeReference),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new OperationDescriptorSourceGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation.ReplaceReference(beforeReference, MetadataReference.CreateFromImage(after)));
+
+        driver.GetRunResult().GeneratedTrees.Single(static t => t.FilePath.EndsWith(Descriptor, StringComparison.Ordinal)).ToString()
+            .Should().Contain("OperationProblemExample(\"Widget\", \"not found|missing\")");
     }
 
     private static byte[] LegacyIndexedInner()
