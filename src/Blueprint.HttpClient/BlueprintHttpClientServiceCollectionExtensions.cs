@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Blueprint.Http;
 using Blueprint.Model;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 
 namespace Blueprint.HttpClient;
 
@@ -136,6 +138,68 @@ public static class BlueprintHttpClientServiceCollectionExtensions
         where TInterface : class
         where TImplementation : class, TInterface, IBlueprintClient<TImplementation>
     {
+        return services.RegisterBlueprintClient<TInterface, TImplementation>(configureClient, withCallerCredential: false);
+    }
+
+    /// <summary>
+    /// Registers a generated typed client against its interface as <c>AddBlueprintClient</c> does, resolved already carrying
+    /// the <c>Authorization</c> header of the caller the app is serving as its credential: the registration a gateway uses
+    /// for a client that calls upstream on the caller's behalf.
+    /// <para>
+    /// <c>services.AddCallerBlueprintClient&lt;IPortalApi, PortalApi&gt;((s, c) =&gt; c.BaseAddress = ...);</c>
+    /// </para>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The header is read once, when the client is resolved, from <see cref="Microsoft.AspNetCore.Http.IHttpContextAccessor"/>,
+    /// which this registers if nothing has, and given to the client as a <see cref="CallerAuthorizationCredential"/> through
+    /// the generated <see cref="IBlueprintClient{TSelf}.WithCredential"/>. Nothing is set on the named
+    /// <see cref="System.Net.Http.HttpClient"/>, so concurrent callers never see each other's token; a client resolved outside
+    /// a request, or for a caller that sent no <c>Authorization</c> header, adds no credential of its own: an
+    /// <c>Authorization</c> header the named client's defaults, a call's options or a request modifier set is sent as it is.
+    /// </para>
+    /// <para>
+    /// The credential is applied after every other step that shapes a request, so it replaces an <c>Authorization</c> header
+    /// the named client's defaults, a call's options or a request modifier set, and a clone the client makes through
+    /// <c>WithRequestModifier</c> (a <c>ForRegion</c>, say) keeps it. A later <c>WithCredential</c> on the resolved client
+    /// replaces it.
+    /// </para>
+    /// <para>
+    /// Only the credential is forwarded. Any other header of the caller's, such as <c>User-Agent</c>, is the app's to forward,
+    /// in <paramref name="configureClient"/> or a request modifier.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TInterface">The service interface (e.g. <c>IPortalApi</c>).</typeparam>
+    /// <typeparam name="TImplementation">The generated typed client class (e.g. <c>PortalApi</c>).</typeparam>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configureClient">
+    /// Callback to set the named client's <see cref="System.Net.Http.HttpClient.BaseAddress"/> and any default headers, as
+    /// <c>AddBlueprintClient</c>'s does.
+    /// </param>
+    /// <returns>
+    /// The named client's <see cref="IHttpClientBuilder"/>, as <c>AddBlueprintClient</c> returns it. Where
+    /// <typeparamref name="TInterface"/> is already registered by anything else (a test double, say), that registration
+    /// stands, credential-free.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// <typeparamref name="TImplementation"/> is already registered by this method or <c>AddBlueprintClient</c>.
+    /// </exception>
+    public static IHttpClientBuilder AddCallerBlueprintClient<TInterface, TImplementation>(
+        this IServiceCollection services,
+        Action<IServiceProvider, System.Net.Http.HttpClient> configureClient)
+        where TInterface : class
+        where TImplementation : class, TInterface, IBlueprintClient<TImplementation>
+    {
+        return services.RegisterBlueprintClient<TInterface, TImplementation>(configureClient, withCallerCredential: true);
+    }
+
+    private static IHttpClientBuilder RegisterBlueprintClient<TInterface, TImplementation>(
+        this IServiceCollection services,
+        Action<IServiceProvider, System.Net.Http.HttpClient> configureClient,
+        bool withCallerCredential)
+        where TInterface : class
+        where TImplementation : class, TInterface, IBlueprintClient<TImplementation>
+    {
         var httpClientName = typeof(TImplementation).Name;
 
         // One registration per client: a second's callback would run on the same named client too, so a setting both make
@@ -156,6 +220,11 @@ public static class BlueprintHttpClientServiceCollectionExtensions
             configureClient(sp, client);
         });
 
+        if (withCallerCredential)
+        {
+            services.AddHttpContextAccessor();
+        }
+
         // Idempotent for the interface: one registered beforehand (a test double, say) stands.
         if (services.Any(static s => s.ServiceType == typeof(TInterface)))
         {
@@ -170,7 +239,17 @@ public static class BlueprintHttpClientServiceCollectionExtensions
             // uses too (BlueprintClientTransport).
             var jsonOptions = BlueprintClientTransport.GetJsonOptions(sp);
 
-            return TImplementation.Create(sp, new BlueprintHttpClient(httpClient, jsonOptions));
+            var client = TImplementation.Create(sp, new BlueprintHttpClient(httpClient, jsonOptions));
+
+            if (!withCallerCredential)
+            {
+                return client;
+            }
+
+            // Read here, once, so the client carries this caller's header for its whole life, never a later request's.
+            var authorization = sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.Request.Headers[HeaderNames.Authorization].ToString();
+
+            return TImplementation.WithCredential(client, new CallerAuthorizationCredential(authorization));
         });
 
         return builder;
