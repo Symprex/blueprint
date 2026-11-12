@@ -66,12 +66,13 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPGW006: an <c>[Expose&lt;TInner&gt;]</c> class that declares no operation interface (D9).
+    /// BPGW006: an <c>[Expose&lt;TInner&gt;]</c> or <c>[ForwardsTo&lt;TInner&gt;]</c> class that declares no operation
+    /// interface (D9, D10).
     /// </summary>
     public static readonly DiagnosticDescriptor MissingOperationInterface = new(
         id: "BPGW006",
-        title: "An exposing operation must declare its operation interface",
-        messageFormat: "'{0}' uses [Expose<{1}>] but declares no operation interface, so no generator treats it as an operation. Declare it, for example 'partial class {0} : {2}'.",
+        title: "A gateway operation must declare its operation interface",
+        messageFormat: "'{0}' uses [{3}<{1}>] but declares no operation interface, so no generator treats it as an operation. Declare it, for example 'partial class {0} : {2}'.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

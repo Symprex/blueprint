@@ -42,13 +42,13 @@ internal sealed record RuntimeFallbackPropertyValidationPlan(
 /// Indicates that a property can be validated through generated conditions and generated validation-attribute instances.
 /// </summary>
 /// <param name="MemberName">The property name used in diagnostics and runtime fallback calls.</param>
-/// <param name="DisplayName">The display name currently used when creating validation results.</param>
+/// <param name="DisplayNameExpression">The C# expression of the display name the validation results are formatted with.</param>
 /// <param name="PropertyAccess">The generated-code expression used to read the property value.</param>
 /// <param name="RequiredRule">The required-like rule that must run before other rules, if one exists.</param>
 /// <param name="OtherRules">Additional non-required rules that can run after the required guard passes.</param>
 internal sealed record FastPathPropertyValidationPlan(
     string MemberName,
-    string DisplayName,
+    string DisplayNameExpression,
     string PropertyAccess,
     ValidationFastPathRule? RequiredRule,
     IReadOnlyList<ValidationFastPathRule> OtherRules)

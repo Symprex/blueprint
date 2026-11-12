@@ -110,17 +110,21 @@ internal static class DeclaredForward
     }
 
     /// <summary>
-    /// Gets the inner operation's public settable instance properties, by name, most derived first.
+    /// Gets the inner operation's public settable instance properties, by name: each name's most derived public instance
+    /// declaration, which an object initialiser naming it sets, where that declaration has a public setter.
     /// </summary>
     /// <param name="innerType">The inner operation.</param>
     /// <returns>The properties a forward can set.</returns>
     public static Dictionary<string, IPropertySymbol> GetSettableProperties(INamedTypeSymbol innerType)
     {
+        // A getter-only declaration hiding a settable base one leaves the name unsettable: C# resolves the derived one.
         var properties = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in innerType.GetAllMembers().OfType<IPropertySymbol>())
         {
-            if (member is { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public, SetMethod.DeclaredAccessibility: Accessibility.Public }
-                && !properties.ContainsKey(member.Name))
+            if (member is { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public }
+                && seen.Add(member.Name)
+                && member.SetMethod?.DeclaredAccessibility == Accessibility.Public)
             {
                 properties.Add(member.Name, member);
             }
@@ -200,7 +204,7 @@ internal static class DeclaredForward
         }
 
         List<AttributeData>? rules = null;
-        foreach (var attribute in counterpart.GetAttributes())
+        foreach (var attribute in GetEffectiveAttributes(counterpart))
         {
             if (attribute.AttributeClass is { } attributeClass
                 && ValidationSymbolHelpers.IsValidationAttribute(attributeClass)
@@ -212,6 +216,73 @@ internal static class DeclaredForward
         }
 
         return rules ?? (IReadOnlyList<AttributeData>)[];
+    }
+
+    /// <summary>
+    /// Gets the attributes the runtime reads on an inner property: its own, then those of each declaration it overrides
+    /// that the attribute's <c>[AttributeUsage]</c> lets it inherit, as <c>TypeDescriptor</c>, and so DataAnnotations
+    /// validation, collects them. A single-use attribute the property already has replaces the overridden one's.
+    /// </summary>
+    /// <param name="property">The inner operation's property.</param>
+    /// <returns>The property's effective attributes.</returns>
+    public static IReadOnlyList<AttributeData> GetEffectiveAttributes(IPropertySymbol property)
+    {
+        var attributes = property.GetAttributes();
+        if (property.OverriddenProperty is null)
+        {
+            return attributes;
+        }
+
+        var result = new List<AttributeData>(attributes);
+        for (var overridden = property.OverriddenProperty; overridden is not null; overridden = overridden.OverriddenProperty)
+        {
+            foreach (var attribute in overridden.GetAttributes())
+            {
+                if (attribute.AttributeClass is { } attributeClass
+                    && GetUsage(attributeClass) is (Inherited: true, var allowMultiple)
+                    && (allowMultiple || !result.Any(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, attributeClass))))
+                {
+                    result.Add(attribute);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Reads an attribute class's <c>[AttributeUsage]</c>, its own or the nearest base class's, with the runtime's defaults.
+    /// </summary>
+    private static (bool Inherited, bool AllowMultiple) GetUsage(INamedTypeSymbol attributeClass)
+    {
+        for (var current = attributeClass; current is not null; current = current.BaseType)
+        {
+            foreach (var usage in current.GetAttributes())
+            {
+                if (usage.AttributeClass?.ToFullMetadataName() != "System.AttributeUsageAttribute")
+                {
+                    continue;
+                }
+
+                var inherited = true;
+                var allowMultiple = false;
+                foreach (var argument in usage.NamedArguments)
+                {
+                    if (argument is { Key: "Inherited", Value.Value: bool isInherited })
+                    {
+                        inherited = isInherited;
+                    }
+                    else if (argument is { Key: "AllowMultiple", Value.Value: bool isMultiple })
+                    {
+                        allowMultiple = isMultiple;
+                    }
+                }
+
+                return (inherited, allowMultiple);
+            }
+        }
+
+        return (true, false);
     }
 
     /// <summary>

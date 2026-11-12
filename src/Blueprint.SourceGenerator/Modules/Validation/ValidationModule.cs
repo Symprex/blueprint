@@ -712,7 +712,7 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             branch =>
             {
                 branch.WriteStatement(
-                    $"AppendValidationError(ref validationResults, {validationAttributeExpression}.FormatErrorMessage(\"{property.DisplayName}\"), \"{property.MemberName}\");");
+                    $"AppendValidationError(ref validationResults, {validationAttributeExpression}.FormatErrorMessage({property.DisplayNameExpression}), \"{property.MemberName}\");");
             });
     }
 

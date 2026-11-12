@@ -147,7 +147,7 @@ internal static class GatewayBindings
 
     private static EquatableList<GatewayPropertyBinding> Evaluate(INamedTypeSymbol operationType, INamedTypeSymbol innerType, List<DiagnosticInfo>? diagnostics)
     {
-        var innerProperties = GetSettableProperties(innerType);
+        var innerProperties = DeclaredForward.GetSettableProperties(innerType);
         var declared = GetDeclaredProperties(operationType);
         var result = new List<GatewayPropertyBinding>();
         var bound = new HashSet<string>(StringComparer.Ordinal);
@@ -568,21 +568,6 @@ internal static class GatewayBindings
         }
 
         return resolved;
-    }
-
-    private static Dictionary<string, IPropertySymbol> GetSettableProperties(INamedTypeSymbol type)
-    {
-        var properties = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
-        foreach (var member in type.GetAllMembers().OfType<IPropertySymbol>())
-        {
-            if (member is { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public, SetMethod.DeclaredAccessibility: Accessibility.Public }
-                && !properties.ContainsKey(member.Name))
-            {
-                properties.Add(member.Name, member);
-            }
-        }
-
-        return properties;
     }
 
     private static Dictionary<string, IPropertySymbol> GetDeclaredProperties(INamedTypeSymbol type)

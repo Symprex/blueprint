@@ -134,7 +134,7 @@ public static class GatewayForward
             return Result<OperationHandlerModel>.Failure(new DiagnosticInfo(
                 GatewayDiagnosticDescriptors.MissingOperationInterface,
                 location,
-                [operationType.Name, exposedType.Name, "IQuery<" + (OperationResultContractHelper.GetDeclaredOperationResultType(exposedType)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? "R") + ">"]));
+                [operationType.Name, exposedType.Name, "IQuery<" + (OperationResultContractHelper.GetDeclaredOperationResultType(exposedType)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? "R") + ">", OperationPropertyModelBuilder.FindExposedType(operationType, out _) is null ? "ForwardsTo" : "Expose"]));
         }
 
         var resultTypeName = resultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -309,16 +309,12 @@ public static class GatewayForward
         out List<string> unreadable)
     {
         unreadable = [];
-        var innerSettable = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
-        foreach (var member in exposedType.GetAllMembers().OfType<IPropertySymbol>())
+        var innerSettable = DeclaredForward.GetSettableProperties(exposedType);
+
+        // A bound property takes its binding's value, never a caller's, even where the operation declares one of its name.
+        foreach (var binding in bindings)
         {
-            // A bound property takes its binding's value, never a caller's, even where the operation declares one of its name.
-            if (member is { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public, SetMethod.DeclaredAccessibility: Accessibility.Public }
-                && !innerSettable.ContainsKey(member.Name)
-                && !bindings.Any(b => b.PropertyName == member.Name))
-            {
-                innerSettable.Add(member.Name, member);
-            }
+            innerSettable.Remove(binding.PropertyName);
         }
 
         var renameTargets = DeclaredForward.FindForwardedType(operationType, out _) is null ? null : DeclaredForward.GetRenameTargets(operationType);

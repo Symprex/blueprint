@@ -277,14 +277,68 @@ internal static class ValidationPropertyPlanner
             return false;
         }
 
-        return TryCreateFastPathPlan(property, propertyAccess, supported, out plan);
+        return TryCreateFastPathPlan(property, propertyAccess, supported, out plan, GetDisplayNameExpression(property));
+    }
+
+    /// <summary>
+    /// Gets the C# expression of the name the runtime would give a property in its validation messages: its
+    /// <c>[Display]</c> name, resource-backed or not, else its <c>[DisplayName]</c>, else its own name. Inherited checks
+    /// need it because the runtime path, which reads those attributes itself, cannot see the rules they apply.
+    /// </summary>
+    private static string GetDisplayNameExpression(IPropertySymbol property)
+    {
+        var memberName = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(property.Name, quote: true);
+        AttributeData? displayName = null;
+        foreach (var attribute in property.GetAttributes())
+        {
+            if (!ValidationSymbolHelpers.IsDisplayNameAffectingAttribute(attribute.AttributeClass))
+            {
+                continue;
+            }
+
+            if (attribute.AttributeClass!.Name != "DisplayAttribute")
+            {
+                displayName ??= attribute;
+                continue;
+            }
+
+            string? name = null;
+            ITypeSymbol? resourceType = null;
+            foreach (var argument in attribute.NamedArguments)
+            {
+                if (argument is { Key: "Name", Value.Value: string value })
+                {
+                    name = value;
+                }
+                else if (argument is { Key: "ResourceType", Value.Value: ITypeSymbol type })
+                {
+                    resourceType = type;
+                }
+            }
+
+            if (name is null)
+            {
+                return memberName;
+            }
+
+            var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(name, quote: true);
+            return resourceType is null
+                ? literal
+                : "new global::System.ComponentModel.DataAnnotations.DisplayAttribute { Name = " + literal + ", ResourceType = typeof("
+                    + resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ") }.GetName() ?? " + memberName;
+        }
+
+        return displayName is { ConstructorArguments: [{ Value: string label }] }
+            ? Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(label, quote: true)
+            : memberName;
     }
 
     private static bool TryCreateFastPathPlan(
         IPropertySymbol property,
         string propertyAccess,
         IReadOnlyList<AttributeData> validationAttributes,
-        out FastPathPropertyValidationPlan plan)
+        out FastPathPropertyValidationPlan plan,
+        string? displayNameExpression = null)
     {
         ValidationFastPathRule? requiredRule = null;
         var otherRules = new List<ValidationFastPathRule>();
@@ -314,7 +368,7 @@ internal static class ValidationPropertyPlanner
 
         plan = new FastPathPropertyValidationPlan(
             property.Name,
-            property.Name,
+            displayNameExpression ?? Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(property.Name, quote: true),
             propertyAccess,
             requiredRule,
             otherRules);

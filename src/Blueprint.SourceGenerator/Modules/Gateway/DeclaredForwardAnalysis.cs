@@ -40,6 +40,14 @@ internal sealed record DeclaredForwardAnalysis(EquatableList<DiagnosticInfo> Dia
             diagnostics.Add(new DiagnosticInfo(GatewayDiagnosticDescriptors.ExposeAndForwardsTo, location, [type.Name]));
         }
 
+        if (!type.ImplementsInterface(ExposedOperationAnalysis.OperationInterfaceMetadataName))
+        {
+            diagnostics.Add(new DiagnosticInfo(
+                GatewayDiagnosticDescriptors.MissingOperationInterface,
+                location,
+                [type.Name, inner.Name, ExposedOperationAnalysis.SuggestInterface(inner), "ForwardsTo"]));
+        }
+
         diagnostics.AddRange(GatewayBindings.Analyse(type, inner, location));
 
         var bindings = GatewayBindings.Resolve(type, inner);
@@ -54,6 +62,15 @@ internal sealed record DeclaredForwardAnalysis(EquatableList<DiagnosticInfo> Dia
             var innerName = DeclaredForward.GetPairedName(member, renameTargets);
             if (innerName is null)
             {
+                // A property another rename displaces is the gateway's own; a rename with no target names nothing.
+                if (forwardAs is not null)
+                {
+                    diagnostics.Add(new DiagnosticInfo(
+                        GatewayDiagnosticDescriptors.ForwardAsTargetNotOnInnerOperation,
+                        GetLocation(forwardAs, member),
+                        [type.Name, member.Name, "null", inner.Name]));
+                }
+
                 continue;
             }
 
@@ -135,7 +152,7 @@ internal sealed record DeclaredForwardAnalysis(EquatableList<DiagnosticInfo> Dia
 
     private static bool IsMarkedRequired(IPropertySymbol property)
     {
-        return property.GetAttributes().Any(static a => a.AttributeClass is { } attributeClass
+        return DeclaredForward.GetEffectiveAttributes(property).Any(static a => a.AttributeClass is { } attributeClass
             && (attributeClass.ToFullMetadataName() == "System.ComponentModel.DataAnnotations.RequiredAttribute"
                 || attributeClass.InheritsFrom("System.ComponentModel.DataAnnotations.RequiredAttribute")));
     }

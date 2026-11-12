@@ -162,8 +162,15 @@ internal static class OperationPropertyModelBuilder
     /// <returns>The names, empty when the operation exposes nothing or binds nothing.</returns>
     public static HashSet<string> GetBoundNames(INamedTypeSymbol operationType)
     {
+        // Only [Expose] contributes properties whose rules can name a bound one: in declared mode a property declared on
+        // another type than the operation is a gateway base class's, whose rules are the gateway's own (D10).
         var names = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var binding in GetBindings(operationType))
+        if (FindExposedType(operationType, out _) is not { } exposed)
+        {
+            return names;
+        }
+
+        foreach (var binding in GatewayBindings.Resolve(operationType, exposed))
         {
             names.Add(binding.PropertyName);
         }

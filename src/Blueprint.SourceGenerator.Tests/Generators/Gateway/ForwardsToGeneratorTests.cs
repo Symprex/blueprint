@@ -108,8 +108,42 @@ public class ForwardsToGeneratorTests
         }
         """;
 
+    private const string InnerDerivedMembers = """
+        /// <summary>A note the run keeps.</summary>
+                public new string? Note { get; }
+
+                /// <summary>The region the run imports into.</summary>
+                public override string? Region { get; set; }
+
+                /// <summary>Who started the run.</summary>
+        """;
+
+    private const string InnerBaseClass = """
+        public class ImportRunBase
+            {
+                public string? Note { get; set; }
+
+                [Required]
+                [MaxLength(20)]
+                public virtual string? Region { get; set; }
+            }
+
+            [RootLink("/tenants/{TenantId}/importRuns")]
+        """;
+
     private static readonly Lazy<MetadataReference> _innerContract = new(
         static () => TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(InnerSource, "InnerImportContract"));
+
+    private static readonly Lazy<MetadataReference> _innerWithBase = new(
+        static () => TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(
+            InnerSource
+                .Replace(
+                    "public partial class CreateImportRunCommand : ICommand<ImportRunResult>",
+                    "public partial class CreateImportRunCommand : ImportRunBase, ICommand<ImportRunResult>",
+                    StringComparison.Ordinal)
+                .Replace("/// <summary>Who started the run.</summary>", InnerDerivedMembers, StringComparison.Ordinal)
+                .Replace("[RootLink(\"/tenants/{TenantId}/importRuns\")]", InnerBaseClass, StringComparison.Ordinal),
+            "InnerImportContractWithBase"));
 
     [Fact]
     public void Every_generator_together_compiles_the_declared_operation_and_its_forward_and_a_second_run_is_cached()
@@ -528,6 +562,165 @@ public class ForwardsToGeneratorTests
             StringComparison.Ordinal);
 
         SingleDescriptorDiagnostic(gateway, "BPGW007");
+    }
+
+    [Fact]
+    public void An_inner_property_a_getter_only_declaration_hides_is_not_forwarded()
+    {
+        // The settable base Note was found past the derived getter-only one that hides it, so the forward set Note and
+        // did not compile (CS0200), as C# resolves the derived property (Copilot on #169).
+        var run = RunWithInnerBase(GatewayWithRegion().Replace(
+            "public string? Comment { get; set; }",
+            "public string? Comment { get; set; }\n\n        public string? Note { get; set; }",
+            StringComparison.Ordinal));
+
+        run.EmitErrors.Should().BeEmpty();
+        ForwardInitialiser(run).Should().NotContain("Note");
+    }
+
+    [Fact]
+    public void A_rename_onto_an_inner_property_a_getter_only_declaration_hides_reports_BPGW023()
+    {
+        var run = RunWithInnerBase(GatewayWithRegion().Replace(
+            "public string? Comment { get; set; }",
+            "[ForwardAs(\"Note\")]\n        public string? Remark { get; set; }",
+            StringComparison.Ordinal));
+
+        run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW023")
+            .Which.GetMessage().Should().Contain("Remark");
+    }
+
+    [Fact]
+    public void An_inner_override_that_does_not_repeat_its_base_rules_still_passes_them_on()
+    {
+        // Only the override's own attributes were read, and the runtime also applies the overridden declaration's, so the
+        // gateway forwarded what the inner operation would reject (Copilot on #169).
+        var validation = ValidationBlock(RunWithInnerBase(GatewayWithRegion()));
+
+        validation.Should().Contain("global::System.String.IsNullOrWhiteSpace(operation.Region)")
+            .And.Contain("operation.Region.Length > 20");
+    }
+
+    [Fact]
+    public void An_inner_override_whose_base_declaration_is_marked_Required_and_that_nothing_supplies_reports_BPGW025()
+    {
+        var run = RunWithInnerBase(GatewaySource);
+
+        run.GeneratorDiagnostics.Should().ContainSingle(static d => d.Id == "BPGW025")
+            .Which.GetMessage().Should().Contain("Region");
+    }
+
+    [Fact]
+    public void A_rename_with_no_target_reports_BPGW023()
+    {
+        // GetPairedName gave no name for it, which read as a property another rename displaces, so it was dropped from
+        // the forward without a diagnostic (Copilot on #169).
+        var gateway = GatewaySource.Replace("[ForwardAs(\"SourceId\")]", "[ForwardAs(null!)]", StringComparison.Ordinal);
+
+        SingleDescriptorDiagnostic(gateway, "BPGW023").GetMessage().Should().Contain("ExternalId");
+    }
+
+    [Fact]
+    public void A_declared_operation_without_an_operation_interface_reports_BPGW006()
+    {
+        // Nothing checked it, so the class compiled, no generator treated it as an operation and no endpoint was
+        // registered (Copilot on #169).
+        var gateway = GatewaySource.Replace(" : ICommand<Inner.ImportRunResult>", string.Empty, StringComparison.Ordinal);
+
+        SingleDescriptorDiagnostic(gateway, "BPGW006").GetMessage().Should().Contain("ForwardsTo<CreateImportRunCommand>");
+    }
+
+    [Fact]
+    public void An_inherited_check_names_the_property_by_its_DisplayName()
+    {
+        // Inherited checks used the CLR name, where the runtime path reads the label (Copilot on #169).
+        var gateway = GatewaySource.Replace(
+            "public string? Owner { get; set; }",
+            "[System.ComponentModel.DisplayName(\"Started \\\"by\\\"\")]\n        public string? Owner { get; set; }",
+            StringComparison.Ordinal);
+
+        var run = Run(gateway);
+
+        run.EmitErrors.Should().BeEmpty();
+        ValidationBlock(run).Should().Contain("FormatErrorMessage(\"Started \\\"by\\\"\"), \"Owner\")");
+    }
+
+    [Fact]
+    public void An_inherited_check_names_the_property_by_its_resource_backed_Display_name()
+    {
+        var gateway = GatewaySource.Replace(
+                "public string? Owner { get; set; }",
+                "[System.ComponentModel.DataAnnotations.Display(Name = nameof(Labels.Owner), ResourceType = typeof(Labels))]\n        public string? Owner { get; set; }",
+                StringComparison.Ordinal)
+            + """
+
+            namespace Gateway
+            {
+                public static class Labels
+                {
+                    public static string Owner => "Run owner";
+                }
+            }
+            """;
+
+        var run = Run(gateway);
+
+        run.EmitErrors.Should().BeEmpty();
+        ValidationBlock(run).Should().Contain(
+            "FormatErrorMessage(new global::System.ComponentModel.DataAnnotations.DisplayAttribute { Name = \"Owner\", ResourceType = typeof(global::Gateway.Labels) }.GetName() ?? \"Owner\"), \"Owner\")");
+    }
+
+    [Fact]
+    public void A_cross_property_rule_of_a_gateway_base_property_naming_a_bound_property_is_kept()
+    {
+        // The bindings of declared mode made every base-class property read as one contributed by [Expose], whose rule
+        // naming a bound property is the inner operation's, so the gateway's own [Compare] was dropped (Copilot on #169).
+        var gateway = GatewaySource
+            .Replace(
+                "[ForwardsTo<Inner.CreateImportRunCommand>]",
+                "[ForwardsTo<Inner.CreateImportRunCommand>]\n    [Bind(\"Owner\", FromProperty = \"Owner\")]",
+                StringComparison.Ordinal)
+            .Replace(
+                "public partial class CreateImportRunCommand : ICommand<Inner.ImportRunResult>",
+                "public partial class CreateImportRunCommand : GatewayBase, ICommand<Inner.ImportRunResult>",
+                StringComparison.Ordinal)
+            + """
+
+            namespace Gateway
+            {
+                public class GatewayBase
+                {
+                    [System.ComponentModel.DataAnnotations.Compare("Owner")]
+                    public string? ConfirmOwner { get; set; }
+                }
+            }
+            """;
+
+        var run = Run(gateway);
+
+        run.EmitErrors.Should().BeEmpty();
+        ValidationBlock(run).Should().Contain("\"ConfirmOwner\"");
+    }
+
+    /// <summary>
+    /// Runs every generator against an inner operation whose <c>Note</c> is a getter-only declaration hiding a settable
+    /// base one, and whose <c>Region</c> overrides a base declaration marked <c>[Required, MaxLength(20)]</c> without
+    /// repeating its rules.
+    /// </summary>
+    private static AllGeneratorsRun RunWithInnerBase(string gateway)
+    {
+        return RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], _innerWithBase.Value);
+    }
+
+    /// <summary>
+    /// The gateway, declaring the inner operation's <c>Region</c> too.
+    /// </summary>
+    private static string GatewayWithRegion()
+    {
+        return GatewaySource.Replace(
+            "public string? Owner { get; set; }",
+            "public string? Owner { get; set; }\n\n        public string? Region { get; set; }",
+            StringComparison.Ordinal);
     }
 
     /// <summary>
