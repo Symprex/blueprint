@@ -47,6 +47,56 @@ public static class McpEndpointRouteBuilderExtensions
     public static IEndpointConventionBuilder MapBlueprintMcp<TApp>(this IEndpointRouteBuilder endpoints, string path)
         where TApp : BlueprintApp
     {
+        return Map<TApp>(endpoints, path, null);
+    }
+
+    /// <summary>
+    /// Serves one MCP tool per operation <typeparamref name="TApp"/> exposes over HTTP, at <paramref name="path"/>, as
+    /// <see cref="MapBlueprintMcp{TApp}(IEndpointRouteBuilder, string)"/> does, each operation's request running through
+    /// the host middleware <paramref name="operationPipeline"/> adds before it reaches the operation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An operation's request is not the MCP request: it has its own service scope, and the host's HTTP pipeline does not
+    /// run on it. Middleware that sets up a request's scoped state, such as a tenant accessor set from the signed-in
+    /// caller's claims, set it up on the MCP request's scope, which the operation does not see. Add that middleware here
+    /// too, as the host adds it to its HTTP pipeline (<c>operation => operation.UseMiddleware&lt;TenantMiddleware&gt;()</c>),
+    /// so the operation is given what it is given over HTTP.
+    /// </para>
+    /// <para>
+    /// The middleware runs where it would between <c>UseAuthentication</c> and <c>UseAuthorization</c>: on the operation's
+    /// request, once routing has matched it and the caller is signed in, with the operation's endpoint, user and services,
+    /// and before the endpoint's authorisation, rate limiting and the operation itself, which run when it calls the next
+    /// middleware. A middleware that answers without calling it gives the call its response. Add only middleware that
+    /// sets up or guards the request: routing, authentication, authorisation, rate limiting and the endpoint already run.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TApp">The Blueprint app whose operations become tools.</typeparam>
+    /// <param name="endpoints">The endpoint route builder the app's API is mapped on.</param>
+    /// <param name="path">The route the MCP endpoint answers at, such as <c>mcp</c> or <c>api/mcp</c>.</param>
+    /// <param name="operationPipeline">Adds the middleware each operation's request runs through.</param>
+    /// <returns>A builder for conventions on the MCP endpoint.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// <c>AddBlueprintMcp</c> was not called, <c>MapBlueprintApi</c> has not mapped <typeparamref name="TApp"/>, or an
+    /// operation's input schema cannot be made.
+    /// </exception>
+    public static IEndpointConventionBuilder MapBlueprintMcp<TApp>(
+        this IEndpointRouteBuilder endpoints,
+        string path,
+        Action<IApplicationBuilder> operationPipeline)
+        where TApp : BlueprintApp
+    {
+        ArgumentNullException.ThrowIfNull(operationPipeline);
+
+        return Map<TApp>(endpoints, path, operationPipeline);
+    }
+
+    private static IEndpointConventionBuilder Map<TApp>(
+        IEndpointRouteBuilder endpoints,
+        string path,
+        Action<IApplicationBuilder>? operationPipeline)
+        where TApp : BlueprintApp
+    {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentNullException.ThrowIfNull(path);
 
@@ -85,6 +135,15 @@ public static class McpEndpointRouteBuilderExtensions
         }
 
         var toolSet = new BlueprintMcpToolSet(app, schemaProvider, services);
+
+        if (operationPipeline is not null)
+        {
+            // Built once, as the host's own pipeline is, from the host's services, so a middleware class is made once.
+            var pipeline = new ApplicationBuilder(services);
+            operationPipeline(pipeline);
+            pipeline.Run(BlueprintOperationTool.RunEndpointAsync);
+            toolSet.OperationPipeline = pipeline.Build();
+        }
 
         if (!httpOptions.RenderOpenApiDocumentOnFirstRequest)
         {

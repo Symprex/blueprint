@@ -55,7 +55,7 @@ does not dispatch or publish an event twice.
 
 Blueprint.Marten does **not** provide built-in multi-tenant document session isolation. S365 services that need per-tenant Marten stores should configure Marten's built-in tenancy (`options.Policies.ForAllDocumentTypes(x => x.TenancyStyle = TenancyStyle.Conjoined)`) and set the tenant ID on the session before the pipeline runs.
 
-**Recommended approach:** Use ASP.NET Core middleware to extract the tenant claim and set it on a scoped `ICurrentTenantAccessor`, then configure Marten to read from that accessor.
+**Recommended approach:** Use ASP.NET Core middleware to extract the tenant claim and set it on a scoped `ICurrentTenantAccessor`, then configure Marten to read from that accessor. A host serving its operations as MCP tools gives that middleware to `MapBlueprintMcp` too ([Blueprint.Mcp](#blueprintmcp)), or a tool call's operation is given no tenant.
 
 ---
 
@@ -662,6 +662,7 @@ app that serves MCP takes the SDK.
 |---|---|---|
 | DI registration | `AddBlueprintMcp()` | Registers the app's MCP server, stateless, giving each MCP endpoint its own app's tools |
 | Endpoint mapping | `MapBlueprintMcp<TApp>(path)` | Serves one tool per operation `TApp` exposes over HTTP at `path` |
+| Operation middleware | `MapBlueprintMcp<TApp>(path, operation => …)` | Runs the host's middleware on each operation's request, as on an HTTP request |
 
 ### Registration
 
@@ -711,6 +712,24 @@ calls it there with the SDK's own MCP client.
   callbacks run, so what it registered for disposal is disposed. An API mapped in a route group is called with the
   group's prefix and conventions, a route value in the prefix (`tenants/{TenantId}`) taken from the URL the tools were
   called at, and a HEAD operation's result has its status and no body, as HTTP gives it.
+- **The host's middleware runs only where it is given.** The host's HTTP pipeline runs on the MCP request, not on an
+  operation's request, so middleware that sets up a request's scoped state (the tenant accessor of the
+  [multi-tenancy pattern](#multi-tenancy-gap), say) sets up the MCP request's scope, which the operation does not
+  see. Give that middleware to the tools too, as the host gives it to its pipeline:
+
+  ```csharp
+  app.UseAuthentication();
+  app.UseMiddleware<TenantMiddleware>();
+  app.UseAuthorization();
+
+  app.MapBlueprintMcp<GatewayBlueprintApp>("gateway/mcp", operation => operation.UseMiddleware<TenantMiddleware>());
+  ```
+
+  It runs on each operation's request where it would run between `UseAuthentication` and `UseAuthorization`: once
+  routing has matched the request and the caller is signed in, with the operation's endpoint, user and services, and
+  before the endpoint's authorisation, rate limiting and the operation itself, which run when it calls the next
+  middleware. One that answers without calling it gives the call its response. Routing, authentication, authorisation,
+  rate limiting and the endpoint already run, so give it only middleware that sets up or guards the request.
 - **One mapping per tool set.** The tools run through the endpoints of the `MapBlueprintApi` call mapped last before
   `MapBlueprintMcp`, so an app mapped under two base paths, each with its own conventions, can have tools for each.
   `MapBlueprintMcp` refuses to map when that call was another app's, rather than serve its schemas and policies.

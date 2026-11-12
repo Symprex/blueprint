@@ -47,6 +47,12 @@ internal sealed class BlueprintMcpToolSet
     internal HttpRouteProbe Routing => this._routing.Value;
 
     /// <summary>
+    /// Gets or sets the host's middleware each operation's request runs through once it is signed in, ending in the
+    /// operation's endpoint, or <see langword="null"/> where the host gave none.
+    /// </summary>
+    internal RequestDelegate? OperationPipeline { get; set; }
+
+    /// <summary>
     /// Makes the tools now, so an operation whose schema cannot be made fails the caller instead of the first MCP request.
     /// </summary>
     public void EnsureToolsCreated()

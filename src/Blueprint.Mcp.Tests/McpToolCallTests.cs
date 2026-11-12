@@ -494,6 +494,24 @@ public sealed class McpToolCallTests
     }
 
     [Fact]
+    public async Task The_hosts_middleware_given_to_the_tools_sets_the_operations_scoped_state_as_it_does_over_HTTP()
+    {
+        // The operation's request has a service scope of its own, which the host's tenant middleware used to set only on
+        // the MCP request's, so a tenant-aware operation called as a tool was given no tenant.
+        await using var host = await McpTestHost.StartAsync(tenantMiddleware: true);
+        var ids = await host.GetOperationIdsAsync();
+        using var http = host.CreateHttpClient("Blue");
+        await using var client = await host.ConnectAsync(roles: "Blue");
+
+        var overHttp = await http.GetStringAsync("api/current-tenant");
+        var result = await client.CallToolAsync(ids[("get", "/current-tenant")], new Dictionary<string, object?>());
+
+        overHttp.Should().Contain("Blue");
+        HttpStatus(result).Should().Be(200);
+        Text(result).Should().Be(overHttp);
+    }
+
+    [Fact]
     public async Task A_route_constraint_that_reads_the_request_is_given_the_operations_request_not_the_MCP_request()
     {
         await using var host = await McpTestHost.StartAsync();
@@ -529,10 +547,9 @@ public sealed class McpToolCallTests
 
     [Theory]
     [InlineData(null, "files/abc")]
+    [InlineData("txt", "files/abc.txt")]
     public async Task An_optional_value_behind_a_separator_may_be_left_out_as_HTTP_routing_lets_a_URL_leave_it_out(string? ext, string url)
     {
-        // Only the omitted value: the generator does not take an optional placeholder ({Ext?}) as the property's route
-        // input, so the schema gives Ext as a query input and a URL's .txt does not reach the operation over HTTP either.
         await using var host = await McpTestHost.StartAsync();
         var ids = await host.GetOperationIdsAsync();
         using var http = host.CreateHttpClient();

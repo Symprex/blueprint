@@ -148,7 +148,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
                 CultureInfo.CurrentCulture = culture;
                 CultureInfo.CurrentUICulture = uiCulture;
 
-                return RunRequestAsync(accessor, caller, endpoint, this._toolSet.Routing, method, toolRequest, cancellationToken);
+                return RunRequestAsync(accessor, caller, endpoint, this._toolSet, method, toolRequest, cancellationToken);
             });
         }
 
@@ -163,7 +163,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
         IHttpContextAccessor accessor,
         HttpContext caller,
         RouteEndpoint endpoint,
-        HttpRouteProbe routing,
+        BlueprintMcpToolSet toolSet,
         string method,
         OperationToolRequest toolRequest,
         CancellationToken cancellationToken)
@@ -213,7 +213,7 @@ internal sealed class BlueprintOperationTool : McpServerTool
 
                 // Nor where HTTP routing would select another endpoint, as a literal route that outranks the operation's
                 // ({Name} given "special" where /special is mapped too): over HTTP the operation never sees that request.
-                var routed = await routing.FindAsync(context).ConfigureAwait(false);
+                var routed = await toolSet.Routing.FindAsync(context).ConfigureAwait(false);
 
                 if (!ReferenceEquals(routed, endpoint))
                 {
@@ -231,7 +231,18 @@ internal sealed class BlueprintOperationTool : McpServerTool
                     await AuthenticateAsync(context).ConfigureAwait(false);
                 }
 
-                await RunAsync(endpoint, context).ConfigureAwait(false);
+                // The host's middleware, where it gave the tools some, runs on the operation's request as it runs on an HTTP
+                // request between authentication and authorisation, so it sets up the request's own scope (its tenant,
+                // say) rather than the MCP request's.
+                if (toolSet.OperationPipeline is { } pipeline)
+                {
+                    await pipeline(context).ConfigureAwait(false);
+                }
+                else
+                {
+                    await RunAsync(endpoint, context).ConfigureAwait(false);
+                }
+
                 await context.Response.CompleteAsync().ConfigureAwait(false);
 
                 return OperationToolResult.Create(context.Response.StatusCode, context.Response.ContentType, response.Captured);
@@ -330,6 +341,25 @@ internal sealed class BlueprintOperationTool : McpServerTool
         var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, resource).ConfigureAwait(false);
 
         await resultHandler.HandleAsync(run, context, policy, authorizeResult).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Ends the host's middleware for an operation's request (<c>MapBlueprintMcp</c>'s <c>operationPipeline</c>) as the
+    /// endpoint routing middleware would: the request's endpoint is run, authorised and rate limited as
+    /// <see cref="RunAsync"/> runs it, or, where the middleware took the endpoint away, the request is not found.
+    /// </summary>
+    /// <param name="context">The operation's request.</param>
+    /// <returns>A task that completes once the endpoint has run.</returns>
+    internal static Task RunEndpointAsync(HttpContext context)
+    {
+        if (context.GetEndpoint() is RouteEndpoint endpoint)
+        {
+            return RunAsync(endpoint, context);
+        }
+
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

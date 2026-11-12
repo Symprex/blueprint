@@ -124,6 +124,10 @@ internal sealed class McpTestHost : IAsyncDisposable
     /// Whether the host has a global rate limiter allowing one request at a time, and one more queued, across every path,
     /// from which the MCP endpoint is not exempt.
     /// </param>
+    /// <param name="tenantMiddleware">
+    /// Whether the host's middleware sets the request's <see cref="CurrentTenant"/> to the signed-in caller's roles once it
+    /// is authenticated, and the tools at <c>api/mcp</c> run the same middleware on each operation's request.
+    /// </param>
     /// <returns>The started host.</returns>
     public static async Task<McpTestHost> StartAsync(
         bool renderOnFirstRequest = false,
@@ -139,7 +143,8 @@ internal sealed class McpTestHost : IAsyncDisposable
         bool endpointResourceUpperCase = false,
         bool authenticateBeforeRouting = false,
         bool globalLimiterPerPath = false,
-        bool globalConcurrencyLimiter = false)
+        bool globalConcurrencyLimiter = false,
+        bool tenantMiddleware = false)
     {
         var builder = WebApplication.CreateSlimBuilder();
 
@@ -170,6 +175,7 @@ internal sealed class McpTestHost : IAsyncDisposable
         builder.Services.AddSingleton<IAuthorizationHandler, EndpointResourceHandler>();
         builder.Services.AddSingleton<ResponseCallbackProbe>();
         builder.Services.AddSingleton<AmbientContextProbe>();
+        builder.Services.AddScoped<CurrentTenant>();
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddBlueprintMcp();
         builder.Services.AddRateLimiter(o =>
@@ -249,6 +255,11 @@ internal sealed class McpTestHost : IAsyncDisposable
             app.UseAuthentication();
         }
 
+        if (tenantMiddleware)
+        {
+            app.Use(SetCurrentTenantAsync);
+        }
+
         app.UseAuthorization();
         app.UseRateLimiter();
 
@@ -301,7 +312,9 @@ internal sealed class McpTestHost : IAsyncDisposable
             app.MapBlueprintApi<SampleBlueprintApp, SampleBlueprintAppExecutor>("sample/");
         }
 
-        var tools = app.MapBlueprintMcp<McpTestBlueprintApp>("api/mcp");
+        var tools = tenantMiddleware
+            ? app.MapBlueprintMcp<McpTestBlueprintApp>("api/mcp", static operation => operation.Use(SetCurrentTenantAsync))
+            : app.MapBlueprintMcp<McpTestBlueprintApp>("api/mcp");
 
         if (globalLimiterPerPath)
         {
@@ -349,6 +362,18 @@ internal sealed class McpTestHost : IAsyncDisposable
         await app.StartAsync();
 
         return new McpTestHost(app, new Uri(app.Urls.First().TrimEnd('/') + "/"));
+    }
+
+    /// <summary>Sets the request's <see cref="CurrentTenant"/> to the signed-in caller's roles, as tenant middleware would.</summary>
+    private static Task SetCurrentTenantAsync(HttpContext context, RequestDelegate next)
+    {
+        if (context.User.Identity?.IsAuthenticated == true)
+        {
+            context.RequestServices.GetRequiredService<CurrentTenant>().Id =
+                string.Join(',', context.User.FindAll(System.Security.Claims.ClaimTypes.Role).Select(static c => c.Value));
+        }
+
+        return next(context);
     }
 
     /// <summary>Makes an HTTP client addressed at the host, signed in with <paramref name="roles"/>.</summary>

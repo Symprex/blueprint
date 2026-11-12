@@ -442,3 +442,33 @@ public partial class FileNameMcpQuery : IQuery<string>
         return $"{query.Name}|{query.Ext ?? "(none)"}";
     }
 }
+
+/// <summary>
+/// The caller's tenant, a scoped service the host's middleware sets from the signed-in user, as a host following the
+/// scoped-tenant pattern sets its tenant accessor.
+/// </summary>
+public sealed class CurrentTenant
+{
+    /// <summary>Gets or sets the tenant, or <see langword="null"/> where no middleware has set it.</summary>
+    public string? Id { get; set; }
+}
+
+/// <summary>A query answering with the tenant the host's middleware set on its request's scope.</summary>
+[AllowAnonymous]
+[RootLink("/current-tenant")]
+public partial class CurrentTenantMcpQuery : IQuery<string>
+{
+}
+
+/// <summary>Handles <see cref="CurrentTenantMcpQuery"/> from the request's <see cref="CurrentTenant"/>.</summary>
+/// <param name="tenant">The request's tenant.</param>
+public class CurrentTenantMcpQueryHandler(CurrentTenant tenant)
+{
+    /// <summary>Answers with the tenant.</summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The tenant, or <c>none</c>.</returns>
+    public string Handle(CurrentTenantMcpQuery query)
+    {
+        return tenant.Id ?? "none";
+    }
+}
