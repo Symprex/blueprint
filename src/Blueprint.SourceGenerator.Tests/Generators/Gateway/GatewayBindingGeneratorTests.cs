@@ -463,6 +463,9 @@ public class GatewayBindingGeneratorTests
     [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { if (inner.Priority > 0) { return; } inner.InternalNote = \"staff\"; }")]
     [InlineData("internal System.Threading.Tasks.Task OnMapAsync(Inner.AddNoteCommand inner) { if (inner.Priority > 0) return System.Threading.Tasks.Task.CompletedTask; inner.InternalNote = \"staff\"; return System.Threading.Tasks.Task.CompletedTask; }")]
     [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { inner = new Inner.AddNoteCommand { TenantId = \"\", Text = \"\", InternalNote = \"\" }; inner.InternalNote = \"staff\"; }")]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { Replace(out inner); inner.InternalNote = \"staff\"; } private static void Replace(out Inner.AddNoteCommand inner) => inner = new Inner.AddNoteCommand { TenantId = \"\", Text = \"\", InternalNote = \"\" };")]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { Replace(ref inner); inner.InternalNote = \"staff\"; } private static void Replace(ref Inner.AddNoteCommand inner) { }")]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { if (inner.Priority > 0) goto Done; inner.InternalNote = \"staff\"; Done: ; }")]
     public void When_a_hidden_required_inner_property_is_not_assigned_by_the_map_hook_then_BPGW035_is_reported(string hook)
     {
         var contract = RequiredInternalNoteContract();

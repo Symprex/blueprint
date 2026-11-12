@@ -1,5 +1,6 @@
 using Blueprint.SourceGenerator.Helpers;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Blueprint.SourceGenerator.Modules.Gateway;
@@ -70,9 +71,10 @@ internal static class GatewayMapHook
     /// <remarks>
     /// Syntax only. An assignment counts when it is the hook's expression body or a statement of its body, directly or in a
     /// nested plain block, so it runs whenever the hook returns normally. One under an <c>if</c>, a loop, a <c>try</c>, a
-    /// lambda or a local function, or after a <c>return</c> of the hook's own, might never run, and a call to a helper cannot
-    /// be seen, so neither counts; nor does any, where the hook rebinds its parameter to another instance: a required
-    /// property with no null check behind it, such as a <c>required int?</c>, would otherwise be sent as its initial value.
+    /// lambda or a local function, or after a <c>return</c> or <c>goto</c> of the hook's own, might never run, and a call to a
+    /// helper cannot be seen, so neither counts. Nor does any where the hook rebinds its parameter, by assignment or as a
+    /// <c>ref</c> or <c>out</c> argument, since it may then assign an instance the forward does not send. A required property
+    /// with no null check behind it, such as a <c>required int?</c>, would otherwise be sent as its initial value.
     /// </remarks>
     /// <param name="hook">The hook <see cref="Find"/> returned.</param>
     /// <param name="propertyName">The inner operation's property.</param>
@@ -91,7 +93,10 @@ internal static class GatewayMapHook
             // A hook that rebinds its parameter may assign another instance than the one the forward sends, so none of its
             // assignments counts.
             var assignments = declaration.DescendantNodes().OfType<AssignmentExpressionSyntax>().ToList();
-            if (assignments.Any(a => a.Left is IdentifierNameSyntax rebound && rebound.Identifier.ValueText == parameterName))
+            if (assignments.Any(a => IsParameter(a.Left, parameterName))
+                || declaration.DescendantNodes().OfType<ArgumentSyntax>().Any(a => !a.RefKindKeyword.IsKind(SyntaxKind.None)
+                    && !a.RefKindKeyword.IsKind(SyntaxKind.InKeyword)
+                    && IsParameter(a.Expression, parameterName)))
             {
                 return false;
             }
@@ -111,11 +116,16 @@ internal static class GatewayMapHook
         return false;
     }
 
+    private static bool IsParameter(ExpressionSyntax expression, string parameterName)
+    {
+        return expression is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == parameterName;
+    }
+
     private static bool AlwaysRuns(AssignmentExpressionSyntax assignment, MethodDeclarationSyntax declaration)
     {
-        // A return of the hook's own before the assignment may leave without it; a lambda's or local function's may not.
+        // A return or goto of the hook's own before the assignment may skip it; a lambda's or local function's may not.
         var earlyReturn = declaration.DescendantNodes(static n => n is not (AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax))
-            .OfType<ReturnStatementSyntax>()
+            .Where(static n => n is ReturnStatementSyntax or GotoStatementSyntax)
             .Any(r => r.SpanStart < assignment.SpanStart);
         if (earlyReturn)
         {
