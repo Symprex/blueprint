@@ -213,6 +213,55 @@ public class StreamingRequestBodyOwnershipTests
         result.Diagnostics.Should().BeEmpty();
     }
 
+    [Fact]
+    public void When_a_multipart_field_is_an_array_of_a_nullable_value_type_then_reports_BPPO016()
+    {
+        // A form field array is parsed into an array of the element's underlying type, which cannot be assigned to int?[].
+        var result = CompileDescriptor(
+            """
+            [RootLink("/attachments")]
+            [HttpPost]
+            public partial class AttachCommand : ICommand<string>
+            {
+                public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+
+                public int?[] Scores { get; set; }
+
+                public static Task<string> HandleAsync(AttachCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        var diagnostic = result.Diagnostics.Should().ContainSingle().Which;
+        diagnostic.Id.Should().Be("BPPO016");
+        diagnostic.GetMessage().Should().Contain("'Scores'");
+    }
+
+    [Fact]
+    public void When_a_Stream_hides_a_base_property_of_the_same_name_then_the_client_body_is_built_from_the_Stream()
+    {
+        // The derived property is the one bound; the client's body builder used to look the name up and find the base's.
+        var result = CompileDescriptor(
+            """
+            public abstract partial class ImportBase
+            {
+                public string Content { get; set; }
+            }
+
+            [RootLink("/imports")]
+            [HttpPost]
+            public partial class ImportCommand : ImportBase, ICommand<string>
+            {
+                [FromBody]
+                public new System.IO.Stream Content { get; set; }
+
+                public static Task<string> HandleAsync(ImportCommand operation) => Task.FromResult("ok");
+            }
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Output.Select(static t => t.ToString()).Should().Contain(static s => s.Contains("CreateStreamContent(this.Content)"));
+    }
+
     private static GenerationResult CompileDescriptor(string source)
     {
         _ = _formFileType;

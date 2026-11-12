@@ -446,6 +446,17 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     }
 
     /// <summary>
+    /// Whether a multipart body's field can carry a property of <paramref name="type"/>: a type the query string can carry,
+    /// but not an array of nullable values, which the shared array reader would build as an array of the underlying type
+    /// (see <see cref="IsQueryOnGet"/>'s remarks).
+    /// </summary>
+    private static bool IsSupportedFormFieldType(ITypeSymbol type)
+    {
+        return IsSupportedQueryType(type)
+            && type is not IArrayTypeSymbol { ElementType.OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+    }
+
+    /// <summary>
     /// Returns true when a property otherwise read from the body is also read from the query string of a GET: the operation
     /// answers GET as well as another method, and the property's type can be read from a query string. One whose type
     /// cannot is read from the body alone, as before.
@@ -768,7 +779,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                     location is not null ? LocationInfo.CreateFrom(location) : null,
                     [stream.PropertyName, operationType.Name, entry.PropertyName]));
             }
-            else if (stream is null && !isStreamingPart && !IsSupportedQueryType(entry.TypeSymbol))
+            else if (stream is null && !isStreamingPart && !IsSupportedFormFieldType(entry.TypeSymbol))
             {
                 diagnostics.Add(CreatePropertyDiagnostic(
                     PropertyOwnershipDiagnosticDescriptors.UnsupportedFormFieldPropertyType,

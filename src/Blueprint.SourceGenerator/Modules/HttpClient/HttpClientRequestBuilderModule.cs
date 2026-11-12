@@ -216,7 +216,12 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         var propertiesByName = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
         foreach (var property in properties)
         {
-            propertiesByName[property.Name] = property;
+            // The derived type's members come first: keep the first of each name, the one ownership analysis bound, not a
+            // base property it hides.
+            if (!propertiesByName.ContainsKey(property.Name))
+            {
+                propertiesByName[property.Name] = property;
+            }
         }
 
         if (bindingEntries.BodyShape == PropertyOwnershipModule.RequestBodyShape.Stream)

@@ -134,6 +134,45 @@ public sealed class StreamRequestBindingWireTests
     }
 
     [Fact]
+    public async Task A_multipart_operation_refuses_a_chunked_body_with_no_content_type_with_415()
+    {
+        await using var host = await StreamRequestHost.StartAsync();
+
+        var (status, _) = await host.SendAsync(new HttpRequestMessage(HttpMethod.Post, "stream-request/folders/folder-1/attachments")
+        {
+            Content = new UnknownLengthContent(Encoding.UTF8.GetBytes("not a form")),
+        });
+
+        status.Should().Be(415);
+    }
+
+    [Fact]
+    public async Task A_multipart_operation_with_no_body_and_no_content_type_runs_with_its_form_properties_unset()
+    {
+        await using var host = await StreamRequestHost.StartAsync();
+
+        var (status, body) = await host.SendAsync(new HttpRequestMessage(HttpMethod.Post, "stream-request/folders/folder-1/attachments")
+        {
+            Content = new UnknownLengthContent([]),
+        });
+
+        status.Should().Be(200);
+        body.Should().Contain("file=none");
+    }
+
+    [Fact]
+    public async Task A_multipart_body_that_ends_before_its_closing_boundary_is_a_400()
+    {
+        await using var host = await StreamRequestHost.StartAsync();
+        var truncated = new ByteArrayContent(Encoding.UTF8.GetBytes("--b\r\nContent-Disposition: form-data; name=\"description\"\r\n\r\nx"));
+        truncated.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data; boundary=b");
+
+        var (status, _) = await host.SendAsync(new HttpRequestMessage(HttpMethod.Post, "stream-request/folders/folder-1/attachments") { Content = truncated });
+
+        status.Should().Be(400);
+    }
+
+    [Fact]
     public void The_document_describes_a_stream_property_as_a_binary_octet_stream_request_body()
     {
         var operation = RenderOperation("/stream-request/imports/{FolderId}", "post");

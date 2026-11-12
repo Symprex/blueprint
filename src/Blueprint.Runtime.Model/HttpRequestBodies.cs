@@ -109,6 +109,9 @@ public static class HttpRequestBodies
             bool flag => flag ? "true" : "false",
             DateTime dateTime => dateTime.ToString("O", CultureInfo.InvariantCulture),
             DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
+
+            // TimeOnly's default invariant format is HH:mm, which would drop the seconds.
+            TimeOnly timeOnly => timeOnly.ToString("O", CultureInfo.InvariantCulture),
             IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
             _ => value.ToString(),
         };

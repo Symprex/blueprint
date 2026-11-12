@@ -566,19 +566,28 @@ public static class PipelineHelpers
     {
         var request = httpContext.Request;
 
-        if (request.ContentLength is null or 0 && request.ContentType is null)
+        if (request.HasFormContentType)
         {
-            return Task.FromResult(default(FormReadResult));
+            return ReadFormCoreAsync(request, cancellationToken);
         }
 
-        if (!request.HasFormContentType)
+        if (request.ContentLength is { } contentLength)
         {
-            return Task.FromResult(request.ContentLength == 0
+            return Task.FromResult(contentLength == 0
                 ? default
                 : new FormReadResult(null, UnsupportedMediaTypeResult.Instance));
         }
 
-        return ReadFormCoreAsync(request, cancellationToken);
+        // Chunked, or no framing at all: only reading tells whether there is a body, as RefuseFormBodyIfPresentAsync reads.
+        return RefuseNonFormBodyIfAnyByteAsync(request, cancellationToken);
+    }
+
+    private static async Task<FormReadResult> RefuseNonFormBodyIfAnyByteAsync(HttpRequest request, CancellationToken cancellationToken)
+    {
+        var probe = new byte[1];
+        var bytesRead = await request.Body.ReadAsync(probe, cancellationToken).ConfigureAwait(false);
+
+        return bytesRead > 0 ? new FormReadResult(null, UnsupportedMediaTypeResult.Instance) : default;
     }
 
     private static async Task<FormReadResult> ReadFormCoreAsync(HttpRequest request, CancellationToken cancellationToken)
@@ -587,11 +596,24 @@ public static class PipelineHelpers
         {
             return new FormReadResult(await request.ReadFormAsync(cancellationToken).ConfigureAwait(false), null);
         }
-        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException)
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException
+            || (ex is IOException io && !cancellationToken.IsCancellationRequested && !IsStorageFailure(io)))
         {
-            // A malformed multipart body (a missing or bad boundary, a truncated section) or one over FormOptions' limits.
+            // A malformed multipart body (a missing or bad boundary, a body that ends before its closing boundary, which the
+            // reader fails with an IOException) or one over FormOptions' limits.
             return new FormReadResult(null, new BindingFailureResult($"Invalid form body: {ex.Message}"));
         }
+    }
+
+    /// <summary>
+    /// Whether an <see cref="IOException"/> from reading a form is the server's own failure to spool a large file to disk
+    /// (a full disk or quota), which is not the request's fault and stays a 500, rather than a malformed body.
+    /// </summary>
+    private static bool IsStorageFailure(IOException exception)
+    {
+        // ERROR_HANDLE_DISK_FULL and ERROR_DISK_FULL as Windows HRESULTs; ENOSPC and EDQUOT, which .NET reports as the raw
+        // errno on Linux.
+        return exception.HResult is unchecked((int)0x80070027) or unchecked((int)0x80070070) or 28 or 122;
     }
 
     /// <summary>
