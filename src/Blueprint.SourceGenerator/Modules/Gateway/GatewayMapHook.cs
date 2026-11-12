@@ -64,30 +64,61 @@ internal static class GatewayMapHook
     }
 
     /// <summary>
-    /// Whether the hook's own body assigns <c>inner.<paramref name="propertyName"/></c>, by any assignment operator, through
-    /// its first parameter (#175).
+    /// Whether the hook's own body assigns <c>inner.<paramref name="propertyName"/></c> unconditionally, by any assignment
+    /// operator, through its first parameter (#175).
     /// </summary>
     /// <remarks>
-    /// Syntax only, so it does not follow a call to a helper or tell a conditional assignment from an unconditional one: the
-    /// forward's null check backs it at run time where null is never a value the hook meant.
+    /// Syntax only. An assignment counts when it is the hook's expression body or a statement of its body, directly or in a
+    /// nested plain block, so it runs whenever the hook returns normally. One under an <c>if</c>, a loop, a <c>try</c>, a
+    /// lambda or a local function might never run, and a call to a helper cannot be seen, so neither counts: a required
+    /// property with no null check behind it, such as a <c>required int?</c>, would otherwise be sent as its initial value.
     /// </remarks>
     /// <param name="hook">The hook <see cref="Find"/> returned.</param>
     /// <param name="propertyName">The inner operation's property.</param>
-    /// <returns><see langword="true"/> when an assignment to it appears in the hook.</returns>
+    /// <returns><see langword="true"/> when the hook always assigns it.</returns>
     public static bool Assigns(IMethodSymbol hook, string propertyName)
     {
         var parameterName = hook.Parameters[0].Name;
 
         foreach (var reference in hook.DeclaringSyntaxReferences)
         {
-            foreach (var assignment in reference.GetSyntax().DescendantNodes().OfType<AssignmentExpressionSyntax>())
+            if (reference.GetSyntax() is not MethodDeclarationSyntax declaration)
+            {
+                continue;
+            }
+
+            foreach (var assignment in declaration.DescendantNodes().OfType<AssignmentExpressionSyntax>())
             {
                 if (assignment.Left is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax target, Name: var name }
                     && target.Identifier.ValueText == parameterName
-                    && name.Identifier.ValueText == propertyName)
+                    && name.Identifier.ValueText == propertyName
+                    && AlwaysRuns(assignment, declaration))
                 {
                     return true;
                 }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool AlwaysRuns(AssignmentExpressionSyntax assignment, MethodDeclarationSyntax declaration)
+    {
+        if (assignment.Parent == declaration.ExpressionBody)
+        {
+            return true;
+        }
+
+        if (assignment.Parent is not ExpressionStatementSyntax statement)
+        {
+            return false;
+        }
+
+        for (var current = statement.Parent; current is BlockSyntax block; current = block.Parent)
+        {
+            if (block == declaration.Body)
+            {
+                return true;
             }
         }
 

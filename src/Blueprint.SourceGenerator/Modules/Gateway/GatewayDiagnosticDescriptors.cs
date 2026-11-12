@@ -265,8 +265,9 @@ internal static class GatewayDiagnosticDescriptors
 
     /// <summary>
     /// BPGW035: a <c>[Hide]</c> on a property the inner operation requires, which the operation's map hook never assigns
-    /// (#175). The hook has to assign <c>inner.Property</c> in its own body, where the check can see it: one that left it
-    /// to a helper, or dropped the line, would otherwise send the type's default without complaint.
+    /// (#175). The hook has to assign <c>inner.Property</c> unconditionally in its own body, where the check can see it: one
+    /// that left it to a helper, a branch or a lambda, or dropped the line, would otherwise send the type's default without
+    /// complaint.
     /// </summary>
     /// <remarks>
     /// BPGW022 to BPGW034 are taken or reserved by other gateway work.
@@ -274,7 +275,7 @@ internal static class GatewayDiagnosticDescriptors
     public static readonly DiagnosticDescriptor HiddenRequiredPropertyNotAssignedByMapHook = new(
         id: "BPGW035",
         title: "A required inner property a gateway hides must be assigned by its map hook",
-        messageFormat: "Gateway operation '{0}' hides '{1}', which '{2}' requires, but its {3} never assigns it. Assign inner.{1} in {3}, or bind it with [Bind].",
+        messageFormat: "Gateway operation '{0}' hides '{1}', which '{2}' requires, but its {3} does not always assign it. Assign inner.{1} in {3}'s own body, not under an if, a loop, a try or a lambda, or bind it with [Bind].",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

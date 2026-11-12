@@ -457,6 +457,9 @@ public class GatewayBindingGeneratorTests
     [InlineData("internal void OnMap(Inner.AddNoteCommand inner) => inner.Priority = 5;")]
     [InlineData("internal System.Threading.Tasks.ValueTask OnMapAsync(Inner.AddNoteCommand inner) { var internalNote = \"staff\"; return default; }")]
     [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { var other = new Inner.AddNoteCommand { TenantId = \"\", Text = \"\", InternalNote = \"staff\" }; }")]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { if (inner.Priority > 0) inner.InternalNote = \"staff\"; }")]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { System.Action set = () => inner.InternalNote = \"staff\"; }")]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { void Set() => inner.InternalNote = \"staff\"; }")]
     public void When_a_hidden_required_inner_property_is_not_assigned_by_the_map_hook_then_BPGW035_is_reported(string hook)
     {
         var contract = RequiredInternalNoteContract();
@@ -468,6 +471,92 @@ public class GatewayBindingGeneratorTests
         var diagnostic = result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW035").Which;
         diagnostic.Severity.Should().Be(DiagnosticSeverity.Error);
         diagnostic.GetMessage().Should().Contain("AddGatewayNoteCommand").And.Contain("InternalNote").And.Contain(hook.Contains("OnMapAsync", StringComparison.Ordinal) ? "OnMapAsync" : "OnMap");
+    }
+
+    [Fact]
+    public void A_required_nullable_value_the_map_hook_assigns_only_conditionally_is_BPGW035()
+    {
+        // No null check backs a required int?, so a skipped assignment would send the initial null (#180 review).
+        var inner = InnerSource.Replace("public int Priority { get; set; }", "public required int? Priority { get; set; }", StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.Priority))]"),
+            "internal void OnMap(Inner.AddNoteCommand inner) { if (inner.Text.Length > 0) { inner.Priority = 5; } }");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([AppBindingSource, gateway], additionalReferences: [contract]);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW035");
+    }
+
+    [Theory]
+    [InlineData("internal void OnMap(Inner.AddNoteCommand inner) { if (inner.Priority < 0) { throw new System.InvalidOperationException(); } inner.InternalNote = null; }")]
+    [InlineData("internal System.Threading.Tasks.Task OnMapAsync(Inner.AddNoteCommand inner) { { inner.InternalNote ??= \"staff\"; } return System.Threading.Tasks.Task.CompletedTask; }")]
+    public void An_unconditional_assignment_after_a_guard_or_in_a_nested_block_satisfies_the_map_hook_check(string hook)
+    {
+        var gateway = WithBody(WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]"), hook);
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([AppBindingSource, gateway], additionalReferences: [RequiredInternalNoteContract()]);
+
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW009" || d.Id == "BPGW035");
+    }
+
+    [Fact]
+    public void A_map_hook_read_from_metadata_keeps_its_binding()
+    {
+        // #180 review: a gateway operation an app scans from a referenced assembly has a hook with no syntax to check. Its
+        // own build checked it; dropping the binding would make the forward copy a property the gateway does not have.
+        var inner = InnerSource.Replace("public string? InternalNote { get; set; }", "public required string InternalNote { get; set; }", StringComparison.Ordinal);
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]"),
+            "public static void OnMap(Inner.AddNoteCommand inner) => inner.InternalNote = \"staff\";");
+        var contract = TestHelpers.CreateReferenceFromSource(inner + "\n" + gateway, "GatewayContract");
+        var compilation = CreateCompilation(["namespace App { }"], contract);
+
+        var bindings = OperationPropertyModelBuilder.GetBindings(compilation.GetTypeByMetadataName("Gateway.AddGatewayNoteCommand")!);
+
+        bindings.Should().ContainSingle(static b => b.PropertyName == "InternalNote").Which.Source.Should().Be(Blueprint.SourceGenerator.Modules.Gateway.GatewayBindingSource.MapHook);
+    }
+
+    [Fact]
+    public void A_required_inner_property_whose_constructor_sets_required_members_gets_no_placeholder()
+    {
+        // #180 review: the [SetsRequiredMembers] constructor's own value would be replaced by a null before the hook ran.
+        var inner = InnerSource
+            .Replace("public string? InternalNote { get; set; }", "public required string InternalNote { get; set; }", StringComparison.Ordinal)
+            .Replace(
+                "/// <summary>The tenant the note belongs to.</summary>",
+                "[System.Diagnostics.CodeAnalysis.SetsRequiredMembers] public AddNoteCommand() { this.InternalNote = \"none\"; }\n\n/// <summary>The tenant the note belongs to.</summary>",
+                StringComparison.Ordinal);
+        inner.Should().Contain("SetsRequiredMembers");
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.InternalNote))]"),
+            "internal void OnMap(Inner.AddNoteCommand inner) => inner.InternalNote = \"staff\";");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], contract);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().NotContain("InternalNote = default!");
+    }
+
+    [Theory]
+    [InlineData("public string Text { private get; set; } = \"\";")]
+    [InlineData("public string Text { set { } }")]
+    public void A_Required_inner_property_without_a_public_getter_is_filled_without_a_null_check(string declaration)
+    {
+        // #180 review: the check would read a getter the pipeline cannot call (CS0271, CS0154).
+        var inner = InnerSource.Replace("public string Text { get; set; } = \"\";", declaration, StringComparison.Ordinal);
+        inner.Should().Contain(declaration);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerNoteContract");
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.Text))]"),
+            "internal void OnMap(Inner.AddNoteCommand inner) => inner.Text = \"from the gateway\";");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, AppSource], contract);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW009" || d.Id == "BPGW035");
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs").Should().NotContain("forwardInner.Text is null");
     }
 
     [Fact]

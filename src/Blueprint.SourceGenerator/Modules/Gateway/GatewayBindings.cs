@@ -216,7 +216,8 @@ internal static class GatewayBindings
                         continue;
                     }
 
-                    if (!GatewayMapHook.Assigns(mapHook, propertyName))
+                    // A hook read from a referenced assembly has no syntax to check; that assembly's own build checked it.
+                    if (!mapHook.DeclaringSyntaxReferences.IsEmpty && !GatewayMapHook.Assigns(mapHook, propertyName))
                     {
                         diagnostics?.Add(new DiagnosticInfo(
                             GatewayDiagnosticDescriptors.HiddenRequiredPropertyNotAssignedByMapHook,
@@ -225,9 +226,12 @@ internal static class GatewayBindings
                         continue;
                     }
 
+                    // A [SetsRequiredMembers] constructor needs no initialiser, and a placeholder would replace its value.
+                    var constructorSetsRequired = OperationPropertyModelBuilder.FindArgumentlessConstructor(innerType) is { } constructor
+                        && OperationPropertyModelBuilder.SetsRequiredMembers(constructor);
                     var filled = Create(innerProperty, GatewayBindingSource.MapHook, mapHook.Name, isAppTier: false) with
                     {
-                        IsRequiredMember = innerProperty.IsRequired,
+                        IsRequiredMember = innerProperty.IsRequired && !constructorSetsRequired,
                         IsNullRefused = IsNullRefused(innerProperty),
                     };
                     AddUnlessDeclared(filled, operationType, declared, location, result, diagnostics);
@@ -632,9 +636,11 @@ internal static class GatewayBindings
     /// </summary>
     private static bool IsNullRefused(IPropertySymbol property)
     {
+        // The check reads the property from the pipeline, which a getter that is not public does not allow (CS0271, CS0154);
+        // BPGW035's check that the hook assigns it is then the only one.
         var type = property.Type;
         var canBeNull = type.IsReferenceType || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
-        if (!canBeNull)
+        if (!canBeNull || property.GetMethod is not { DeclaredAccessibility: Accessibility.Public })
         {
             return false;
         }
