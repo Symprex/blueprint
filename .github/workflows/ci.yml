@@ -57,7 +57,13 @@ jobs:
       - name: Build
         run: dotnet build Blueprint.sln -c Release --no-restore
 
+      # dotnet test starts every test project's host at once, and on a busy runner one can take longer
+      # than vstest's default 90 seconds to connect. vstest then aborts that project's run without
+      # running a test, and the job fails although nothing did. Five minutes is well over what a host
+      # needs, so a slow start no longer counts as a failure, while a host that never starts still does.
       - name: Test
+        env:
+          VSTEST_CONNECTION_TIMEOUT: 300
         run: >
           dotnet test Blueprint.sln -c Release --no-build
           --logger "trx;LogFileName=results.trx"
