@@ -5,6 +5,7 @@
 
 namespace Gateway;
 
+/// <inheritdoc cref="global::Inner.GetWidgetQuery"/>
 partial class GetGatewayWidgetQuery
 {
     [global::System.ThreadStatic]
