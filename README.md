@@ -80,6 +80,7 @@ GET /api/greetings/Ada
 | `Blueprint.Runtime` | The runtime: the semantic result types (`OkResult<T>` and the rest), the executor that runs the generated pipelines, `AddBlueprintApi` / `MapBlueprintApi`, HTTP result translation and OpenAPI rendering. Depends on `Blueprint.Runtime.Model`. |
 | `Blueprint.SourceGenerator` | The Roslyn source generator, plus the IDE code fix for a missing `partial`. It is an analyzer-only package, so reference it with `PrivateAssets="all"`. |
 | `Blueprint.HttpClient` | `BlueprintHttpClient<TApp>`, a typed client that calls another Blueprint API using its operation types. |
+| `Blueprint.Mcp` | `MapBlueprintMcp<TApp>`, which serves an app's operations as MCP tools over the official C# MCP SDK, with the same authentication and authorisation as HTTP. |
 | `Blueprint.Testing` | In-memory and full-HTTP test hosts, task collectors and result assertions. |
 | `Blueprint.Marten` | A Marten `IUnitOfWork`, plus domain-event dispatch from Marten sessions. |
 | `Blueprint.Rebus` | Delivers Rebus messages through Blueprint pipelines, with a transaction scope and an optional outbox. |

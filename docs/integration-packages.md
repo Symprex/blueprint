@@ -55,7 +55,7 @@ does not dispatch or publish an event twice.
 
 Blueprint.Marten does **not** provide built-in multi-tenant document session isolation. S365 services that need per-tenant Marten stores should configure Marten's built-in tenancy (`options.Policies.ForAllDocumentTypes(x => x.TenancyStyle = TenancyStyle.Conjoined)`) and set the tenant ID on the session before the pipeline runs.
 
-**Recommended approach:** Use ASP.NET Core middleware to extract the tenant claim and set it on a scoped `ICurrentTenantAccessor`, then configure Marten to read from that accessor.
+**Recommended approach:** Use ASP.NET Core middleware to extract the tenant claim and set it on a scoped `ICurrentTenantAccessor`, then configure Marten to read from that accessor. A host serving its operations as MCP tools gives that middleware to `MapBlueprintMcp` too ([Blueprint.Mcp](#blueprintmcp)), or a tool call's operation is given no tenant.
 
 ---
 
@@ -661,6 +661,132 @@ services.AddBlueprintHttpClient<TargetServiceApp>(client =>
 
 ---
 
+## Blueprint.Mcp
+
+**NuGet:** `Blueprint.Mcp` | **Source:** `src/Blueprint.Mcp`
+
+Serves a Blueprint app's operations as Model Context Protocol tools, over the official C# MCP SDK
+(`ModelContextProtocol.AspNetCore`) and its Streamable HTTP transport (D22). It is a package of its own so that only an
+app that serves MCP takes the SDK.
+
+### What It Provides
+
+| Abstraction | Member | Purpose |
+|---|---|---|
+| DI registration | `AddBlueprintMcp()` | Registers the app's MCP server, stateless, giving each MCP endpoint its own app's tools |
+| Endpoint mapping | `MapBlueprintMcp<TApp>(path)` | Serves one tool per operation `TApp` exposes over HTTP at `path` |
+| Operation middleware | `MapBlueprintMcp<TApp>(path, operation => …)` | Runs the host's middleware on each operation's request, as on an HTTP request |
+
+### Registration
+
+```csharp
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>(_ => { });
+    services.AddBlueprintMcp();
+}
+
+public void Configure(IApplicationBuilder app)
+{
+    app.UseRouting();
+    app.UseAuthentication();
+
+    app.UseEndpoints(endpoints =>
+    {
+        endpoints.MapBlueprintApi<GatewayBlueprintApp, GatewayBlueprintAppExecutor>("gateway/");
+
+        // After MapBlueprintApi: the tools are made from the API's input schemas.
+        endpoints.MapBlueprintMcp<GatewayBlueprintApp>("gateway/mcp");
+    });
+}
+```
+
+`Blueprint.SourceGenerator.Sample.Gateway` maps it at `gateway/mcp`, and `Blueprint.EndToEnd.Tests/McpToolsTests.cs`
+calls it there with the SDK's own MCP client.
+
+### How It Works
+
+- **Tools.** One per operation with a URL, named by its OpenAPI `operationId`, with the operation's flattened input
+  schema (`IOperationInputSchemaProvider`, D21) as its `inputSchema` and its summary and description as its
+  description. A GET-only operation is annotated `readOnlyHint`. An operation whose schema cannot be made fails
+  `MapBlueprintMcp`, as it fails the OpenAPI document, unless `RenderOpenApiDocumentOnFirstRequest` defers both.
+- **Calls run through the pipeline.** A call makes the HTTP request the URL and method its `operationId` names answer
+  (of an operation answering GET and POST, the method that reads its body): path arguments into the route, query and
+  header arguments as an HTTP caller writes them, and body arguments as the JSON body. The request runs in process
+  through the operation's own endpoint, so the ASP.NET Core authorisation the middleware would apply to that endpoint
+  (its policies, `[Authorize]` data and requirements, or the fallback policy when it has none), binding, validation,
+  authentication and authorisation are those of HTTP. It carries the MCP request's `Authorization` header, scheme, host
+  and path base (so links point at the HTTP API), its connection's addresses, ports and client certificate, and is signed in from that header by the host's default
+  authentication scheme, as the authentication middleware signs in an HTTP request. It is not given the MCP request's
+  `HttpContext.User`, which the MCP endpoint may have signed in with a scheme of its own that the API does not use. It
+  has its own service scope and execution context, as an HTTP request has, carrying only the MCP request's tracing
+  activity and culture; `IHttpContextAccessor` gives its handler, its callbacks and its scope's disposals the
+  operation's request, while middleware around the MCP endpoint still reads the MCP request from it; and its response's `OnStarting` and `OnCompleted`
+  callbacks run, so what it registered for disposal is disposed. An API mapped in a route group is called with the
+  group's prefix and conventions, a route value in the prefix (`tenants/{TenantId}`) taken from the URL the tools were
+  called at, and a HEAD operation's result has its status and no body, as HTTP gives it.
+- **The host's middleware runs only where it is given.** The host's HTTP pipeline runs on the MCP request, not on an
+  operation's request, so middleware that sets up a request's scoped state (the tenant accessor of the
+  [multi-tenancy pattern](#multi-tenancy-gap), say) sets up the MCP request's scope, which the operation does not
+  see. Give that middleware to the tools too, as the host gives it to its pipeline:
+
+  ```csharp
+  app.UseAuthentication();
+  app.UseMiddleware<TenantMiddleware>();
+  app.UseAuthorization();
+
+  app.MapBlueprintMcp<GatewayBlueprintApp>("gateway/mcp", operation => operation.UseMiddleware<TenantMiddleware>());
+  ```
+
+  It runs on each operation's request where it would run between `UseAuthentication` and `UseAuthorization`: once
+  routing has matched the request and the caller is signed in, with the operation's endpoint, user and services, and
+  before the endpoint's authorisation, rate limiting and the operation itself, which run when it calls the next
+  middleware. One that answers without calling it gives the call its response. Routing, authentication, authorisation,
+  rate limiting and the endpoint already run, so give it only middleware that sets up or guards the request.
+- **One mapping per tool set.** The tools run through the endpoints of the `MapBlueprintApi` call mapped last before
+  `MapBlueprintMcp`, so an app mapped under two base paths, each with its own conventions, can have tools for each.
+  `MapBlueprintMcp` refuses to map when that call was another app's, rather than serve its schemas and policies.
+- **Route values are HTTP's.** They are read back from the path the arguments make, as routing reads them, so a segment holding two values (`{From}-{To}`) splits as it does over HTTP. An empty path argument is refused as missing, as no HTTP route matches an empty
+  segment, except a catch-all's, which matches an empty remainder, and a defaulted parameter's, which is given its
+  default. A slash within one reaches the operation escaped (`a%2Fb`), as routing gives it. Dot segments are removed
+  from the path, as a server removes them, so a catch-all given `a/../b` is given `b`, and a value of `..` alone leaves
+  a path the route does not match. The route's constraints
+  (`{Id:int:min(1)}`) and host (`RequireHost`) are evaluated as routing evaluates them, and a value or host they refuse gets routing's 404.
+  The host's own routing then matches the request, and the operation runs only when routing selects its endpoint: a
+  call to `/items/{Name}` with `special` where `/items/special` is mapped too is refused, as HTTP sends that request
+  to the literal route's operation. Routing is given the operation request's connection, and its signed-in user only
+  where the host calls `UseAuthentication` before `UseRouting` (anonymous otherwise, as HTTP routing sees it), so a
+  constraint or matcher policy that reads them decides as it does over HTTP.
+- **Results are the HTTP response.** The body is the tool result's text, read in the charset its content type
+  declares (UTF-8 when it declares none), and its structured content when it is a JSON object. The status is `_meta.httpStatus`, and a 4xx or 5xx is a tool error: an unauthenticated call gets the 401
+  problem body an HTTP caller gets, a call that fails validation the same 422.
+- **Stateless.** Every MCP request is answered within its own HTTP request, so a tool call always runs as the caller
+  that request authenticated. A stateful session would answer later calls as whoever opened it.
+
+### Limits
+
+- Listing tools needs no authentication, as reading the OpenAPI document needs none. Add `.RequireAuthorization()` to
+  the builder `MapBlueprintMcp` returns to require it.
+- An operation whose endpoint requires rate limiting (`RequireRateLimiting`) is refused as a tool: the rate-limiting
+  middleware, which a tool call does not go through, offers no way to apply a named policy outside it. The host's
+  global limiter (`RateLimiterOptions.GlobalLimiter`) is applied to the operation's request, once the caller is
+  authorised and unless its endpoint disables rate limiting, so a quota it keeps per path or per user is spent by a
+  tool call as by the HTTP request. The MCP endpoint must then be exempt from it, with `.DisableRateLimiting()` on the
+  builder `MapBlueprintMcp` returns: otherwise a call would ask for a permit while its MCP request holds one, and
+  wait on itself where both share a concurrency partition, so it is refused. It is applied wherever one is
+  configured, so configure one only in a host that calls `UseRateLimiter`.
+- A caller signed in by anything but the `Authorization` header, such as a cookie, is anonymous to the operation: the
+  operation's request is signed in from that header alone.
+- Only the `Authorization` header is carried from the MCP request; any other header an operation reads must be a tool
+  argument.
+- There are no output schemas yet: `IOperationInputSchemaProvider` gives inputs only.
+- A body that is not text (a file or stream result), text with a content encoding (`gzip`, `br`), or text longer than 1 MiB, is described in the result rather than
+  returned. Its bytes are counted, not kept, so a large download does not fill the server's memory.
+- Blueprint owns the app's MCP server: tools registered with the SDK's own `WithTools` are not served at a
+  `MapBlueprintMcp` endpoint.
+
+---
+
 ## Blueprint.Testing
 
 **NuGet:** `Blueprint.Testing` | **Source:** `src/Blueprint.Testing`
@@ -810,6 +936,7 @@ upstream.Requests.Single().RequestAuthorization.Should().Be(new AuthenticationHe
 | **Blueprint.Rebus** | ✅ | ✅ Activator, subscriptions | ❌ Built-in | Tenant from headers |
 | **Blueprint.Tasks.Hangfire** | ✅ | ✅ Schedule, recurring, retry | ❌ Built-in | Tenant context restore |
 | **Blueprint.HttpClient** | ✅ | ✅ Typed service clients, reflection-free registration, credentials, compile-time call plans | ❌ Built-in | Tenant/tracing headers (delegating handlers) |
+| **Blueprint.Mcp** | ✅ | ✅ One tool per op, same auth as HTTP | ✅ Through the op's own pipeline | Output schemas, file results |
 | **Blueprint.Testing** | ✅ | ✅ Full test infrastructure | ✅ `WithTenant()` | Audit/event assertions |
 
 ### Cross-Cutting: Multi-Tenancy

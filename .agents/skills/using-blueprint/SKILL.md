@@ -428,6 +428,15 @@ A gateway handler that sends an inner operation on unchanged calls `ForwardAsync
 - **Forward every field the inner operation replaces.** A forward sends a fresh `TInner`, so a property the handler leaves unset is sent as its default.
 - **An `[Expose<TInner>]` operation's `OnMap(TInner inner, …)` / `OnMapAsync`** runs on the inner operation after its bindings and before the send. It may be an instance or a `static` method; make one that reads nothing of the gateway operation `static` rather than suppressing CA1822. To fill a property the inner operation requires, `[Hide]` it and assign `inner.X` unconditionally in the hook's own body (not under an `if`, a loop, a `try` or a lambda, nor after an early `return` or `goto`): no placeholder `[Bind(…, Value = …)]`. BPGW035 fails the build when the hook does not assign it, and the forward throws rather than send it null where null cannot be meant. Full detail: `docs/integration-packages.md` (Binding inner properties).
 
+### MCP tools (`Blueprint.Mcp`)
+
+To serve an app's operations as MCP tools, reference `Blueprint.Mcp`, call `services.AddBlueprintMcp()`, and map
+`endpoints.MapBlueprintMcp<MyApp>("mcp")` **after** `MapBlueprintApi` for the same app (the tools are made from its input
+schemas). Each tool is named by its operation's OpenAPI `operationId`, and a call runs through the operation's own HTTP
+endpoint, signed in from the MCP request's `Authorization` header by the host's default scheme, so authentication, authorisation and validation are those of HTTP. The result's
+text is the HTTP response body, `_meta.httpStatus` its status, and a 4xx or 5xx is a tool error. Detail and limits:
+`docs/integration-packages.md#blueprintmcp`.
+
 ## ASP.NET Core infrastructure (consumer responsibility)
 
 Blueprint intentionally delegates standard ASP.NET Core concerns to the consumer rather than wrapping them:
