@@ -174,6 +174,37 @@ public sealed class StreamRequestBindingWireTests
     }
 
     [Fact]
+    public async Task An_init_only_stream_body_declared_by_a_base_is_bound()
+    {
+        // The init accessor used to target the operation, where UnsafeAccessor does not find a base's setter: a 500.
+        await using var host = await StreamRequestHost.StartAsync();
+
+        var (status, body) = await host.SendAsync(new HttpRequestMessage(HttpMethod.Post, "stream-request/inherited/import")
+        {
+            Content = new ByteArrayContent(Encoding.UTF8.GetBytes("inherited")),
+        });
+
+        status.Should().Be(200);
+        body.Should().Be("\"inherited\"");
+    }
+
+    [Fact]
+    public async Task An_init_only_file_and_field_declared_by_a_base_are_bound()
+    {
+        await using var host = await StreamRequestHost.StartAsync();
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent("tagged"), "label" },
+            { FileContent([1, 2, 3], "application/octet-stream"), "file", "a.bin" },
+        };
+
+        var (status, body) = await host.SendAsync(new HttpRequestMessage(HttpMethod.Post, "stream-request/inherited/attach") { Content = form });
+
+        status.Should().Be(200);
+        body.Should().Be("\"tagged:a.bin\"");
+    }
+
+    [Fact]
     public async Task A_multipart_operation_refuses_an_unauthenticated_caller_before_reading_the_form()
     {
         // The form used to be read, and a large file spooled to disk, before the identity check, so an anonymous caller's
@@ -614,5 +645,45 @@ public partial class StreamRequestSecuredAttachCommand : ICommand<string>
     public static Task<string> HandleAsync(StreamRequestSecuredAttachCommand command)
     {
         return Task.FromResult(command.File.FileName);
+    }
+}
+
+/// <summary>A base declaring an init-only stream body, which <see cref="StreamRequestInheritedInitImportCommand"/> inherits.</summary>
+public abstract class StreamRequestInitStreamBase
+{
+    [FromBody]
+    public Stream Content { get; init; } = Stream.Null;
+}
+
+/// <summary>An import whose init-only stream body is declared by its base.</summary>
+[AllowAnonymous]
+[RootLink("/stream-request/inherited/import")]
+[HttpPost]
+public partial class StreamRequestInheritedInitImportCommand : StreamRequestInitStreamBase, ICommand<string>
+{
+    public static async Task<string> HandleAsync(StreamRequestInheritedInitImportCommand command)
+    {
+        using var reader = new StreamReader(command.Content);
+        return await reader.ReadToEndAsync();
+    }
+}
+
+/// <summary>A base declaring an init-only file and field, which <see cref="StreamRequestInheritedInitAttachCommand"/> inherits.</summary>
+public abstract class StreamRequestInitFormBase
+{
+    public IFormFile? File { get; init; }
+
+    public string? Label { get; init; }
+}
+
+/// <summary>An upload whose init-only file and field are declared by its base.</summary>
+[AllowAnonymous]
+[RootLink("/stream-request/inherited/attach")]
+[HttpPost]
+public partial class StreamRequestInheritedInitAttachCommand : StreamRequestInitFormBase, ICommand<string>
+{
+    public static Task<string> HandleAsync(StreamRequestInheritedInitAttachCommand command)
+    {
+        return Task.FromResult($"{command.Label}:{command.File?.FileName}");
     }
 }

@@ -186,10 +186,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
         // assign route/query/header/cookie/body values after construction.
         if (initEntries is not null)
         {
-            var operationTypeFull = operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
             context.AddDeferredClassMember(pipelineClass =>
-                WriteUnsafeAccessorSetters(pipelineClass, operationTypeFull, initEntries));
+                WriteUnsafeAccessorSetters(pipelineClass, operationType, initEntries));
         }
 
         // A stream or multipart body is bound inline by RenderPopulation, with no JSON reader.
@@ -1658,7 +1656,7 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
     /// </summary>
     private static void WriteUnsafeAccessorSetters(
         ClassBuilder pipelineClass,
-        string operationTypeFull,
+        INamedTypeSymbol operationType,
         List<PropertyOwnershipEntry> initEntries)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -1670,6 +1668,8 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 continue;
             }
 
+            var operationTypeFull = GetSetterDeclaringType(operationType, entry.PropertyName)
+                .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var propertyTypeFull = entry.TypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var methodName = $"_SetInit_{entry.PropertyName}";
 
@@ -1682,6 +1682,25 @@ public sealed class PropertyOwnershipModule : IBlueprintSourceGeneratorModule, I
                 .AddParameter(propertyTypeFull, "value")
                 .AddAttribute($"System.Runtime.CompilerServices.UnsafeAccessor(System.Runtime.CompilerServices.UnsafeAccessorKind.Method, Name = \"set_{entry.PropertyName}\")");
         }
+    }
+
+    /// <summary>
+    /// The type an init-only property's setter is declared on, which an <c>[UnsafeAccessor]</c> must name, since it does not
+    /// search base types: the most-derived type in the operation's hierarchy that declares the property. A property contributed
+    /// by <c>[Expose]</c> is emitted into the operation's own partial, so for one no type in the hierarchy declares, that is the
+    /// operation. Naming the operation for an inherited setter used to fail every request with a <c>MissingMethodException</c>.
+    /// </summary>
+    private static INamedTypeSymbol GetSetterDeclaringType(INamedTypeSymbol operationType, string propertyName)
+    {
+        for (var type = operationType; type is not null; type = type.BaseType)
+        {
+            if (type.GetMembers(propertyName).OfType<IPropertySymbol>().Any(static p => !p.IsStatic))
+            {
+                return type;
+            }
+        }
+
+        return operationType;
     }
 
     private static void WritePopulateFromJsonBodyMethod(
