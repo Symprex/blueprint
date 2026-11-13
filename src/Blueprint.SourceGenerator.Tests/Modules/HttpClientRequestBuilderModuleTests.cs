@@ -972,8 +972,8 @@ public class HttpClientRequestBuilderModuleTests
 
         var source = GetDescriptorSource(result, "SearchItemsQuery");
 
-        source.Should().Contain("foreach (var _item in typed.Ids) { { var s = _item.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"ids=\"");
-        source.Should().Contain("parts.Add(\"numbers=\" + global::System.Uri.EscapeDataString(_item.ToString()!));");
+        source.Should().Contain("foreach (var _item in typed.Ids) { { var s = global::System.Convert.ToString(_item, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) parts.Add(\"ids=\"");
+        source.Should().Contain("parts.Add(\"numbers=\" + global::System.Uri.EscapeDataString(global::System.Convert.ToString(_item, global::System.Globalization.CultureInfo.InvariantCulture)!));");
     }
 
     [Fact]
@@ -1004,9 +1004,9 @@ public class HttpClientRequestBuilderModuleTests
 
         var source = GetDescriptorSource(result, "GetItemQuery");
 
-        source.Should().Contain("{ var s = typed.Id.ToString(); if (!string.IsNullOrEmpty(s))");
-        source.Should().Contain("{ var s = typed.Other.Value.ToString(); if (!string.IsNullOrEmpty(s))");
-        source.Should().Contain("EscapeDataString(typed.Page.ToString()!)");
+        source.Should().Contain("{ var s = global::System.Convert.ToString(typed.Id, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s))");
+        source.Should().Contain("{ var s = global::System.Convert.ToString(typed.Other.Value, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s))");
+        source.Should().Contain("EscapeDataString(global::System.Convert.ToString(typed.Page, global::System.Globalization.CultureInfo.InvariantCulture)!)");
     }
 
     [Fact]

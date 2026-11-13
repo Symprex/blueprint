@@ -348,8 +348,9 @@ public sealed record OpenApiSchemaProjectionContext(
 
             foreach (var entry in ownership.Entries)
             {
-                if (operation.Operation.OperationType.GetProperty(entry.PropertyName, BindingFlags.Public | BindingFlags.Instance) is { } property
-                    && OpenApiOperationRenderingContext.IsRequestBodyEntry(operation.Operation, entry, property, naming))
+                if (Blueprint.Model.MostDerivedProperties.Find(operation.Operation.OperationType, entry.PropertyName) is { } property
+                    && OpenApiOperationRenderingContext.IsRequestBodyEntry(operation.Operation, entry, property, naming)
+                    && !OpenApiOperationRenderingContext.IsStreamingBodyType(property.PropertyType))
                 {
                     yield return property.PropertyType;
                 }
@@ -1195,7 +1196,7 @@ public sealed record OpenApiSchemaProjectionContext(
         // looking up by name from the declaring type (necessary for source-generated
         // serializer contexts where AttributeProvider may be null).
         var clrProperty = property.AttributeProvider as PropertyInfo
-            ?? bodyType.GetProperty(property.Name, BindingFlags.Public | BindingFlags.Instance);
+            ?? Blueprint.Model.MostDerivedProperties.Find(bodyType, property.Name);
 
         if (clrProperty is null)
         {

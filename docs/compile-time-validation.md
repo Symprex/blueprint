@@ -103,6 +103,10 @@ Current property ownership IDs in active use:
 - `BPPO011`: route/query property type uses `[TypeConverter]` instead of the faster `IParsable<T>` / static `TryParse` path. TypeConverter uses exception-based control flow for invalid input (info).
 - `BPPO012`: route template contains a placeholder with no matching operation property, so the generated pipeline would never be able to populate that route segment (error).
 - `BPPO013`: route-bound property is nullable even though route parameters are always required, highlighting a migration contract mismatch before runtime (warning).
+- `BPPO014`: a body-owned `Stream` property is handed the whole request body (#71), so no other property of the operation can be read from the body — not a JSON property, a file or a route placeholder that falls back to the body (error).
+- `BPPO015`: a `Stream` or `IFormFile` property on an operation that also answers GET, which has no body to read it from (error).
+- `BPPO016`: a body property of an operation with an `IFormFile` property is a `multipart/form-data` field, parsed as a query-string value is, so its type must be one the query string can carry: a scalar, an enum or an array of either (error).
+- `BPPO017`: a property read from a stream or `multipart/form-data` body has no public getter, so a generated client cannot send it, or a private or protected setter, so the generated pipeline cannot set it; an init-only setter is fine (error).
 
 ### Operation discovery and host diagnostics
 

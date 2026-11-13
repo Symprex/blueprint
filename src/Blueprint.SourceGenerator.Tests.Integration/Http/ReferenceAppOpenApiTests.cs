@@ -45,6 +45,22 @@ public class ReferenceAppOpenApiTests
     }
 
     [Fact]
+    public async Task When_openapi_endpoint_invoked_then_a_required_file_is_required_without_demanding_a_non_empty_one()
+    {
+        // A required file is only checked for presence; mapping it as a string used to infer a non-empty string's minLength.
+        var (json, _) = await InvokeOpenApiEndpointAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var reference = doc.RootElement.GetProperty("paths").GetProperty("/templates/{Id}/attachments").GetProperty("post")
+            .GetProperty("requestBody").GetProperty("content").GetProperty("multipart/form-data").GetProperty("schema")
+            .GetProperty("$ref").GetString()!;
+        var schema = doc.RootElement.GetProperty("components").GetProperty("schemas").GetProperty(reference["#/components/schemas/".Length..]);
+
+        schema.GetProperty("required").EnumerateArray().Select(static r => r.GetString()).Should().Contain("file");
+        schema.GetProperty("properties").GetProperty("file").TryGetProperty("minLength", out _).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task When_openapi_endpoint_invoked_then_templates_path_has_get_and_post()
     {
         var (json, _) = await InvokeOpenApiEndpointAsync();

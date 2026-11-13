@@ -35,6 +35,7 @@ public partial class SampleBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(TemplateVersionApiResource[]))]
 [JsonSerializable(typeof(TemplatePreviewApiResource))]
 [JsonSerializable(typeof(TemplatePreviewRecipient))]
+[JsonSerializable(typeof(TemplateUploadApiResource))]
 [JsonSerializable(typeof(TemplateNotificationRuleApiResource))]
 [JsonSerializable(typeof(TemplateNotificationRuleApiResource[]))]
 [JsonSerializable(typeof(ExportJobApiResource))]

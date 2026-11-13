@@ -235,7 +235,7 @@ Blueprint's `PropertyOwnershipModule` generates HTTP request binding code at com
 | `[FromQuery]` | Query string `?name=` | Optional `Name` property overrides the parameter name |
 | `[FromHeader("X-Header")]` | HTTP header | Header name required (doesn't follow C# conventions) |
 | `[FromCookie("name")]` | HTTP cookie | Cookie name required |
-| `[FromBody]` | JSON request body | Marker; uses camelCase property name for field matching |
+| `[FromBody]` | JSON request body | Marker; uses camelCase property name for field matching. On a `Stream`, the raw body (see Streaming request bodies) |
 
 ### Convention-based binding
 
@@ -264,6 +264,34 @@ public partial class UpdateTemplateCommand : ICommand<ResourceEventResult<Templa
     public string? CorrelationId { get; set; }
 }
 ```
+
+### Streaming request bodies
+
+An operation's body is JSON unless one of its body properties says otherwise, by its type:
+
+- **`[FromBody] Stream`** — the property is handed the request body itself, unread, of any content type. It must be the operation's only body property (BPPO014); its other properties come from the route, query string or headers. OpenAPI documents the body as `application/octet-stream`, a binary string.
+- **`IFormFile`** — the body is `multipart/form-data` (or URL-encoded): each `IFormFile` property is the file part of its camel-case name, and every other body property is the form field of that name, parsed as a query-string value is (a scalar, an enum or an array of either; BPPO016). A JSON body is refused with a 415. ASP.NET Core's form reader and its `FormOptions` limits apply: a large file is spooled to disk, so memory stays bounded. Unless the operation is `[AllowAnonymous]`, the caller's identity is checked before the form is read, so an anonymous caller gets a 401 without anything being spooled. OpenAPI documents the body as `multipart/form-data`, files as binary strings.
+
+Neither can be on an operation that answers GET (BPPO015). Every property read from such a body needs a public getter, since the clients build the body from it, and a public or init-only setter, since the pipeline sets it (BPPO017). The generated clients — a `[BlueprintClient]`, `BlueprintHttpClient<TApp>` and a gateway's forward — send such an operation as a stream or a form too, never as JSON, through the `IHttpRequestBodyBuilder` the generator implements on it. A gateway that exposes or forwards a `Stream` body therefore streams it upstream as it arrives. A multipart one is different: the gateway's own host reads the whole inbound form first, spooling large files to disk, and only then sends the files upstream, so nothing reaches the upstream until the caller has sent everything:
+
+```csharp
+[RootLink("/templates/{Id}/source")]
+[HttpPut]
+public partial class ImportTemplateSourceCommand : ICommand<TemplateUploadApiResource>
+{
+    public required string Id { get; set; }
+
+    [FromBody]
+    public Stream Content { get; set; } = Stream.Null;
+}
+
+[Expose<ImportTemplateSourceCommand>]   // in the gateway: the inbound body goes upstream unbuffered
+[RootLink("/templates/{Id}/source")]
+[HttpPut]
+public partial class ImportGatewayTemplateSourceCommand : ICommand<TemplateUploadApiResource>;
+```
+
+A body sent as content takes the operation's streams over: sending reads them, and disposing the request disposes them.
 
 ## Auditing and observability contract
 

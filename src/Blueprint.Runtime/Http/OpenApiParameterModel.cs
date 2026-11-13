@@ -145,6 +145,29 @@ public sealed record OpenApiRequestBodyModel(
     /// Gets the description of the body's schema component, or <see langword="null"/> for none.
     /// </summary>
     public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets the media type the body is sent as (#71, D19): <c>application/json</c> for an operation's JSON properties,
+    /// <c>multipart/form-data</c> when it has an <c>IFormFile</c> property, whose files are binary strings beside its other
+    /// properties' fields, and <c>application/octet-stream</c> when a <c>Stream</c> property takes the whole body, which then
+    /// has no <see cref="Properties"/> and is described as one binary string.
+    /// </summary>
+    public string MediaType { get; init; } = OpenApiRequestBodyMediaTypes.Json;
+}
+
+/// <summary>
+/// The media types an operation's request body is documented with; see <see cref="OpenApiRequestBodyModel.MediaType"/>.
+/// </summary>
+public static class OpenApiRequestBodyMediaTypes
+{
+    /// <summary>A JSON object of the operation's body properties.</summary>
+    public const string Json = "application/json";
+
+    /// <summary>A form whose files are an operation's <c>IFormFile</c> properties and whose fields are its other body properties.</summary>
+    public const string MultipartFormData = "multipart/form-data";
+
+    /// <summary>The raw body a <c>Stream</c> property is handed.</summary>
+    public const string OctetStream = "application/octet-stream";
 }
 
 /// <summary>

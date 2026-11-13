@@ -165,4 +165,52 @@ internal static class PropertyOwnershipDiagnosticDescriptors
         category: "PropertyOwnership",
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO014: A body-owned <c>Stream</c> property is handed the request body itself, unread, so nothing else can be read
+    /// from that body: not a JSON property, not a form field and not a file.
+    /// </summary>
+    public static readonly DiagnosticDescriptor StreamBodyWithOtherBodyProperty = new(
+        id: "BPPO014",
+        title: "Stream body with another body property",
+        messageFormat: "Property '{0}' on operation '{1}' is bound to the whole request body as a stream, so property '{2}' cannot also be read from the body. Bind '{2}' from the route, query string or a header instead.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO015: A <c>Stream</c> or <c>IFormFile</c> property is read from a request body, which a GET does not carry, and the
+    /// operation's client would have no body to send it in.
+    /// </summary>
+    public static readonly DiagnosticDescriptor StreamingBodyOnGet = new(
+        id: "BPPO015",
+        title: "Stream or file property on an operation that answers GET",
+        messageFormat: "Property '{0}' on operation '{1}' is of type '{2}', which is read from the request body, but the operation answers GET, which has none. Remove GET from its methods.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO016: An operation with an <c>IFormFile</c> property is bound from a <c>multipart/form-data</c> body, whose other
+    /// properties are form fields: text, parsed as a query-string value is, so a type no query string can carry cannot be one.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedFormFieldPropertyType = new(
+        id: "BPPO016",
+        title: "Unsupported form field property type",
+        messageFormat: "Property '{0}' on operation '{1}' is read from a multipart/form-data field because the operation has a file property, but its type '{2}' cannot be parsed from a form field. Use a scalar, an enum or an array of either.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPPO017: A client sends a stream or multipart body built from the operation's own properties, the stream it holds or
+    /// each file and field, so every property read from that body needs a public getter; and the generated pipeline sets each one, so it needs a public or init-only setter.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnreadableStreamingBodyProperty = new(
+        id: "BPPO017",
+        title: "Stream or multipart body property has no public getter or setter",
+        messageFormat: "Property '{0}' on operation '{1}' is read from a stream or multipart/form-data body, which a client builds from the operation's properties, but it has no public getter, or a setter the generated pipeline cannot call. Give it a public getter and a public or init-only setter.",
+        category: "PropertyOwnership",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
