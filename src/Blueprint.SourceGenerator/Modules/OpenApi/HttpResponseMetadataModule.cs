@@ -361,7 +361,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         {
             responses.Add(CreateResponse(factory.HttpStatus, true, "Blueprint.ApiException", problemDetailsBody) with
             {
-                ProblemFactoryReferences = ImmutableArray.Create(factory.FieldReference),
+                ProblemExamples = factory.ProblemExample is { } example ? ImmutableArray.Create(example) : ImmutableArray<string>.Empty,
             });
         }
 
@@ -574,7 +574,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
                 .Distinct(StringComparer.Ordinal)
                 .ToImmutableArray(),
             responseGroup
-                .SelectMany(static response => response.ProblemFactoryReferences.IsDefault ? ImmutableArray<string>.Empty : response.ProblemFactoryReferences)
+                .SelectMany(static response => response.ProblemExamples.IsDefault ? ImmutableArray<string>.Empty : response.ProblemExamples)
                 .Distinct(StringComparer.Ordinal)
                 .ToImmutableArray());
     }
@@ -854,19 +854,16 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
 
     /// <summary>
     /// Renders one <c>OperationHttpResponseMetadata</c> construction. A response with <c>ApiExceptionFactory</c> fields
-    /// also passes each field's title and type, read from the field itself when the descriptor is built, as legacy's
+    /// also passes each field's title and type (<see cref="ApiExceptionFactoryRegistration.ProblemExample"/>), as legacy's
     /// <c>ApiExceptionFactoryResponseConvention</c> read the field's value.
     /// </summary>
     private static string RenderResponse(HttpResponseMetadataRegistration response)
     {
         var arguments = $"{response.StatusCode}, {(response.HasResponseBody ? "true" : "false")}, {RenderStringArray(response.ResultTypeNames)}, {RenderStringArray(response.BodyTypeNames)}";
 
-        if (!response.ProblemFactoryReferences.IsDefaultOrEmpty)
+        if (!response.ProblemExamples.IsDefaultOrEmpty)
         {
-            var examples = response.ProblemFactoryReferences
-                .Select(static reference => $"new global::Blueprint.Model.OperationProblemExample({reference}.Title, {reference}.Type)");
-
-            arguments += $", global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", examples)})";
+            arguments += $", global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", response.ProblemExamples)})";
         }
 
         if (!response.ContentTypes.IsDefaultOrEmpty)

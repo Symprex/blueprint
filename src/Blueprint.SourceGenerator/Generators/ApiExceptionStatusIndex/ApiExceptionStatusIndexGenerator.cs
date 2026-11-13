@@ -9,10 +9,11 @@ using Microsoft.CodeAnalysis.Text;
 namespace Blueprint.SourceGenerator.Generators.ApiExceptionStatusIndex;
 
 /// <summary>
-/// Lightweight incremental generator that scans all <c>public static readonly ApiExceptionFactory</c>
-/// fields in the compilation and emits assembly-level attributes recording their HTTP status codes.
-/// Downstream compilations (via project references) can then read these attributes to resolve
-/// cross-assembly field references without needing syntax access.
+/// Lightweight incremental generator that scans all public and internal <c>static ApiExceptionFactory</c> fields and
+/// properties in the compilation and emits assembly-level attributes recording
+/// their HTTP status codes, and their titles and types where they are constants. Downstream compilations (via project
+/// references) can then read these attributes to resolve cross-assembly references without needing syntax access, as a
+/// gateway operation does to document the factories of the inner operation it exposes (Symprex/blueprint#67).
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, ITrackedSourceGenerator
@@ -51,6 +52,17 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
                         /// <param name="fieldName">The name of the ApiExceptionFactory field.</param>
                         /// <param name="httpStatusCode">The resolved HTTP status code.</param>
                         public BlueprintApiExceptionStatusAttribute(string containingTypeMetadataName, string fieldName, int httpStatusCode) { }
+
+                        /// <summary>
+                        /// Initializes a new instance of the <see cref="BlueprintApiExceptionStatusAttribute"/> class, for a
+                        /// field whose title or type is a constant.
+                        /// </summary>
+                        /// <param name="containingTypeMetadataName">The metadata name of the type containing the field.</param>
+                        /// <param name="fieldName">The name of the ApiExceptionFactory field.</param>
+                        /// <param name="httpStatusCode">The resolved HTTP status code.</param>
+                        /// <param name="title">The factory's problem title, or null when it is not a constant.</param>
+                        /// <param name="type">The factory's problem type, or null when it is not a constant.</param>
+                        public BlueprintApiExceptionStatusAttribute(string containingTypeMetadataName, string fieldName, int httpStatusCode, string title, string type) { }
                     }
                 }
                 """;
@@ -60,136 +72,87 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
                 SourceText.From(attributeSource, Encoding.UTF8));
         });
 
-        // Scan for field declarations on classes containing ApiExceptionFactory fields
+        // Static ApiExceptionFactory fields and properties another assembly can see: public, or internal for one that
+        // InternalsVisibleTo admits. Metadata exposes an auto-property, not its backing field, so a consumer looks it up by
+        // the property's name.
         var fieldEntries = context.SyntaxProvider
             .CreateSyntaxProvider(
-                predicate: static (s, _) => s is FieldDeclarationSyntax
+                predicate: static (s, _) => s switch
                 {
-                    Modifiers: var mods,
-                    Declaration.Type: var type,
-                } && mods.Any(SyntaxKind.PublicKeyword)
-                  && mods.Any(SyntaxKind.StaticKeyword)
-                  && mods.Any(SyntaxKind.ReadOnlyKeyword)
-                  && type.ToString().Contains("ApiExceptionFactory"),
-                transform: static (ctx, ct) => TransformField(ctx, ct))
-            .Where(static entry => entry is not null)
+                    // Readonly or not: a consumer reads any static field, as legacy's GetFields did.
+                    FieldDeclarationSyntax { Modifiers: var mods, Declaration.Type: var type } =>
+                        CanBeReferenced(mods)
+                        && mods.Any(SyntaxKind.StaticKeyword)
+                        && type.ToString().Contains("ApiExceptionFactory"),
+
+                    // An auto-property's initialiser or a getter-backed property's body, such as a [TranslateError] target.
+                    PropertyDeclarationSyntax { Modifiers: var mods, Type: var type } =>
+                        CanBeReferenced(mods)
+                        && mods.Any(SyntaxKind.StaticKeyword)
+                        && type.ToString().Contains("ApiExceptionFactory"),
+                    _ => false,
+                },
+                transform: static (ctx, ct) => TransformMember(ctx, ct))
+            .SelectMany(static (entries, _) => entries)
             .WithTrackingName(Stages.InitialExtraction)
             .Collect()
             .WithTrackingName(Stages.Collected);
 
-        context.RegisterSourceOutput(fieldEntries, static (spc, entries) => EmitAssemblyAttributes(spc, entries!));
+        context.RegisterSourceOutput(fieldEntries, static (spc, entries) => EmitAssemblyAttributes(spc, entries));
     }
 
-    private static ApiExceptionFieldEntry? TransformField(GeneratorSyntaxContext ctx, System.Threading.CancellationToken ct)
+    private static bool CanBeReferenced(SyntaxTokenList modifiers)
     {
-        var fieldDecl = (FieldDeclarationSyntax)ctx.Node;
+        return modifiers.Any(SyntaxKind.PublicKeyword) || modifiers.Any(SyntaxKind.InternalKeyword);
+    }
 
-        foreach (var variable in fieldDecl.Declaration.Variables)
+    private static ImmutableArray<ApiExceptionFieldEntry> TransformMember(GeneratorSyntaxContext ctx, CancellationToken ct)
+    {
+        var symbols = ctx.Node switch
+        {
+            FieldDeclarationSyntax fieldDecl => fieldDecl.Declaration.Variables.Select(variable => ctx.SemanticModel.GetDeclaredSymbol(variable, ct)).ToArray(),
+            PropertyDeclarationSyntax propertyDecl => [ctx.SemanticModel.GetDeclaredSymbol(propertyDecl, ct)],
+            _ => [],
+        };
+
+        var entries = ImmutableArray.CreateBuilder<ApiExceptionFieldEntry>();
+
+        foreach (var symbol in symbols)
         {
             ct.ThrowIfCancellationRequested();
 
-            if (ctx.SemanticModel.GetDeclaredSymbol(variable) is not IFieldSymbol fieldSymbol)
+            var memberType = symbol switch
+            {
+                IFieldSymbol field => field.Type,
+                IPropertySymbol property => property.Type,
+                _ => null,
+            };
+
+            if (memberType is null
+                || (memberType.ToDisplayString() != "Blueprint.ApiExceptionFactory" && memberType.ToFullMetadataName() != ApiExceptionFactoryMetadataName))
             {
                 continue;
             }
 
-            // Verify the type IS ApiExceptionFactory
-            if (fieldSymbol.Type.ToDisplayString() != "Blueprint.ApiExceptionFactory"
-                && fieldSymbol.Type.ToFullMetadataName() != ApiExceptionFactoryMetadataName)
+            // The referenced factory can be declared in another file, which needs that file's semantic model.
+            var compilation = ctx.SemanticModel.Compilation;
+            if (ApiExceptionFactoryResolver.TryResolve(
+                    symbol!,
+                    tree => tree == ctx.SemanticModel.SyntaxTree ? ctx.SemanticModel : compilation.ContainsSyntaxTree(tree) ? compilation.GetSemanticModel(tree) : null,
+                    out var factory)
+                && factory.HttpStatus > 0)
             {
-                continue;
-            }
-
-            // Try to resolve status code from the initializer
-            if (variable.Initializer?.Value is not { } initExpr)
-            {
-                continue;
-            }
-
-            if (TryResolveFromInitializer(initExpr, ctx.SemanticModel, out var httpStatus))
-            {
-                var containingType = fieldSymbol.ContainingType;
-                var metadataName = containingType.ToFullMetadataName();
-
-                return new ApiExceptionFieldEntry(metadataName, fieldSymbol.Name, httpStatus);
+                entries.Add(new ApiExceptionFieldEntry(symbol!.ContainingType.ToFullMetadataName(), symbol.Name, factory.HttpStatus, factory.Title, factory.Type));
             }
         }
 
-        return null;
+        return entries.ToImmutable();
     }
 
-    private static bool TryResolveFromInitializer(
-        ExpressionSyntax initExpr,
-        SemanticModel semanticModel,
-        out int httpStatus)
-    {
-        httpStatus = 0;
-
-        // Direct constructor: new ApiExceptionFactory("title", "type", statusCode)
-        var argumentList = initExpr switch
-        {
-            ObjectCreationExpressionSyntax creation => creation.ArgumentList,
-            ImplicitObjectCreationExpressionSyntax implicitCreation => implicitCreation.ArgumentList,
-            _ => null,
-        };
-
-        if (argumentList is { Arguments.Count: >= 3 })
-        {
-            return TryResolveStatusCodeFromExpression(argumentList.Arguments[2].Expression, out httpStatus);
-        }
-
-        // Follow one-hop field references within the same compilation
-        if (initExpr is MemberAccessExpressionSyntax or IdentifierNameSyntax)
-        {
-            var symbolInfo = semanticModel.GetSymbolInfo(initExpr);
-            if (symbolInfo.Symbol is IFieldSymbol referencedField
-                && referencedField.DeclaringSyntaxReferences.Length > 0)
-            {
-                var refSyntax = referencedField.DeclaringSyntaxReferences[0].GetSyntax();
-                if (refSyntax is VariableDeclaratorSyntax { Initializer.Value: var refInit })
-                {
-                    return TryResolveFromInitializer(refInit, semanticModel, out httpStatus);
-                }
-            }
-
-            // Cross-assembly fallback: name-based heuristic
-            if (symbolInfo.Symbol is IFieldSymbol crossAssemblyField
-                && crossAssemblyField.DeclaringSyntaxReferences.Length == 0)
-            {
-                return WellKnownHttpStatusCodes.TryGetValue(crossAssemblyField.Name, out httpStatus);
-            }
-        }
-
-        return false;
-    }
-
-    private static bool TryResolveStatusCodeFromExpression(ExpressionSyntax expression, out int httpStatus)
-    {
-        httpStatus = 0;
-
-        switch (expression)
-        {
-            case LiteralExpressionSyntax literal when literal.Token.Value is int intValue:
-                httpStatus = intValue;
-                return intValue > 0;
-
-            case CastExpressionSyntax castExpression:
-                return TryResolveStatusCodeFromExpression(castExpression.Expression, out httpStatus);
-
-            case MemberAccessExpressionSyntax memberAccess:
-                return WellKnownHttpStatusCodes.TryGetValue(memberAccess.Name.Identifier.Text, out httpStatus);
-
-            default:
-                return false;
-        }
-    }
-
-    private static void EmitAssemblyAttributes(SourceProductionContext spc, ImmutableArray<ApiExceptionFieldEntry?> entries)
+    private static void EmitAssemblyAttributes(SourceProductionContext spc, ImmutableArray<ApiExceptionFieldEntry> entries)
     {
         // Deduplicate and sort for deterministic output
         var uniqueEntries = entries
-            .Where(static e => e is not null)
-            .Cast<ApiExceptionFieldEntry>()
             .Distinct()
             .OrderBy(static e => e.ContainingTypeMetadataName, StringComparer.Ordinal)
             .ThenBy(static e => e.FieldName, StringComparer.Ordinal)
@@ -206,40 +169,27 @@ public sealed class ApiExceptionStatusIndexGenerator : IIncrementalGenerator, IT
 
         foreach (var entry in uniqueEntries)
         {
-            sb.AppendLine($"[assembly: global::Blueprint.Model.Attributes.BlueprintApiExceptionStatus(\"{entry.ContainingTypeMetadataName}\", \"{entry.FieldName}\", {entry.HttpStatus})]");
+            // Each of the title and type is indexed where it is a constant, so a known type is kept with a title that is not.
+            var titleAndType = entry.Title is not null || entry.Type is not null
+                ? $", {FormatNullableLiteral(entry.Title)}, {FormatNullableLiteral(entry.Type)}"
+                : string.Empty;
+
+            sb.AppendLine($"[assembly: global::Blueprint.Model.Attributes.BlueprintApiExceptionStatus(\"{entry.ContainingTypeMetadataName}\", \"{entry.FieldName}\", {entry.HttpStatus}{titleAndType})]");
         }
 
         spc.AddSource("Blueprint.ApiExceptionStatuses.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
     }
 
-    /// <summary>
-    /// Well-known HttpStatusCode member names for name-based resolution.
-    /// </summary>
-    private static readonly Dictionary<string, int> WellKnownHttpStatusCodes = new(StringComparer.Ordinal)
+    private static string FormatNullableLiteral(string? value)
     {
-        ["OK"] = 200,
-        ["Created"] = 201,
-        ["Accepted"] = 202,
-        ["NoContent"] = 204,
-        ["BadRequest"] = 400,
-        ["Unauthorized"] = 401,
-        ["Forbidden"] = 403,
-        ["NotFound"] = 404,
-        ["MethodNotAllowed"] = 405,
-        ["Conflict"] = 409,
-        ["Gone"] = 410,
-        ["UnprocessableEntity"] = 422,
-        ["TooManyRequests"] = 429,
-        ["InternalServerError"] = 500,
-        ["NotImplemented"] = 501,
-        ["BadGateway"] = 502,
-        ["ServiceUnavailable"] = 503,
-    };
+        return value is null ? "null" : SymbolDisplay.FormatLiteral(value, quote: true);
+    }
 
     /// <summary>
-    /// Represents a discovered ApiExceptionFactory field with its resolved HTTP status code.
+    /// Represents a discovered ApiExceptionFactory field or auto-property with its resolved HTTP status code, and its title
+    /// and type where they are constants.
     /// </summary>
-    private sealed record ApiExceptionFieldEntry(string ContainingTypeMetadataName, string FieldName, int HttpStatus);
+    private sealed record ApiExceptionFieldEntry(string ContainingTypeMetadataName, string FieldName, int HttpStatus, string? Title, string? Type);
 
     /// <summary>
     /// Incremental generator tracking stage names for cacheability verification.

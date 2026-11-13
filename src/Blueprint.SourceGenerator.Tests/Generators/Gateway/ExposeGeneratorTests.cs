@@ -1112,7 +1112,7 @@ public class ExposeGeneratorTests
             .Single(s => s.HintName == hintName).SourceText;
     }
 
-    internal static AllGeneratorsRun RunAllGenerators(string[] sources, MetadataReference? innerContract = null)
+    internal static AllGeneratorsRun RunAllGenerators(string[] sources, MetadataReference? innerContract = null, params MetadataReference[] additionalReferences)
     {
         var generators = new IIncrementalGenerator[]
         {
@@ -1122,7 +1122,7 @@ public class ExposeGeneratorTests
             new TypedClientGenerator(),
         };
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
-        var compilation = CreateCompilation(sources, innerContract);
+        var compilation = CreateCompilation(sources, innerContract, additionalReferences);
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             generators.Select(static g => g.AsSourceGenerator()),
@@ -1202,10 +1202,10 @@ public class ExposeGeneratorTests
         return MetadataReference.CreateFromImage(stream.ToArray());
     }
 
-    internal static CSharpCompilation CreateCompilation(string[] sources, MetadataReference? innerContract = null)
+    internal static CSharpCompilation CreateCompilation(string[] sources, MetadataReference? innerContract = null, params MetadataReference[] additionalReferences)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Diagnose);
-        var references = TestHelpers.CreateMetadataReferences().Append(innerContract ?? _innerContract.Value);
+        var references = TestHelpers.CreateMetadataReferences().Append(innerContract ?? _innerContract.Value).Concat(additionalReferences);
 
         return CSharpCompilation.Create(
             "Gateway",

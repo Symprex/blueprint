@@ -10,9 +10,9 @@ namespace Blueprint.SourceGenerator.Modules;
 /// <param name="HasResponseBody">Whether the response family writes a body.</param>
 /// <param name="ResultTypeNames">The semantic result type names contributing to this response.</param>
 /// <param name="BodyTypeNames">The compile-time body payload types currently known for this response.</param>
-/// <param name="ProblemFactoryReferences">
-/// The fully qualified <c>ApiExceptionFactory</c> fields contributing to this response
-/// (<see cref="ApiExceptionFactoryRegistration.FieldReference"/>). Default or empty when there are none.
+/// <param name="ProblemExamples">
+/// The <c>OperationProblemExample</c> constructions documenting the <c>ApiExceptionFactory</c> fields contributing to this
+/// response (<see cref="ApiExceptionFactoryRegistration.ProblemExample"/>). Default or empty when there are none.
 /// </param>
 /// <param name="ContentTypes">
 /// The media types a streamed body of this response is sent as, from the operation's <c>[ProducesContentType]</c>. Default
@@ -23,5 +23,5 @@ internal sealed record HttpResponseMetadataRegistration(
     bool HasResponseBody,
     ImmutableArray<string> ResultTypeNames,
     ImmutableArray<string> BodyTypeNames,
-    ImmutableArray<string> ProblemFactoryReferences = default,
+    ImmutableArray<string> ProblemExamples = default,
     ImmutableArray<string> ContentTypes = default);
