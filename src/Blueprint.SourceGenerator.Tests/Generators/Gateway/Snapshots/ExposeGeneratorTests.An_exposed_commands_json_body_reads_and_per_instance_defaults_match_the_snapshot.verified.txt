@@ -5,6 +5,7 @@
 
 namespace Gateway;
 
+/// <inheritdoc cref="global::Inner.TagWidgetCommand"/>
 partial class TagGatewayWidgetCommand
 {
     [global::System.ThreadStatic]

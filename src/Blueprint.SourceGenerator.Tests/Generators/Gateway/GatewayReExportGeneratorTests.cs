@@ -1,0 +1,825 @@
+using Blueprint.SourceGenerator.Generators.ApiExceptionStatusIndex;
+using Blueprint.SourceGenerator.Generators.Descriptors;
+using FluentAssertions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+
+namespace Blueprint.SourceGenerator.Tests.Generators.Gateway;
+
+/// <summary>
+/// A gateway operation re-exports its inner operation's errors and documentation (Symprex/blueprint#67): the inner
+/// operation's <c>ApiExceptionFactory</c> members are documented on the exposing operation's responses as though declared
+/// there, less those a <c>[TranslateError]</c> answers with the gateway's own (D14), and an undocumented exposing operation
+/// takes the inner operation's docs and description (D15).
+/// </summary>
+public class GatewayReExportGeneratorTests
+{
+    private const string InnerSource = """
+        namespace Inner
+        {
+            using System.ComponentModel;
+            using System.Net;
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            public class WidgetResult : ApiResource
+            {
+                public string Id { get; set; } = "";
+            }
+
+            /// <summary>Renames a widget.</summary>
+            /// <remarks>Only the name changes.</remarks>
+            [RootLink("/widgets/{Id}")]
+            [HttpPut]
+            [Description("Rename a widget.")]
+            public partial class RenameWidgetCommand : ICommand<WidgetResult>
+            {
+                public static readonly ApiExceptionFactory NotFound = new("Widget not found", "widget_not_found", HttpStatusCode.NotFound);
+
+                public static readonly ApiExceptionFactory Conflict = new("Widget renamed concurrently", "widget_conflict", 409);
+
+                /// <summary>The widget to rename.</summary>
+                public string Id { get; set; } = "";
+
+                /// <summary>The widget's new name.</summary>
+                public string Name { get; set; } = "";
+            }
+        }
+        """;
+
+    private const string ClientSource = """
+        namespace Gateway
+        {
+            using Blueprint.HttpClient;
+
+            [BlueprintClient]
+            [BlueprintClientInclude(typeof(Inner.RenameWidgetCommand))]
+            public partial class WidgetApi;
+        }
+        """;
+
+    private const string AppSource = """
+        namespace Gateway
+        {
+            using Blueprint.Model;
+
+            [BlueprintAppScan]
+            public partial class GatewayApp : BlueprintApp;
+        }
+        """;
+
+    private const string GatewaySource = """
+        namespace Gateway
+        {
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            [Expose<Inner.RenameWidgetCommand>]
+            [AllowAnonymous]
+            [RootLink("/gateway/widgets/{Id}")]
+            [HttpPut]
+            public partial class RenameGatewayWidgetCommand : ICommand<Inner.WidgetResult>;
+        }
+        """;
+
+    private const string TranslatingGatewaySource = """
+        namespace Gateway
+        {
+            using System.Net;
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            [Expose<Inner.RenameWidgetCommand>]
+            [AllowAnonymous]
+            [RootLink("/gateway/widgets/{Id}")]
+            [HttpPut]
+            [TranslateError("widget_not_found", nameof(WidgetGone))]
+            public partial class RenameGatewayWidgetCommand : ICommand<Inner.WidgetResult>
+            {
+                public static readonly ApiExceptionFactory WidgetGone = new("Widget gone", "widget_gone", HttpStatusCode.Gone);
+            }
+        }
+        """;
+
+    private const string DocumentedGatewaySource = """
+        namespace Gateway
+        {
+            using System.ComponentModel;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+
+            /// <summary>Renames a widget through the gateway.</summary>
+            [Expose<Inner.RenameWidgetCommand>]
+            [AllowAnonymous]
+            [RootLink("/gateway/widgets/{Id}")]
+            [HttpPut]
+            [Description("Rename a widget via the gateway.")]
+            public partial class RenameGatewayWidgetCommand : ICommand<Inner.WidgetResult>;
+        }
+        """;
+
+    private const string Descriptor = "Gateway.RenameGatewayWidgetCommand_Descriptor.g.cs";
+    private const string ExposedProperties = "Gateway.RenameGatewayWidgetCommand_ExposedProperties.g.cs";
+
+    private const string TitlesClass = "public static class Titles { public static readonly string Teapot = \"I am a teapot\"; }";
+
+    private static readonly Lazy<(byte[] Image, byte[] Documentation)> _indexedInner = new(static () => EmitInner(InnerSource, withIndex: true));
+
+    [Fact]
+    public void An_exposed_operation_documents_its_inner_operations_factories_from_their_assemblys_index()
+    {
+        var run = Run([ClientSource, GatewaySource, AppSource], InnerReference());
+
+        run.EmitErrors.Should().BeEmpty();
+        run.GeneratorErrors.Should().BeEmpty();
+
+        // The index's title and type, as literals: generated code reads nothing from the inner contract to document it.
+        var descriptor = run.Source(Descriptor);
+        descriptor.Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(404, true, global::System.Collections.Immutable.ImmutableArray.Create<string>(\"Blueprint.ApiException\")")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget not found\", \"widget_not_found\")")
+            .And.Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(409, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget renamed concurrently\", \"widget_conflict\")");
+
+        run.DescriptorAndAppReplayedFromCache.Should().BeTrue();
+    }
+
+    [Fact]
+    public void An_inner_factory_a_TranslateError_answers_is_not_documented_and_the_gateways_own_is()
+    {
+        var run = Run([ClientSource, TranslatingGatewaySource, AppSource], InnerReference());
+
+        run.EmitErrors.Should().BeEmpty();
+
+        var descriptor = run.Source(Descriptor);
+        descriptor.Should().NotContain("widget_not_found")
+            .And.NotContain("OperationHttpResponseMetadata(404,")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget renamed concurrently\", \"widget_conflict\")")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(global::Gateway.RenameGatewayWidgetCommand.WidgetGone.Title, global::Gateway.RenameGatewayWidgetCommand.WidgetGone.Type)");
+    }
+
+    [Fact]
+    public void An_inner_factory_its_assembly_indexed_by_status_alone_is_read_from_its_field()
+    {
+        // An inner contract built by an earlier generator indexes the status only. The field is public, so the descriptor
+        // reads its title and type at run time, as it does a factory the operation declares.
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(LegacyIndexedInner()));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(global::Inner.RenameWidgetCommand.NotFound.Title, global::Inner.RenameWidgetCommand.NotFound.Type)");
+    }
+
+    [Fact]
+    public void An_inner_operation_in_the_same_compilation_has_even_its_private_factories_documented_from_their_initialisers()
+    {
+        var sameCompilationInner = InnerSource.Replace("public static readonly ApiExceptionFactory NotFound", "private static readonly ApiExceptionFactory NotFound", StringComparison.Ordinal);
+
+        var run = Run([sameCompilationInner, ClientSource, GatewaySource, AppSource], innerContract: null);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget not found\", \"widget_not_found\")");
+    }
+
+    [Fact]
+    public void An_undocumented_exposed_operation_inherits_its_inner_operations_docs_and_description()
+    {
+        var run = Run([ClientSource, GatewaySource, AppSource], InnerReference());
+
+        run.EmitErrors.Should().BeEmpty();
+
+        // The inheritdoc reaches the gateway's documentation file, where the runtime resolves it against the inner
+        // contract's: Roslyn gives no documentation for a project reference's metadata (D15's spike).
+        run.Source(ExposedProperties).ReplaceLineEndings("\n").Should().Contain("/// <inheritdoc cref=\"global::Inner.RenameWidgetCommand\"/>\n[global::System.ComponentModel.DescriptionAttribute(\"Rename a widget.\")]\npartial class RenameGatewayWidgetCommand");
+    }
+
+    [Fact]
+    public void A_documented_exposed_operation_keeps_its_own_docs_and_description()
+    {
+        var run = Run([ClientSource, DocumentedGatewaySource, AppSource], InnerReference());
+
+        run.EmitErrors.Should().BeEmpty();
+
+        run.Source(ExposedProperties).Should().NotContain("<inheritdoc cref=\"global::Inner.RenameWidgetCommand\"/>")
+            .And.NotContain("Rename a widget.");
+        run.Source(Descriptor).Should().Contain("\"Renames a widget through the gateway.\"");
+    }
+
+    [Fact]
+    public void An_exposed_operation_with_a_Description_of_its_own_written_without_arguments_does_not_get_a_second()
+    {
+        // The parameterless constructor gives no string to read, so it used to count as no [Description], and the partial
+        // added the inner operation's: CS0579, a duplicate attribute.
+        var gateway = GatewaySource.Replace(
+            "    [Expose<Inner.RenameWidgetCommand>]",
+            "    [System.ComponentModel.Description]\n    [Expose<Inner.RenameWidgetCommand>]",
+            StringComparison.Ordinal);
+
+        var run = Run([ClientSource, gateway, AppSource], InnerReference());
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(ExposedProperties).Should().NotContain("DescriptionAttribute");
+    }
+
+    [Fact]
+    public void Where_Roslyn_has_the_inner_operations_documentation_an_undocumented_exposed_operation_takes_its_summary_and_remarks()
+    {
+        // A package reference brings its documentation file, which Roslyn reads for the inner operation's symbol.
+        var (image, documentation) = _indexedInner.Value;
+        var reference = MetadataReference.CreateFromImage(image, documentation: XmlDocumentationProvider.CreateFromBytes(documentation));
+
+        var run = Run([ClientSource, GatewaySource, AppSource], reference);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationDocumentationFeatureData(\"Renames a widget.\", \"Only the name changes.\"");
+    }
+
+    [Fact]
+    public void An_exposed_operation_with_an_inheritdoc_of_its_own_does_not_take_the_inner_operations_summary()
+    {
+        // Roslyn leaves the inheritdoc unexpanded, so the operation has no summary of its own to read; it still chose its
+        // documentation, so the inner operation's used to replace that choice.
+        var ownInheritdoc = GatewaySource.Replace(
+            "    [Expose<Inner.RenameWidgetCommand>]",
+            "    /// <inheritdoc cref=\"Inner.WidgetResult\"/>\n    [Expose<Inner.RenameWidgetCommand>]",
+            StringComparison.Ordinal);
+        var (image, documentation) = _indexedInner.Value;
+        var reference = MetadataReference.CreateFromImage(image, documentation: XmlDocumentationProvider.CreateFromBytes(documentation));
+
+        var run = Run([ClientSource, ownInheritdoc, AppSource], reference);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().NotContain("Renames a widget.")
+            .And.NotContain("Only the name changes.");
+    }
+
+    [Fact]
+    public void An_inner_factory_written_with_named_arguments_in_another_order_is_documented_by_parameter()
+    {
+        // Read by position, the title and type would swap, and a [TranslateError] of the real type would match nothing.
+        var namedInner = InnerSource.Replace(
+            "new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)",
+            "new(type: \"widget_not_found\", httpStatus: HttpStatusCode.NotFound, title: \"Widget not found\")",
+            StringComparison.Ordinal);
+
+        var run = Run([namedInner, ClientSource, GatewaySource, AppSource], innerContract: null);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget not found\", \"widget_not_found\")")
+            .And.Contain("OperationHttpResponseMetadata(404,");
+    }
+
+    [Fact]
+    public void An_inner_factory_aliasing_a_custom_named_factory_of_a_third_assembly_is_documented_from_that_assemblys_index()
+    {
+        // Shared errors -> inner contract -> gateway: the inner contract's index has to follow the alias into the shared
+        // assembly's index, as no HttpStatusCode is named MissingStripeAccount.
+        const string sharedSource = """
+            namespace SharedErrors
+            {
+                using System.Net;
+                using Blueprint;
+
+                public static class BillingApiExceptions
+                {
+                    public static readonly ApiExceptionFactory MissingStripeAccount = new("Missing Stripe account", "missing_stripe_account", HttpStatusCode.NotFound);
+                }
+            }
+            """;
+        var (sharedImage, _) = EmitInner(sharedSource, withIndex: true, assemblyName: "SharedErrors");
+        var shared = MetadataReference.CreateFromImage(sharedImage);
+
+        var aliasingInner = InnerSource.Replace(
+            "new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)",
+            "SharedErrors.BillingApiExceptions.MissingStripeAccount",
+            StringComparison.Ordinal);
+        var (innerImage, _) = EmitInner(aliasingInner, withIndex: true, references: [shared]);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(innerImage), shared);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(\"Missing Stripe account\", \"missing_stripe_account\")");
+    }
+
+    [Fact]
+    public void An_edit_to_an_inner_factorys_title_in_another_file_re_plans_the_exposing_operations_descriptor_on_the_same_driver()
+    {
+        var result = EditInner(InnerSource.Replace("\"Widget not found\"", "\"Widget is missing\"", StringComparison.Ordinal));
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().Contain("OperationProblemExample(\"Widget is missing\", \"widget_not_found\")");
+    }
+
+    [Fact]
+    public void An_edit_to_an_inner_operations_summary_in_another_file_re_plans_the_exposing_operations_descriptor_on_the_same_driver()
+    {
+        var result = EditInner(InnerSource.Replace("Renames a widget.", "Renames a widget, keeping its id.", StringComparison.Ordinal));
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().Contain("\"Renames a widget, keeping its id.\"");
+    }
+
+    [Fact]
+    public void An_edit_to_a_shared_factory_an_inner_factory_aliases_re_plans_the_exposing_operations_descriptor_on_the_same_driver()
+    {
+        // Only CommonErrors.cs changes: neither the inner operation's file nor the gateway's does.
+        const string commonErrors = """
+            namespace Inner
+            {
+                using Blueprint;
+
+                public static class CommonErrors
+                {
+                    public static readonly ApiExceptionFactory NotFound = new("Widget not found", "widget_not_found", 404);
+                }
+            }
+            """;
+        var aliasingInner = InnerSource.Replace(
+            "new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)",
+            "CommonErrors.NotFound",
+            StringComparison.Ordinal);
+
+        var result = Edit(
+            [aliasingInner, commonErrors, ClientSource, GatewaySource],
+            [aliasingInner, commonErrors.Replace("404", "410", StringComparison.Ordinal), ClientSource, GatewaySource],
+            ["Inner.cs", "CommonErrors.cs", "Client.cs", "Gateway.cs"]);
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().Contain("OperationHttpResponseMetadata(410,")
+            .And.NotContain("OperationHttpResponseMetadata(404,");
+    }
+
+    [Fact]
+    public void An_inner_factory_with_a_non_constant_title_keeps_its_constant_type_so_a_TranslateError_still_answers_it()
+    {
+        // The title is read from a static field, so it is not a constant; the type is. Discarding the type with the title
+        // used to leave the translated factory documented at its original 404.
+        var nonConstantTitleInner = InnerSource
+            .Replace(
+                "new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)",
+                "new(Titles.NotFound, \"widget_not_found\", HttpStatusCode.NotFound)",
+                StringComparison.Ordinal)
+            .Replace(
+                "public class WidgetResult",
+                "public static class Titles { public static readonly string NotFound = \"Widget not found\"; }\n\n    public class WidgetResult",
+                StringComparison.Ordinal);
+        var (image, _) = EmitInner(nonConstantTitleInner, withIndex: true);
+
+        var translated = Run([ClientSource, TranslatingGatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        translated.EmitErrors.Should().BeEmpty();
+        translated.Source(Descriptor).Should().NotContain("widget_not_found")
+            .And.NotContain("OperationHttpResponseMetadata(404,");
+
+        // Untranslated, the known type is a literal and the title is read from the field at run time.
+        var untranslated = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        untranslated.EmitErrors.Should().BeEmpty();
+        untranslated.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(global::Inner.RenameWidgetCommand.NotFound.Title, \"widget_not_found\")");
+    }
+
+    [Fact]
+    public void An_inner_factory_its_assembly_indexed_by_status_alone_is_reported_where_a_TranslateError_may_answer_it()
+    {
+        // The problem type is known only at run time, so whether the translation answers the factory cannot be decided here.
+        var run = Run([ClientSource, TranslatingGatewaySource, AppSource], MetadataReference.CreateFromImage(LegacyIndexedInner()));
+
+        run.EmitErrors.Should().BeEmpty();
+
+        // One for each factory of unknown type: the index has neither type.
+        run.GeneratorDiagnostics.Where(static d => d.Id == "BPGW030")
+            .Select(static d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture))
+            .Should().HaveCount(2)
+            .And.Contain(static m => m.Contains("'Inner.RenameWidgetCommand.NotFound'", StringComparison.Ordinal) && m.Contains("'InnerContract'", StringComparison.Ordinal))
+            .And.Contain(static m => m.Contains("'Inner.RenameWidgetCommand.Conflict'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_inner_factory_its_assembly_indexed_by_status_alone_is_not_reported_when_the_gateway_translates_nothing()
+    {
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(LegacyIndexedInner()));
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW030");
+    }
+
+    [Fact]
+    public void An_inner_factory_declared_as_a_static_auto_property_in_a_referenced_assembly_is_documented_from_that_assemblys_index()
+    {
+        // Metadata gives the property, not its private backing field.
+        var propertyInner = InnerSource.Replace(
+            "public static readonly ApiExceptionFactory NotFound = new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound);",
+            "public static ApiExceptionFactory NotFound { get; } = new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound);",
+            StringComparison.Ordinal);
+        var (image, _) = EmitInner(propertyInner, withIndex: true);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(404, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget not found\", \"widget_not_found\")");
+    }
+
+    [Fact]
+    public void A_TranslateError_naming_a_getter_backed_factory_documents_that_factory_in_place_of_the_inner_one()
+    {
+        // An expression-bodied property has no backing field, so it used to be left out while the inner 404 it replaces
+        // was still dropped: the gateway documented neither.
+        var getterBacked = TranslatingGatewaySource.Replace(
+            "public static readonly ApiExceptionFactory WidgetGone = new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            "public static ApiExceptionFactory WidgetGone => new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            StringComparison.Ordinal);
+
+        var run = Run([ClientSource, getterBacked, AppSource], InnerReference());
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().NotContain("OperationHttpResponseMetadata(404,")
+            .And.Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(410, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(global::Gateway.RenameGatewayWidgetCommand.WidgetGone.Title, global::Gateway.RenameGatewayWidgetCommand.WidgetGone.Type)");
+    }
+
+    [Fact]
+    public void An_inner_factory_whose_example_cannot_be_rendered_still_documents_its_status()
+    {
+        // Private, with a non-constant title: the gateway can neither write the title nor read it from the field, but the
+        // status is known, so the response stays and only its example goes.
+        var inner = InnerSource
+            .Replace(
+                "public static readonly ApiExceptionFactory Conflict",
+                "private static readonly ApiExceptionFactory Teapot = new(Titles.Teapot, \"teapot\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+                StringComparison.Ordinal)
+            .Replace("public class WidgetResult", TitlesClass + "\n\n    public class WidgetResult", StringComparison.Ordinal);
+
+        var run = Run([inner, ClientSource, GatewaySource, AppSource], innerContract: null);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(418, true, global::System.Collections.Immutable.ImmutableArray.Create<string>(\"Blueprint.ApiException\"), global::System.Collections.Immutable.ImmutableArray.Create<string>(\"Microsoft.AspNetCore.Mvc.ProblemDetails\"))")
+            .And.NotContain("Teapot");
+    }
+
+    [Fact]
+    public void An_inner_auto_property_factory_with_a_private_getter_is_not_read_at_run_time()
+    {
+        // The property is public but its getter is not, so the gateway cannot read Inner.Teapot.Title (CS0271).
+        var inner = InnerSource
+            .Replace(
+                "public static readonly ApiExceptionFactory Conflict",
+                "public static ApiExceptionFactory Teapot { private get; set; } = new(Titles.Teapot, \"teapot\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+                StringComparison.Ordinal)
+            .Replace("public class WidgetResult", TitlesClass + "\n\n    public class WidgetResult", StringComparison.Ordinal);
+
+        var run = Run([inner, ClientSource, GatewaySource, AppSource], innerContract: null);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("OperationHttpResponseMetadata(418,")
+            .And.NotContain("RenameWidgetCommand.Teapot");
+    }
+
+    [Fact]
+    public void A_public_static_factory_field_that_is_not_readonly_in_a_referenced_assembly_is_documented_from_its_index()
+    {
+        var inner = InnerSource.Replace(
+            "public static readonly ApiExceptionFactory Conflict",
+            "public static ApiExceptionFactory MissingWidget = new(\"Missing widget\", \"missing_widget\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+            StringComparison.Ordinal);
+        var (image, _) = EmitInner(inner, withIndex: true);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(418, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Missing widget\", \"missing_widget\")");
+    }
+
+    [Fact]
+    public void Moving_a_delimiter_between_a_shared_factorys_title_and_type_re_plans_the_exposing_operations_descriptor_on_the_same_driver()
+    {
+        // ("Widget|not found", "missing") and ("Widget", "not found|missing") used to fingerprint alike.
+        const string commonErrors = """
+            namespace Inner
+            {
+                using Blueprint;
+
+                public static class CommonErrors
+                {
+                    public static readonly ApiExceptionFactory NotFound = new("Widget|not found", "missing", 404);
+                }
+            }
+            """;
+        var aliasingInner = InnerSource.Replace(
+            "new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)",
+            "CommonErrors.NotFound",
+            StringComparison.Ordinal);
+        var moved = commonErrors.Replace("new(\"Widget|not found\", \"missing\", 404)", "new(\"Widget\", \"not found|missing\", 404)", StringComparison.Ordinal);
+
+        var result = Edit(
+            [aliasingInner, commonErrors, ClientSource, GatewaySource],
+            [aliasingInner, moved, ClientSource, GatewaySource],
+            ["Inner.cs", "CommonErrors.cs", "Client.cs", "Gateway.cs"]);
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().Contain("OperationProblemExample(\"Widget\", \"not found|missing\")");
+    }
+
+    [Fact]
+    public void Moving_a_delimiter_between_an_inner_factorys_indexed_title_and_type_re_plans_the_descriptor_when_the_contract_is_replaced()
+    {
+        var before = EmitInner(InnerSource.Replace("new(\"Widget not found\", \"widget_not_found\",", "new(\"Widget|not found\", \"missing\",", StringComparison.Ordinal), withIndex: true).Image;
+        var after = EmitInner(InnerSource.Replace("new(\"Widget not found\", \"widget_not_found\",", "new(\"Widget\", \"not found|missing\",", StringComparison.Ordinal), withIndex: true).Image;
+        RunReplacingContract(before, after).Should().Contain("OperationProblemExample(\"Widget\", \"not found|missing\")");
+    }
+
+    [Fact]
+    public void An_edit_to_a_shared_factory_a_getter_backed_translation_target_reads_re_plans_the_descriptor_on_the_same_driver()
+    {
+        const string commonErrors = """
+            namespace Gateway
+            {
+                using Blueprint;
+
+                public static class CommonErrors
+                {
+                    public static readonly ApiExceptionFactory Gone = new("Widget gone", "widget_gone", 410);
+                }
+            }
+            """;
+        var gateway = TranslatingGatewaySource.Replace(
+            "public static readonly ApiExceptionFactory WidgetGone = new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            "public static ApiExceptionFactory WidgetGone => CommonErrors.Gone;",
+            StringComparison.Ordinal);
+
+        var result = Edit(
+            [InnerSource, commonErrors, ClientSource, gateway],
+            [InnerSource, commonErrors.Replace("410", "409", StringComparison.Ordinal), ClientSource, gateway],
+            ["Inner.cs", "CommonErrors.cs", "Client.cs", "Gateway.cs"]);
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().NotContain("OperationHttpResponseMetadata(410,");
+    }
+
+    [Fact]
+    public void Making_an_inner_factorys_getter_private_re_plans_the_descriptor_when_the_contract_is_replaced()
+    {
+        // A non-constant title is read from the property at run time only while its getter is readable.
+        var readable = InnerSource
+            .Replace(
+                "public static readonly ApiExceptionFactory Conflict",
+                "public static ApiExceptionFactory Teapot { get; set; } = new(Titles.Teapot, \"teapot\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+                StringComparison.Ordinal)
+            .Replace("public class WidgetResult", TitlesClass + "\n\n    public class WidgetResult", StringComparison.Ordinal);
+        var before = EmitInner(readable, withIndex: true).Image;
+        var after = EmitInner(readable.Replace("Teapot { get; set; }", "Teapot { private get; set; }", StringComparison.Ordinal), withIndex: true).Image;
+
+        var descriptor = RunReplacingContract(before, after);
+
+        descriptor.Should().Contain("OperationHttpResponseMetadata(418,")
+            .And.NotContain("RenameWidgetCommand.Teapot");
+    }
+
+    [Fact]
+    public void An_inner_factory_aliasing_through_three_factories_in_a_referenced_assembly_is_documented_from_its_index()
+    {
+        // MissingWidget -> DomainErrors -> CommonErrors -> CoreErrors: a depth limit of two used to stop short of the constructor.
+        const string chain = """
+            public static class CoreErrors { public static readonly ApiExceptionFactory Missing = new("Widget not found", "widget_not_found", 404); }
+
+                public static class CommonErrors { public static readonly ApiExceptionFactory Missing = CoreErrors.Missing; }
+
+                public static class DomainErrors { public static readonly ApiExceptionFactory Missing = CommonErrors.Missing; }
+
+                public class WidgetResult
+            """;
+        var chained = InnerSource
+            .Replace("new(\"Widget not found\", \"widget_not_found\", HttpStatusCode.NotFound)", "DomainErrors.Missing", StringComparison.Ordinal)
+            .Replace("public class WidgetResult", chain, StringComparison.Ordinal);
+        var (image, _) = EmitInner(chained, withIndex: true);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget not found\", \"widget_not_found\")");
+    }
+
+    [Fact]
+    public void An_inner_operations_getter_backed_translation_target_in_the_same_compilation_is_documented_by_the_gateway()
+    {
+        // The inner operation documents its own target as one of its errors, so the gateway re-exports it with the rest.
+        var run = Run([InnerWithGetterBackedTarget(), ClientSource, GatewaySource, AppSource], innerContract: null);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(410, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget gone\", \"widget_gone\")");
+    }
+
+    [Fact]
+    public void An_inner_operations_getter_backed_translation_target_in_a_referenced_assembly_is_documented_from_its_index()
+    {
+        var (image, _) = EmitInner(InnerWithGetterBackedTarget(), withIndex: true);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(410, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Widget gone\", \"widget_gone\")");
+    }
+
+    [Fact]
+    public void An_inner_getter_backed_factory_no_translation_names_is_documented_neither_in_the_same_compilation_nor_from_a_reference()
+    {
+        // The inner descriptor documents fields, auto-properties and translation targets, not an ordinary getter; metadata
+        // used to take every static factory property, so only a referencing gateway advertised its 418.
+        var inner = InnerSource.Replace(
+            "public static readonly ApiExceptionFactory Conflict",
+            "public static ApiExceptionFactory Preview => new(\"Preview\", \"preview\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+            StringComparison.Ordinal);
+        var (image, _) = EmitInner(inner, withIndex: true);
+
+        var sameCompilation = Run([inner, ClientSource, GatewaySource, AppSource], innerContract: null);
+        var referenced = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        sameCompilation.EmitErrors.Should().BeEmpty();
+        referenced.EmitErrors.Should().BeEmpty();
+        sameCompilation.Source(Descriptor).Should().NotContain("OperationHttpResponseMetadata(418,");
+        referenced.Source(Descriptor).Should().NotContain("OperationHttpResponseMetadata(418,");
+    }
+
+    [Fact]
+    public void An_edit_to_a_shared_factory_a_field_backed_translation_target_aliases_re_plans_the_descriptor_on_the_same_driver()
+    {
+        const string commonErrors = """
+            namespace Gateway
+            {
+                using Blueprint;
+
+                public static class CommonErrors
+                {
+                    public static readonly ApiExceptionFactory Gone = new("Widget gone", "widget_gone", 410);
+                }
+            }
+            """;
+        var gateway = TranslatingGatewaySource.Replace(
+            "public static readonly ApiExceptionFactory WidgetGone = new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            "public static readonly ApiExceptionFactory WidgetGone = CommonErrors.Gone;",
+            StringComparison.Ordinal);
+
+        var result = Edit(
+            [InnerSource, commonErrors, ClientSource, gateway],
+            [InnerSource, commonErrors.Replace("410", "409", StringComparison.Ordinal), ClientSource, gateway],
+            ["Inner.cs", "CommonErrors.cs", "Client.cs", "Gateway.cs"]);
+
+        result.GetChangedGeneratedSourceHintNames(nameof(OperationDescriptorSourceGenerator)).Should().Contain(Descriptor);
+        UpdatedDescriptor(result).Should().Contain("OperationHttpResponseMetadata(409,")
+            .And.NotContain("OperationHttpResponseMetadata(410,");
+    }
+
+    [Fact]
+    public void An_internal_inner_factory_its_contract_gives_the_gateway_access_to_is_documented_from_its_index()
+    {
+        // The inner descriptor documents a factory of any accessibility, and InternalsVisibleTo lets the gateway see this one,
+        // but the index used to take public members only, so its custom name resolved to nothing.
+        var inner = "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"Gateway\")]\n" + InnerSource.Replace(
+            "public static readonly ApiExceptionFactory Conflict",
+            "internal static readonly ApiExceptionFactory MissingWidget = new(\"Missing widget\", \"missing_widget\", 418);\n\n        public static readonly ApiExceptionFactory Conflict",
+            StringComparison.Ordinal);
+        var (image, _) = EmitInner(inner, withIndex: true);
+
+        var run = Run([ClientSource, GatewaySource, AppSource], MetadataReference.CreateFromImage(image));
+
+        run.EmitErrors.Should().BeEmpty();
+        run.Source(Descriptor).Should().Contain("new global::Blueprint.Model.OperationHttpResponseMetadata(418, true")
+            .And.Contain("new global::Blueprint.Model.OperationProblemExample(\"Missing widget\", \"missing_widget\")");
+    }
+
+    [Fact]
+    public void A_getter_backed_TranslateError_target_that_cannot_be_evaluated_is_reported()
+    {
+        // The inner 404 it answers is still dropped, and the target documents nothing, so neither status appeared and
+        // nothing said why.
+        var gateway = TranslatingGatewaySource.Replace(
+            "public static readonly ApiExceptionFactory WidgetGone = new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            "public static ApiExceptionFactory WidgetGone => Make();\n\n        private static ApiExceptionFactory Make() => new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);",
+            StringComparison.Ordinal);
+
+        var run = Run([ClientSource, gateway, AppSource], InnerReference());
+
+        run.EmitErrors.Should().BeEmpty();
+        run.GeneratorDiagnostics.Where(static d => d.Id == "BP010")
+            .Select(static d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture))
+            .Should().ContainSingle(static m => m.Contains("'WidgetGone'", StringComparison.Ordinal));
+    }
+
+    private static string InnerWithGetterBackedTarget()
+    {
+        return InnerSource
+            .Replace(
+                "    [Description(\"Rename a widget.\")]",
+                "    [Description(\"Rename a widget.\")]\n    [TranslateError(\"upstream_gone\", nameof(Gone))]",
+                StringComparison.Ordinal)
+            .Replace(
+                "public static readonly ApiExceptionFactory Conflict",
+                "public static ApiExceptionFactory Gone => new(\"Widget gone\", \"widget_gone\", HttpStatusCode.Gone);\n\n        public static readonly ApiExceptionFactory Conflict",
+                StringComparison.Ordinal);
+    }
+
+    private static string RunReplacingContract(byte[] before, byte[] after)
+    {
+        var beforeReference = MetadataReference.CreateFromImage(before);
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var compilation = CSharpCompilation.Create(
+            "Gateway",
+            [CSharpSyntaxTree.ParseText(ClientSource, parseOptions, "Client.cs"), CSharpSyntaxTree.ParseText(GatewaySource, parseOptions, "Gateway.cs")],
+            TestHelpers.CreateMetadataReferences().Append(beforeReference),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new OperationDescriptorSourceGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation.ReplaceReference(beforeReference, MetadataReference.CreateFromImage(after)));
+
+        return driver.GetRunResult().GeneratedTrees.Single(static t => t.FilePath.EndsWith(Descriptor, StringComparison.Ordinal)).ToString();
+    }
+
+    private static byte[] LegacyIndexedInner()
+    {
+        const string legacyIndex = """
+            namespace Blueprint.Model.Attributes
+            {
+                [System.AttributeUsage(System.AttributeTargets.Assembly, AllowMultiple = true)]
+                internal sealed class BlueprintApiExceptionStatusAttribute : System.Attribute
+                {
+                    public BlueprintApiExceptionStatusAttribute(string containingTypeMetadataName, string fieldName, int httpStatusCode) { }
+                }
+            }
+            """;
+        var source = "[assembly: Blueprint.Model.Attributes.BlueprintApiExceptionStatus(\"Inner.RenameWidgetCommand\", \"NotFound\", 404)]\n"
+            + "[assembly: Blueprint.Model.Attributes.BlueprintApiExceptionStatus(\"Inner.RenameWidgetCommand\", \"Conflict\", 409)]\n"
+            + legacyIndex + InnerSource;
+
+        return EmitInner(source, withIndex: false).Image;
+    }
+
+    private static MultiGeneratorEditResult EditInner(string updatedInner)
+    {
+        return Edit(
+            [InnerSource, ClientSource, GatewaySource],
+            [updatedInner, ClientSource, GatewaySource],
+            ["Inner.cs", "Client.cs", "Gateway.cs"]);
+    }
+
+    private static MultiGeneratorEditResult Edit(string[] initial, string[] updated, string[] paths)
+    {
+        var result = TestHelpers.CompileWithTrackedGeneratorsAfterEdit(
+            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+            initial,
+            updated,
+            paths);
+
+        result.Updated.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        return result;
+    }
+
+    private static string UpdatedDescriptor(MultiGeneratorEditResult result)
+    {
+        return result.Updated.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator)).Single(static s => s.HintName == Descriptor).SourceText;
+    }
+
+    private static ExposeGeneratorTests.AllGeneratorsRun Run(string[] sources, MetadataReference? innerContract, params MetadataReference[] additionalReferences)
+    {
+        // The inner operation in source still needs a reference standing in for the default inner contract.
+        return ExposeGeneratorTests.RunAllGenerators(
+            sources,
+            innerContract ?? TestHelpers.CreateReferenceFromSource("namespace Unused { public class Nothing; }", "InnerContract"),
+            additionalReferences);
+    }
+
+    private static MetadataReference InnerReference()
+    {
+        return MetadataReference.CreateFromImage(_indexedInner.Value.Image);
+    }
+
+    /// <summary>
+    /// Builds the inner contract as a consumer's is built: with the descriptor generator, the status index generator when
+    /// <paramref name="withIndex"/> is set, and its documentation file.
+    /// </summary>
+    private static (byte[] Image, byte[] Documentation) EmitInner(string source, bool withIndex, string assemblyName = "InnerContract", MetadataReference[]? references = null)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Diagnose);
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            [CSharpSyntaxTree.ParseText(source, parseOptions)],
+            TestHelpers.CreateMetadataReferences().Concat(references ?? []),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        IIncrementalGenerator[] generators = withIndex
+            ? [new OperationDescriptorSourceGenerator(), new ApiExceptionStatusIndexGenerator()]
+            : [new OperationDescriptorSourceGenerator()];
+
+        CSharpGeneratorDriver.Create(generators.Select(static g => g.AsSourceGenerator()), parseOptions: parseOptions)
+            .RunGeneratorsAndUpdateCompilation(compilation, out var generated, out _);
+
+        using var image = new MemoryStream();
+        using var documentation = new MemoryStream();
+        var emit = generated.Emit(image, xmlDocumentationStream: documentation);
+        emit.Success.Should().BeTrue(string.Join(Environment.NewLine, emit.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error)));
+
+        return (image.ToArray(), documentation.ToArray());
+    }
+}

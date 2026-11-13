@@ -93,7 +93,7 @@ internal static class GatewayMapHook
             // A hook that rebinds its parameter may assign another instance than the one the forward sends, so none of its
             // assignments counts.
             var assignments = declaration.DescendantNodes().OfType<AssignmentExpressionSyntax>().ToList();
-            if (assignments.Any(a => IsParameter(a.Left, parameterName))
+            if (assignments.Any(a => Rebinds(a.Left, parameterName))
                 || declaration.DescendantNodes().OfType<ArgumentSyntax>().Any(a => !a.RefKindKeyword.IsKind(SyntaxKind.None)
                     && !a.RefKindKeyword.IsKind(SyntaxKind.InKeyword)
                     && IsParameter(a.Expression, parameterName)))
@@ -114,6 +114,19 @@ internal static class GatewayMapHook
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether an assignment's target is the parameter itself, alone or as an element of a deconstruction such as
+    /// <c>(inner, _) = …</c>, rather than one of its members.
+    /// </summary>
+    private static bool Rebinds(ExpressionSyntax target, string parameterName)
+    {
+        return target switch
+        {
+            TupleExpressionSyntax tuple => tuple.Arguments.Any(a => Rebinds(a.Expression, parameterName)),
+            _ => IsParameter(target, parameterName),
+        };
     }
 
     private static bool IsParameter(ExpressionSyntax expression, string parameterName)
