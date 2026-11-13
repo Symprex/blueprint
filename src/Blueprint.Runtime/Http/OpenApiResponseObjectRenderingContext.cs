@@ -24,6 +24,7 @@ public sealed record OpenApiResponseObjectRenderingContext(
     private const string OctetStreamMediaType = "application/octet-stream";
     private const string PlainTextResultTypeName = "Blueprint.Runtime.Exec.PlainTextResult";
     private const string FileStreamResultTypeName = "Blueprint.Runtime.Exec.FileStreamResult";
+    private const string ProxyResultTypeName = "Blueprint.Http.ProxyResult";
     private const string ProblemDetailsTypeName = "ProblemDetails";
     private const string ValidationProblemDetailsTypeName = "ValidationProblemDetails";
 
@@ -112,7 +113,8 @@ public sealed record OpenApiResponseObjectRenderingContext(
 
     /// <summary>
     /// Creates content entries for non-JSON body responses (e.g. <c>text/plain</c> for PlainTextResult,
-    /// <c>application/octet-stream</c> for FileStreamResult) that carry a body but have no CLR payload
+    /// a FileStreamResult's or ProxyResult's declared media types, or <c>application/octet-stream</c> for a FileStreamResult
+    /// that declares none) that carry a body but have no CLR payload
     /// type to schema-project. Returns empty when no known non-JSON type is present.
     /// </summary>
     private static ImmutableArray<OpenApiResponseContentModel> TryCreateNonJsonContent(
@@ -131,15 +133,23 @@ public sealed record OpenApiResponseObjectRenderingContext(
                 ];
             }
 
-            if (string.Equals(resultTypeName, FileStreamResultTypeName, StringComparison.Ordinal))
+            // The generator sets a response's content types only for a streamed result, a subclass's included, so they mark
+            // one whose type name is not FileStreamResult's or ProxyResult's own.
+            if (!response.ContentTypes.IsDefaultOrEmpty
+                || string.Equals(resultTypeName, FileStreamResultTypeName, StringComparison.Ordinal)
+                || string.Equals(resultTypeName, ProxyResultTypeName, StringComparison.Ordinal))
             {
-                return
-                [
-                    new OpenApiResponseContentModel(
-                        OctetStreamMediaType,
+                // A streamed body as the operation's [ProducesContentType] declares it, or a file as octet-stream.
+                var mediaTypes = !response.ContentTypes.IsDefaultOrEmpty
+                    ? response.ContentTypes
+                    : [OctetStreamMediaType];
+
+                return mediaTypes
+                    .Select(static mediaType => new OpenApiResponseContentModel(
+                        mediaType,
                         ImmutableArray<OpenApiResponseContentSchemaComponent>.Empty,
-                        InlineSchema: new OpenApiInlineSchemaModel("string", "binary")),
-                ];
+                        InlineSchema: new OpenApiInlineSchemaModel("string", "binary")))
+                    .ToImmutableArray();
             }
         }
 

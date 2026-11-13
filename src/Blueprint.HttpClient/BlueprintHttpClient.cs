@@ -207,31 +207,50 @@ public class BlueprintHttpClient
             await credential.ApplyAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
-        // Read before HttpClient merges its default headers in, after which no handler can tell the two apart.
-        if (request.Headers.Authorization is { } requestAuthorization)
-        {
-            request.Options.Set(BlueprintRequestOptions.RequestAuthorization, requestAuthorization);
-        }
+        TagRequestAuthorization(request);
+
+        HttpResponseMessage? response = null;
 
         try
         {
-            using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            // A reader that takes the response (a forward's ProxyResult) is handed it at its headers, to stream its body.
+            // Every other call is sent exactly as before, leaving the body to the client's own handling.
+            response = reader.TakesResponse
+                ? await this._httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false)
+                : await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             var context = new ResponseReadContext(request, response, operationName, this._jsonOptions);
 
             if (!response.IsSuccessStatusCode)
             {
-                // Only a forward's reader claims a failure (a declared NotFoundResult the host wrote); any other is mapped.
-                var (claimed, value) = await reader.ReadFailureAsync(context, cancellationToken).ConfigureAwait(false);
+                using var failureRead = this.BoundFailureRead(cancellationToken);
 
-                if (claimed)
+                try
                 {
-                    return value;
-                }
+                    // Only a forward's reader claims a failure (a declared NotFoundResult the host wrote); any other is mapped.
+                    var (claimed, value) = await reader.ReadFailureAsync(context, failureRead.Token).ConfigureAwait(false);
 
-                await this.EnsureSuccessOrThrowAsync(request, response, cancellationToken).ConfigureAwait(false);
+                    if (claimed)
+                    {
+                        return value;
+                    }
+
+                    await this.EnsureSuccessOrThrowAsync(request, response, failureRead.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException e) when (failureRead.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    throw CreateTimeoutException(e);
+                }
             }
 
-            return await reader.ReadAsync(context, cancellationToken).ConfigureAwait(false);
+            var result = await reader.ReadAsync(context, cancellationToken).ConfigureAwait(false);
+
+            if (reader.TakesResponse)
+            {
+                // The result owns it now, and disposes it once its body is written.
+                response = null;
+            }
+
+            return result;
         }
         catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
         {
@@ -246,6 +265,133 @@ public class BlueprintHttpClient
             // A body the send did not buffer fails as the connection's own HttpIOException, which only a buffering send
             // wraps in an HttpRequestException.
             throw CreateUnreachableException(e);
+        }
+        finally
+        {
+            response?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Builds the request <see cref="SendAsync{TOperation, TResult}"/> sends for an operation, without sending it, so a
+    /// caller can adjust it and send it with <see cref="SendRawAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// A GET carries the operation's other properties in its URL, so it has no body; every other method sends the
+    /// operation as its JSON body, written with this client's JSON options.
+    /// </remarks>
+    /// <typeparam name="TOperation">The operation's type.</typeparam>
+    /// <param name="method">The HTTP method.</param>
+    /// <param name="url">
+    /// The URL, relative to the <see cref="HttpClient"/>'s base address even with a leading <c>/</c>, and with a GET's
+    /// query string already appended, as an operation's URL builder returns it.
+    /// </param>
+    /// <param name="operation">The operation to send.</param>
+    /// <param name="operationTypeInfo">
+    /// The metadata to write the body with, from this client's JSON options; or <see langword="null"/> to write it as the
+    /// operation's run-time type.
+    /// </param>
+    /// <returns>The request, which the caller owns.</returns>
+    /// <exception cref="InvalidOperationException"><paramref name="url"/> is <see langword="null"/>: a route placeholder had no value.</exception>
+    public HttpRequestMessage CreateRequest<TOperation>(HttpMethod method, string? url, TOperation operation, JsonTypeInfo<TOperation>? operationTypeInfo = null)
+        where TOperation : class, IOperation
+    {
+        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(operation);
+
+        if (url is null)
+        {
+            throw new InvalidOperationException(
+                $"Compiled URL builder returned null for '{operation.GetType().FullName}'. " +
+                $"A required route parameter is likely null.");
+        }
+
+        // Strip the leading '/' so the URL is treated as relative to the HttpClient's BaseAddress.
+        // Without this, HttpClient treats "/templates" as an absolute path from the host root,
+        // discarding the BaseAddress path component (e.g. "http://host/api/" → "http://host/templates").
+        if (url.Length > 0 && url[0] == '/')
+        {
+            url = url[1..];
+        }
+
+        var request = new HttpRequestMessage(method, url);
+        request.Options.Set(BlueprintRequestOptions.Operation, operation);
+
+        if (method != HttpMethod.Get)
+        {
+            // The declared type's metadata writes none of a derived type's own members, so an instance of one is written as its
+            // run-time type, as an operation without metadata is.
+            request.Content = operationTypeInfo is not null && operation.GetType() == typeof(TOperation)
+                ? JsonContent.Create(operation, operationTypeInfo)
+                : JsonContent.Create(operation, operation.GetType(), options: this._jsonOptions);
+        }
+
+        return request;
+    }
+
+    /// <summary>
+    /// Sends a request and returns the response as soon as its headers arrive
+    /// (<see cref="HttpCompletionOption.ResponseHeadersRead"/>), its body unread, for a caller that streams the body on, such
+    /// as into a <see cref="ProxyResult"/>.
+    /// </summary>
+    /// <remarks>
+    /// A failure is mapped as <see cref="SendAsync{TOperation, TResult}"/> maps one, so a response that is not a success is
+    /// read, disposed and thrown as the upstream problem rather than streamed. <see cref="System.Net.Http.HttpClient.Timeout"/>
+    /// covers the wait for the headers only. A failure's body is read within a further
+    /// <see cref="System.Net.Http.HttpClient.Timeout"/>, and one that does not arrive in time is thrown as a timeout; a
+    /// success's body is bounded only by whatever token its reader passes.
+    /// </remarks>
+    /// <param name="request">The request, such as one <see cref="CreateRequest{TOperation}"/> built. The caller still owns it.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The success response, which the caller owns and must dispose.</returns>
+    /// <exception cref="BlueprintApiException">The request could not be sent or timed out, or the response was not a success.</exception>
+    /// <exception cref="ValidationException">The response was a 422 Unprocessable Entity.</exception>
+    public async Task<HttpResponseMessage> SendRawAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        TagRequestAuthorization(request);
+
+        HttpResponseMessage? response = null;
+
+        try
+        {
+            response = await this._httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                using var failureRead = this.BoundFailureRead(cancellationToken);
+
+                try
+                {
+                    await this.EnsureSuccessOrThrowAsync(request, response, failureRead.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException e) when (failureRead.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    throw CreateTimeoutException(e);
+                }
+            }
+
+            var success = response;
+            response = null;
+
+            return success;
+        }
+        catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
+        {
+            throw CreateTimeoutException(e);
+        }
+        catch (HttpRequestException e)
+        {
+            throw CreateUnreachableException(e);
+        }
+        catch (IOException e)
+        {
+            throw CreateUnreachableException(e);
+        }
+        finally
+        {
+            response?.Dispose();
         }
     }
 
@@ -274,6 +420,12 @@ public class BlueprintHttpClient
     /// problem as <c>application/json</c> to a request with no <c>Accept</c>, still writes it as a problem. It replaces any
     /// <c>Accept</c> the caller sets through <see cref="CallOptions.ModifyRequest"/>, which would otherwise let a negotiating
     /// host's 404 problem be read as the not-found member.
+    /// </para>
+    /// <para>
+    /// When <typeparamref name="TResult"/> is <see cref="ProxyResult"/>, the upstream response is returned at its headers,
+    /// its body unread, inside a <see cref="ProxyResult"/> that streams it to the gateway's caller and disposes it once
+    /// written. This is how an inner operation returning a stream or file result is forwarded, never buffered. A failure is
+    /// still mapped before anything is streamed.
     /// </para>
     /// <para>
     /// A forwarded resource arrives without the inner service's <c>$links</c>: <see cref="ApiResource.Links"/> is get-only and
@@ -426,7 +578,7 @@ public class BlueprintHttpClient
     /// </remarks>
     /// <param name="exception">The cancellation the timeout raised.</param>
     /// <returns>The exception to throw.</returns>
-    private static BlueprintApiException CreateTimeoutException(TaskCanceledException exception)
+    private static BlueprintApiException CreateTimeoutException(OperationCanceledException exception)
     {
         return new BlueprintApiException(
             new BlueprintApiException.ApiProblem(
@@ -578,37 +730,37 @@ public class BlueprintHttpClient
             cancellationToken);
     }
 
-    private HttpRequestMessage CreateRequest<TOperation>(HttpMethod method, string? url, TOperation operation, JsonTypeInfo<TOperation>? operationTypeInfo)
-        where TOperation : class, IOperation
+    /// <summary>
+    /// Records the <c>Authorization</c> header the request itself carries as <see cref="BlueprintRequestOptions.RequestAuthorization"/>.
+    /// It must run before the request is handed to the <see cref="System.Net.Http.HttpClient"/>, which merges its default
+    /// headers in, after which no handler can tell the two apart.
+    /// </summary>
+    private static void TagRequestAuthorization(HttpRequestMessage request)
     {
-        if (url is null)
+        if (request.Headers.Authorization is { } requestAuthorization)
         {
-            throw new InvalidOperationException(
-                $"Compiled URL builder returned null for '{operation.GetType().FullName}'. " +
-                $"A required route parameter is likely null.");
+            request.Options.Set(BlueprintRequestOptions.RequestAuthorization, requestAuthorization);
+        }
+    }
+
+    /// <summary>
+    /// The token a failure's body is read with: the caller's, and the client's <see cref="System.Net.Http.HttpClient.Timeout"/>
+    /// from now. A streamed send returns at the headers, outside that timeout, so an upstream that sent a failure's headers
+    /// and stalled would otherwise be waited on for as long as the caller's token allows. A buffered send has read the body
+    /// already, so the bound costs it nothing.
+    /// </summary>
+    /// <param name="cancellationToken">The caller's token.</param>
+    /// <returns>The source of the bounded token, which the caller disposes.</returns>
+    private CancellationTokenSource BoundFailureRead(CancellationToken cancellationToken)
+    {
+        var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        if (this._httpClient.Timeout != Timeout.InfiniteTimeSpan)
+        {
+            source.CancelAfter(this._httpClient.Timeout);
         }
 
-        // Strip the leading '/' so the URL is treated as relative to the HttpClient's BaseAddress.
-        // Without this, HttpClient treats "/templates" as an absolute path from the host root,
-        // discarding the BaseAddress path component (e.g. "http://host/api/" → "http://host/templates").
-        if (url.Length > 0 && url[0] == '/')
-        {
-            url = url[1..];
-        }
-
-        var request = new HttpRequestMessage(method, url);
-        request.Options.Set(BlueprintRequestOptions.Operation, operation);
-
-        if (method != HttpMethod.Get)
-        {
-            // The declared type's metadata writes none of a derived type's own members, so an instance of one is written as its
-            // run-time type, as an operation without metadata is.
-            request.Content = operationTypeInfo is not null && operation.GetType() == typeof(TOperation)
-                ? JsonContent.Create(operation, operationTypeInfo)
-                : JsonContent.Create(operation, operation.GetType(), options: this._jsonOptions);
-        }
-
-        return request;
+        return source;
     }
 
     private async Task EnsureSuccessOrThrowAsync(

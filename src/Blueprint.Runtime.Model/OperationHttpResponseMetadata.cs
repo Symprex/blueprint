@@ -13,13 +13,40 @@ namespace Blueprint.Model;
 /// The title and type of each <c>ApiExceptionFactory</c> field on the operation whose status is this response's, read
 /// from the fields themselves when the descriptor is built. Empty when the operation declares none at this status.
 /// </param>
+/// <param name="ContentTypes">
+/// The media types a streamed body of this response is sent as, from the operation's <c>[ProducesContentType]</c>, for a
+/// <c>FileStreamResult</c> or <c>ProxyResult</c> response. Default or empty when the operation declares none.
+/// </param>
 public sealed record OperationHttpResponseMetadata(
     int StatusCode,
     bool HasResponseBody,
     ImmutableArray<string> ResultTypeNames,
     ImmutableArray<string> BodyTypeNames,
-    ImmutableArray<OperationProblemExample> ProblemExamples = default)
+    ImmutableArray<OperationProblemExample> ProblemExamples = default,
+    ImmutableArray<string> ContentTypes = default)
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OperationHttpResponseMetadata"/> class with no declared content types.
+    /// </summary>
+    /// <remarks>
+    /// The 3.0 signature, kept so that a descriptor its generator emitted still binds: <see cref="ContentTypes"/> was added
+    /// as an optional parameter, which a recompile fills in but an existing binary cannot.
+    /// </remarks>
+    /// <param name="statusCode">The HTTP status code emitted for this response family.</param>
+    /// <param name="hasResponseBody">Whether the current response family writes a response body.</param>
+    /// <param name="resultTypeNames">The semantic result type names that collapse into this HTTP response.</param>
+    /// <param name="bodyTypeNames">The body payload types currently known for this response family.</param>
+    /// <param name="problemExamples">The title and type of each <c>ApiExceptionFactory</c> at this response's status.</param>
+    public OperationHttpResponseMetadata(
+        int statusCode,
+        bool hasResponseBody,
+        ImmutableArray<string> resultTypeNames,
+        ImmutableArray<string> bodyTypeNames,
+        ImmutableArray<OperationProblemExample> problemExamples)
+        : this(statusCode, hasResponseBody, resultTypeNames, bodyTypeNames, problemExamples, default)
+    {
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="OperationHttpResponseMetadata"/> class with no problem examples.
     /// </summary>
@@ -33,7 +60,7 @@ public sealed record OperationHttpResponseMetadata(
     /// <param name="resultTypeNames">The semantic result type names that collapse into this HTTP response.</param>
     /// <param name="bodyTypeNames">The body payload types currently known for this response family.</param>
     public OperationHttpResponseMetadata(int statusCode, bool hasResponseBody, ImmutableArray<string> resultTypeNames, ImmutableArray<string> bodyTypeNames)
-        : this(statusCode, hasResponseBody, resultTypeNames, bodyTypeNames, default)
+        : this(statusCode, hasResponseBody, resultTypeNames, bodyTypeNames, default, default)
     {
     }
 
@@ -48,6 +75,23 @@ public sealed record OperationHttpResponseMetadata(
         hasResponseBody = this.HasResponseBody;
         resultTypeNames = this.ResultTypeNames;
         bodyTypeNames = this.BodyTypeNames;
+    }
+
+    /// <summary>Deconstructs the response into the five members it had in 3.0, kept for binaries built against that signature.</summary>
+    /// <param name="statusCode">The HTTP status code emitted for this response family.</param>
+    /// <param name="hasResponseBody">Whether the current response family writes a response body.</param>
+    /// <param name="resultTypeNames">The semantic result type names that collapse into this HTTP response.</param>
+    /// <param name="bodyTypeNames">The body payload types currently known for this response family.</param>
+    /// <param name="problemExamples">The title and type of each <c>ApiExceptionFactory</c> at this response's status.</param>
+    public void Deconstruct(
+        out int statusCode,
+        out bool hasResponseBody,
+        out ImmutableArray<string> resultTypeNames,
+        out ImmutableArray<string> bodyTypeNames,
+        out ImmutableArray<OperationProblemExample> problemExamples)
+    {
+        this.Deconstruct(out statusCode, out hasResponseBody, out resultTypeNames, out bodyTypeNames);
+        problemExamples = this.ProblemExamples;
     }
 }
 

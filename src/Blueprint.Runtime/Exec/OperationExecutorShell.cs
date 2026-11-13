@@ -494,6 +494,13 @@ public abstract class OperationExecutorShell : IOperationExecutorPipeline
 
     private OperationResult HandleException(ApiOperationContext context, Exception e)
     {
+        // The handler's ProxyResult is replaced by the failure, so nothing else will ever see or dispose its response.
+        if (context.UnownedProxyResult is { } abandoned)
+        {
+            context.UnownedProxyResult = null;
+            abandoned.DownstreamResponse.Dispose();
+        }
+
         if (e is Validation.ValidationException ve)
         {
             context.Activity?.SetTag("otel.status_code", "OK");

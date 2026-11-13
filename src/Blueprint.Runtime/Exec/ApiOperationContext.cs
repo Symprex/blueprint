@@ -126,6 +126,13 @@ public sealed class ApiOperationContext : IHttpOperationContext
     public HttpContext? HttpContext { get; set; }
 
     /// <summary>
+    /// Gets or sets the <see cref="Blueprint.Http.ProxyResult"/> the handler returned outside an HTTP request, which the pipeline disposes
+    /// the upstream response of if a later stage fails and replaces the result. A context of its own, nested or not, starts
+    /// without one.
+    /// </summary>
+    internal Blueprint.Http.ProxyResult? UnownedProxyResult { get; set; }
+
+    /// <summary>
     /// Gets or sets the <see cref="ClaimsPrincipal"/> representing the authenticated user for this operation.
     /// Set by the HTTP host from <see cref="Microsoft.AspNetCore.Http.HttpContext.User"/>.
     /// </summary>
