@@ -54,7 +54,7 @@ internal static class OperationPropertyModelBuilder
 
         return new OperationPropertyModel(
             operationType.ToFullMetadataName(),
-            exposed is null ? null : CreateExposedInfo(exposed),
+            exposed is null ? null : CreateExposedInfo(exposed, operationType),
             new EquatableList<OperationPropertyInfo>(infos),
             GetBindings(operationType));
     }
@@ -272,6 +272,17 @@ internal static class OperationPropertyModelBuilder
             source.AppendLine();
         }
 
+        if (exposed.InheritsDocumentation)
+        {
+            source.Append("/// <inheritdoc cref=\"").Append(exposed.TypeName).AppendLine("\"/>");
+        }
+
+        if (exposed.InheritedDescription is { } description)
+        {
+            source.Append("[global::System.ComponentModel.DescriptionAttribute(")
+                .Append(Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(description, quote: true)).AppendLine(")]");
+        }
+
         source.Append("partial class ").AppendLine(typeName);
         source.AppendLine("{");
 
@@ -422,7 +433,7 @@ internal static class OperationPropertyModelBuilder
         return false;
     }
 
-    private static ExposedOperationInfo CreateExposedInfo(INamedTypeSymbol exposed)
+    private static ExposedOperationInfo CreateExposedInfo(INamedTypeSymbol exposed, INamedTypeSymbol operationType)
     {
         var typeName = exposed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
@@ -442,7 +453,78 @@ internal static class OperationPropertyModelBuilder
             }
         }
 
-        return new ExposedOperationInfo(exposed.ToFullMetadataName(), typeName, creation);
+        // D15: an operation that documents or describes itself keeps its own. Where the build writes no documentation file,
+        // the comment is not parsed and so reads as none, and the inheritdoc emitted for it is ignored in turn.
+        var inheritsDocumentation = string.IsNullOrWhiteSpace(operationType.GetDocumentationCommentXml());
+
+        // Any [Description] of its own counts, however written: [Description] alone has no string to read, but a second one
+        // in the partial would be a duplicate (CS0579).
+        var inheritedDescription = HasDescription(operationType) ? null : FindDescription(exposed);
+
+        return new ExposedOperationInfo(exposed.ToFullMetadataName(), typeName, creation, inheritsDocumentation, inheritedDescription, GetInnerDependencies(exposed));
+    }
+
+    /// <summary>
+    /// Fingerprints what a descriptor reads from the inner operation beyond its properties: its factories and its docs. A
+    /// source inner operation is covered by the checksums of the files declaring it, as WithDeclarationChecksums covers the
+    /// exposing operation's own; a metadata one by its assembly's index entries for it and its documentation.
+    /// </summary>
+    private static EquatableList<string> GetInnerDependencies(INamedTypeSymbol exposed)
+    {
+        var dependencies = new List<string>();
+
+        foreach (var reference in exposed.DeclaringSyntaxReferences)
+        {
+            // Cached on the file's text, which an unedited file keeps.
+            dependencies.Add(reference.SyntaxTree.FilePath + ":" + Convert.ToBase64String(reference.SyntaxTree.GetText().GetChecksum().ToArray()));
+        }
+
+        if (dependencies.Count > 0)
+        {
+            return EquatableList<string>.TakeOwnership(dependencies);
+        }
+
+        var metadataName = exposed.ToFullMetadataName();
+        foreach (var attribute in exposed.ContainingAssembly.GetAttributes())
+        {
+            if (attribute.AttributeClass?.Name == "BlueprintApiExceptionStatusAttribute"
+                && attribute.ConstructorArguments is [{ Value: string indexedType }, ..]
+                && string.Equals(indexedType, metadataName, StringComparison.Ordinal))
+            {
+                dependencies.Add(Fingerprint.Join(attribute.ConstructorArguments.Select(static a => a.Value is null ? null : Convert.ToString(a.Value, CultureInfo.InvariantCulture)).ToArray()));
+            }
+        }
+
+        dependencies.Add(exposed.GetDocumentationCommentXml() ?? string.Empty);
+
+        return EquatableList<string>.TakeOwnership(dependencies);
+    }
+
+    /// <summary>
+    /// Whether a type carries a <c>[System.ComponentModel.Description]</c> of its own, with or without a string.
+    /// </summary>
+    private static bool HasDescription(INamedTypeSymbol type)
+    {
+        return type.GetAttributes().Any(static attribute => attribute.AttributeClass is { Name: "DescriptionAttribute" } attributeClass
+            && attributeClass.IsInNamespace("System", "ComponentModel"));
+    }
+
+    /// <summary>
+    /// The text of a type's own <c>[System.ComponentModel.Description]</c>, or <see langword="null"/>.
+    /// </summary>
+    private static string? FindDescription(INamedTypeSymbol type)
+    {
+        foreach (var attribute in type.GetAttributes())
+        {
+            if (attribute.AttributeClass is { Name: "DescriptionAttribute" } attributeClass
+                && attributeClass.IsInNamespace("System", "ComponentModel")
+                && attribute.ConstructorArguments is [{ Value: string description }])
+            {
+                return description;
+            }
+        }
+
+        return null;
     }
 
     private static bool IsPublicInstanceProperty(IPropertySymbol member)

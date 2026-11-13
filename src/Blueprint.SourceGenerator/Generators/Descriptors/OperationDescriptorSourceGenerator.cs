@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Blueprint.SourceGenerator.CodeWriter;
 using Blueprint.SourceGenerator.Generators.ApiResources;
@@ -156,7 +157,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         context.RegisterDiagnosticOutput(forwardedOperations);
 
         context.RegisterSourceOutput(
-            exposedOperations.Where(static analysis => analysis.Model.HasContributedProperties),
+            exposedOperations.Where(static analysis => analysis.Model.HasPartialToEmit),
             static (spc, analysis) => spc.AddSource(
                 $"{analysis.Model.OperationTypeName}_ExposedProperties.g.cs",
                 SourceText.From(OperationPropertyModelBuilder.RenderContributedProperties(analysis.Model), Encoding.UTF8)));
@@ -233,6 +234,9 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         // where no checksum above reaches (a rebuilt contract assembly has no file here), so its property model is part of
         // the key too. A declared-mode operation's model carries the rules and docs it takes from its inner operation (D10).
         var type = compilation.GetTypeByMetadataName(operation.FullClassName);
+
+        // D14's re-exported errors are [Expose<TInner>]'s alone; the property model is either mode's.
+        var innerType = type is null ? null : OperationPropertyModelBuilder.FindExposedType(type, out _);
         var exposedProperties = type is not null && OperationPropertyModelBuilder.FindGatewayInnerType(type, out _) is not null
             ? OperationPropertyModelBuilder.Build(type)
             : null;
@@ -248,9 +252,51 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             {
                 DeclarationChecksums = EquatableList<string>.TakeOwnership(checksums),
                 ExposedProperties = exposedProperties,
+                InnerErrorFacts = innerType is null ? EquatableList<string>.Empty : GetErrorFacts(type!, innerType, compilation, cancellationToken),
                 ForwardPolicyDiagnostics = forwardPolicyDiagnostics,
             },
         };
+    }
+
+    /// <summary>
+    /// What an exposing operation's descriptor documents of factories declared elsewhere (D14): each inner factory's name,
+    /// status, title and type where known, and whether the operation can read it at run time; and the same for the
+    /// operation's own factories, its <c>[TranslateError]</c> targets among them, which may be getter-backed. Each is
+    /// resolved through any alias and constant it reads, wherever those are declared.
+    /// </summary>
+    private static EquatableList<string> GetErrorFacts(INamedTypeSymbol operationType, INamedTypeSymbol innerType, Compilation compilation, CancellationToken cancellationToken)
+    {
+        if (compilation.GetTypeByMetadataName("Blueprint.ApiExceptionFactory") is not { } apiExceptionFactoryType)
+        {
+            return EquatableList<string>.Empty;
+        }
+
+        var facts = new List<string>();
+
+        foreach (var (named, member) in ApiExceptionFactoryResolver.GetDocumentedMembers(innerType, apiExceptionFactoryType))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            facts.Add(GetErrorFact(named, member, compilation, ApiExceptionFactoryResolver.CanRead(named, compilation.Assembly)));
+        }
+
+        // The operation's own factories too, whose aliases reach into other files: a [TranslateError] target, field or
+        // property, documents the status that replaces an inner one.
+        foreach (var (named, member) in ApiExceptionFactoryResolver.GetDocumentedMembers(operationType, apiExceptionFactoryType))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            facts.Add(GetErrorFact(named, member, compilation, readable: true));
+        }
+
+        return EquatableList<string>.TakeOwnership(facts);
+    }
+
+    private static string GetErrorFact(ISymbol named, ISymbol member, Compilation compilation, bool readable)
+    {
+        var readability = readable ? "readable" : "unreadable";
+
+        return ApiExceptionFactoryResolver.TryResolve(member, tree => compilation.ContainsSyntaxTree(tree) ? compilation.GetSemanticModel(tree) : null, out var factory)
+            ? Fingerprint.Join(named.Name, readability, factory.HttpStatus.ToString(CultureInfo.InvariantCulture), factory.Title, factory.Type)
+            : Fingerprint.Join(named.Name, readability);
     }
 
     private static Result<DescriptorPlan> Configure(
@@ -470,6 +516,12 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         /// the inner operation re-plans the descriptor although no file of the operation changed.
         /// </summary>
         public OperationPropertyModel? ExposedProperties { get; init; }
+
+        /// <summary>
+        /// Gets the inner operation's <c>ApiExceptionFactory</c> members as <see cref="ApiExceptionFactoryModule"/> resolves
+        /// them (D14), so an edit to a factory one aliases, in a file of neither operation, re-plans the descriptor.
+        /// </summary>
+        public EquatableList<string> InnerErrorFacts { get; init; } = EquatableList<string>.Empty;
 
         /// <summary>
         /// Gets what <see cref="UpstreamForwardPolicyAnalysis"/> reports for the operation, so an edit to the credential

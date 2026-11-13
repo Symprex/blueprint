@@ -344,6 +344,20 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
+    /// BPGW030: an inner factory whose problem type is known only at run time, re-exported by a gateway operation that
+    /// declares <c>[TranslateError]</c>s (D14): its type is not a constant, or its assembly was built by a generator that
+    /// indexed the status alone. Whether a translation answers it cannot be decided at compile time, so it is documented as
+    /// the inner operation gives it.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InnerFactoryTypeUnknown = new(
+        id: "BPGW030",
+        title: "An inner error's problem type is not known, so a translation cannot be matched to it",
+        messageFormat: "Gateway operation '{0}' declares [TranslateError]s, but the problem type of '{1}' (in '{2}') is known only at run time, so it is documented with its own status whether or not a translation answers it. Give it a constant type and, if '{2}' is a reference built by an earlier Blueprint, rebuild it with this one.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// BPGW035: a <c>[Hide]</c> on a property the inner operation requires, which the operation's map hook never assigns
     /// (#175). The hook has to assign <c>inner.Property</c> unconditionally in its own body, where the check can see it: one
     /// that left it to a helper, a branch or a lambda, or dropped the line, would otherwise send the type's default without
