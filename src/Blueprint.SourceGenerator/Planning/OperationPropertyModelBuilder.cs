@@ -71,6 +71,9 @@ internal static class OperationPropertyModelBuilder
         var result = new List<ResolvedOperationProperty>();
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
 
+        // D10: in declared mode a declared property takes its counterpart's rules and docs where it has none of its own.
+        var forwardedType = DeclaredForward.FindForwardedType(operationType, out _);
+
         foreach (var member in operationType.GetAllMembers().OfType<IPropertySymbol>())
         {
             if (!IsPublicInstanceProperty(member) || !seenNames.Add(member.Name))
@@ -79,9 +82,13 @@ internal static class OperationPropertyModelBuilder
             }
 
             var location = member.Locations.FirstOrDefault(static l => l.IsInSource);
-            result.Add(new ResolvedOperationProperty(
-                CreateInfo(member, OperationPropertyOrigin.Declared, location is null ? null : LocationInfo.CreateFrom(location), operationType.ContainingAssembly),
-                member));
+            var info = CreateInfo(member, OperationPropertyOrigin.Declared, location is null ? null : LocationInfo.CreateFrom(location), operationType.ContainingAssembly);
+            if (forwardedType is not null)
+            {
+                info = WithInherited(info, operationType, forwardedType, member);
+            }
+
+            result.Add(new ResolvedOperationProperty(info, member));
         }
 
         HashSet<string>? bound = null;
@@ -135,15 +142,16 @@ internal static class OperationPropertyModelBuilder
     }
 
     /// <summary>
-    /// Gets the D11 bindings of an operation marked <c>[Expose&lt;TInner&gt;]</c>: the inner properties it binds or hides,
-    /// which are left out of its contributed properties and filled by the generated forward instead.
+    /// Gets the D11 bindings of an operation marked <c>[Expose&lt;TInner&gt;]</c> or <c>[ForwardsTo&lt;TInner&gt;]</c>: the
+    /// inner properties it binds or hides, which are left out of its contributed properties and filled by the generated
+    /// forward instead.
     /// </summary>
     /// <param name="operationType">The operation.</param>
-    /// <returns>The valid bindings, empty when the operation exposes nothing or binds nothing.</returns>
+    /// <returns>The valid bindings, empty when the operation forwards nothing or binds nothing.</returns>
     public static EquatableList<GatewayPropertyBinding> GetBindings(INamedTypeSymbol operationType)
     {
-        return FindExposedType(operationType, out _) is { } exposed
-            ? GatewayBindings.Resolve(operationType, exposed)
+        return FindGatewayInnerType(operationType, out _) is { } inner
+            ? GatewayBindings.Resolve(operationType, inner)
             : EquatableList<GatewayPropertyBinding>.Empty;
     }
 
@@ -154,8 +162,15 @@ internal static class OperationPropertyModelBuilder
     /// <returns>The names, empty when the operation exposes nothing or binds nothing.</returns>
     public static HashSet<string> GetBoundNames(INamedTypeSymbol operationType)
     {
+        // Only [Expose] contributes properties whose rules can name a bound one: in declared mode a property declared on
+        // another type than the operation is a gateway base class's, whose rules are the gateway's own (D10).
         var names = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var binding in GetBindings(operationType))
+        if (FindExposedType(operationType, out _) is not { } exposed)
+        {
+            return names;
+        }
+
+        foreach (var binding in GatewayBindings.Resolve(operationType, exposed))
         {
             names.Add(binding.PropertyName);
         }
@@ -184,7 +199,9 @@ internal static class OperationPropertyModelBuilder
     /// Whether a rule's first argument names another property, as the validation module's missing-property checks read it,
     /// rather than being a literal such as <c>[RegularExpression]</c>'s pattern that may spell a property's name.
     /// </summary>
-    private static bool NamesAnotherProperty(INamedTypeSymbol attributeClass)
+    /// <param name="attributeClass">The rule's class.</param>
+    /// <returns><see langword="true"/> when the rule's first argument is another property's name.</returns>
+    internal static bool NamesAnotherProperty(INamedTypeSymbol attributeClass)
     {
         return Modules.ValidationSymbolHelpers.IsCompareAttribute(attributeClass)
             || Modules.ValidationSymbolHelpers.IsGreaterThanPropertyAttribute(attributeClass)
@@ -195,6 +212,18 @@ internal static class OperationPropertyModelBuilder
             || Modules.ValidationSymbolHelpers.IsNotAllowedIfAttribute(attributeClass)
             || Modules.ValidationSymbolHelpers.IsRequiredItemsIfAttribute(attributeClass)
             || Modules.ValidationSymbolHelpers.IsRequiredItemsIfNotAttribute(attributeClass);
+    }
+
+    /// <summary>
+    /// Finds the inner operation a gateway operation forwards to, in either mode: <c>[Expose&lt;TInner&gt;]</c> (D9) or
+    /// <c>[ForwardsTo&lt;TInner&gt;]</c> (D10).
+    /// </summary>
+    /// <param name="operationType">The operation.</param>
+    /// <param name="attribute">The mode's attribute, when there is one.</param>
+    /// <returns>The inner operation, or <see langword="null"/> when the operation is not a gateway operation.</returns>
+    public static INamedTypeSymbol? FindGatewayInnerType(INamedTypeSymbol operationType, out AttributeData? attribute)
+    {
+        return FindExposedType(operationType, out attribute) ?? DeclaredForward.FindForwardedType(operationType, out attribute);
     }
 
     /// <summary>
@@ -335,12 +364,10 @@ internal static class OperationPropertyModelBuilder
             bound.Add(binding.PropertyName);
         }
 
-        return exposedType.GetAllMembers()
-            .OfType<IPropertySymbol>()
-            .Where(member => IsPublicInstanceProperty(member)
-                && member.SetMethod is { DeclaredAccessibility: Accessibility.Public }
-                && !IsObsolete(member)
-                && !bound.Contains(member.Name));
+        // Only the declaration an initialiser sets counts: a base one a getter-only or static declaration hides would be
+        // published and its value never forwarded.
+        return DeclaredForward.GetSettableProperties(exposedType).Values
+            .Where(member => !IsObsolete(member) && !bound.Contains(member.Name));
     }
 
     /// <summary>
@@ -539,6 +566,18 @@ internal static class OperationPropertyModelBuilder
             || attributeClass.ToFullMetadataName() == "System.ObsoleteAttribute";
     }
 
+    /// <summary>
+    /// Whether code in <paramref name="within"/> can apply an attribute as it is applied: its class, constructor, named
+    /// arguments and every type its arguments name are accessible there.
+    /// </summary>
+    /// <param name="attribute">The attribute.</param>
+    /// <param name="within">The assembly that would apply it.</param>
+    /// <returns><see langword="true"/> when it can be carried.</returns>
+    internal static bool CanCarry(AttributeData attribute, IAssemblySymbol within)
+    {
+        return attribute.AttributeClass is { TypeKind: not TypeKind.Error } attributeClass && CanCarry(attribute, attributeClass, within);
+    }
+
     private static bool CanCarry(AttributeData attribute, INamedTypeSymbol attributeClass, IAssemblySymbol within)
     {
         // No constructor is resolved where the one applied is one metadata does not import for this compilation: an internal
@@ -680,6 +719,35 @@ internal static class OperationPropertyModelBuilder
             EquatableList<string>.TakeOwnership(attributes),
             string.IsNullOrWhiteSpace(documentation) ? null : documentation,
             location);
+    }
+
+    /// <summary>
+    /// Adds to a declared property's model the rules and docs it takes from its counterpart in declared mode (D10), so the
+    /// model, which keys a descriptor's cache, changes with them.
+    /// </summary>
+    private static OperationPropertyInfo WithInherited(OperationPropertyInfo info, INamedTypeSymbol operationType, INamedTypeSymbol forwardedType, IPropertySymbol member)
+    {
+        var rules = DeclaredForward.GetInheritedRules(operationType, forwardedType, member);
+        var documentation = DeclaredForward.GetInheritedDocumentation(operationType, forwardedType, member);
+        if (rules.Count == 0 && documentation is null)
+        {
+            return info;
+        }
+
+        var attributes = new List<string>(info.Attributes);
+        foreach (var rule in rules)
+        {
+            if (RenderAttribute(rule, operationType.ContainingAssembly) is { } rendered)
+            {
+                attributes.Add(rendered);
+            }
+        }
+
+        return info with
+        {
+            Attributes = EquatableList<string>.TakeOwnership(attributes),
+            DocumentationCommentXml = documentation ?? info.DocumentationCommentXml,
+        };
     }
 
     private static string? RenderAttribute(AttributeData attribute, IAssemblySymbol within)

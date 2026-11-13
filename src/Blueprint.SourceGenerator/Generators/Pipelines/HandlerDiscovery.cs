@@ -25,8 +25,9 @@ public static class HandlerDiscovery
         INamedTypeSymbol operationType,
         ExternalHandlerIndex externalHandlerIndex)
     {
-        // An [Expose<TInner>] operation's handler is generated (D12), so a hand-written one would make the attribute misleading.
-        var exposedType = OperationPropertyModelBuilder.FindExposedType(operationType, out _);
+        // An [Expose<TInner>] or [ForwardsTo<TInner>] operation's handler is generated (D12), so a hand-written one would make
+        // the attribute misleading.
+        var exposedType = OperationPropertyModelBuilder.FindGatewayInnerType(operationType, out _);
 
         // First, try to find an inline handler
         var (inlineValue, inlineDiagnostic) = FindInlineHandler(operationType);

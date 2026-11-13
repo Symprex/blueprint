@@ -164,7 +164,7 @@ internal static class GatewayBindings
 
     private static EquatableList<GatewayPropertyBinding> Evaluate(INamedTypeSymbol operationType, INamedTypeSymbol innerType, List<DiagnosticInfo>? diagnostics)
     {
-        var innerProperties = GetSettableProperties(innerType);
+        var innerProperties = DeclaredForward.GetSettableProperties(innerType);
         var declared = GetDeclaredProperties(operationType);
         var result = new List<GatewayPropertyBinding>();
         var bound = new HashSet<string>(StringComparer.Ordinal);
@@ -446,22 +446,14 @@ internal static class GatewayBindings
             }
         }
 
-        var gatewayPlaceholders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var template in GetRouteTemplates(operationType))
-        {
-            foreach (Match match in Placeholder.Matches(template))
-            {
-                gatewayPlaceholders.Add(match.Groups[1].Value);
-            }
-        }
-
         // A copied property gives the inner request builder its value wherever the gateway reads it from, the query string
-        // included (#161). A declared one of another type is the gateway's own, so it does not.
+        // included (#161). A declared one of another type is the gateway's own, so it does not, and nor does a gateway route
+        // placeholder whose property a rename sends to another inner property.
         var copied = GatewayForward.GetCopiedProperties(operationType, innerType, bindings, out _);
 
         foreach (var name in required)
         {
-            if (gatewayPlaceholders.Contains(name) || copied.Contains(name) || bindings.Any(b => b.PropertyName == name))
+            if (copied.Any(c => c.InnerName == name) || bindings.Any(b => b.PropertyName == name))
             {
                 continue;
             }
@@ -491,7 +483,7 @@ internal static class GatewayBindings
         {
             var name = RoutePlaceholderSyntax.ResolveMemberName(innerMembers, placeholder) ?? placeholder;
 
-            return copied.Contains(name);
+            return copied.Any(c => c.InnerName == name);
         }
 
         bool IsAlwaysNull(string placeholder) =>
@@ -650,7 +642,7 @@ internal static class GatewayBindings
 
     private static bool HasRequiredAttribute(IPropertySymbol property)
     {
-        return property.GetAttributes().Any(static a => a.AttributeClass?.InheritsFrom("System.ComponentModel.DataAnnotations.RequiredAttribute") == true
+        return DeclaredForward.GetEffectiveAttributes(property).Any(static a => a.AttributeClass?.InheritsFrom("System.ComponentModel.DataAnnotations.RequiredAttribute") == true
             || a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.RequiredAttribute");
     }
 
@@ -694,21 +686,6 @@ internal static class GatewayBindings
         }
 
         return resolved;
-    }
-
-    private static Dictionary<string, IPropertySymbol> GetSettableProperties(INamedTypeSymbol type)
-    {
-        var properties = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
-        foreach (var member in type.GetAllMembers().OfType<IPropertySymbol>())
-        {
-            if (member is { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public, SetMethod.DeclaredAccessibility: Accessibility.Public }
-                && !properties.ContainsKey(member.Name))
-            {
-                properties.Add(member.Name, member);
-            }
-        }
-
-        return properties;
     }
 
     private static Dictionary<string, IPropertySymbol> GetDeclaredProperties(INamedTypeSymbol type)

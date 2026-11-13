@@ -59,9 +59,13 @@ internal static class ValidationPropertyPlanner
     {
         // Class-level validation attributes (e.g. [CustomValidation] on the type) require full runtime fallback
         // because they may depend on cross-property state that we cannot safely decompose at compile time.
+        var forwardedType = Gateway.DeclaredForward.FindForwardedType(operationType, out _);
+
         if (ValidationSymbolHelpers.HasValidationAttribute(operationType))
         {
-            return new ValidationPipelinePlan(RequiresWholeObjectFallback: true, ImplementsIValidatableObject: false, Properties: []);
+            // The runtime validates the gateway's own attributes only, so a declared-mode operation's inherited rules (D10)
+            // are planned alongside it.
+            return new ValidationPipelinePlan(RequiresWholeObjectFallback: true, ImplementsIValidatableObject: false, Properties: PlanInheritedRulesOnly(operationType, forwardedType));
         }
 
         var implementsIValidatableObject = ValidationSymbolHelpers.ImplementsIValidatableObject(operationType);
@@ -93,6 +97,22 @@ internal static class ValidationPropertyPlanner
                     validationAttributeList ??= new List<AttributeData>(4);
                     validationAttributeList.Add(attribute);
                 }
+            }
+
+            // D10: a declared-mode property with no rules of its own is validated by its inner counterpart's. Only generated
+            // checks can apply them, since the runtime path reads the gateway property's own attributes, so a rule without
+            // a fast path is left to the inner operation, which validates the forwarded instance.
+            if (validationAttributeList is null
+                && forwardedType is not null
+                && Gateway.DeclaredForward.GetInheritedRules(operationType, forwardedType, property) is { Count: > 0 } inheritedRules)
+            {
+                if (TryCreateInheritedPlan(property, propertyAccess, inheritedRules, out var inheritedPlan))
+                {
+                    properties.Add(inheritedPlan);
+                }
+
+                AppendChildValidationIfApplicable(properties, property, propertyAccess);
+                continue;
             }
 
             if (validationAttributeList is null)
@@ -207,11 +227,133 @@ internal static class ValidationPropertyPlanner
         }
     }
 
+    /// <summary>
+    /// Plans the inherited rules (D10) of a declared-mode operation whose own validation the runtime owns, because a
+    /// class-level attribute requires the whole-object fallback: those properties declare no rules the runtime would see.
+    /// </summary>
+    private static List<PropertyValidationPlan> PlanInheritedRulesOnly(INamedTypeSymbol operationType, INamedTypeSymbol? forwardedType)
+    {
+        var properties = new List<PropertyValidationPlan>();
+        if (forwardedType is null)
+        {
+            return properties;
+        }
+
+        foreach (var property in ValidationSymbolHelpers.GetPublicInstanceProperties(operationType))
+        {
+            var propertyAccess = $"operation.{ValidationSymbolHelpers.EscapeIdentifier(property.Name)}";
+            if (Gateway.DeclaredForward.GetInheritedRules(operationType, forwardedType, property) is { Count: > 0 } rules
+                && TryCreateInheritedPlan(property, propertyAccess, rules, out var plan))
+            {
+                properties.Add(plan);
+            }
+        }
+
+        return properties;
+    }
+
+    /// <summary>
+    /// Plans the inherited rules of one property that generated checks can apply. One without a fast path is left to the
+    /// inner operation without taking the others with it, as it would if the whole set were planned at once.
+    /// </summary>
+    private static bool TryCreateInheritedPlan(
+        IPropertySymbol property,
+        string propertyAccess,
+        IReadOnlyList<AttributeData> rules,
+        out FastPathPropertyValidationPlan plan)
+    {
+        var supported = new List<AttributeData>(rules.Count);
+        foreach (var rule in rules)
+        {
+            if (TryCreateFastPathPlan(property, propertyAccess, [rule], out _))
+            {
+                supported.Add(rule);
+            }
+        }
+
+        if (supported.Count == 0)
+        {
+            plan = null!;
+            return false;
+        }
+
+        var displayNameExpression = GetDisplayNameExpression(property);
+        if (!TryCreateFastPathPlan(property, propertyAccess, supported, out plan, displayNameExpression))
+        {
+            return false;
+        }
+
+        if (displayNameExpression is null)
+        {
+            plan = plan with { DisplayNameFromDescriptor = true };
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Gets the C# expression of the name the runtime would give a property in its validation messages: its
+    /// <c>[Display]</c> name, else its <c>[DisplayName]</c>, else its own name, reading the attributes an override inherits
+    /// as the runtime does. Inherited checks need it because the runtime path, which reads those attributes itself, cannot
+    /// see the rules they apply.
+    /// </summary>
+    /// <returns>
+    /// The expression, or <see langword="null"/> for a resource-backed <c>[Display]</c> name, which only the attribute can
+    /// resolve: the check reads it from the descriptor's cached attributes, so the resource type, which the pipeline class
+    /// may not be able to name, is never written out and the lookup is not repeated on every failure.
+    /// </returns>
+    private static string? GetDisplayNameExpression(IPropertySymbol property)
+    {
+        var attributes = Gateway.DeclaredForward.GetEffectiveAttributes(property)
+            .Where(static a => ValidationSymbolHelpers.IsDisplayNameAffectingAttribute(a.AttributeClass))
+            .ToList();
+
+        // As ValidationRuntime.GetDisplayName: a blank label is no label, so the search goes on.
+        var fallback = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(property.Name, quote: true);
+        if (attributes.FirstOrDefault(static a => a.AttributeClass!.Name != "DisplayAttribute"
+            && a.ConstructorArguments is [{ Value: string label }] && !string.IsNullOrWhiteSpace(label)) is { ConstructorArguments: [{ Value: string displayName }] })
+        {
+            fallback = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(displayName, quote: true);
+        }
+
+        foreach (var attribute in attributes)
+        {
+            if (attribute.AttributeClass!.Name != "DisplayAttribute")
+            {
+                continue;
+            }
+
+            string? name = null;
+            ITypeSymbol? resourceType = null;
+            foreach (var argument in attribute.NamedArguments)
+            {
+                if (argument is { Key: "Name", Value.Value: string value })
+                {
+                    name = value;
+                }
+                else if (argument is { Key: "ResourceType", Value.Value: ITypeSymbol type })
+                {
+                    resourceType = type;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            return resourceType is null ? Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(name!, quote: true) : null;
+        }
+
+        return fallback;
+    }
+
     private static bool TryCreateFastPathPlan(
         IPropertySymbol property,
         string propertyAccess,
         IReadOnlyList<AttributeData> validationAttributes,
-        out FastPathPropertyValidationPlan plan)
+        out FastPathPropertyValidationPlan plan,
+        string? displayNameExpression = null)
     {
         ValidationFastPathRule? requiredRule = null;
         var otherRules = new List<ValidationFastPathRule>();
@@ -241,7 +383,7 @@ internal static class ValidationPropertyPlanner
 
         plan = new FastPathPropertyValidationPlan(
             property.Name,
-            property.Name,
+            displayNameExpression ?? Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(property.Name, quote: true),
             propertyAccess,
             requiredRule,
             otherRules);

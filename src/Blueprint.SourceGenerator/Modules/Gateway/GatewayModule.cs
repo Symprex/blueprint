@@ -5,9 +5,10 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Modules.Gateway;
 
 /// <summary>
-/// Gateway operations (Symprex/blueprint#59): checks that an operation marked <c>[Expose&lt;TInner&gt;]</c> declares its
-/// authorisation with Blueprint's native attributes (D13), and that any operation's upstream credential and error
-/// translations are valid (D7, D8; <see cref="UpstreamForwardPolicyAnalysis"/>).
+/// Gateway operations (Symprex/blueprint#59): checks that an operation marked <c>[Expose&lt;TInner&gt;]</c> or
+/// <c>[ForwardsTo&lt;TInner&gt;]</c> declares its authorisation with Blueprint's native attributes (D13), that any
+/// operation's upstream credential and error translations are valid (D7, D8; <see cref="UpstreamForwardPolicyAnalysis"/>),
+/// and that only a declared-mode operation renames a property with <c>[ForwardAs]</c> (D10).
 /// </summary>
 /// <remarks>
 /// The rest of minimal mode lives where the generator that needs it runs: the property model and its emission in
@@ -46,7 +47,12 @@ public sealed class GatewayModule : IBlueprintSourceGeneratorModule, IDescriptor
             context.AddDiagnostic(diagnostic);
         }
 
-        if (OperationPropertyModelBuilder.FindExposedType(operationType, out var exposeAttribute) is null)
+        if (DeclaredForward.FindForwardedType(operationType, out _) is null)
+        {
+            ReportRenamesWithoutForwardsTo(context, operationType);
+        }
+
+        if (OperationPropertyModelBuilder.FindGatewayInnerType(operationType, out var exposeAttribute) is null)
         {
             return;
         }
@@ -61,6 +67,35 @@ public sealed class GatewayModule : IBlueprintSourceGeneratorModule, IDescriptor
             : LocationInfo.CreateFrom(operationType.Locations.First());
 
         context.AddDiagnostic(new DiagnosticInfo(GatewayDiagnosticDescriptors.MissingAuthorisationDeclaration, location, [operationType.Name]));
+    }
+
+    /// <summary>
+    /// BPGW027: a <c>[ForwardAs]</c> on an operation that no declared-mode forward reads, so the rename would do nothing.
+    /// </summary>
+    private static void ReportRenamesWithoutForwardsTo(DescriptorContributorContext context, INamedTypeSymbol operationType)
+    {
+        // The operation's own declarations, then the public ones it inherits; the most derived declaration of a name stands
+        // for it, and an override carries the rename of the declaration it overrides.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var member in operationType.GetAllMembers())
+        {
+            if (member is not IPropertySymbol property
+                || !seen.Add(property.Name)
+                || (!SymbolEqualityComparer.Default.Equals(property.ContainingType, operationType)
+                    && (property.IsStatic || property.DeclaredAccessibility != Accessibility.Public)))
+            {
+                continue;
+            }
+
+            if (DeclaredForward.FindForwardAs(property, out _) is { } forwardAs)
+            {
+                var location = forwardAs.ApplicationSyntaxReference is { } reference
+                    ? LocationInfo.CreateFrom(reference.GetSyntax())
+                    : LocationInfo.CreateFrom(property.Locations.First());
+
+                context.AddDiagnostic(new DiagnosticInfo(GatewayDiagnosticDescriptors.ForwardAsWithoutForwardsTo, location, [operationType.Name, property.Name]));
+            }
+        }
     }
 
     /// <summary>

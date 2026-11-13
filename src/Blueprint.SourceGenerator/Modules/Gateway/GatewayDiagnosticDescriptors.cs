@@ -3,8 +3,8 @@ using Microsoft.CodeAnalysis;
 namespace Blueprint.SourceGenerator.Modules.Gateway;
 
 /// <summary>
-/// Diagnostic descriptors for gateway operations: <c>[Expose&lt;TInner&gt;]</c> and the forwarding handler the pipeline
-/// generator synthesises for it (Symprex/blueprint#59, D17).
+/// Diagnostic descriptors for gateway operations: <c>[Expose&lt;TInner&gt;]</c>, <c>[ForwardsTo&lt;TInner&gt;]</c> and
+/// the forwarding handler the pipeline generator synthesises for them (Symprex/blueprint#59, D17).
 /// </summary>
 internal static class GatewayDiagnosticDescriptors
 {
@@ -66,12 +66,13 @@ internal static class GatewayDiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
-    /// BPGW006: an <c>[Expose&lt;TInner&gt;]</c> class that declares no operation interface (D9).
+    /// BPGW006: an <c>[Expose&lt;TInner&gt;]</c> or <c>[ForwardsTo&lt;TInner&gt;]</c> class that declares no operation
+    /// interface (D9, D10).
     /// </summary>
     public static readonly DiagnosticDescriptor MissingOperationInterface = new(
         id: "BPGW006",
-        title: "An exposing operation must declare its operation interface",
-        messageFormat: "'{0}' uses [Expose<{1}>] but declares no operation interface, so no generator treats it as an operation. Declare it, for example 'partial class {0} : {2}'.",
+        title: "A gateway operation must declare its operation interface",
+        messageFormat: "'{0}' uses [{3}<{1}>] but declares no operation interface, so no generator treats it as an operation. Declare it, for example 'partial class {0} : {2}'.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -246,6 +247,85 @@ internal static class GatewayDiagnosticDescriptors
         id: "BPGW021",
         title: "A property the gateway operation declares cannot be bound or hidden from elsewhere",
         messageFormat: "Gateway operation '{0}' declares '{1}', which a binding fills from elsewhere or hides, so callers would see a property the forward ignores. Remove the declaration, or forward it with [Bind(\"{1}\", FromProperty = \"{1}\")].",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW022: a declared-mode property whose type is not the type of the inner property it is matched to (D16).
+    /// </summary>
+    public static readonly DiagnosticDescriptor DeclaredPropertyTypeMismatch = new(
+        id: "BPGW022",
+        title: "A declared property must have the type of the inner property it forwards to",
+        messageFormat: "Gateway operation '{0}' declares '{1}' as {2}, but it forwards to {3}.{4}, which is {5}. Declare it as {5}, rename it with [ForwardAs] so it no longer matches {4}, or fill {4} with [Bind].",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW023: a <c>[ForwardAs]</c> naming no public settable property of the inner operation (D10).
+    /// </summary>
+    public static readonly DiagnosticDescriptor ForwardAsTargetNotOnInnerOperation = new(
+        id: "BPGW023",
+        title: "[ForwardAs] must name a settable property of the inner operation",
+        messageFormat: "Gateway operation '{0}' forwards '{1}' as '{2}', but '{3}' has no public settable property '{2}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW024: an inner property that more than one declared property forwards to, or that a declared property forwards
+    /// to although a binding fills it (D10, D11).
+    /// </summary>
+    public static readonly DiagnosticDescriptor InnerPropertyForwardedTwice = new(
+        id: "BPGW024",
+        title: "An inner property can be supplied only once",
+        messageFormat: "Gateway operation '{0}' supplies {1}.{2} more than once: from {3}. Forward it from one property, or leave it to the binding.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW025: an inner property marked <c>[Required]</c> that no declared property, binding or map hook supplies (D16).
+    /// </summary>
+    public static readonly DiagnosticDescriptor RequiredInnerPropertyNotSupplied = new(
+        id: "BPGW025",
+        title: "A declared operation must supply every required property of the inner operation",
+        messageFormat: "Gateway operation '{0}' forwards to '{1}', which requires {2}, but no declared property, binding or OnMap hook supplies it. Declare it, or fill it with [Bind].",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW026: an inner property marked <c>[Required]</c> that only the operation's map hook could supply, which the
+    /// generator does not analyse (D16).
+    /// </summary>
+    public static readonly DiagnosticDescriptor RequiredInnerPropertyLeftToMapHook = new(
+        id: "BPGW026",
+        title: "A required inner property is left to the map hook",
+        messageFormat: "Gateway operation '{0}' forwards to '{1}', which requires {2}, and only its OnMap hook could supply it, which the generator cannot check. Fill it with [Bind] if a binding can, or [Hide] it if the hook sets it.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW027: a <c>[ForwardAs]</c> on a property of an operation that is not marked <c>[ForwardsTo&lt;TInner&gt;]</c>.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ForwardAsWithoutForwardsTo = new(
+        id: "BPGW027",
+        title: "[ForwardAs] needs [ForwardsTo<TInner>]",
+        messageFormat: "Operation '{0}' marks '{1}' with [ForwardAs], which only an operation marked [ForwardsTo<TInner>] reads. Mark the operation [ForwardsTo<TInner>], or remove the attribute.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// BPGW028: an operation marked both <c>[Expose&lt;TInner&gt;]</c> and <c>[ForwardsTo&lt;TInner&gt;]</c>.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ExposeAndForwardsTo = new(
+        id: "BPGW028",
+        title: "An operation is either exposed or declared, not both",
+        messageFormat: "Operation '{0}' is marked both [Expose<TInner>] and [ForwardsTo<TInner>]. Use [Expose<TInner>] to take the inner operation's properties, or [ForwardsTo<TInner>] to declare them.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

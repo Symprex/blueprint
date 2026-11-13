@@ -77,14 +77,21 @@ public sealed class OperationDocumentationModule : IBlueprintSourceGeneratorModu
     {
         var summaries = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        // D10: in declared mode a property with no docs of its own is documented by its inner counterpart's.
+        var forwardedType = Gateway.DeclaredForward.FindForwardedType(operationType, out _);
+
+        // Members come most derived first, and as in the property model the first declaration of a name is the property;
+        // a base declaration it hides documents nothing.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationType).OfType<IPropertySymbol>())
         {
-            if (member.IsStatic || member.DeclaredAccessibility != Accessibility.Public)
+            if (member.IsStatic || member.DeclaredAccessibility != Accessibility.Public || !seen.Add(member.Name))
             {
                 continue;
             }
 
-            var propertySummary = ExtractSummary(member);
+            var propertySummary = ExtractOwnOrOverriddenSummary(member)
+                ?? ExtractXmlSection(Gateway.DeclaredForward.GetInheritedDocumentation(operationType, forwardedType, member), "summary");
 
             if (propertySummary is not null)
             {
@@ -95,10 +102,29 @@ public sealed class OperationDocumentationModule : IBlueprintSourceGeneratorModu
         return summaries;
     }
 
+    /// <summary>
+    /// The property's own summary, else that of the nearest declaration it overrides.
+    /// </summary>
+    private static string? ExtractOwnOrOverriddenSummary(IPropertySymbol property)
+    {
+        for (var current = property; current is not null; current = current.OverriddenProperty)
+        {
+            if (ExtractSummary(current) is { } summary)
+            {
+                return summary;
+            }
+        }
+
+        return null;
+    }
+
     private static string? ExtractXmlSection(ISymbol symbol, string sectionName)
     {
-        var xmlComment = symbol.GetDocumentationCommentXml();
+        return ExtractXmlSection(symbol.GetDocumentationCommentXml(), sectionName);
+    }
 
+    private static string? ExtractXmlSection(string? xmlComment, string sectionName)
+    {
         if (string.IsNullOrWhiteSpace(xmlComment))
         {
             return null;
