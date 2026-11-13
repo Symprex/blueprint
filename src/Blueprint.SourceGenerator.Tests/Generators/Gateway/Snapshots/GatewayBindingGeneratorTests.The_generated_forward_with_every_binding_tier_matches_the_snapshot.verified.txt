@@ -5,6 +5,7 @@
 
 namespace Gateway;
 
+/// <inheritdoc cref="global::Inner.AddNoteCommand"/>
 partial class AddGatewayNoteCommand
 {
     [global::System.ThreadStatic]
