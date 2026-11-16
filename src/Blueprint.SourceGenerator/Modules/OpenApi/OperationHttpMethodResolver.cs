@@ -29,12 +29,20 @@ internal static class OperationHttpMethodResolver
     /// <remarks>
     /// An inherited method is not an attribute of the operation's own, so BPOA001 and BPOA002 are never reported for it: an
     /// inner operation whose methods are blank or conflict is its own compilation's to report, and the operation exposing it
-    /// falls back to the convention.
+    /// falls back to the convention. So does an operation in an exposure cycle (one exposing itself, or two exposing each
+    /// other) that declares no method along it.
     /// </remarks>
     /// <param name="operationType">The operation's type.</param>
     /// <returns>The methods, or why there are none.</returns>
     internal static OperationHttpMethods Resolve(INamedTypeSymbol operationType)
     {
+        return ResolveAvoiding(operationType, new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default));
+    }
+
+    private static OperationHttpMethods ResolveAvoiding(INamedTypeSymbol operationType, HashSet<INamedTypeSymbol> visited)
+    {
+        visited.Add(operationType);
+
         var explicitMethods = operationType.GetAttributes()
             .Where(static attribute => attribute.AttributeClass is { } attributeClass && IsOrInheritsFromHttpMethodAttribute(attributeClass))
             .Select(static attribute => (Attribute: attribute, HttpMethod: GetExplicitHttpMethodValue(attribute)))
@@ -42,8 +50,8 @@ internal static class OperationHttpMethodResolver
 
         if (explicitMethods.Length == 0)
         {
-            var inherited = OperationPropertyModelBuilder.FindExposedType(operationType, out _) is { } inner
-                ? Resolve(inner)
+            var inherited = OperationPropertyModelBuilder.FindExposedType(operationType, out _) is { } inner && !visited.Contains(inner)
+                ? ResolveAvoiding(inner, visited)
                 : default;
 
             return inherited is { InvalidAttribute: null, Methods.Length: 1 }

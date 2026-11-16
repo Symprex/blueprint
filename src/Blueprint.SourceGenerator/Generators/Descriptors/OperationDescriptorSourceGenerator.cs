@@ -253,6 +253,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
                 DeclarationChecksums = EquatableList<string>.TakeOwnership(checksums),
                 ExposedProperties = exposedProperties,
                 InnerErrorFacts = innerType is null ? EquatableList<string>.Empty : GetErrorFacts(type!, innerType, compilation, cancellationToken),
+                ExposedHttpMethods = innerType is null ? EquatableList<string>.Empty : EquatableList<string>.TakeOwnership([.. OperationHttpMethodResolver.Resolve(type!).Methods]),
                 ForwardPolicyDiagnostics = forwardPolicyDiagnostics,
             },
         };
@@ -522,6 +523,13 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         /// them (D14), so an edit to a factory one aliases, in a file of neither operation, re-plans the descriptor.
         /// </summary>
         public EquatableList<string> InnerErrorFacts { get; init; } = EquatableList<string>.Empty;
+
+        /// <summary>
+        /// Gets the HTTP methods an operation exposing another with <c>[Expose&lt;TInner&gt;]</c> resolves to, which it may
+        /// take from the inner operation (Symprex/blueprint#190), so a change to the inner operation's method, which no
+        /// file of the operation and no property model reflects, re-plans the descriptor.
+        /// </summary>
+        public EquatableList<string> ExposedHttpMethods { get; init; } = EquatableList<string>.Empty;
 
         /// <summary>
         /// Gets what <see cref="UpstreamForwardPolicyAnalysis"/> reports for the operation, so an edit to the credential
