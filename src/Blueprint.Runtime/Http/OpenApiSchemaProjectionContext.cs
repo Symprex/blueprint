@@ -312,7 +312,33 @@ public sealed record OpenApiSchemaProjectionContext(
         {
             JsonTypeInfoKind.Object => typeInfo.Properties.Where(static property => !property.IsExtensionData && IsSerialised(property)).Select(static property => property.PropertyType),
             JsonTypeInfoKind.Enumerable or JsonTypeInfoKind.Dictionary when typeInfo.ElementType is { } elementType => [elementType],
+            JsonTypeInfoKind.None when GetConverterWrittenElementType(typeInfo.Type) is { } elementType => [elementType],
             _ => [],
+        };
+    }
+
+    /// <summary>
+    /// Returns the type of the items, or of a dictionary's values, of a collection the serializer metadata describes as
+    /// <see cref="JsonTypeInfoKind.None"/>, written by a converter of its own, which the document still renders as the
+    /// array or dictionary its CLR type is (<see cref="MapKind"/>).
+    /// </summary>
+    /// <param name="type">The collection's type.</param>
+    /// <returns>The element type, or <see langword="null"/> when <paramref name="type"/> is not rendered as a collection.</returns>
+    /// <remarks>
+    /// A converter registered for a collection type on the serializer options (one that reads the items one at a time, to
+    /// refuse a bad item on its own) hides the element type from the metadata, which once left the element and every type
+    /// reached only through it without a component, and the property's items a bare object. A type the document renders
+    /// as a scalar, such as a byte array or a strongly typed id, keeps no element type.
+    /// </remarks>
+    private static Type? GetConverterWrittenElementType(Type type)
+    {
+        var nonNullableType = Nullable.GetUnderlyingType(type) ?? type;
+
+        return MapKind(nonNullableType, JsonTypeInfoKind.None) switch
+        {
+            OpenApiSchemaKind.Object => ExtractElementType(nonNullableType, JsonTypeInfoKind.Dictionary),
+            OpenApiSchemaKind.Array => ExtractElementType(nonNullableType, JsonTypeInfoKind.Enumerable),
+            _ => null,
         };
     }
 
@@ -914,6 +940,18 @@ public sealed record OpenApiSchemaProjectionContext(
             var kind = MapKind(elementType, JsonTypeInfoKind.None);
             var format = MapFormat(elementType);
             var schemaName = ResolveSchemaRef(elementType, kind, schemaNamesByType);
+            return (kind, format, schemaName);
+        }
+
+        // A collection written by a converter of its own has no element type in its metadata; its CLR type still says
+        // what each item, or each value, is.
+        if (typeInfo is { Kind: JsonTypeInfoKind.None }
+            && MapKind(propertyType, JsonTypeInfoKind.None) == (expectedKind == JsonTypeInfoKind.Dictionary ? OpenApiSchemaKind.Object : OpenApiSchemaKind.Array)
+            && GetConverterWrittenElementType(propertyType) is { } convertedElementType)
+        {
+            var kind = MapKind(convertedElementType, JsonTypeInfoKind.None);
+            var format = MapFormat(convertedElementType);
+            var schemaName = ResolveSchemaRef(convertedElementType, kind, schemaNamesByType);
             return (kind, format, schemaName);
         }
 
