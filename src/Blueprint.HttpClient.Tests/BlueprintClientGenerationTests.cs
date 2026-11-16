@@ -189,8 +189,10 @@ public sealed class BlueprintClientGenerationTests : IClassFixture<SampleAppFixt
     [Fact]
     public void The_interface_has_a_method_for_each_included_operation_named_for_it()
     {
+        // The two uploads are not sample cases: a form's boundary is random and a stream is read once, so no two sends of one
+        // compare equal. BlueprintHttpClientStreamingRequestTests covers what they send.
         OperationMethods(typeof(ISampleContractApi)).Select(static m => m.Name)
-            .Should().BeEquivalentTo(SampleCases.Select(static c => ((ClientCase)c[0]).MethodName));
+            .Should().BeEquivalentTo(SampleCases.Select(static c => ((ClientCase)c[0]).MethodName).Append("AttachTemplateFileAsync").Append("ImportTemplateSourceAsync"));
 
         OperationMethods(typeof(ILocalOperationsApi)).Select(static m => m.Name)
             .Should().BeEquivalentTo("CopyTemplateAsync", "FindTemplateCopiesAsync");

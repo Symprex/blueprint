@@ -459,16 +459,44 @@ public sealed partial record OpenApiOperationRenderingContext(
         var bodyPropertyNamesByClrName = new Dictionary<string, string>(StringComparer.Ordinal);
         var nullabilityContext = new NullabilityInfoContext();
 
+        // #71 (D19): a body-owned Stream is handed the whole body, and an IFormFile makes the body a multipart form, whose
+        // files are binary strings. The generator allows neither beside anything that would contradict that (BPPO014-016).
+        var bodyMediaType = OpenApiRequestBodyMediaTypes.Json;
+
+        // A multipart form's fields are described as the form binds them, not as JSON writes them, so the shape comes first.
+        var isMultipartBody = ownershipData.Entries.Any(e => e.Source == PropertyBindingSource.Body
+            && MostDerivedProperties.Find(descriptor.OperationType, e.PropertyName)?.PropertyType
+                == typeof(Microsoft.AspNetCore.Http.IFormFile));
+
         foreach (var entry in ownershipData.Entries)
         {
-            var clrProperty = descriptor.OperationType.GetProperty(
-                entry.PropertyName,
-                BindingFlags.Public | BindingFlags.Instance);
+            var clrProperty = MostDerivedProperties.Find(descriptor.OperationType, entry.PropertyName);
+
+            if (entry.Source == PropertyBindingSource.Body && clrProperty is not null && clrProperty.PropertyType == typeof(Stream))
+            {
+                bodyMediaType = OpenApiRequestBodyMediaTypes.OctetStream;
+                continue;
+            }
+
+            var isFormFile = entry.Source == PropertyBindingSource.Body
+                && clrProperty?.PropertyType == typeof(Microsoft.AspNetCore.Http.IFormFile);
+
+            if (isFormFile)
+            {
+                bodyMediaType = OpenApiRequestBodyMediaTypes.MultipartFormData;
+            }
+
+            // A form binds a byte array from a field per byte, where JSON writes it as one base64 string.
+            var isFormByteArray = isMultipartBody && entry.Source == PropertyBindingSource.Body && clrProperty?.PropertyType == typeof(byte[]);
 
             // Prefer CLR type-based mapping when property info is available for accurate collection/dictionary support.
-            var (schemaType, schemaFormat) = clrProperty is not null
-                ? MapClrTypeToOpenApiSchema(clrProperty.PropertyType)
-                : MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
+            var (schemaType, schemaFormat) = isFormFile
+                ? ("string", "binary")
+                : isFormByteArray
+                ? ("array", (string?)null)
+                : clrProperty is not null
+                    ? MapClrTypeToOpenApiSchema(clrProperty.PropertyType)
+                    : MapClrTypeToOpenApiSchema(entry.PropertyTypeName);
             var constraints = OpenApiValidationConstraints.ExtractFromProperty(clrProperty, includeComparisonBounds: naming != OpenApiSchemaNaming.Legacy);
 
             // R44: legacy generated a parameter's schema by reflection alone (generator.Generate(property.PropertyType)),
@@ -711,6 +739,10 @@ public sealed partial record OpenApiOperationRenderingContext(
 
                 case PropertyBindingSource.Body:
                     var (bodyItemsType, bodyItemsFormat, bodyItemsSchemaRef, _, bodyAdditionalType, bodyAdditionalFormat, bodyAdditionalSchemaRef) = ResolveCollectionSchema(clrProperty, schemaNamesByType);
+                    if (isFormByteArray)
+                    {
+                        (bodyItemsType, bodyItemsFormat) = ("integer", "int32");
+                    }
 
                     // Legacy documented a dictionary's open value as any value, and a value as nullable when its
                     // annotation said so.
@@ -734,7 +766,7 @@ public sealed partial record OpenApiOperationRenderingContext(
                         MinLength = OpenApiValidationConstraints.GetDocumentedMinLength(
                             constraints.MinLength,
                             constraints.RequiresNonEmptyString,
-                            isNonEnumString: schemaType == "string" && enumValues.IsDefaultOrEmpty && enumSchemaRef is null,
+                            isNonEnumString: schemaType == "string" && !isFormFile && enumValues.IsDefaultOrEmpty && enumSchemaRef is null,
                             hasStringLengthAttribute: constraints.HasStringLengthAttribute,
                             useLegacyStringLengthZero: naming == OpenApiSchemaNaming.Legacy),
                         MaxLength = constraints.MaxLength,
@@ -810,8 +842,11 @@ public sealed partial record OpenApiOperationRenderingContext(
 
                 // Legacy's NJsonSchema described the body's schema by the operation type, as it did any other.
                 Description = OpenApiSchemaProjectionContext.GetTypeDescription(descriptor.OperationType) ?? docData?.Summary,
+                MediaType = bodyMediaType,
             }
-            : null;
+            : bodyMediaType == OpenApiRequestBodyMediaTypes.OctetStream
+                ? new OpenApiRequestBodyModel(Required: true, []) { MediaType = bodyMediaType }
+                : null;
 
         return (orderedParameters, requestBody);
     }
@@ -1095,6 +1130,17 @@ public sealed partial record OpenApiOperationRenderingContext(
     internal ImmutableArray<string> Warnings { get; init; } = [];
 
     /// <summary>
+    /// Whether a body property of <paramref name="type"/> is a stream or a file (#71, D19), described as a binary string
+    /// rather than as a schema of its own type's members.
+    /// </summary>
+    /// <param name="type">The property's type.</param>
+    /// <returns><see langword="true"/> for <see cref="Stream"/> and <c>IFormFile</c>.</returns>
+    internal static bool IsStreamingBodyType(Type type)
+    {
+        return type == typeof(Stream) || type == typeof(Microsoft.AspNetCore.Http.IFormFile);
+    }
+
+    /// <summary>
     /// Whether <paramref name="entry"/> is a property of the operation's request body: one the ownership plan gives the body
     /// and, under <see cref="OpenApiSchemaNaming.Legacy"/>, a route, query, header or cookie property inherited from a
     /// base type of a non-GET operation.
@@ -1151,7 +1197,7 @@ public sealed partial record OpenApiOperationRenderingContext(
                 && ownership.Entries.Any(entry => IsRequestBodyEntry(
                     descriptor,
                     entry,
-                    descriptor.OperationType.GetProperty(entry.PropertyName, BindingFlags.Public | BindingFlags.Instance),
+                    MostDerivedProperties.Find(descriptor.OperationType, entry.PropertyName),
                     naming)))
             {
                 var name = requestBodyNaming == OpenApiRequestBodyNaming.OperationType

@@ -1290,6 +1290,12 @@ it was, as legacy did for `Content-Length: 0` and for an empty chunked urlencode
 and bound nothing (an empty chunked multipart body, which legacy's form reader failed on with a 500, runs the handler
 too). Every other non-JSON content type (`text/plain`, `application/xml`, …) is ignored as described above.
 
+The exception is an operation that declares an `IFormFile` property (#71): it is bound from a `multipart/form-data`
+(or URL-encoded) body, its files by name and its other body properties from the form's fields, parsed as query-string
+values are, and it is the one that refuses a JSON body with a 415. An operation with a `[FromBody] Stream` property is
+handed the request body itself, of any content type, unread. An operation that declares neither keeps the behaviour
+above. See `Streaming request bodies` in the `using-blueprint` skill.
+
 ## Development-time inspection
 
 Blueprint exposes development-only endpoints for inspecting the generated API surface:

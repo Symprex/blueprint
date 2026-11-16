@@ -88,10 +88,14 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // Collect all public instance properties from the operation
         // Read through the shared property model (D25), so an exposed operation's contributed properties reach its URL and
         // query string although this compilation cannot see them emitted into its partial.
+        // The members come derived type first, so the first of each name is the declaration C# binds, which ownership analysis
+        // keeps too; a base property it hides used to be read as well, sending each of a hidden query array's values twice.
         var properties = Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationSymbol)
             .OfType<IPropertySymbol>()
+            .Where(static p => !p.IsStatic)
+            .GroupBy(static p => p.Name, StringComparer.Ordinal)
+            .Select(static g => g.First())
             .Where(static p => p.DeclaredAccessibility == Accessibility.Public
-                && !p.IsStatic
                 && p.GetMethod is not null
                 && !p.GetAttributes().Any(static a => a.AttributeClass?.Name is "ObsoleteAttribute"))
             .ToList();
@@ -144,6 +148,16 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         // build the same URL. An operation that cannot take the class (CanDeclareHttpClass) keeps the inline delegates only.
         var urlBuilderBody = BuildUrlBuilderBody(urlTemplate, placeholders, properties);
 
+        // A stream or multipart body (#71) has no room for the host's query properties and is never a GET (BPPO015), so its
+        // URL carries them itself, for every client that builds it.
+        if (bindingEntries is { BodyShape: not PropertyOwnershipModule.RequestBodyShape.Json }
+            && BuildQueryStringBody(placeholders, properties, queryBindingNames, []) is { } bodyQueryString)
+        {
+            urlBuilderBody = $"var builtUrl = BuildPath(operation); return builtUrl is null ? null : AppendQuery(operation, builtUrl); "
+                + $"static string BuildPath({operationFqn} operation) {{ {urlBuilderBody} }} "
+                + $"static string AppendQuery({operationFqn} operation, string url) {{ {bodyQueryString} }}";
+        }
+
         // A GET carries its non-URL properties as a query string rather than a body. The typed appender exists for every
         // GET; the delegate stays null when no property is query-eligible, as the runtime reads that as "append nothing".
         var queryStringBody = isQueryMethod
@@ -193,10 +207,132 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             });
         }
 
+        // A host that reads a stream or a multipart body is sent one (#71, D19), by every client, through the operation itself.
+        if (bindingEntries is { BodyShape: not PropertyOwnershipModule.RequestBodyShape.Json } streamingEntries)
+        {
+            var requestBodyLines = BuildRequestBodyLines(streamingEntries, operationSymbol);
+            context.AddOperationMemberStep(operationClass => AddRequestBodyBuilderInterface(operationClass, requestBodyLines));
+        }
+        else if (InheritsStreamingBodyProperty(operationSymbol))
+        {
+            // A JSON operation derived from a stream or multipart one, whose property it hides, inherits the base's body
+            // builder; implementing it again to build none sends this operation as JSON, as its host reads it.
+            context.AddOperationMemberStep(static operationClass => AddRequestBodyBuilderInterface(operationClass, ["return null;"]));
+        }
+
         context.AddRenderStep(codeWriter =>
         {
             RenderCompiledHttpRequestFeatureData(codeWriter, operationFqn, urlBuilderBody, queryStringBody, emitHttpClass);
         });
+    }
+
+    /// <summary>
+    /// Builds the body of the operation's <c>IHttpRequestBodyBuilder.BuildRequestBody</c>: its stream as the whole content, or
+    /// a form of its files and of its other body properties as fields, each under the name the host's binding reads it by.
+    /// </summary>
+    private static List<string> BuildRequestBodyLines(PropertyBindingEntriesMetadata bindingEntries, INamedTypeSymbol operationSymbol)
+    {
+        const string Helpers = "global::Blueprint.Model.HttpRequestBodies";
+        var propertiesByName = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
+
+        // Every property ownership analysis may bind, an obsolete one included, which the host still binds.
+        foreach (var property in Planning.OperationPropertyModelBuilder.GetMembersWithContributed(operationSymbol).OfType<IPropertySymbol>())
+        {
+            // The derived type's members come first: keep the first of each name, the one ownership analysis bound, not a
+            // base property it hides.
+            if (!property.IsStatic && !propertiesByName.ContainsKey(property.Name))
+            {
+                propertiesByName[property.Name] = property;
+            }
+        }
+
+        if (bindingEntries.BodyShape == PropertyOwnershipModule.RequestBodyShape.Stream)
+        {
+            // BPPO014 leaves the stream the only body property.
+            var stream = bindingEntries.Entries.First(e =>
+                e.Source == PropertyOwnershipModule.PropertyOwnershipSource.Body
+                && propertiesByName.TryGetValue(e.PropertyName, out var property)
+                && PropertyOwnershipModule.IsStreamType(property.Type));
+
+            return [$"return {Helpers}.CreateStreamContent(this.{stream.PropertyName});"];
+        }
+
+        var lines = new List<string> { "var form = new global::System.Net.Http.MultipartFormDataContent();" };
+
+        foreach (var entry in bindingEntries.Entries)
+        {
+            var isBody = entry.Source == PropertyOwnershipModule.PropertyOwnershipSource.Body;
+            if ((!isBody && entry.FallbackSource != PropertyOwnershipModule.PropertyOwnershipSource.Body)
+                || !propertiesByName.TryGetValue(entry.PropertyName, out var property)
+                || property.GetMethod is null)
+            {
+                continue;
+            }
+
+            // A route placeholder in only some links is read from the body as its camel-case name (ToFallbackBodyEntry).
+            var name = SymbolDisplay.FormatLiteral(isBody ? entry.BindingName ?? entry.PropertyName : entry.PropertyName.Camelize(), quote: true);
+            var access = $"this.{entry.PropertyName}";
+
+            if (PropertyOwnershipModule.IsFormFileType(property.Type))
+            {
+                var file = $"file_{entry.PropertyName}";
+                lines.Add($"if ({access} is {{ }} {file}) {Helpers}.AddFile(form, {name}, {file}.OpenReadStream, {file}.Length, {file}.FileName, {file}.ContentType);");
+            }
+            else if (property.Type is IArrayTypeSymbol)
+            {
+                lines.Add($"{Helpers}.AddFields(form, {name}, {access});");
+            }
+            else
+            {
+                lines.Add($"{Helpers}.AddField(form, {name}, {access});");
+            }
+        }
+
+        lines.Add("return form;");
+
+        return lines;
+    }
+
+    /// <summary>
+    /// Whether a base type of the operation declares a <c>Stream</c> or <c>IFormFile</c> property, so may implement
+    /// <c>IHttpRequestBodyBuilder</c> for a body this operation, whose own body is JSON, does not have. The base's generated
+    /// implementation cannot be seen from its own compilation, so the property is what is looked for.
+    /// </summary>
+    private static bool InheritsStreamingBodyProperty(INamedTypeSymbol operationSymbol)
+    {
+        for (var baseType = operationSymbol.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            foreach (var member in baseType.GetMembers())
+            {
+                if (member is IPropertySymbol { IsStatic: false } property
+                    && (PropertyOwnershipModule.IsStreamType(property.Type) || PropertyOwnershipModule.IsFormFileType(property.Type)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Implements <c>IHttpRequestBodyBuilder</c> on the operation's generated partial, explicitly, so it adds no member name to
+    /// the operation's own, and <c>BlueprintHttpClient</c> sends the content it builds instead of the operation as JSON.
+    /// </summary>
+    private static void AddRequestBodyBuilderInterface(ClassBuilder operationClass, List<string> requestBodyLines)
+    {
+        const string BuilderInterface = "global::Blueprint.Model.IHttpRequestBodyBuilder";
+
+        operationClass.AddInterface(BuilderInterface);
+        operationClass.AddMethod(BuilderInterface + ".BuildRequestBody")
+            .WithReturnType("global::System.Net.Http.HttpContent")
+            .WithBody(codeWriter =>
+            {
+                foreach (var line in requestBodyLines)
+                {
+                    codeWriter.AppendLine(line);
+                }
+            });
     }
 
     /// <summary>
@@ -701,12 +837,12 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             {
                 if (HasNonEmptyToString(prop.Type))
                 {
-                    parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!); sep = '&';");
+                    parts.Add($"qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture)!); sep = '&';");
                 }
                 else
                 {
                     // A struct's ToString() may be null or empty when default (e.g. Signature365's ApiId): skip the key.
-                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
                 }
             }
             else
@@ -720,11 +856,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 }
                 else if (prop.Type.IsValueType)
                 {
-                    parts.Add($"{{ var s = {propAccess}.Value.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}.Value, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
                 }
                 else
                 {
-                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) {{ qs = qs + sep + \"{escapedName}=\" + global::System.Uri.EscapeDataString(s); sep = '&'; }} }}");
                 }
 
                 parts.Add("}");
@@ -768,11 +904,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
             {
                 if (HasNonEmptyToString(prop.Type))
                 {
-                    parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString({propAccess}.ToString()!));");
+                    parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture)!));");
                 }
                 else
                 {
-                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
                 }
             }
             else
@@ -786,11 +922,11 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
                 }
                 else if (prop.Type.IsValueType)
                 {
-                    parts.Add($"{{ var s = {propAccess}.Value.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}.Value, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
                 }
                 else
                 {
-                    parts.Add($"{{ var s = {propAccess}.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+                    parts.Add($"{{ var s = global::System.Convert.ToString({propAccess}, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
                 }
 
                 parts.Add("}");
@@ -875,14 +1011,13 @@ public sealed class HttpClientRequestBuilderModule : IBlueprintSourceGeneratorMo
         else if (elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated } && HasNonEmptyToString(elementType))
         {
             // Built-in value types (int, enums, etc.) — ToString() is never null or empty
-            parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(_item.ToString()!));");
+            parts.Add($"parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(global::System.Convert.ToString(_item, global::System.Globalization.CultureInfo.InvariantCulture)!));");
         }
         else
         {
             // Reference types, nullable value types and structs whose ToString() may be null or empty — skip those.
-            // A non-nullable struct has no null to propagate, so `?.` is only valid on the others.
-            var access = elementType is { IsValueType: true, NullableAnnotation: not NullableAnnotation.Annotated } ? "_item" : "_item?";
-            parts.Add($"{{ var s = {access}.ToString(); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
+            // Each value is written with the invariant culture, as the host parses it; a null element is written as empty.
+            parts.Add($"{{ var s = global::System.Convert.ToString(_item, global::System.Globalization.CultureInfo.InvariantCulture); if (!string.IsNullOrEmpty(s)) parts.Add(\"{escapedName}=\" + global::System.Uri.EscapeDataString(s)); }}");
         }
 
         parts.Add("}");

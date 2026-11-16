@@ -277,8 +277,9 @@ public class BlueprintHttpClient
     /// caller can adjust it and send it with <see cref="SendRawAsync"/>.
     /// </summary>
     /// <remarks>
-    /// A GET carries the operation's other properties in its URL, so it has no body; every other method sends the
-    /// operation as its JSON body, written with this client's JSON options.
+    /// A GET carries the operation's other properties in its URL, so it has no body; every other method sends the body an
+    /// <see cref="IHttpRequestBodyBuilder"/> operation builds (a stream or a multipart form), or else the operation as its
+    /// JSON body, written with this client's JSON options.
     /// </remarks>
     /// <typeparam name="TOperation">The operation's type.</typeparam>
     /// <param name="method">The HTTP method.</param>
@@ -319,11 +320,14 @@ public class BlueprintHttpClient
 
         if (method != HttpMethod.Get)
         {
+            // An operation whose host reads a stream or a multipart body builds that body itself (#71), streaming what it holds.
             // The declared type's metadata writes none of a derived type's own members, so an instance of one is written as its
             // run-time type, as an operation without metadata is.
-            request.Content = operationTypeInfo is not null && operation.GetType() == typeof(TOperation)
-                ? JsonContent.Create(operation, operationTypeInfo)
-                : JsonContent.Create(operation, operation.GetType(), options: this._jsonOptions);
+            request.Content = operation is IHttpRequestBodyBuilder bodyBuilder && bodyBuilder.BuildRequestBody() is { } body
+                ? body
+                : operationTypeInfo is not null && operation.GetType() == typeof(TOperation)
+                    ? JsonContent.Create(operation, operationTypeInfo)
+                    : JsonContent.Create(operation, operation.GetType(), options: this._jsonOptions);
         }
 
         return request;
