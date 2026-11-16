@@ -72,9 +72,10 @@ internal sealed class ForwardingStreamContent : HttpContent
     /// <inheritdoc />
     protected override bool TryComputeLength(out long length)
     {
-        // A seekable stream, such as a file, has a known length from where it started, the same for every send; any other is
-        // sent chunked, as it is read.
-        if (this._source.CanSeek)
+        // A memory or file stream's Length is its whole content, the same for every send from where it started. Being able to
+        // seek is not enough: a request body after EnableBuffering() seeks, but its Length is only what it has buffered so far,
+        // which used to be advertised as the Content-Length of a body then sent whole. Any other stream is sent chunked.
+        if (this._source is MemoryStream or FileStream && this._source.CanSeek)
         {
             length = this._source.Length - this._start;
             return true;

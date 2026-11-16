@@ -27,6 +27,19 @@ public class HttpRequestBodiesTests
     }
 
     [Fact]
+    public async Task A_request_body_buffered_as_it_is_read_is_sent_whole_without_a_length()
+    {
+        // EnableBuffering() makes a request body seekable, but its Length is only what it has buffered so far: the content
+        // used to advertise that as its Content-Length (here 0) while sending the whole body.
+        var bytes = Encoding.UTF8.GetBytes("buffered upload");
+        using var buffering = new Microsoft.AspNetCore.WebUtilities.FileBufferingReadStream(new NonSeekableStream(bytes), memoryThreshold: 1024);
+        using var content = HttpRequestBodies.CreateStreamContent(buffering);
+
+        content.Headers.ContentLength.Should().BeNull("a stream that buffers as it is read does not know its length");
+        (await SendAsync(content)).Should().Be("buffered upload");
+    }
+
+    [Fact]
     public async Task A_stream_body_that_cannot_seek_refuses_to_be_sent_a_second_time()
     {
         using var content = HttpRequestBodies.CreateStreamContent(new NonSeekableStream(Encoding.UTF8.GetBytes("once")));

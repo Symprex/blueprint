@@ -108,6 +108,43 @@ public sealed class StreamRequestTests(SampleSystemFixture system)
         body.RootElement.GetProperty("sha256").GetString().Should().Be(Convert.ToHexString(SHA256.HashData(payload)));
     }
 
+    [Fact]
+    public async Task A_stream_body_buffered_by_the_gateway_reaches_the_inner_app_whole()
+    {
+        // EnableBuffering() makes the gateway's inbound body seekable with a Length of only what it has buffered so far,
+        // which the forward used to send upstream as its Content-Length (0) ahead of the whole body.
+        var issuer = new TestJwtIssuer();
+        await using var host = new MultiAppHost(issuer);
+        var inner = await host.StartAsync<Blueprint.SourceGenerator.Sample.Startup>("inner");
+        var gateway = await host.StartAsync<Blueprint.SourceGenerator.Sample.Gateway.Startup>("gateway", options =>
+        {
+            options.Settings[Blueprint.SourceGenerator.Sample.Gateway.Startup.TemplateServiceAddressKey] = new Uri(inner.BaseAddress, "api/").ToString();
+            options.Settings[Blueprint.SourceGenerator.Sample.Gateway.Startup.ServiceTokenKey] = issuer.CreateToken([new Claim("sub", "gateway-service")]);
+            options.ConfigureServices = services =>
+            {
+                services.AddSingleton<Blueprint.SourceGenerator.Sample.Gateway.ITenantTokenExchanger>(
+                    new TestTenantTokenExchanger(issuer, SampleSystemFixture.TemplateScopes));
+                services.AddSingleton<IStartupFilter>(new EnableBufferingFilter());
+            };
+            options.ForwardCallerCredential = true;
+        });
+
+        var token = issuer.CreateToken([new Claim("sub", "e2e-user"), .. SampleSystemFixture.TemplateScopes.Select(static s => new Claim("scope", s))]);
+        var id = await SeedTemplateAsync(inner, token);
+        var payload = RandomNumberGenerator.GetBytes(2 * 1024 * 1024);
+        using var content = new ByteArrayContent(payload);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        using var caller = gateway.CreateClient(token);
+
+        var response = await caller.PutAsync($"gateway/templates/{id}/source", content);
+
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, text);
+        using var body = JsonDocument.Parse(text);
+        body.RootElement.GetProperty("length").GetInt64().Should().Be(payload.Length);
+        body.RootElement.GetProperty("sha256").GetString().Should().Be(Convert.ToHexString(SHA256.HashData(payload)));
+    }
+
     private static JsonElement FindOperation(JsonDocument document, string path, string method)
     {
         var paths = document.RootElement.GetProperty("paths");
@@ -133,6 +170,23 @@ public sealed class StreamRequestTests(SampleSystemFixture system)
 
         using var document = JsonDocument.Parse(body);
         return document.RootElement.GetProperty("data").GetProperty("id").GetString()!;
+    }
+
+    /// <summary>Buffers every request body as a host's own middleware might, before anything else in the app reads it.</summary>
+    private sealed class EnableBufferingFilter : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
+        {
+            return app =>
+            {
+                app.Use(async (context, nextMiddleware) =>
+                {
+                    context.Request.EnableBuffering();
+                    await nextMiddleware(context);
+                });
+                next(app);
+            };
+        }
     }
 
     /// <summary>
