@@ -88,7 +88,9 @@ public class AppModelOpenApiDocumentBuilderContextTests
             "Blueprint.Model.ListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.GrantFolderApiResource>",
             "Blueprint.SourceGenerator.Tests.Integration.Http.NestedValidationAddress",
             "System.Collections.Generic.List<Blueprint.SourceGenerator.Tests.Integration.Http.NestedValidationItem>",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.OperationInputSchemaAddress");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.OperationInputSchemaAddress",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.ConvertedCollectionApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.ConvertedCollectionItem[]");
         context.Operations.Select(static operation => operation.Operation.OperationType)
             .Should()
             .NotContain(typeof(InternalOnlyOperationToScan))
