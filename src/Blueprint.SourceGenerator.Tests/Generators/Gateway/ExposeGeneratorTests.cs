@@ -426,6 +426,30 @@ public class ExposeGeneratorTests
             .UseDirectory("Snapshots");
     }
 
+    [Theory]
+    [InlineData("[HttpDelete]", "", "HttpDelete")]
+    [InlineData("[HttpPut]", "", "HttpPut")]
+    [InlineData("[HttpPatch]", "", "HttpPatch")]
+    [InlineData("[HttpMethod(\"delete\")]", "", "HttpDelete")]
+    [InlineData("", "", "HttpPost")]
+    [InlineData("[HttpDelete]", "[HttpPost]", "HttpPost")]
+    [InlineData("[HttpDelete]", "[HttpPut]", "HttpPut")]
+    public void An_exposed_operation_takes_its_inner_operations_HTTP_method_unless_it_declares_its_own(string innerMethod, string gatewayMethod, string expected)
+    {
+        // Symprex/blueprint#190: an exposed command that declared no method used to be published as POST, whatever its inner
+        // operation's, so an exposed delete appeared in the gateway's OpenAPI document and links as a POST.
+        var inner = CommandInnerSource.Replace("[HttpPost]", innerMethod, StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+        var gateway = CommandGatewaySource.Replace("[HttpPost]", gatewayMethod, StringComparison.Ordinal);
+
+        var run = RunAllGenerators([CommandClientSource, gateway, AppSource], contract);
+
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.TagGatewayWidgetCommand_Descriptor.g.cs")
+            .Should().Contain($"this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.{expected});");
+    }
+
     [Fact]
     public void When_a_declared_property_of_another_type_leaves_a_required_inner_member_unset_then_BPGW019_is_reported()
     {
