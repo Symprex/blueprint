@@ -426,6 +426,70 @@ public class ExposeGeneratorTests
             .UseDirectory("Snapshots");
     }
 
+    [Theory]
+    [InlineData("[HttpDelete]", "", "HttpDelete")]
+    [InlineData("[HttpPut]", "", "HttpPut")]
+    [InlineData("[HttpPatch]", "", "HttpPatch")]
+    [InlineData("[HttpMethod(\"delete\")]", "", "HttpDelete")]
+    [InlineData("", "", "HttpPost")]
+    [InlineData("[HttpDelete]", "[HttpPost]", "HttpPost")]
+    [InlineData("[HttpDelete]", "[HttpPut]", "HttpPut")]
+    public void An_exposed_operation_takes_its_inner_operations_HTTP_method_unless_it_declares_its_own(string innerMethod, string gatewayMethod, string expected)
+    {
+        // Symprex/blueprint#190: an exposed command that declared no method used to be published as POST, whatever its inner
+        // operation's, so an exposed delete appeared in the gateway's OpenAPI document and links as a POST.
+        var inner = CommandInnerSource.Replace("[HttpPost]", innerMethod, StringComparison.Ordinal);
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(inner, "InnerContract");
+        var gateway = CommandGatewaySource.Replace("[HttpPost]", gatewayMethod, StringComparison.Ordinal);
+
+        var run = RunAllGenerators([CommandClientSource, gateway, AppSource], contract);
+
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+        run.Source("Gateway.TagGatewayWidgetCommand_Descriptor.g.cs")
+            .Should().Contain($"this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.{expected});");
+    }
+
+    [Theory]
+    [InlineData("[Expose<Loop>] public partial class Loop : ICommand;")]
+    [InlineData("[Expose<Pong>] public partial class Ping : ICommand; [Expose<Ping>] public partial class Pong : ICommand;")]
+    public void An_exposure_cycle_with_no_HTTP_method_takes_the_convention(string declarations)
+    {
+        var compilation = CreateCompilation(["namespace Gateway { using Blueprint.Model; using Blueprint.Model.Attributes; " + declarations + " }"]);
+
+        foreach (var type in compilation.GetSymbolsWithName(static _ => true, SymbolFilter.Type).OfType<INamedTypeSymbol>())
+        {
+            Blueprint.SourceGenerator.Modules.OperationHttpMethodResolver.Resolve(type).Methods.Should().Equal("POST");
+        }
+    }
+
+    [Fact]
+    public void The_descriptor_follows_an_edit_to_the_inner_operations_HTTP_method_in_another_file()
+    {
+        // The inherited method is not in the exposing operation's file or its property model, so WithDeclarationChecksums'
+        // key has to carry it, or an inner [HttpDelete] changed to [HttpPut] would leave the gateway's descriptor a DELETE.
+        // The driver is reused and only the contract reference is replaced, as a rebuilt contract project is, so the
+        // gateway's syntax tree is the one the driver cached.
+        var gateway = CommandGatewaySource.Replace("[HttpPost]", string.Empty, StringComparison.Ordinal);
+        var deleting = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(
+            CommandInnerSource.Replace("[HttpPost]", "[HttpDelete]", StringComparison.Ordinal), "InnerContract");
+        var putting = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(
+            CommandInnerSource.Replace("[HttpPost]", "[HttpPut]", StringComparison.Ordinal), "InnerContract");
+        var before = CreateCompilation([CommandClientSource, gateway], deleting);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new OperationDescriptorSourceGenerator().AsSourceGenerator()],
+            parseOptions: new CSharpParseOptions(LanguageVersion.Preview));
+
+        driver = driver.RunGenerators(before);
+        Descriptor(driver).Should().Contain("WellKnownFeatureData.HttpDelete);");
+        driver = driver.RunGenerators(before.ReplaceReference(deleting, putting));
+
+        Descriptor(driver).Should().Contain("this.SetFeatureData(global::Blueprint.Model.WellKnownFeatureData.HttpPut);");
+
+        static string Descriptor(GeneratorDriver driver) => driver.GetRunResult().Results.Single().GeneratedSources
+            .Single(static s => s.HintName == "Gateway.TagGatewayWidgetCommand_Descriptor.g.cs").SourceText.ToString();
+    }
+
     [Fact]
     public void When_a_declared_property_of_another_type_leaves_a_required_inner_member_unset_then_BPGW019_is_reported()
     {

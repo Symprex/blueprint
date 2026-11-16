@@ -1,4 +1,5 @@
 using Blueprint.SourceGenerator.Helpers;
+using Blueprint.SourceGenerator.Planning;
 using Microsoft.CodeAnalysis;
 
 namespace Blueprint.SourceGenerator.Modules;
@@ -22,12 +23,26 @@ internal static class OperationHttpMethodResolver
 
     /// <summary>
     /// Resolves the operation's HTTP methods: the distinct, upper-cased methods its HTTP method attributes declare, in
-    /// ordinal order, or POST for a command and GET for anything else when it declares none.
+    /// ordinal order. When it declares none, an operation marked <c>[Expose&lt;TInner&gt;]</c> takes its inner operation's
+    /// (Symprex/blueprint#190), and any other is POST for a command and GET for anything else.
     /// </summary>
+    /// <remarks>
+    /// An inherited method is not an attribute of the operation's own, so BPOA001 and BPOA002 are never reported for it: an
+    /// inner operation whose methods are blank or conflict is its own compilation's to report, and the operation exposing it
+    /// falls back to the convention. So does an operation in an exposure cycle (one exposing itself, or two exposing each
+    /// other) that declares no method along it.
+    /// </remarks>
     /// <param name="operationType">The operation's type.</param>
     /// <returns>The methods, or why there are none.</returns>
     internal static OperationHttpMethods Resolve(INamedTypeSymbol operationType)
     {
+        return ResolveAvoiding(operationType, new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default));
+    }
+
+    private static OperationHttpMethods ResolveAvoiding(INamedTypeSymbol operationType, HashSet<INamedTypeSymbol> visited)
+    {
+        visited.Add(operationType);
+
         var explicitMethods = operationType.GetAttributes()
             .Where(static attribute => attribute.AttributeClass is { } attributeClass && IsOrInheritsFromHttpMethodAttribute(attributeClass))
             .Select(static attribute => (Attribute: attribute, HttpMethod: GetExplicitHttpMethodValue(attribute)))
@@ -35,7 +50,13 @@ internal static class OperationHttpMethodResolver
 
         if (explicitMethods.Length == 0)
         {
-            return new OperationHttpMethods(IsCommand(operationType) ? ["POST"] : ["GET"], null, null);
+            var inherited = OperationPropertyModelBuilder.FindExposedType(operationType, out _) is { } inner && !visited.Contains(inner)
+                ? ResolveAvoiding(inner, visited)
+                : default;
+
+            return inherited is { InvalidAttribute: null, Methods.Length: 1 }
+                ? new OperationHttpMethods(inherited.Methods, null, null)
+                : new OperationHttpMethods(IsCommand(operationType) ? ["POST"] : ["GET"], null, null);
         }
 
         foreach (var explicitMethod in explicitMethods)
