@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <Description>Serves a Blueprint app's operations as Model Context Protocol tools, one per operation, invoked through the operation's own pipeline with the caller's ASP.NET Core authentication.</Description>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackageTags>$(PackageTags);MCP;ModelContextProtocol</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Blueprint.Mcp.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The official C# MCP SDK. It lives here, not in Blueprint.Runtime, so only an app that serves MCP takes it (D22). -->
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Blueprint.Runtime\Blueprint.Runtime.csproj" />
+    <ProjectReference Include="..\Blueprint.Runtime.Model\Blueprint.Runtime.Model.csproj" />
+  </ItemGroup>
+</Project>

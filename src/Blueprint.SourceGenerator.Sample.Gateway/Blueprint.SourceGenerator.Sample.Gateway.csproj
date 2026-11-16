@@ -27,6 +27,9 @@
 
     <!-- HTTP client for inter-service communication -->
     <ProjectReference Include="..\Blueprint.HttpClient\Blueprint.HttpClient.csproj" />
+
+    <!-- MCP tools for the gateway's operations -->
+    <ProjectReference Include="..\Blueprint.Mcp\Blueprint.Mcp.csproj" />
   </ItemGroup>
 
   <!-- The BlueprintEmitOpenApi target, which a package consumer gets from Blueprint.Runtime's buildTransitive folder:

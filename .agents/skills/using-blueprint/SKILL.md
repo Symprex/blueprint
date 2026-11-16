@@ -460,6 +460,15 @@ A gateway handler that sends an inner operation on unchanged calls `ForwardAsync
 - **Supply every required inner property:** a `required` member nobody sets is BPGW019, one marked `[Required]` is BPGW025, or the BPGW026 warning when only the map hook could set it.
 - **Inherited rules and docs:** a declared property with no validation attribute of its own is validated by the inner property's, and one with no XML docs of its own (or only `<inheritdoc cref="…"/>`) is documented by the inner property's. Rules naming another property (`[Compare]`, `[RequiredIf]`) and rules generated validation cannot apply are not inherited; the inner operation still applies them on receipt. The OpenAPI schema's constraints (`maxLength` and the like) still come from the gateway property's own attributes, so declare a rule there when the published schema must show it.
 
+### MCP tools (`Blueprint.Mcp`)
+
+To serve an app's operations as MCP tools, reference `Blueprint.Mcp`, call `services.AddBlueprintMcp()`, and map
+`endpoints.MapBlueprintMcp<MyApp>("mcp")` **after** `MapBlueprintApi` for the same app (the tools are made from its input
+schemas). Each tool is named by its operation's OpenAPI `operationId`, and a call runs through the operation's own HTTP
+endpoint, signed in from the MCP request's `Authorization` header by the host's default scheme, so authentication, authorisation and validation are those of HTTP. The result's
+text is the HTTP response body, `_meta.httpStatus` its status, and a 4xx or 5xx is a tool error. Detail and limits:
+`docs/integration-packages.md#blueprintmcp`.
+
 ## ASP.NET Core infrastructure (consumer responsibility)
 
 Blueprint intentionally delegates standard ASP.NET Core concerns to the consumer rather than wrapping them:
