@@ -93,7 +93,9 @@ public class AppModelSerializerContextTests
             "Blueprint.Model.ListApiResource<Blueprint.SourceGenerator.Tests.Integration.Http.GrantFolderApiResource>",
             "Blueprint.SourceGenerator.Tests.Integration.Http.NestedValidationAddress",
             "System.Collections.Generic.List<Blueprint.SourceGenerator.Tests.Integration.Http.NestedValidationItem>",
-            "Blueprint.SourceGenerator.Tests.Integration.Http.OperationInputSchemaAddress");
+            "Blueprint.SourceGenerator.Tests.Integration.Http.OperationInputSchemaAddress",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.ConvertedCollectionApiResource",
+            "Blueprint.SourceGenerator.Tests.Integration.Http.ConvertedCollectionItem[]");
     }
 
     [Fact]
@@ -183,6 +185,8 @@ public class AppModelSerializerContextTests
             typeof(Blueprint.Model.ListApiResource<Http.GrantFolderApiResource>),
             typeof(Http.NestedValidationAddress),
             typeof(List<Http.NestedValidationItem>),
-            typeof(Http.OperationInputSchemaAddress));
+            typeof(Http.OperationInputSchemaAddress),
+            typeof(Http.ConvertedCollectionApiResource),
+            typeof(Http.ConvertedCollectionItem[]));
     }
 }

@@ -20,6 +20,11 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 public partial class AddTenantNoteCommand : ICommand<TenantNoteApiResource>
 {
     /// <summary>
+    /// The longest <see cref="Source"/> the service accepts.
+    /// </summary>
+    public const int MaxSourceLength = 50;
+
+    /// <summary>
     /// The tenant the note belongs to.
     /// </summary>
     [Description("The tenant the note belongs to.")]
@@ -35,6 +40,7 @@ public partial class AddTenantNoteCommand : ICommand<TenantNoteApiResource>
     /// <summary>
     /// Where the note came from.
     /// </summary>
+    [MaxLength(MaxSourceLength)]
     [Description("Where the note came from.")]
     public string? Source { get; set; }
 
