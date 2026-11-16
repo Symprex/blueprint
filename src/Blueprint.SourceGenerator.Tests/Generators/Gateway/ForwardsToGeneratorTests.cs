@@ -376,6 +376,36 @@ public class ForwardsToGeneratorTests
     }
 
     [Fact]
+    public void The_descriptor_documents_a_declared_property_with_the_summary_an_undocumented_inner_override_inherits()
+    {
+        // Only the inner override's own comment was read, so its documented base declaration's summary was lost (Copilot
+        // on #169).
+        var inner = InnerSource
+            .Replace(
+                "public partial class CreateImportRunCommand : ICommand<ImportRunResult>",
+                "public partial class CreateImportRunCommand : ImportRunBase, ICommand<ImportRunResult>",
+                StringComparison.Ordinal)
+            .Replace("/// <summary>Who started the run.</summary>", string.Empty, StringComparison.Ordinal)
+            .Replace("public string? Owner { get; set; }", "public override string? Owner { get; set; }", StringComparison.Ordinal)
+            + """
+
+            namespace Inner
+            {
+                public class ImportRunBase
+                {
+                    /// <summary>The person the run was started for.</summary>
+                    public virtual string? Owner { get; set; }
+                }
+            }
+            """;
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([inner, AppBindingSource, GatewaySource]);
+
+        var descriptor = result.Output.Single(static t => t.FilePath.EndsWith("Gateway.CreateImportRunCommand_Descriptor.g.cs", StringComparison.Ordinal)).ToString();
+        descriptor.Should().Contain("The person the run was started for.");
+    }
+
+    [Fact]
     public void When_a_declared_property_has_another_type_than_the_inner_one_then_BPGW022_is_reported_at_the_property()
     {
         var gateway = GatewaySource.Replace(

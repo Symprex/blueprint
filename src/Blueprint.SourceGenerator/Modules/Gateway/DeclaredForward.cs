@@ -306,8 +306,18 @@ internal static class DeclaredForward
             return null;
         }
 
-        var documentation = counterpart.GetDocumentationCommentXml();
-        return string.IsNullOrWhiteSpace(documentation) ? null : documentation;
+        // An undocumented inner override is documented by the declaration it overrides, as the inner operation's own
+        // description is.
+        for (var current = counterpart; current is not null; current = current.OverriddenProperty)
+        {
+            var documentation = current.GetDocumentationCommentXml();
+            if (HasOwnDocumentation(documentation))
+            {
+                return documentation;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
