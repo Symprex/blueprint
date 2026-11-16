@@ -14,4 +14,5 @@ namespace Blueprint.SourceGenerator.Sample.Gateway.Api;
 [BlueprintClientInclude(typeof(PreviewTemplateCommand))]
 [BlueprintClientInclude(typeof(AttachTemplateFileCommand))]
 [BlueprintClientInclude(typeof(ImportTemplateSourceCommand))]
+[BlueprintClientInclude(typeof(DiscardTemplateCommand))]
 public partial class TemplateServiceApi;

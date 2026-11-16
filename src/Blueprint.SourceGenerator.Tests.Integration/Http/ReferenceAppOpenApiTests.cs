@@ -1393,6 +1393,7 @@ public class ReferenceAppOpenApiTests
             [
                 ("archive", "ArchiveTemplate", "DELETE"),
                 ("clone", "CloneTemplate", "POST"),
+                ("discard", "DiscardTemplate", "DELETE"),
                 ("set-notification-priority", "SetTemplateNotificationPriority", "PUT"),
             ]);
     }

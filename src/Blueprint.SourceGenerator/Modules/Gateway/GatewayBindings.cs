@@ -234,11 +234,11 @@ internal static class GatewayBindings
                         IsRequiredMember = innerProperty.IsRequired && !constructorSetsRequired,
                         IsNullRefused = IsNullRefused(innerProperty),
                     };
-                    AddUnlessDeclared(filled, operationType, declared, location, result, diagnostics);
+                    AddUnlessDeclared(filled, operationType, declared, location, result, diagnostics, hiddenInner: innerProperty);
                     continue;
                 }
 
-                AddUnlessDeclared(Create(innerProperty, GatewayBindingSource.Hidden, null, isAppTier: false), operationType, declared, location, result, diagnostics);
+                AddUnlessDeclared(Create(innerProperty, GatewayBindingSource.Hidden, null, isAppTier: false), operationType, declared, location, result, diagnostics, hiddenInner: innerProperty);
                 continue;
             }
 
@@ -300,16 +300,35 @@ internal static class GatewayBindings
     /// forward would ignore it (BPGW021). A binding that reads it, <c>[Bind(X, FromProperty = "X")]</c> or a route
     /// placeholder that binds it, is the gateway forwarding its own property.
     /// </summary>
+    /// <remarks>
+    /// A <c>[Hide]</c> beside a declaration of another type is not that either (#187). The forward copies a declaration
+    /// only when its type is the inner property's (<see cref="GatewayForward.GetCopiedProperties"/>), so one of another
+    /// type is the gateway's own input, not one a caller would read as forwarded, and hiding the inner property leaves the
+    /// map hook to fill it, typically from the declaration: <c>inner.TenantId = this.TenantId.Value</c>. Hiding is the
+    /// only way to say so, since no binding converts between the two types (BPGW011), and BPGW035 still holds the hook to
+    /// assigning a required one.
+    /// </remarks>
+    /// <param name="binding">The binding to add.</param>
+    /// <param name="operationType">The gateway operation.</param>
+    /// <param name="declared">The gateway operation's declared properties, by name.</param>
+    /// <param name="location">Where the binding is declared, for BPGW021.</param>
+    /// <param name="result">The bindings so far, which a valid one joins.</param>
+    /// <param name="diagnostics">Where BPGW021 is reported, or <see langword="null"/> when only resolving.</param>
+    /// <param name="hiddenInner">For a <c>[Hide]</c>, the inner property it hides; <see langword="null"/> for a binding.</param>
     private static void AddUnlessDeclared(
         GatewayPropertyBinding binding,
         INamedTypeSymbol operationType,
         Dictionary<string, IPropertySymbol> declared,
         LocationInfo? location,
         List<GatewayPropertyBinding> result,
-        List<DiagnosticInfo>? diagnostics)
+        List<DiagnosticInfo>? diagnostics,
+        IPropertySymbol? hiddenInner = null)
     {
         var readsDeclaration = binding.Source is GatewayBindingSource.Route or GatewayBindingSource.Property && binding.Argument == binding.PropertyName;
-        if (declared.ContainsKey(binding.PropertyName) && !readsDeclaration)
+        var isOwnInput = hiddenInner is not null
+            && declared.TryGetValue(binding.PropertyName, out var declaration)
+            && !SymbolEqualityComparer.Default.Equals(declaration.Type, hiddenInner.Type);
+        if (declared.ContainsKey(binding.PropertyName) && !readsDeclaration && !isOwnInput)
         {
             diagnostics?.Add(new DiagnosticInfo(
                 GatewayDiagnosticDescriptors.BoundPropertyDeclaredByGateway,

@@ -69,6 +69,21 @@ public sealed class GatewayBindingTests(SampleSystemFixture system)
     }
 
     [Fact]
+    public async Task A_gateway_declaration_of_another_type_reaches_the_inner_route_through_OnMap()
+    {
+        // Symprex/blueprint#187: the gateway's TenantId is a GatewayTenantKey read from its own route, the inner one a
+        // string in the inner route, /tenants/{TenantId}/notes. [Hide] beside the declaration used to be BPGW021, so OnMap
+        // had no accepted way to convert one into the other. The inner service refuses any tenant but the caller's account,
+        // so the note coming back proves the URL the forward sent carried the converted value.
+        using var caller = system.Gateway.CreateClient(this.CreateToken(tenantId: "tenant-app", accountId: "tenant-k"));
+
+        var note = await PostNoteAsync(caller, "gateway/keyed-tenants/tk_tenant-k/notes", new { text = "Hello" });
+
+        note.GetProperty("tenantId").GetString().Should().Be("tenant-k");
+        note.GetProperty("text").GetString().Should().Be("Hello");
+    }
+
+    [Fact]
     public async Task A_fixed_value_replaces_the_callers_and_a_hidden_property_stays_unset()
     {
         using var caller = system.Gateway.CreateClient(this.CreateToken(tenantId: "tenant-d", accountId: "tenant-d"));

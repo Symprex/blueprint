@@ -117,7 +117,7 @@ internal static class GatewayDiagnosticDescriptors
     public static readonly DiagnosticDescriptor UnboundInnerRoutePlaceholder = new(
         id: "BPGW010",
         title: "An inner route placeholder must be in the gateway's route, bound or hidden",
-        messageFormat: "Gateway operation '{0}' does not carry '{1}' in its route, but '{2}' routes by it ('{3}', the URL the forward sends). Add it to the gateway's route, or bind it with [GatewayBind] or [Bind], or hide it with [Hide].",
+        messageFormat: "Gateway operation '{0}' does not carry '{1}' in its route, but '{2}' routes by it ('{3}', the URL the forward sends). Add it to the gateway's route, or bind it with [GatewayBind] or [Bind], or hide it with [Hide] and assign it in OnMap.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -241,7 +241,9 @@ internal static class GatewayDiagnosticDescriptors
 
     /// <summary>
     /// BPGW021: a binding or hide of a property the gateway operation declares itself, which would leave the declaration
-    /// caller-facing (bound from the request, validated, in the schema) while the forward ignores it (D11).
+    /// caller-facing (bound from the request, validated, in the schema) while the forward ignores it (D11). A <c>[Hide]</c>
+    /// beside a declaration of another type is not reported: the forward never copies such a declaration, so it is the
+    /// gateway's own input, which the map hook converts into the hidden inner property (#187).
     /// </summary>
     public static readonly DiagnosticDescriptor BoundPropertyDeclaredByGateway = new(
         id: "BPGW021",

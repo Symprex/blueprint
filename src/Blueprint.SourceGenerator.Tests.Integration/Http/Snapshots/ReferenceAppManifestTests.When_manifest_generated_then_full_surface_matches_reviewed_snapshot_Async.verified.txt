@@ -167,6 +167,30 @@
     - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
     - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
 
+### DiscardTemplate
+  Type: DiscardTemplateCommand
+  Source: Source Generated
+  HTTP Methods: DELETE
+  URL: /templates/{Id}/discard
+  Hosts: http
+  Auth: Authenticated
+  Discovery: command (Blueprint.SourceGenerator.Sample.Contract.Api.DiscardTemplateCommand)
+  Group: Templates
+  Result Outcomes:
+    - ResourceEvent`1
+  Failure Outcomes:
+    - legacy-validation-exception: Blueprint.Validation.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - data-annotations-validation-exception: System.ComponentModel.DataAnnotations.ValidationException -> Blueprint.Runtime.Exec.ValidationFailedResult
+    - default-unhandled-exception: System.Exception -> Blueprint.Runtime.Exec.UnhandledExceptionResult
+  HTTP Responses:
+    - 200: hasBody=True types=[Blueprint.SourceGenerator.Sample.Contract.Api.TemplateApiResource]
+    - 401: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 403: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+    - 422: hasBody=True types=[Microsoft.AspNetCore.Mvc.ValidationProblemDetails]
+    - 500: hasBody=True types=[Microsoft.AspNetCore.Mvc.ProblemDetails]
+  Links:
+    - rel=discard url=/templates/{Id}/discard resource=TemplateApiResource
+
 ### DownloadTemplate
   Type: DownloadTemplateQuery
   Source: Source Generated
@@ -687,6 +711,7 @@
   AuthManifestApiResource [self] -> /me/authManifest (GetMyAuthManifest)
   TemplateApiResource [archive] -> /templates/{Id} (ArchiveTemplate)
   TemplateApiResource [clone] -> /templates/{Id}/clone (CloneTemplate)
+  TemplateApiResource [discard] -> /templates/{Id}/discard (DiscardTemplate)
   TemplateApiResource [self] -> /templates/{Id} (GetTemplate)
   TemplateApiResource [set-notification-priority] -> /templates/{Id}/notification-priority (SetTemplateNotificationPriority)
   TemplateListApiResource [self] -> /templates (GetTemplates)
