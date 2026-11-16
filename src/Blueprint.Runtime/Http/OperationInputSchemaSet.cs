@@ -127,8 +127,11 @@ internal sealed class OperationInputSchemaSet
             try
             {
                 var slotJson = paths?[slot.UrlFormat]?[slot.Method.ToLowerInvariant()]?.AsObject();
+                var declaredUrlFormat = descriptor?.Urls
+                    .FirstOrDefault(url => string.Equals(OpenApiOperationRenderingContext.ToPathKey(url.UrlFormat), slot.UrlFormat, StringComparison.Ordinal))
+                    ?.UrlFormat;
 
-                entries.Add(CreateEntry(operation, operationName, operationId, slotJson, components));
+                entries.Add(CreateEntry(operation, operationName, operationId, (declaredUrlFormat, slot.Method), slotJson, components));
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
@@ -263,6 +266,7 @@ internal sealed class OperationInputSchemaSet
         OpenApiOperationModel operation,
         string operationName,
         string operationId,
+        (string? UrlFormat, string Method) slot,
         JsonObject? slotJson,
         JsonObject? components)
     {
@@ -424,6 +428,8 @@ internal sealed class OperationInputSchemaSet
             {
                 Summary = operation.Summary,
                 Description = operation.Description,
+                UrlFormat = slot.UrlFormat,
+                HttpMethod = slot.Method,
             },
             null);
     }

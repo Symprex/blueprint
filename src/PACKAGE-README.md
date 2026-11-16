@@ -12,7 +12,7 @@ To build an API, reference `Blueprint.Runtime`, and add `Blueprint.SourceGenerat
 <PackageReference Include="Blueprint.SourceGenerator" Version="x.y.z" PrivateAssets="all" />
 ```
 
-The other `Blueprint.*` packages add an HTTP client, testing hosts, and integrations with Marten, Rebus and Hangfire.
+The other `Blueprint.*` packages add an HTTP client, MCP tools, testing hosts, and integrations with Marten, Rebus and Hangfire.
 
 - Getting started and how it works: https://github.com/Symprex/blueprint#readme
 - Release notes: https://github.com/Symprex/blueprint/releases
