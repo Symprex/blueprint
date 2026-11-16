@@ -2615,7 +2615,8 @@
           "source": {
             "type": "string",
             "nullable": true,
-            "description": "Where the note came from."
+            "description": "Where the note came from.",
+            "maxLength": 50
           },
           "internalNote": {
             "type": "string",

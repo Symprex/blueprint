@@ -24,7 +24,10 @@ internal sealed record ExposedOperationAnalysis(
     EquatableList<DiagnosticInfo> BindingDiagnostics,
     EquatableList<DiagnosticInfo> InaccessibleValidation)
 {
-    private const string OperationInterfaceMetadataName = "Blueprint.Model.IOperation";
+    /// <summary>
+    /// The metadata name of <c>Blueprint.Model.IOperation</c>, which every operation implements.
+    /// </summary>
+    internal const string OperationInterfaceMetadataName = "Blueprint.Model.IOperation";
 
     /// <summary>
     /// Analyses one class marked <c>[Expose&lt;TInner&gt;]</c>.
@@ -50,7 +53,7 @@ internal sealed record ExposedOperationAnalysis(
             missingInterface = new DiagnosticInfo(
                 GatewayDiagnosticDescriptors.MissingOperationInterface,
                 location,
-                [type.Name, inner.Name, SuggestInterface(inner)]);
+                [type.Name, inner.Name, SuggestInterface(inner), "Expose"]);
         }
 
         // An attribute naming a type the gateway's assembly cannot access is not emitted, which would leave the gateway
@@ -109,7 +112,9 @@ internal sealed record ExposedOperationAnalysis(
     /// <summary>
     /// Suggests the operation interface the class should declare: the inner operation's own, which carries its result.
     /// </summary>
-    private static string SuggestInterface(INamedTypeSymbol inner)
+    /// <param name="inner">The inner operation.</param>
+    /// <returns>The interface, as the class would declare it.</returns>
+    internal static string SuggestInterface(INamedTypeSymbol inner)
     {
         foreach (var candidate in inner.AllInterfaces)
         {
