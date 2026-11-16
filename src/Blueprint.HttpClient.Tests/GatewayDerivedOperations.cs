@@ -25,6 +25,21 @@ public sealed partial class GatewayCreateTemplateCommand : CreateTemplateCommand
 [AllowAnonymous]
 public sealed partial class GatewayArchiveTemplateCommand : ArchiveTemplateCommand;
 
+/// <summary>
+/// A consumer's operation deriving from a contract command whose body is a stream, but hiding that stream with text of its
+/// own, so its body is JSON again (#71).
+/// </summary>
+[RootLink("/gateway/templates/{Id}/source-text")]
+[HttpPut]
+[AllowAnonymous]
+public sealed partial class GatewayImportTemplateSourceTextCommand : ImportTemplateSourceCommand
+{
+    /// <summary>
+    /// Gets or sets the source, as text in the JSON body.
+    /// </summary>
+    public new string Content { get; set; } = string.Empty;
+}
+
 /// <summary>An operation that neither is nor derives from any operation a contract client's app registers.</summary>
 [RootLink("/gateway/unregistered")]
 [HttpPost]

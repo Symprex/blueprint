@@ -543,6 +543,159 @@ public static class PipelineHelpers
     }
 
     /// <summary>
+    /// Reads the form of a request to an operation with an <c>IFormFile</c> property (#71, D19), whose generated pipeline
+    /// binds its files and fields from it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A request with no body and no content type has no form, and leaves the operation as it was, as such a request to a
+    /// JSON operation does. One whose content type is <c>multipart/form-data</c> or <c>application/x-www-form-urlencoded</c>
+    /// is read with ASP.NET Core's own form reader, so its limits (<c>FormOptions</c>) apply; that reader keeps a small file
+    /// in memory and spools a larger one to a temporary file, so memory stays bounded whatever the upload's size. A body that
+    /// is not a well-formed form, or exceeds those limits, is a 400.
+    /// </para>
+    /// <para>
+    /// A body of any other content type is refused with a 415, as the JSON path refuses a form; with no body to read
+    /// (<c>Content-Length: 0</c>), there is nothing to refuse, and it has no form.
+    /// </para>
+    /// </remarks>
+    /// <param name="httpContext">The current HTTP context.</param>
+    /// <param name="cancellationToken">Cancellation token to observe while the body is read.</param>
+    /// <returns>The form, a failure to return, or neither.</returns>
+    public static Task<FormReadResult> ReadFormAsync(HttpContext httpContext, CancellationToken cancellationToken)
+    {
+        var request = httpContext.Request;
+
+        if (request.HasFormContentType)
+        {
+            return ReadFormCoreAsync(request, cancellationToken);
+        }
+
+        if (request.ContentLength is { } contentLength)
+        {
+            return Task.FromResult(contentLength == 0
+                ? default
+                : new FormReadResult(null, UnsupportedMediaTypeResult.Instance));
+        }
+
+        // Chunked, or no framing at all: only reading tells whether there is a body, as RefuseFormBodyIfPresentAsync reads.
+        return RefuseNonFormBodyIfAnyByteAsync(request, cancellationToken);
+    }
+
+    private static async Task<FormReadResult> RefuseNonFormBodyIfAnyByteAsync(HttpRequest request, CancellationToken cancellationToken)
+    {
+        var probe = new byte[1];
+        var bytesRead = await request.Body.ReadAsync(probe, cancellationToken).ConfigureAwait(false);
+
+        return bytesRead > 0 ? new FormReadResult(null, UnsupportedMediaTypeResult.Instance) : default;
+    }
+
+    private static async Task<FormReadResult> ReadFormCoreAsync(HttpRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return new FormReadResult(await request.ReadFormAsync(cancellationToken).ConfigureAwait(false), null);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException
+            || (ex is IOException io && !cancellationToken.IsCancellationRequested && IsRaisedByTheReader(io)))
+        {
+            // A malformed multipart body (a missing or bad boundary, a body that ends before its closing boundary, which the
+            // reader fails with an IOException) or one over FormOptions' limits.
+            return new FormReadResult(null, new BindingFailureResult($"Invalid form body: {ex.Message}"));
+        }
+    }
+
+    /// <summary>
+    /// Whether an <see cref="IOException"/> from reading a form is one the reader raised itself over the body it was sent,
+    /// such as one that ends before its closing boundary, rather than the server's own failure to spool a large file to disk.
+    /// </summary>
+    /// <remarks>
+    /// The reader, and Kestrel under it, raise a plain <see cref="IOException"/>, whose HResult is <c>COR_E_IO</c>; a file
+    /// system failure carries the operating system's own error (a Win32 HRESULT, or the raw errno on Linux) or is a subclass
+    /// with its own, as <see cref="DirectoryNotFoundException"/> is. Only a full disk's used to be told apart, so a missing
+    /// temporary directory or a file the server could not write was answered as the caller's malformed body.
+    /// </remarks>
+    private static bool IsRaisedByTheReader(IOException exception)
+    {
+        const int CorEIo = unchecked((int)0x80131620);
+
+        return exception.HResult == CorEIo;
+    }
+
+    /// <summary>
+    /// Parses a typed scalar from a field of a multipart or URL-encoded body, as <see cref="BindQueryValue{T}"/> parses one
+    /// from the query string.
+    /// </summary>
+    /// <typeparam name="T">The target value type.</typeparam>
+    /// <param name="form">The request's form.</param>
+    /// <param name="name">The field's name.</param>
+    /// <param name="value">The parsed value on success.</param>
+    /// <param name="found">Whether the form carried the field.</param>
+    /// <param name="tryParse">A static delegate that wraps the type-specific TryParse method.</param>
+    /// <returns><see langword="null"/> on success or absent; a <see cref="BindingFailureResult"/> on parse failure.</returns>
+    public static OperationResult? BindFormValue<T>(
+        Microsoft.AspNetCore.Http.IFormCollection form,
+        string name,
+        out T value,
+        out bool found,
+        TryParseFunc<T> tryParse)
+    {
+        var sv = form[name];
+        if (sv.Count > 0)
+        {
+            found = true;
+            if (tryParse(sv[0]!, out value))
+            {
+                return null;
+            }
+
+            value = default!;
+            return new BindingFailureResult($"Invalid form field '{name}'");
+        }
+
+        found = false;
+        value = default!;
+        return null;
+    }
+
+    /// <summary>
+    /// Parses a typed array from every field of a name in a multipart or URL-encoded body, as
+    /// <see cref="BindQueryArray{T}"/> parses one from the query string.
+    /// </summary>
+    /// <typeparam name="T">The array element type.</typeparam>
+    /// <param name="form">The request's form.</param>
+    /// <param name="name">The fields' name.</param>
+    /// <param name="values">The parsed array on success, or <see langword="null"/> when absent.</param>
+    /// <param name="tryParse">A static delegate that wraps the type-specific TryParse method.</param>
+    /// <returns><see langword="null"/> on success or absent; a <see cref="BindingFailureResult"/> on parse failure.</returns>
+    public static OperationResult? BindFormArray<T>(
+        Microsoft.AspNetCore.Http.IFormCollection form,
+        string name,
+        out T[]? values,
+        TryParseFunc<T> tryParse)
+    {
+        var sv = form[name];
+        if (sv.Count > 0)
+        {
+            var arr = new T[sv.Count];
+            for (var i = 0; i < sv.Count; i++)
+            {
+                if (!tryParse(sv[i]!, out arr[i]))
+                {
+                    values = null;
+                    return new BindingFailureResult($"Invalid form field '{name}'");
+                }
+            }
+
+            values = arr;
+            return null;
+        }
+
+        values = null;
+        return null;
+    }
+
+    /// <summary>
     /// Async continuation for when the first read completed synchronously but returned a partial result.
     /// </summary>
     private static async Task<OperationResult?> ReadJsonBodyContinueAsync<TOperation>(

@@ -25,6 +25,7 @@ public partial class GatewayBlueprintApp : BlueprintApp;
 [JsonSerializable(typeof(TemplateApiResource))]
 [JsonSerializable(typeof(TemplateApiResource[]))]
 [JsonSerializable(typeof(TemplatePreviewApiResource))]
+[JsonSerializable(typeof(TemplateUploadApiResource))]
 [JsonSerializable(typeof(TenantNoteApiResource))]
 [JsonSerializable(typeof(ProblemDetails))]
 [JsonSerializable(typeof(ValidationProblemDetails))]

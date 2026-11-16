@@ -7,8 +7,13 @@ namespace Blueprint.SourceGenerator.Modules;
 /// uses this to emit camelCase query parameter names matching the server and OpenAPI contract).
 /// </summary>
 /// <param name="Entries">The ordered property binding entries with source and binding name information.</param>
+/// <param name="BodyShape">
+/// The request body the host reads the body-owned properties from, which <c>HttpClientRequestBuilderModule</c> builds a
+/// stream or multipart body to match (#71).
+/// </param>
 internal sealed record PropertyBindingEntriesMetadata(
-    IReadOnlyList<PropertyBindingEntriesMetadata.Entry> Entries)
+    IReadOnlyList<PropertyBindingEntriesMetadata.Entry> Entries,
+    PropertyOwnershipModule.RequestBodyShape BodyShape = PropertyOwnershipModule.RequestBodyShape.Json)
 {
     /// <summary>
     /// A single property's binding ownership projected for cross-module consumption.

@@ -70,9 +70,13 @@ internal sealed record OpenApiValidationConstraints(
         "Trimming",
         "IL2070",
         Justification = "OpenAPI constraint projection reflects over operation type properties that are preserved by the source generator's generated pipeline code.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2067",
+        Justification = "As above: the operation type's properties are preserved by the generated pipeline code.")]
     public static OpenApiValidationConstraints Extract(Type operationType, string propertyName)
     {
-        var property = operationType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        var property = Blueprint.Model.MostDerivedProperties.Find(operationType, propertyName);
         return ExtractFromProperty(property);
     }
 

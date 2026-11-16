@@ -231,12 +231,12 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         var binding = context.GetMetadata<BindingDescriptorRegistration>().FirstOrDefault();
         if (binding is not null)
         {
-            if (binding.HasBodyBinding || binding.HasHeaderOrCookieBinding)
+            if (binding.CanFailToBind)
             {
                 responses.Add(CreateResponse(400, true, "Blueprint.Runtime.Exec.BindingFailureResult", problemDetailsBody));
             }
 
-            if (binding.HasBodyBinding)
+            if (binding.RejectsUnsupportedMediaType)
             {
                 responses.Add(CreateResponse(415, true, "Blueprint.Runtime.Exec.UnsupportedMediaTypeResult", problemDetailsBody));
             }

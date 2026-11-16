@@ -35,7 +35,7 @@ public class AppModelOpenApiDocumentRenderingContextTests
         var requestBodyOperationNames = context.Paths
             .SelectMany(static path => path.Methods)
             .SelectMany(static method => method.Operations)
-            .Where(static operation => operation.RequestBody is not null)
+            .Where(static operation => operation.RequestBody is { Properties.IsEmpty: false }) // a stream body (#71) has no component
             .Select(static operation => operation.OperationName)
             .ToArray();
         schemaComponentNames.Should().Contain(requestBodyOperationNames);
