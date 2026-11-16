@@ -87,7 +87,8 @@ internal sealed record DeclaredForwardAnalysis(EquatableList<DiagnosticInfo> Dia
                 continue;
             }
 
-            // A same-named property a binding fills is BPGW021's; a rename onto one supplies it twice.
+            // A same-named property a binding fills is BPGW021's, or the gateway's own beside a [Hide] when its type differs
+            // (#187); a rename onto one supplies it twice.
             if (bindings.Any(b => b.PropertyName == innerName))
             {
                 if (forwardAs is not null)

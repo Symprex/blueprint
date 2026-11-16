@@ -95,6 +95,19 @@ public class GatewayBindingGeneratorTests
     /// </summary>
     private const string DeclaredTenantIdOfAnotherType = "public int TenantId { get; set; }";
 
+    /// <summary>
+    /// A gateway <c>TenantId</c> of a strong-id type with a string <c>Value</c>, as Signature365's <c>ApiId</c>, which does
+    /// not convert to the inner <c>string</c> and so is the gateway's own input (#187).
+    /// </summary>
+    private const string TenantKeyDeclaration = "public TenantKey TenantId { get; set; }";
+
+    private const string TenantKeySource = """
+        namespace Gateway
+        {
+            public readonly record struct TenantKey(string Value);
+        }
+        """;
+
     private static readonly Lazy<MetadataReference> _innerContract = new(
         static () => TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(InnerSource, "InnerNoteContract"));
 
@@ -615,7 +628,7 @@ public class GatewayBindingGeneratorTests
         // A declared property of another type is the gateway's own, so nothing gives the inner property a value.
         var diagnostic = SingleDescriptorDiagnostic([WithBody(GatewaySource, DeclaredTenantIdOfAnotherType)], "BPGW010");
 
-        diagnostic.GetMessage().Should().Contain("TenantId").And.Contain("/tenants/{TenantId}/notes");
+        diagnostic.GetMessage().Should().Contain("TenantId").And.Contain("/tenants/{TenantId}/notes").And.Contain("OnMap");
         Located(diagnostic).Should().StartWith("Expose<");
     }
 
@@ -831,6 +844,57 @@ public class GatewayBindingGeneratorTests
         var diagnostic = SingleDescriptorDiagnostic([appBinding, gateway], "BPGW021");
 
         diagnostic.GetMessage().Should().Contain("AddGatewayNoteCommand").And.Contain("TenantId");
+    }
+
+    [Theory]
+    [InlineData("public string TenantId { get; set; } = \"\";")]
+    [InlineData("[Required] public string TenantId { get; set; } = \"\";")]
+    [InlineData("public required string TenantId { get; set; }")]
+    public void A_hide_beside_a_declaration_of_another_type_leaves_the_declaration_the_gateways_own_and_OnMap_fills_the_inner_property(string innerTenantId)
+    {
+        // Symprex/blueprint#187: a declaration of another type is never copied, so it is the gateway's own input, not one
+        // callers would read as forwarded. This used to be BPGW021, leaving BPGW010 with no accepted fix.
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(
+            InnerSource.Replace("public string TenantId { get; set; } = \"\";", innerTenantId, StringComparison.Ordinal),
+            "InnerNoteContract");
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.TenantId))]"),
+            TenantKeyDeclaration + "\n    internal void OnMap(Inner.AddNoteCommand inner) => inner.TenantId = this.TenantId.Value;");
+
+        var run = RunAllGenerators([ClientSource, AppBindingSource, gateway, TenantKeySource, AppSource], contract);
+
+        run.GeneratorDiagnostics.Should().NotContain(static d => d.Id == "BPGW009" || d.Id == "BPGW010" || d.Id == "BPGW021" || d.Id == "BPGW035");
+        run.GeneratorErrors.Should().BeEmpty();
+        run.EmitErrors.Should().BeEmpty();
+
+        var pipeline = run.Source("Gateway.AddGatewayNoteCommandExecutorPipeline.g.cs");
+        pipeline.Should().Contain("operation.OnMap(forwardInner)").And.NotContain("TenantId = operation.TenantId");
+    }
+
+    [Fact]
+    public void A_hide_beside_a_declaration_of_another_type_keeps_the_declaration_in_the_model()
+    {
+        var gateway = WithBody(WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.TenantId))]"), TenantKeyDeclaration);
+
+        var model = BuildModel(AppBindingSource, gateway, TenantKeySource);
+
+        model.Properties.Should().ContainSingle(static p => p.Name == "TenantId").Which.TypeName.Should().Contain("TenantKey");
+    }
+
+    [Fact]
+    public void A_hidden_required_inner_property_beside_a_declaration_of_another_type_still_needs_the_map_hook_to_assign_it()
+    {
+        var contract = TestHelpers.CreateReferenceFromSource<OperationDescriptorSourceGenerator>(
+            InnerSource.Replace("public string TenantId { get; set; } = \"\";", "[Required] public string TenantId { get; set; } = \"\";", StringComparison.Ordinal),
+            "InnerNoteContract");
+        var gateway = WithBody(
+            WithAttributes(GatewaySource, "[Hide(nameof(Inner.AddNoteCommand.TenantId))]"),
+            TenantKeyDeclaration + "\n    internal void OnMap(Inner.AddNoteCommand inner) => inner.Text = inner.Text.Trim();");
+
+        var result = TestHelpers.CompileOnce<OperationDescriptorSourceGenerator>([AppBindingSource, gateway, TenantKeySource], additionalReferences: [contract]);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPGW035").Which.GetMessage().Should().Contain("TenantId");
+        result.Diagnostics.Should().NotContain(static d => d.Id == "BPGW021");
     }
 
     [Theory]

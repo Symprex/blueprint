@@ -1905,6 +1905,12 @@ public static class PipelineHelpers
     /// Neither the resource's own <c>$links</c> nor the operation's URL is consulted, as legacy consulted neither: a self
     /// link on the data can be hidden by link authorisation or relative, and the operation's URL is a different resource's
     /// (a collection's, for a create). Signature365 stores the href with every audited event.
+    /// <para>
+    /// An event with neither data nor a self query is one read from another service: a forward's, or a handler's that
+    /// returned its upstream's event. Neither travels on the wire for a deletion, and the upstream's own href is on the
+    /// upstream's host, so the self link is filled from the operation's values instead, the same ones a hand-written
+    /// handler copies into its own self query (Symprex/blueprint#188). No constructor makes such an event otherwise.
+    /// </para>
     /// </remarks>
     private static void PopulateResourceEventHref(ApiOperationContext context, OperationResult handlerResult)
     {
@@ -1924,7 +1930,7 @@ public static class PipelineHelpers
             return;
         }
 
-        if (TryCreateResourceEventHref(context, resourceEvent.ResourceType, resourceEvent.Data ?? resourceEvent.SelfQuery, out var href))
+        if (TryCreateResourceEventHref(context, resourceEvent.ResourceType, resourceEvent.Data ?? resourceEvent.SelfQuery ?? context.Operation, out var href))
         {
             resourceEvent.Href = href;
         }

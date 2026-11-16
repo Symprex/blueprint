@@ -38,6 +38,29 @@ public sealed class GatewayExposeTests(SampleSystemFixture system)
     }
 
     [Fact]
+    public async Task An_exposed_delete_whose_inner_event_has_no_data_carries_the_gateways_href_for_the_resource()
+    {
+        // Symprex/blueprint#188: the inner service answers with a ResourceDeleted<T> made from a self query, which it
+        // writes with its own href and no data. A forwarded one used to come back with no href at all, where a hand-written
+        // gateway handler's own ResourceDeleted<T> carried the gateway's, which clients evict their cache by.
+        var id = await this.SeedTemplateAsync("Discarded Template");
+        using var caller = system.Gateway.CreateClient(system.CreateCallerToken());
+
+        var response = await caller.DeleteAsync($"gateway/templates/{id}/discard");
+
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, text);
+        using var body = JsonDocument.Parse(text);
+        body.RootElement.GetProperty("changeType").GetString().Should().Be("Deleted");
+        body.RootElement.TryGetProperty("data", out _).Should().BeFalse();
+        body.RootElement.TryGetProperty("href", out var href).Should().BeTrue(text);
+        href.GetString().Should().Be(new Uri(system.Gateway.BaseAddress, $"gateway/templates/{id}").ToString());
+
+        using var inner = system.Inner.CreateClient(system.CreateCallerToken());
+        (await inner.GetAsync($"api/templates/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task The_exposed_op_answers_the_inner_not_found_result_as_its_own_404()
     {
         using var caller = system.Gateway.CreateClient(system.CreateCallerToken());
