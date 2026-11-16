@@ -60,6 +60,23 @@ public sealed class GatewayExposeTests(SampleSystemFixture system)
         (await inner.GetAsync($"api/templates/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    [Theory]
+    [InlineData("inner")]
+    [InlineData("gateway")]
+    public async Task A_caller_without_template_write_is_refused_the_discard_and_the_template_survives(string route)
+    {
+        // DiscardTemplateCommand deletes as ArchiveTemplateCommand does, so it owes the same template:write requirement.
+        var id = await this.SeedTemplateAsync("Undiscarded Template");
+        var (app, path) = route == "inner" ? (system.Inner, $"api/templates/{id}/discard") : (system.Gateway, $"gateway/templates/{id}/discard");
+        using var caller = app.CreateClient(system.CreateCallerToken("template:read"));
+
+        var response = await caller.DeleteAsync(path);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+        using var inner = system.Inner.CreateClient(system.CreateCallerToken());
+        (await inner.GetAsync($"api/templates/{id}")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
     [Fact]
     public async Task The_exposed_op_answers_the_inner_not_found_result_as_its_own_404()
     {
