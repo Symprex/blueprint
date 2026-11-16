@@ -155,12 +155,17 @@ public static class EndpointRouteBuilderExtensions
         // Register the mapped document in DI, where OutputOpenApi reads it.
         endpoints.ServiceProvider.GetService<PreRenderedOpenApiDocumentHolder>()?.Set(openApiDocument);
 
+        // This call's operation endpoints, told from those another call maps for the same operations.
+        var mappedApi = new MappedBlueprintApi(typeof(T), absoluteBasePath);
+
         // The per-operation input schemas come from the same rendering, so they agree with the document served.
         if (endpoints.ServiceProvider.GetService<IOperationInputSchemaProvider>() is OperationInputSchemaProvider inputSchemaProvider)
         {
-            inputSchemaProvider.Set(new Lazy<OperationInputSchemaSet>(
-                () => openApiDocument.Value.InputSchemas!.Value,
-                LazyThreadSafetyMode.ExecutionAndPublication));
+            inputSchemaProvider.Set(
+                new Lazy<OperationInputSchemaSet>(
+                    () => openApiDocument.Value.InputSchemas!.Value,
+                    LazyThreadSafetyMode.ExecutionAndPublication),
+                mappedApi);
         }
 
         var openApiBuilder = endpoints.Map(
@@ -271,6 +276,10 @@ public static class EndpointRouteBuilderExtensions
 
                 var builder = endpoints.Map(RoutePatternFactory.Parse(RouteUnder(basePath, url.UrlFormat)), router.CreateRequestDelegate(operation));
                 builder.WithMetadata(operation);
+
+                // The call and URL it is mapped for, by which a tool call (Blueprint.Mcp) finds the endpoint its schema describes.
+                builder.WithMetadata(mappedApi);
+                builder.WithMetadata(url);
                 builder.WithMetadata(new HttpMethodMetadata(httpMethods));
                 builder.WithDisplayName(string.Concat(string.Join('|', httpMethods), " ", operation.Name));
 
