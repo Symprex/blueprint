@@ -25,6 +25,8 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
     /// </summary>
     public const string HandlerResultTypeName = "Blueprint.OperationResult";
 
+    private const string ProxyResultTypeName = "Blueprint.Http.ProxyResult";
+
     /// <inheritdoc />
     public string ModuleId => nameof(HandlerExecutionModule);
 
@@ -201,6 +203,12 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             default:
                 throw new InvalidOperationException($"Unsupported handler normalization kind '{normalization.Kind}'.");
         }
+
+        // Before any later stage can fail and replace the result, leaving no one to dispose the response it owns.
+        if (normalization.CanReturnProxyResult)
+        {
+            context.WriteStatement("Blueprint.Runtime.Exec.PipelineHelpers.DisposeWithRequest(context, handlerResult);");
+        }
     }
 
     private static HandlerReturnNormalization? CreateReturnNormalization(PipelineContributorContext context, OperationHandlerModel handler)
@@ -260,7 +268,8 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             return new HandlerReturnNormalization(
                 HandlerReturnNormalizationKind.ResultsUnion,
                 effectiveHandlerReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                null);
+                null,
+                CanHoldProxyResult(context, effectiveHandlerReturnType));
         }
 
         if (OperationResultContractHelper.IsOperationResultType(effectiveHandlerReturnType, operationResultType))
@@ -273,7 +282,8 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
             return new HandlerReturnNormalization(
                 HandlerReturnNormalizationKind.OperationResult,
                 effectiveHandlerReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                null);
+                null,
+                CanHoldProxyResult(context, effectiveHandlerReturnType));
         }
 
         if (IsNullablePlainValue(effectiveHandlerReturnType))
@@ -328,12 +338,14 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
 
         if (OperationResultContractHelper.TryGetResultsUnionMembers(declaredContractType, out _))
         {
-            return new HandlerReturnNormalization(HandlerReturnNormalizationKind.ResultsUnion, declaredName, null);
+            return new HandlerReturnNormalization(
+                HandlerReturnNormalizationKind.ResultsUnion, declaredName, null, CanHoldProxyResult(context, declaredContractType));
         }
 
         if (OperationResultContractHelper.IsOperationResultType(declaredContractType, operationResultType))
         {
-            return new HandlerReturnNormalization(HandlerReturnNormalizationKind.OperationResult, declaredName, null);
+            return new HandlerReturnNormalization(
+                HandlerReturnNormalizationKind.OperationResult, declaredName, null, CanHoldProxyResult(context, declaredContractType));
         }
 
         return new HandlerReturnNormalization(
@@ -532,7 +544,46 @@ public sealed class HandlerExecutionModule : IBlueprintSourceGeneratorModule, IP
     private sealed record HandlerReturnNormalization(
         HandlerReturnNormalizationKind Kind,
         string ProducedTypeName,
-        string? PlainValueTypeName);
+        string? PlainValueTypeName,
+        bool CanReturnProxyResult = false);
+
+    /// <summary>
+    /// Whether a value of <paramref name="type"/>, a handler's return type or a forward's declared result, can be a
+    /// <c>ProxyResult</c> handing over an upstream response: the type is <c>ProxyResult</c>, derives from it or is one of
+    /// its base types (<c>HttpResult</c>, <c>OperationResult</c>), or is a <c>Results</c> union with such a member.
+    /// </summary>
+    /// <remarks>
+    /// Only the generated registration depends on this, and it checks the actual result at run time, so the test may be
+    /// broad; it is not broader only to keep every other operation's pipeline unchanged.
+    /// </remarks>
+    private static bool CanHoldProxyResult(PipelineContributorContext context, ITypeSymbol type)
+    {
+        if (context.FindTypeByMetadataName(ProxyResultTypeName) is not { } proxyResultType)
+        {
+            return false;
+        }
+
+        return CanHold(type)
+               || (type is INamedTypeSymbol { IsGenericType: true } union && union.TypeArguments.Any(CanHold));
+
+        bool CanHold(ITypeSymbol candidate)
+        {
+            return IsSelfOrBase(proxyResultType, candidate) || IsSelfOrBase(candidate, proxyResultType);
+        }
+
+        static bool IsSelfOrBase(ITypeSymbol derived, ITypeSymbol baseType)
+        {
+            for (var current = derived; current is not null; current = current.BaseType)
+            {
+                if (SymbolEqualityComparer.Default.Equals(current, baseType))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
 
     private enum HandlerReturnNormalizationKind
     {

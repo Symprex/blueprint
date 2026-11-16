@@ -29,6 +29,36 @@ public static class PipelineHelpers
     private const int MaxSelfQueryDepth = 3;
 
     /// <summary>
+    /// Disposes the upstream response a handler's <see cref="ProxyResult"/> owns once the request ends. Generated for an
+    /// operation whose handler can return one, straight after the handler returns, because a later stage that fails (the
+    /// unit of work's save) replaces the result, and nothing would then see or dispose the response. Disposing it twice,
+    /// once the result has also been written, is harmless.
+    /// </summary>
+    /// <remarks>
+    /// Outside an HTTP request there is no request to dispose it with. The result is kept on the context instead, and
+    /// <see cref="OperationExecutorShell"/> disposes its response only if a later stage fails, so a caller handed the
+    /// result still owns it.
+    /// </remarks>
+    /// <param name="context">The operation's context.</param>
+    /// <param name="result">The handler's result.</param>
+    public static void DisposeWithRequest(ApiOperationContext context, OperationResult result)
+    {
+        if (result is not ProxyResult proxy)
+        {
+            return;
+        }
+
+        if (context.HttpContext is { } httpContext)
+        {
+            httpContext.Response.RegisterForDispose(proxy.DownstreamResponse);
+        }
+        else
+        {
+            context.UnownedProxyResult = proxy;
+        }
+    }
+
+    /// <summary>
     /// Context data key used to track current SelfQuery resolution depth and prevent runaway recursion.
     /// </summary>
     private const string SelfQueryDepthKey = "__Blueprint_SelfQueryDepth";

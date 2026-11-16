@@ -57,6 +57,18 @@ public class HangfireBackgroundTaskExecutorResultTests
         await execute.Should().NotThrowAsync();
     }
 
+    [Fact]
+    public async Task When_task_returns_a_proxy_result_then_its_upstream_response_is_disposed()
+    {
+        // The job discards the result, so it is the last to see the upstream response, which it used to leave undisposed.
+        var content = new TrackedContent();
+        var sut = CreateExecutor(new Blueprint.Http.ProxyResult(new HttpResponseMessage { Content = content }), new RecordingLogger());
+
+        await sut.ExecuteAsync(CreatePayload(), CancellationToken.None);
+
+        content.IsDisposed.Should().BeTrue();
+    }
+
     private static HangfireBackgroundTaskExecutor CreateExecutor(OperationResult result, RecordingLogger logger)
     {
         var app = new BlueprintApp();
@@ -94,6 +106,17 @@ public class HangfireBackgroundTaskExecutorResultTests
         public ValueTask<OperationResult> ExecuteAsync(ApiOperationContext context)
         {
             return ValueTask.FromResult(result);
+        }
+    }
+
+    private sealed class TrackedContent() : StringContent("upstream")
+    {
+        public bool IsDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            this.IsDisposed = true;
+            base.Dispose(disposing);
         }
     }
 

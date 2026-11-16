@@ -278,6 +278,38 @@ public class ExposeGeneratorTests
     }
 
     [Fact]
+    public void An_exposed_operation_streaming_a_ProxyResult_disposes_the_upstream_response_with_the_request_before_its_save()
+    {
+        // A failed save replaces the forward's ProxyResult, so the response it owns is registered for disposal with the
+        // request before the save runs. A generated forward used to skip that registration.
+        const string proxySource = """
+            namespace Gateway
+            {
+                using Blueprint.Model;
+                using Blueprint.Model.Attributes;
+
+                [Expose<Inner.GetWidgetQuery>]
+                [AllowAnonymous]
+                [RootLink("/gateway/widgets/{Id}/raw")]
+                [HttpGet]
+                public partial class GetGatewayWidgetRawQuery : IQuery<Blueprint.Http.ProxyResult>;
+            }
+            """;
+
+        var run = RunAllGenerators([ClientSource, proxySource, AppSource]);
+
+        run.EmitErrors.Should().BeEmpty();
+        run.GeneratorErrors.Should().BeEmpty();
+
+        var pipeline = run.Source("Gateway.GetGatewayWidgetRawQueryExecutorPipeline.g.cs");
+        pipeline.Should().Contain("ForwardAsync<global::Inner.GetWidgetQuery, global::Blueprint.Http.ProxyResult>")
+            .And.Contain("Blueprint.Runtime.Exec.PipelineHelpers.DisposeWithRequest(context, handlerResult);")
+            .And.Contain("SaveUnitOfWorkAsync(");
+        pipeline.IndexOf("DisposeWithRequest(", StringComparison.Ordinal)
+            .Should().BeLessThan(pipeline.IndexOf("SaveUnitOfWorkAsync(", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task The_generated_forward_and_emitted_properties_match_the_snapshot()
     {
         var run = RunAllGenerators([ClientSource, GatewaySource, AppSource]);

@@ -66,6 +66,38 @@ public sealed class BlueprintRequestOptionsTests
         own.Should().Be(new AuthenticationHeaderValue("Bearer", "own"));
     }
 
+    [Fact]
+    public async Task A_raw_send_tells_the_requests_own_authorization_apart_from_the_clients_default_header()
+    {
+        // A streamed forward builds its request with CreateRequest and sends it with SendRawAsync, so a handler has to be told
+        // the same things about it as about a request SendAsync sends.
+        var seen = new List<HttpRequestMessage>();
+        await using var provider = BuildProvider(seen, static client => client.DefaultRequestHeaders.Authorization = new("Bearer", "default"));
+        var transport = BlueprintClientTransport.Create<SampleContractApi>(provider);
+        var withoutOwn = new GetTemplateQuery { Id = "t-5" };
+        var withOwn = new GetTemplateQuery { Id = "t-6" };
+
+        using (var request = transport.CreateRequest(HttpMethod.Get, "/templates/t-5", withoutOwn))
+        {
+            (await transport.SendRawAsync(request)).Dispose();
+        }
+
+        using (var request = transport.CreateRequest(HttpMethod.Get, "/templates/t-6", withOwn))
+        {
+            request.Headers.Authorization = new("Bearer", "own");
+            (await transport.SendRawAsync(request)).Dispose();
+        }
+
+        seen[0].Options.TryGetValue(BlueprintRequestOptions.Operation, out var first).Should().BeTrue();
+        first.Should().BeSameAs(withoutOwn);
+        seen[0].Options.TryGetValue(BlueprintRequestOptions.RequestAuthorization, out _).Should().BeFalse();
+
+        seen[1].Options.TryGetValue(BlueprintRequestOptions.Operation, out var second).Should().BeTrue();
+        second.Should().BeSameAs(withOwn);
+        seen[1].Options.TryGetValue(BlueprintRequestOptions.RequestAuthorization, out var own).Should().BeTrue();
+        own.Should().Be(new AuthenticationHeaderValue("Bearer", "own"));
+    }
+
     private static ServiceProvider BuildProvider(List<HttpRequestMessage> seen, Action<System.Net.Http.HttpClient>? configure = null)
     {
         var services = new ServiceCollection();

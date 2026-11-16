@@ -514,6 +514,25 @@ public async Task<Results<OkResult<GatewayTemplateResource>, NotFoundResult<Gate
 - **An upstream 404 becomes the declared `NotFoundResult<T>`** when `TResult` is a `Results<…>` with one, and the upstream wrote it as that result (its content as JSON). Every other failure, a thrown not-found's problem document included (the content type tells them apart: a forward sends `Accept: application/problem+json`, so even a host with `NegotiateErrorContentType` on writes its problems as `application/problem+json`; it replaces any `Accept` the caller sets through `CallOptions.ModifyRequest`), escapes as the `BlueprintApiException` the transport raises (or `ValidationException` for a 422), so the gateway answers the upstream problem unchanged. A typed client's own calls do not do this: there, a 404 always fails.
 - **Inner `$links` are never forwarded.** `ApiResource.Links` is get-only and marked `JsonObjectCreationHandling.Replace`, so deserialising a forwarded resource, even with options that populate read-only members, drops the inner service's `$links`, which name the inner host. The gateway generates its own links from its own route attributes.
 
+#### Streaming a forward
+
+Declare `ProxyResult` as `TResult` to pass the upstream response through unbuffered. Use it for an inner operation that returns a `FileStreamResult`, or anything large:
+
+```csharp
+[ProducesContentType("application/octet-stream")]
+public partial class DownloadGatewayTemplateQuery : IQuery<ProxyResult> { /* ... */ }
+
+public Task<ProxyResult> Handle(DownloadGatewayTemplateQuery query, ApiOperationContext context, BlueprintHttpClient upstream, CancellationToken ct)
+    => upstream.ForwardAsync<DownloadTemplateQuery, ProxyResult>(context, new DownloadTemplateQuery { Id = query.Id }, cancellationToken: ct);
+```
+
+- **Answered at the headers.** The transport sends with `HttpCompletionOption.ResponseHeadersRead` and returns the response unread. The gateway sends its own headers at once and copies the body as it arrives.
+- **`ProxyResult` owns the response.** It disposes the response once the body is written, or when the caller goes away. It is also disposed with the request, registered as soon as the handler returns, so a failing save after the handler, or a result writer that answers in its place or throws on it, does not leave the upstream connection open. The copy is cancelled by `RequestAborted`.
+- **Hop-by-hop headers are dropped:** `Connection`, `Keep-Alive`, `Transfer-Encoding`, `Upgrade`, `Proxy-*`, `TE`, `Trailer`, and any header the upstream `Connection` header names, among the response or the content headers. Every other header is copied.
+- **A failure is not streamed.** An upstream response that is not a success is read and mapped exactly as for any forward, so the gateway answers with the upstream problem.
+- **OpenAPI.** `[ProducesContentType(...)]` on the operation documents the success response of a `FileStreamResult` or `ProxyResult`, or a type derived from either, with those media types, each as a binary string. Without the attribute, a `FileStreamResult` is documented as `application/octet-stream` and a `ProxyResult` with no content. A value that is not a `type/subtype` media type fails the build with BPOA003.
+- **Hand-written requests.** `CreateRequest` builds the request a call would send without sending it. `SendRawAsync` sends a request at its headers, failures mapped first, and returns a response the caller owns, ready for `new ProxyResult(response)`.
+
 #### Credentials and error translation
 
 Pass the gateway operation's `ApiOperationContext` (a handler parameter) to forward as that operation declares:

@@ -19,7 +19,7 @@ public static class BlueprintRequestOptions
     /// <summary>
     /// The <c>Authorization</c> header the request itself carried when it was handed to the
     /// <see cref="System.Net.Http.HttpClient"/>: the one a forward's credential or <see cref="CallOptions.ModifyRequest"/>
-    /// set. It is absent when the request carried none. <see cref="System.Net.Http.HttpClient"/> merges its
+    /// set, or the caller of <see cref="BlueprintHttpClient.SendRawAsync"/> put on its request. It is absent when the request carried none. <see cref="System.Net.Http.HttpClient"/> merges its
     /// <see cref="System.Net.Http.HttpClient.DefaultRequestHeaders"/> into the request before any handler sees it, so the
     /// header a handler reads cannot say which of the two set it; this can.
     /// </summary>

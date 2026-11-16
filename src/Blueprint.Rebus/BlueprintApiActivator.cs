@@ -299,23 +299,27 @@ public sealed class BlueprintApiActivator : IContainerAdapter
             {
                 using var txnScope = new RebusTransactionScope();
 
-                var result = await executor.ExecuteAsync(apiContext);
-
-                if (result is UnhandledExceptionResult { Exception: { } exception })
-                {
-                    ExceptionDispatchInfo.Throw(exception);
-                }
+                ThrowIfUnhandled(await executor.ExecuteAsync(apiContext));
 
                 await txnScope.CompleteAsync();
             }
             else
             {
-                var result = await executor.ExecuteAsync(apiContext);
+                ThrowIfUnhandled(await executor.ExecuteAsync(apiContext));
+            }
+        }
 
-                if (result is UnhandledExceptionResult { Exception: { } exception })
-                {
-                    ExceptionDispatchInfo.Throw(exception);
-                }
+        private static void ThrowIfUnhandled(OperationResult result)
+        {
+            // The result goes no further than here, so nothing else would dispose an upstream response it holds.
+            if (result is Blueprint.Http.ProxyResult proxy)
+            {
+                proxy.DownstreamResponse.Dispose();
+            }
+
+            if (result is UnhandledExceptionResult { Exception: { } exception })
+            {
+                ExceptionDispatchInfo.Throw(exception);
             }
         }
     }

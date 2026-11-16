@@ -17,6 +17,9 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
 {
     private const string ValidationProblemDetailsTypeName = "Microsoft.AspNetCore.Mvc.ValidationProblemDetails";
     private const string ProblemDetailsTypeName = "Microsoft.AspNetCore.Mvc.ProblemDetails";
+    private const string ProducesContentTypeAttributeTypeName = "Blueprint.Model.Attributes.ProducesContentTypeAttribute";
+    private const string FileStreamResultTypeName = "Blueprint.Runtime.Exec.FileStreamResult";
+    private const string ProxyResultTypeName = "Blueprint.Http.ProxyResult";
 
     /// <inheritdoc />
     public string ModuleId => nameof(HttpResponseMetadataModule);
@@ -52,7 +55,7 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
             return;
         }
 
-        var responses = GetResponses(context);
+        var responses = ApplyDeclaredContentTypes(context, GetResponses(context), operationType);
         if (responses.Length == 0)
         {
             return;
@@ -64,6 +67,104 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         }
 
         context.AddRenderStep(writer => RenderDescriptor(writer, context.GetMetadata<HttpResponseMetadataRegistration>()));
+    }
+
+    /// <summary>
+    /// Gives a streamed response (a <c>FileStreamResult</c> or <c>ProxyResult</c>) the media types the operation's
+    /// <c>[ProducesContentType]</c> declares, as a response with a body. Without the attribute every response is unchanged.
+    /// </summary>
+    /// <remarks>
+    /// The attribute is read from source, never constructed, so a value that is not a media type is reported here as
+    /// BPOA003 and the declaration is ignored.
+    /// </remarks>
+    private static ImmutableArray<HttpResponseMetadataRegistration> ApplyDeclaredContentTypes(
+        DescriptorContributorContext context,
+        ImmutableArray<HttpResponseMetadataRegistration> responses,
+        INamedTypeSymbol operationType)
+    {
+        var attribute = operationType.GetAttributes().FirstOrDefault(static attribute =>
+            attribute.AttributeClass?.ToDisplayString() == ProducesContentTypeAttributeTypeName);
+
+        if (attribute is null || attribute.ConstructorArguments.Length != 2)
+        {
+            return responses;
+        }
+
+        // A null params array (a bare null) declares a null content type as surely as a null element does.
+        var additional = attribute.ConstructorArguments[1];
+        IEnumerable<object?> declared = additional.Kind == TypedConstantKind.Array && !additional.IsNull
+            ? [attribute.ConstructorArguments[0].Value, .. additional.Values.Select(static value => value.Value)]
+            : [attribute.ConstructorArguments[0].Value, null];
+
+        var contentTypes = ImmutableArray.CreateBuilder<string>();
+        var location = attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? operationType.Locations.FirstOrDefault();
+
+        foreach (var value in declared)
+        {
+            if (value is not string contentType || !IsMediaType(contentType))
+            {
+                context.AddDiagnostic(new DiagnosticInfo(
+                    HttpResponseMetadataDiagnosticDescriptors.InvalidDeclaredContentType,
+                    location,
+                    [operationType.Name, value as string ?? "null"]));
+
+                return responses;
+            }
+
+            contentTypes.Add(contentType);
+        }
+
+        var streamedTypeNames = GetStreamedResultTypeNames(context, operationType);
+
+        return responses
+            .Select(response => response.ResultTypeNames.Any(streamedTypeNames.Contains)
+                ? response with { HasResponseBody = true, ContentTypes = contentTypes.ToImmutable() }
+                : response)
+            .ToImmutableArray();
+    }
+
+    /// <summary>
+    /// The names, as a response's <see cref="HttpResponseMetadataRegistration.ResultTypeNames"/> holds them, of the declared
+    /// results that stream their body: a <c>FileStreamResult</c> or <c>ProxyResult</c>, or a type derived from either. Read
+    /// from the symbols, because a response keeps only names and a subclass's name says nothing of its base.
+    /// </summary>
+    private static ImmutableHashSet<string> GetStreamedResultTypeNames(DescriptorContributorContext context, INamedTypeSymbol operationType)
+    {
+        var operationResultType = context.FindTypeByMetadataName("Blueprint.OperationResult");
+        var fileStreamResultType = context.FindTypeByMetadataName(FileStreamResultTypeName);
+        var proxyResultType = context.FindTypeByMetadataName(ProxyResultTypeName);
+        var declaredContractType = OperationResultContractHelper.GetDeclaredOperationResultType(operationType);
+
+        if (operationResultType is null || declaredContractType is null)
+        {
+            return [];
+        }
+
+        return OperationResultContractHelper.GetFlattenedSemanticResultTypes(declaredContractType, operationResultType)
+            .Where(resultType => IsTypeOrDerivedFromOptional(resultType, fileStreamResultType) || IsTypeOrDerivedFromOptional(resultType, proxyResultType))
+            .Select(static resultType => GetTypeName(resultType))
+            .ToImmutableHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is a media type: a <c>type/subtype</c> of two RFC 9110 tokens, optionally followed
+    /// by <c>;</c> and its parameters, which are not checked.
+    /// </summary>
+    private static bool IsMediaType(string value)
+    {
+        var parametersStart = value.IndexOf(';');
+        var essence = parametersStart < 0 ? value : value.Substring(0, parametersStart);
+        var slash = essence.IndexOf('/');
+
+        return slash > 0
+               && IsToken(essence.Substring(0, slash))
+               && IsToken(essence.Substring(slash + 1));
+
+        static bool IsToken(string part)
+        {
+            return part.Length > 0 && part.All(static c => c is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9')
+                || "!#$%&'*+-.^_`|~".IndexOf(c) >= 0);
+        }
     }
 
     private static ImmutableArray<HttpResponseMetadataRegistration> GetResponses(DescriptorContributorContext context)
@@ -763,6 +864,11 @@ public sealed class HttpResponseMetadataModule : IBlueprintSourceGeneratorModule
         if (!response.ProblemExamples.IsDefaultOrEmpty)
         {
             arguments += $", global::System.Collections.Immutable.ImmutableArray.Create({string.Join(", ", response.ProblemExamples)})";
+        }
+
+        if (!response.ContentTypes.IsDefaultOrEmpty)
+        {
+            arguments += $", ContentTypes: {RenderStringArray(response.ContentTypes)}";
         }
 
         return $"new global::Blueprint.Model.OperationHttpResponseMetadata({arguments})";

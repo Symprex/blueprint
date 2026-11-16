@@ -84,6 +84,12 @@ public sealed class HangfireBackgroundTaskExecutor
 
         var result = await this._executor.ExecuteWithNewScopeAsync(task, this._serviceProvider, cancellationToken);
 
+        // The result goes no further than here, so nothing else would dispose an upstream response it holds.
+        if (result is Blueprint.Http.ProxyResult proxy)
+        {
+            proxy.DownstreamResponse.Dispose();
+        }
+
         if (!result.WasSuccessful)
         {
             this._logger.LogWarning(

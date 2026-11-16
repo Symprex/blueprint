@@ -14,9 +14,14 @@ namespace Blueprint.SourceGenerator.Modules;
 /// The <c>OperationProblemExample</c> constructions documenting the <c>ApiExceptionFactory</c> fields contributing to this
 /// response (<see cref="ApiExceptionFactoryRegistration.ProblemExample"/>). Default or empty when there are none.
 /// </param>
+/// <param name="ContentTypes">
+/// The media types a streamed body of this response is sent as, from the operation's <c>[ProducesContentType]</c>. Default
+/// or empty when there are none.
+/// </param>
 internal sealed record HttpResponseMetadataRegistration(
     int StatusCode,
     bool HasResponseBody,
     ImmutableArray<string> ResultTypeNames,
     ImmutableArray<string> BodyTypeNames,
-    ImmutableArray<string> ProblemExamples = default);
+    ImmutableArray<string> ProblemExamples = default,
+    ImmutableArray<string> ContentTypes = default);
