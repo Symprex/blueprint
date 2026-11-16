@@ -141,6 +141,21 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             .Combine(allowExpose)
             .Select(static (x, _) => x.Left.GetDiagnostics(allowExpose: x.Right)));
 
+        // D10/D16: a [ForwardsTo<TInner>] class's binding, type-match and supply diagnostics. It declares its properties
+        // itself, so nothing is emitted for it.
+        var forwardedOperations = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                DeclaredForward.ForwardsToAttributeMetadataName,
+                predicate: static (node, _) => node is ClassDeclarationSyntax,
+                transform: static (ctx, _) => ((INamedTypeSymbol)ctx.TargetSymbol).ToFullMetadataName())
+            .Combine(context.CompilationProvider)
+            .Select(static (x, _) => DeclaredForwardAnalysis.Analyse(x.Left, x.Right))
+            .Where(static analysis => analysis is not null)
+            .Select(static (analysis, _) => analysis!.Diagnostics)
+            .WithTrackingName(Stages.ForwardedOperations);
+
+        context.RegisterDiagnosticOutput(forwardedOperations);
+
         context.RegisterSourceOutput(
             exposedOperations.Where(static analysis => analysis.Model.HasPartialToEmit),
             static (spc, analysis) => spc.AddSource(
@@ -217,10 +232,14 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
 
         // D25: an exposed operation's descriptor depends on its inner operation, which may be in another file or assembly,
         // where no checksum above reaches (a rebuilt contract assembly has no file here), so its property model is part of
-        // the key too.
+        // the key too. A declared-mode operation's model carries the rules and docs it takes from its inner operation (D10).
         var type = compilation.GetTypeByMetadataName(operation.FullClassName);
+
+        // D14's re-exported errors are [Expose<TInner>]'s alone; the property model is either mode's.
         var innerType = type is null ? null : OperationPropertyModelBuilder.FindExposedType(type, out _);
-        var exposedProperties = innerType is not null ? OperationPropertyModelBuilder.Build(type!) : null;
+        var exposedProperties = type is not null && OperationPropertyModelBuilder.FindGatewayInnerType(type, out _) is not null
+            ? OperationPropertyModelBuilder.Build(type)
+            : null;
 
         // D7, D8: the credential strategy and translation factories the operation names can be declared in other files.
         var forwardPolicyDiagnostics = type is null
@@ -524,5 +543,6 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         public const string Configuration = nameof(Configuration);
         public const string ExposePolicy = nameof(ExposePolicy);
         public const string ExposedOperations = nameof(ExposedOperations);
+        public const string ForwardedOperations = nameof(ForwardedOperations);
     }
 }

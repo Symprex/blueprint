@@ -43,7 +43,20 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
 
         if (validationPlan.RequiresWholeObjectFallback)
         {
-            context.AddRenderStep(PipelineStage.Validation, RenderGenericValidation);
+            if (validationPlan.Properties.Count == 0)
+            {
+                context.AddRenderStep(PipelineStage.Validation, RenderGenericValidation);
+                return;
+            }
+
+            // A declared-mode operation's inherited rules (D10), which the runtime does not see, are checked first and
+            // their errors reported together with the runtime's.
+            var inheritedFields = EmitCachedAttributeFields(context, validationPlan.Properties);
+            context.AddRenderStep(PipelineStage.Validation, renderContext =>
+            {
+                RenderPropertyValidation(renderContext, validationPlan.Properties, inheritedFields, emitShortCircuitReturn: false);
+                RenderAccumulateGenericValidation(renderContext);
+            });
             return;
         }
 
@@ -699,8 +712,15 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             branch =>
             {
                 branch.WriteStatement(
-                    $"AppendValidationError(ref validationResults, {validationAttributeExpression}.FormatErrorMessage(\"{property.DisplayName}\"), \"{property.MemberName}\");");
+                    $"AppendValidationError(ref validationResults, {validationAttributeExpression}.FormatErrorMessage({GetDisplayNameExpression(context, property)}), \"{property.MemberName}\");");
             });
+    }
+
+    private static string GetDisplayNameExpression(PipelineRenderContext context, FastPathPropertyValidationPlan property)
+    {
+        return property.DisplayNameFromDescriptor
+            ? $"global::Blueprint.Validation.ValidationRuntime.GetDisplayName({context.GetContextPropertyExpression("Descriptor")}.GetPropertyAttributes(\"{property.MemberName}\"), \"{property.MemberName}\")"
+            : property.DisplayNameExpression;
     }
 
     /// <summary>
@@ -793,6 +813,27 @@ public sealed class ValidationModule : IBlueprintSourceGeneratorModule, IDescrip
             $"global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject({context.GetOperationExpression()}, validationContext, validationResults, validateAllProperties: true)");
         context.If(
             "isValid == false",
+            static branch => ReturnValidationFailure(branch, "validationResults"));
+        context.WriteBlankLine();
+    }
+
+    /// <summary>
+    /// Runs the runtime's whole-object validation into the <c>validationResults</c> the generated checks before it may have
+    /// started, and fails when either found an error.
+    /// </summary>
+    private static void RenderAccumulateGenericValidation(PipelineRenderContext context)
+    {
+        context.Assign(
+            "validationResults",
+            "validationResults ?? new global::System.Collections.Generic.List<global::System.ComponentModel.DataAnnotations.ValidationResult>()");
+        context.DeclareVariable(
+            "validationContext",
+            $"new global::System.ComponentModel.DataAnnotations.ValidationContext({context.GetOperationExpression()})");
+        context.DeclareVariable(
+            "isValid",
+            $"global::System.ComponentModel.DataAnnotations.Validator.TryValidateObject({context.GetOperationExpression()}, validationContext, validationResults, validateAllProperties: true)");
+        context.If(
+            "isValid == false || validationResults.Count > 0",
             static branch => ReturnValidationFailure(branch, "validationResults"));
         context.WriteBlankLine();
     }

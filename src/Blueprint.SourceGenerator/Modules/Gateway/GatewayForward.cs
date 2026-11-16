@@ -134,7 +134,7 @@ public static class GatewayForward
             return Result<OperationHandlerModel>.Failure(new DiagnosticInfo(
                 GatewayDiagnosticDescriptors.MissingOperationInterface,
                 location,
-                [operationType.Name, exposedType.Name, "IQuery<" + (OperationResultContractHelper.GetDeclaredOperationResultType(exposedType)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? "R") + ">"]));
+                [operationType.Name, exposedType.Name, "IQuery<" + (OperationResultContractHelper.GetDeclaredOperationResultType(exposedType)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? "R") + ">", OperationPropertyModelBuilder.FindExposedType(operationType, out _) is null ? "ForwardsTo" : "Expose"]));
         }
 
         var resultTypeName = resultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -163,7 +163,7 @@ public static class GatewayForward
         var unset = constructorSetsRequired
             ? []
             : GetRequiredMemberNames(exposedType)
-                .Where(name => !copied.Contains(name) && !bindings.Any(b => b.PropertyName == name && b.Source != GatewayBindingSource.Hidden))
+                .Where(name => !copied.Any(c => c.InnerName == name) && !bindings.Any(b => b.PropertyName == name && b.Source != GatewayBindingSource.Hidden))
                 .ToList();
         if (unset.Count > 0)
         {
@@ -247,7 +247,11 @@ public static class GatewayForward
     public static string RenderInvocation(PipelineRenderContext context, GatewayForwardModel forward, IReadOnlyList<string> mapHookArguments)
     {
         var operation = context.GetOperationExpression();
-        var assignments = forward.CopiedPropertyNames.Select(name => name + " = " + operation + "." + name).ToList();
+
+        // The model holds names as metadata spells them, without the @ a keyword needs in source.
+        var assignments = forward.CopiedProperties
+            .Select(copied => ValidationSymbolHelpers.EscapeIdentifier(copied.InnerName) + " = " + operation + "." + ValidationSymbolHelpers.EscapeIdentifier(copied.SourceName))
+            .ToList();
 
         // D11: bound properties, set in the initialiser so that a required or init-only one is set too. A claim is read
         // into a local first, and a caller without it (or with one that does not convert) is refused before any send.
@@ -310,47 +314,52 @@ public static class GatewayForward
 
     /// <summary>
     /// Gets the gateway's properties the forward copies into <c>new TInner { … }</c>: each contributed one, and each declared
-    /// one of the inner property's type, that no binding fills.
+    /// one of the inner property's type, that no binding fills. In declared mode a declared property is paired with its
+    /// inner property by <c>[ForwardAs]</c> or by name (D10).
     /// </summary>
     /// <param name="operationType">The gateway operation.</param>
     /// <param name="exposedType">The inner operation it forwards to.</param>
     /// <param name="bindings">The operation's valid bindings.</param>
-    /// <param name="unreadable">The copied properties the pipeline cannot read, BPGW018's.</param>
-    /// <returns>The copied property names.</returns>
-    internal static EquatableList<string> GetCopiedProperties(
+    /// <param name="unreadable">The copied properties the pipeline cannot read, BPGW020's.</param>
+    /// <returns>The copied properties.</returns>
+    internal static EquatableList<GatewayCopiedProperty> GetCopiedProperties(
         INamedTypeSymbol operationType,
         INamedTypeSymbol exposedType,
         EquatableList<GatewayPropertyBinding> bindings,
         out List<string> unreadable)
     {
         unreadable = [];
-        var innerSettable = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
-        foreach (var member in exposedType.GetAllMembers().OfType<IPropertySymbol>())
+        var innerSettable = DeclaredForward.GetSettableProperties(exposedType);
+
+        // A bound property takes its binding's value, never a caller's, even where the operation declares one of its name.
+        foreach (var binding in bindings)
         {
-            // A bound property takes its binding's value, never a caller's, even where the operation declares one of its name.
-            if (member is { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public, SetMethod.DeclaredAccessibility: Accessibility.Public }
-                && !innerSettable.ContainsKey(member.Name)
-                && !bindings.Any(b => b.PropertyName == member.Name))
-            {
-                innerSettable.Add(member.Name, member);
-            }
+            innerSettable.Remove(binding.PropertyName);
         }
 
-        var copied = new List<string>();
+        var renameTargets = DeclaredForward.FindForwardedType(operationType, out _) is null ? null : DeclaredForward.GetRenameTargets(operationType);
+        var copied = new List<GatewayCopiedProperty>();
         foreach (var property in OperationPropertyModelBuilder.GetProperties(operationType))
         {
-            if (!innerSettable.TryGetValue(property.Info.Name, out var innerProperty))
+            var innerName = renameTargets is null ? property.Info.Name : DeclaredForward.GetPairedName(property.Member, renameTargets);
+            if (innerName is null || !innerSettable.TryGetValue(innerName, out var innerProperty))
             {
                 continue;
             }
 
             // A contributed property is the inner one. A declared one is copied only when it has the inner property's
-            // type: a declared property of another type is the gateway's own (D10's declared mode maps those, #68).
+            // type: a declared property of another type is the gateway's own in minimal mode, and BPGW022 in declared mode.
             if (property.Info.Origin == OperationPropertyOrigin.Contributed
                 || SymbolEqualityComparer.IncludeNullability.Equals(property.Member.Type, innerProperty.Type)
                 || SymbolEqualityComparer.Default.Equals(property.Member.Type, innerProperty.Type))
             {
-                copied.Add(property.Info.Name);
+                // Two renames to one inner property are BPGW024's; the first is kept so the initialiser still compiles.
+                if (copied.Any(c => c.InnerName == innerName))
+                {
+                    continue;
+                }
+
+                copied.Add(new GatewayCopiedProperty(innerName, property.Info.Name));
 
                 // A declared property the pipeline cannot read; or an inner one whose default the emitted property cannot
                 // start from, so forwarding it would replace the inner operation's default whenever the caller omits it.
@@ -362,7 +371,7 @@ public static class GatewayForward
             }
         }
 
-        return EquatableList<string>.TakeOwnership(copied);
+        return EquatableList<GatewayCopiedProperty>.TakeOwnership(copied);
     }
 
     /// <summary>

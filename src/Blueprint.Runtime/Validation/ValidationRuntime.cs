@@ -73,14 +73,17 @@ public static class ValidationRuntime
         return _emailAddressAttribute.IsValid(value);
     }
 
-    private static void AddValidationResult(ValidationResult validationResult, ref List<ValidationResult>? validationResults)
-    {
-        validationResults ??= [];
-        validationResults.Add(validationResult);
-    }
-
+    /// <summary>
+    /// Gets the name a property is given in its validation messages: its <see cref="DisplayAttribute"/> name, else its
+    /// <see cref="DisplayNameAttribute"/>, else <paramref name="memberName"/>. Generated checks call it for a
+    /// resource-backed <see cref="DisplayAttribute"/>, passing the descriptor's cached attributes, whose
+    /// <see cref="DisplayAttribute"/> keeps the resource lookup it resolves on first use.
+    /// </summary>
+    /// <param name="propertyAttributes">The property attributes supplied by the descriptor.</param>
+    /// <param name="memberName">The property name.</param>
+    /// <returns>The display name.</returns>
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "DisplayAttribute.GetName preserves property display-name formatting for runtime validation fallback paths.")]
-    private static string GetDisplayName(IReadOnlyList<Attribute> propertyAttributes, string memberName)
+    public static string GetDisplayName(IReadOnlyList<Attribute> propertyAttributes, string memberName)
     {
         for (var i = 0; i < propertyAttributes.Count; i++)
         {
@@ -107,5 +110,11 @@ public static class ValidationRuntime
         }
 
         return memberName;
+    }
+
+    private static void AddValidationResult(ValidationResult validationResult, ref List<ValidationResult>? validationResults)
+    {
+        validationResults ??= [];
+        validationResults.Add(validationResult);
     }
 }
