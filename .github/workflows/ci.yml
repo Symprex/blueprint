@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # The merge queue builds (main + queued PRs) on a temporary branch and waits for the required
+  # check, Build and test, to report on it. Without this trigger the queue never gets one and waits
+  # until it times out.
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch: {}
 
 permissions:
