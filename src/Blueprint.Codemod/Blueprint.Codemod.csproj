@@ -19,8 +19,8 @@
     <PackageReference Include="Microsoft.NET.StringTools" Version="17.14.28" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.14.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.14.0" />
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.12" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.12.0" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <!-- Direct pin overrides the transitive System.Security.Cryptography.Xml 10.0.7 reached via the
          Microsoft.Build/Roslyn workspace packages above, which carries GHSA-23rf-6693-g89p and
          related high-severity advisories (NU1903). Keep this at or above the first patched
