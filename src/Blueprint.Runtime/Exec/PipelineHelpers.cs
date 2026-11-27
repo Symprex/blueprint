@@ -1007,9 +1007,11 @@ public static class PipelineHelpers
     /// </summary>
     /// <remarks>
     /// The generated pipeline passes the factory an operation names with
-    /// <see cref="Blueprint.Persistence.SaveRefusedErrorAttribute"/>. Only the unit of work's own save is answered so: a
-    /// handler that saves for itself sees the store's exception, as before. The problem's detail is the refusal's message,
-    /// not the store's, which can name tables and keys.
+    /// <see cref="Blueprint.Persistence.SaveRefusedErrorAttribute"/>. Only the pipeline's own saves are answered so. A
+    /// handler that saves for itself gets no 409: through <c>IDocumentSession.SaveChangesAsync</c> it sees the store's
+    /// exception, as before, and through <c>IUnitOfWork.SaveChangesAsync</c> a
+    /// <see cref="Blueprint.Persistence.SaveRefusedException"/>. The problem's detail is the refusal's message, not the
+    /// store's, which can name tables and keys.
     /// </remarks>
     /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
     /// <param name="cancellationToken">Cancellation token to observe during the save.</param>
