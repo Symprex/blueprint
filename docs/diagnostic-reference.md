@@ -207,6 +207,9 @@ These attributes inspect an item count, so they only make sense on a collection 
 |----|----------|-------|
 | BPP001 | — | Retired in v1.0.3: `[DoNotSaveChanges]` on a query now has effect, as the unit of work is saved after any operation without it |
 | BPP002 | Error | `[ConcurrencyConflictError]` must name a static `ApiExceptionFactory` field or property of the operation class that the generated pipeline can read |
+| BPP003 | Error | `[RetryOnConflict]` needs a unit of work save: not with `[DoNotSaveChanges]` |
+| BPP004 | Error | `[RetryOnConflict]` needs the pipeline's Rebus transaction: not with `[NoRebusTransaction]` |
+| BPP005 | Error | `[RetryOnConflict]` must rerun 1 to 5 times |
 
 ## Messaging (BPM)
 

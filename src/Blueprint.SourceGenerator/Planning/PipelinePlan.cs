@@ -59,6 +59,13 @@ public sealed record PipelinePlan(OperationModel Operation, VariableRegistry Var
     public bool SuppressActivity { get; set; }
 
     /// <summary>
+    /// Gets or sets how many times the generated pipeline reruns its body, in a fresh scope, after its unit of work save is
+    /// refused (<c>[RetryOnConflict]</c>). When above zero the body is emitted as an attempt method that
+    /// <c>ExecuteCoreAsync</c> runs through <c>PipelineHelpers.ExecuteRetryingRefusedSaveAsync</c>.
+    /// </summary>
+    public int RefusedSaveRetries { get; set; }
+
+    /// <summary>
     /// Gets the accumulated diagnostics.
     /// </summary>
     public IReadOnlyList<DiagnosticInfo> Diagnostics => this._diagnostics;

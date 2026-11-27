@@ -40,6 +40,12 @@ namespace Blueprint.SourceGenerator.Modules;
 /// </remarks>
 public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelineContributor
 {
+    /// <summary>
+    /// The most reruns <c>[RetryOnConflict]</c> may ask for: <c>Blueprint.Persistence.RetryOnConflictAttribute.MaxRetries</c>,
+    /// which the generator, a netstandard2.0 assembly that does not reference the runtime, cannot read.
+    /// </summary>
+    private const int MaxRefusedSaveRetries = 5;
+
     /// <inheritdoc />
     public string ModuleId => nameof(UnitOfWorkModule);
 
@@ -66,10 +72,16 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
         // Checked whether or not this pipeline saves: a resource event's self query saves before it runs, even under
         // [DoNotSaveChanges], and answers a conflict with the same factory.
         var concurrencyConflictFactory = ResolveConcurrencyConflictFactory(context, operationType);
+        var retries = ResolveRefusedSaveRetries(context, operationType);
 
         if (!SavesUnitOfWork(operationType))
         {
             return;
+        }
+
+        if (retries > 0)
+        {
+            context.RetryRefusedSave(retries);
         }
 
         context.RequireVariable(
@@ -86,6 +98,53 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
         context.AddSuccessGuardedRenderStep(
             PipelineStage.PostExecution,
             ctx => RenderSaveChanges(ctx, isSkippedWhenNested ? "if (this.HasUnitOfWork && !context.IsNested)" : "if (this.HasUnitOfWork)", saveArguments));
+    }
+
+    /// <summary>
+    /// How many times the operation's <c>[RetryOnConflict]</c> asks for its pipeline to be rerun after a refused save; zero
+    /// when it has none, or when it cannot be honoured, which this module reports: BPP003 under <c>[DoNotSaveChanges]</c>,
+    /// BPP004 under <c>[NoRebusTransaction]</c>, BPP005 for a count outside 1 to 5 (ADR 0001).
+    /// </summary>
+    private static int ResolveRefusedSaveRetries(PipelineContributorContext context, INamedTypeSymbol operationType)
+    {
+        var attribute = operationType.GetAttributes().FirstOrDefault(static attr =>
+            attr.AttributeClass is { Name: "RetryOnConflictAttribute" } attributeClass
+            && attributeClass.IsInNamespace("Blueprint", "Persistence"));
+
+        if (attribute is null)
+        {
+            return 0;
+        }
+
+        var location = attribute.ApplicationSyntaxReference is { } reference
+            ? LocationInfo.CreateFrom(reference.GetSyntax())
+            : LocationInfo.CreateFrom(operationType.Locations.First());
+
+        if (!SavesUnitOfWork(operationType))
+        {
+            context.AddDiagnostic(new DiagnosticInfo(PersistenceDiagnosticDescriptors.RetryOnConflictWithoutSave, location, [operationType.Name]));
+            return 0;
+        }
+
+        if (RebusTransactionModule.HasNoRebusTransactionAttribute(operationType))
+        {
+            context.AddDiagnostic(new DiagnosticInfo(PersistenceDiagnosticDescriptors.RetryOnConflictWithoutRebusTransaction, location, [operationType.Name]));
+            return 0;
+        }
+
+        // The constructor's default (1) is in ConstructorArguments when the attribute is written without one.
+        var retries = attribute.ConstructorArguments is [{ Value: int count }] ? count : 1;
+
+        if (retries is < 1 or > MaxRefusedSaveRetries)
+        {
+            context.AddDiagnostic(new DiagnosticInfo(
+                PersistenceDiagnosticDescriptors.RetryOnConflictCountOutOfRange,
+                location,
+                [retries.ToString(System.Globalization.CultureInfo.InvariantCulture), operationType.Name]));
+            return 0;
+        }
+
+        return retries;
     }
 
     /// <summary>

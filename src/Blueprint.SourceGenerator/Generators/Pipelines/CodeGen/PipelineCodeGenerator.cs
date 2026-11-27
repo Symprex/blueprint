@@ -91,6 +91,20 @@ internal static class PipelineCodeGenerator
             .WithReturnType("System.Threading.Tasks.ValueTask<Blueprint.OperationResult>")
             .AddParameter("Blueprint.Runtime.Exec.ApiOperationContext", "context");
 
+        // [RetryOnConflict]: the body is one attempt, which the runtime reruns in a fresh scope after a refused save
+        // (ADR 0001). The wrapper is not async: it hands back the helper's task.
+        if (plan.RefusedSaveRetries > 0)
+        {
+            executeMethod.WithBody(
+                writer => writer.AppendLine(
+                    $"return ExecuteRetryingRefusedSaveAsync(this, context, {plan.RefusedSaveRetries}, static (pipeline, attemptContext) => pipeline.ExecuteAttemptAsync(attemptContext), this.Logger);"));
+
+            executeMethod = pipelineClass.AddMethod("ExecuteAttemptAsync")
+                .MakePrivateMethod()
+                .WithReturnType("System.Threading.Tasks.ValueTask<Blueprint.OperationResult>")
+                .AddParameter("Blueprint.Runtime.Exec.ApiOperationContext", "context");
+        }
+
         if (handler.IsHandlerAsync || plan.RequiresAsync)
         {
             executeMethod.MakeAsync();
