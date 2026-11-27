@@ -275,9 +275,10 @@ internal static class ApiExceptionFactoryResolver
         {
             if (attribute.AttributeClass is { Name: "SaveRefusedErrorAttribute" } attributeClass
                 && attributeClass.IsInNamespace("Blueprint", "Persistence")
-                && attribute.ConstructorArguments is [{ Value: string factory }])
+                && attribute.ConstructorArguments is [var factory])
             {
-                yield return factory;
+                // A null name names nothing, as an empty one does: reported as BPP002, not read as no attribute.
+                yield return factory.Value as string ?? string.Empty;
             }
         }
     }

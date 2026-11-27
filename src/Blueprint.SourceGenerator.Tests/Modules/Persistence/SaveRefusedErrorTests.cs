@@ -162,6 +162,36 @@ public class SaveRefusedErrorTests
         result.Diagnostics.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"\"")]
+    public void When_operation_names_no_member_at_all_then_BPP002(string argument)
+    {
+        // A null name used to read as no attribute, so the save fell back to save_refused unreported (PR #198 review).
+        var source = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [SaveRefusedError({{argument}})]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = Generate(source);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPP002");
+    }
+
     [Fact]
     public void When_an_operation_that_does_not_save_names_no_static_factory_then_BPP002_still()
     {
