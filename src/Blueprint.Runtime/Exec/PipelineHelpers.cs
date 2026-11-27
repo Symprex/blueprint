@@ -991,14 +991,50 @@ public static class PipelineHelpers
     /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
     /// <param name="cancellationToken">Cancellation token to observe during the save.</param>
     /// <returns>A task that completes when changes are saved (or immediately when no unit of work is registered).</returns>
+    /// <exception cref="ApiException">
+    /// The save was refused because another request wrote first: Blueprint's <see cref="Blueprint.Persistence.SaveRefusedErrors.Default"/>.
+    /// </exception>
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     public static Task SaveUnitOfWorkAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    {
+        return SaveUnitOfWorkAsync(serviceProvider, cancellationToken, Blueprint.Persistence.SaveRefusedErrors.Default);
+    }
+
+    /// <summary>
+    /// Saves unit-of-work changes when an <see cref="Blueprint.Persistence.IUnitOfWork"/> is registered, answering a save
+    /// refused because another request wrote first (<see cref="Blueprint.Persistence.SaveRefusedException"/>) with
+    /// <paramref name="saveRefused"/>'s problem, so the caller gets the operation's 409 rather than a 500.
+    /// </summary>
+    /// <remarks>
+    /// The generated pipeline passes the factory an operation names with
+    /// <see cref="Blueprint.Persistence.SaveRefusedErrorAttribute"/>. Only the unit of work's own save is answered so: a
+    /// handler that saves for itself sees the store's exception, as before. The problem's detail is the refusal's message,
+    /// not the store's, which can name tables and keys.
+    /// </remarks>
+    /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
+    /// <param name="cancellationToken">Cancellation token to observe during the save.</param>
+    /// <param name="saveRefused">The factory whose problem answers a refused save.</param>
+    /// <returns>A task that completes when changes are saved (or immediately when no unit of work is registered).</returns>
+    /// <exception cref="ApiException">The save was refused because another request wrote first.</exception>
+    public static Task SaveUnitOfWorkAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken, ApiExceptionFactory saveRefused)
     {
         var unitOfWork = serviceProvider.GetService<Blueprint.Persistence.IUnitOfWork>();
 
         return unitOfWork != null
-            ? unitOfWork.SaveChangesAsync(cancellationToken)
+            ? SaveAsync(unitOfWork, saveRefused, cancellationToken)
             : Task.CompletedTask;
+
+        static async Task SaveAsync(Blueprint.Persistence.IUnitOfWork unitOfWork, ApiExceptionFactory saveRefused, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Blueprint.Persistence.SaveRefusedException e)
+            {
+                throw saveRefused.Create(e, e.Message);
+            }
+        }
     }
 
     /// <summary>

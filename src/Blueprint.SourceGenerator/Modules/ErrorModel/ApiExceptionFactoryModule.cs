@@ -173,9 +173,10 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             }
         }
 
-        // A [TranslateError] target can be a getter-backed property (`Gone => new(...)`), which has no backing field. It
-        // replaces the inner factory it translates (D14), so it is documented as the operation's own too.
-        foreach (var property in ApiExceptionFactoryResolver.GetTranslationTargetProperties(operationType, apiExceptionFactoryType))
+        // A [TranslateError] or [SaveRefusedError] target can be a getter-backed property (`Gone => new(...)`), which has no
+        // backing field. A translation target replaces the inner factory it translates (D14), and a save refused target is an
+        // error the operation answers with, so each is documented as the operation's own too.
+        foreach (var property in ApiExceptionFactoryResolver.GetNamedTargetProperties(operationType, apiExceptionFactoryType))
         {
             if (builder.Any(registration => registration.FieldName == property.Name))
             {

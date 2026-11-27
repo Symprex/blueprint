@@ -73,12 +73,64 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             requiredBy: PipelineStage.PostExecution);
 
         var isSkippedWhenNested = IsSkippedWhenNested(operationType);
+        var saveRefusedFactory = ResolveSaveRefusedFactory(context, operationType);
+        var saveArguments = saveRefusedFactory is null
+            ? "context.ServiceProvider, context.OperationCancelled"
+            : "context.ServiceProvider, context.OperationCancelled, " + saveRefusedFactory;
 
         context.RequireAsync();
         context.AddRenderStep(PipelineStage.Validation, isSkippedWhenNested ? RenderBeginUnlessNested : RenderBegin);
         context.AddSuccessGuardedRenderStep(
             PipelineStage.PostExecution,
-            isSkippedWhenNested ? RenderSaveChangesUnlessNested : RenderSaveChanges);
+            ctx => RenderSaveChanges(ctx, isSkippedWhenNested ? "if (this.HasUnitOfWork && !context.IsNested)" : "if (this.HasUnitOfWork)", saveArguments));
+    }
+
+    /// <summary>
+    /// The expression for the <c>ApiExceptionFactory</c> the operation's <c>[SaveRefusedError]</c> names, which the save
+    /// is passed so a refused save is answered with the operation's own 409; <see langword="null"/> when it names none,
+    /// so the save answers with Blueprint's default, or names no static factory of its own, which is BPP002.
+    /// </summary>
+    /// <remarks>
+    /// Like a <c>[TranslateError]</c> target, the member is looked for on the operation class only, and may be a field or
+    /// a property, read through its getter each time a save is refused.
+    /// </remarks>
+    private static string? ResolveSaveRefusedFactory(PipelineContributorContext context, INamedTypeSymbol operationType)
+    {
+        if (ApiExceptionFactoryResolver.GetSaveRefusedError(operationType).FirstOrDefault() is not { } factory)
+        {
+            return null;
+        }
+
+        var isFactory = operationType.GetMembers(factory).Any(static member => member.IsStatic && member switch
+        {
+            IFieldSymbol field => IsApiExceptionFactory(field.Type),
+            IPropertySymbol property => property.GetMethod is not null && IsApiExceptionFactory(property.Type),
+            _ => false,
+        });
+
+        if (!isFactory)
+        {
+            var attribute = operationType.GetAttributes().First(static attr => attr.AttributeClass?.Name is "SaveRefusedErrorAttribute");
+            var location = attribute.ApplicationSyntaxReference is { } reference
+                ? LocationInfo.CreateFrom(reference.GetSyntax())
+                : LocationInfo.CreateFrom(operationType.Locations.First());
+
+            context.AddDiagnostic(new DiagnosticInfo(
+                PersistenceDiagnosticDescriptors.SaveRefusedErrorIsNotAFactory,
+                location,
+                [factory, operationType.Name]));
+
+            return null;
+        }
+
+        return operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "." + factory;
+    }
+
+    private static bool IsApiExceptionFactory(ITypeSymbol type)
+    {
+        // The metadata name carries no nullable annotation, which ToString() would ("ApiExceptionFactory?").
+        return type is INamedTypeSymbol named
+               && (named.ToFullMetadataName() == "Blueprint.ApiExceptionFactory" || named.InheritsFrom("Blueprint.ApiExceptionFactory"));
     }
 
     /// <summary>
@@ -135,21 +187,12 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
         context.WriteStatement("}");
     }
 
-    private static void RenderSaveChanges(PipelineRenderContext context)
+    private static void RenderSaveChanges(PipelineRenderContext context, string guard, string arguments)
     {
         context.WriteBlankLine();
-        context.WriteStatement("if (this.HasUnitOfWork)");
+        context.WriteStatement(guard);
         context.WriteStatement("{");
-        context.WriteStatement("    await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
-        context.WriteStatement("}");
-    }
-
-    private static void RenderSaveChangesUnlessNested(PipelineRenderContext context)
-    {
-        context.WriteBlankLine();
-        context.WriteStatement("if (this.HasUnitOfWork && !context.IsNested)");
-        context.WriteStatement("{");
-        context.WriteStatement("    await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+        context.WriteStatement("    await SaveUnitOfWorkAsync(" + arguments + ").ConfigureAwait(false);");
         context.WriteStatement("}");
     }
 

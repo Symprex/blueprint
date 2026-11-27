@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Net;
 using Blueprint.Model;
 using Blueprint.Model.Attributes;
+using Blueprint.Persistence;
 using Blueprint.Runtime.Exec;
 
 namespace Blueprint.SourceGenerator.Sample.Contract.Api;
@@ -28,6 +29,10 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// </para>
 /// </remarks>
 [ApiOperations("Templates")]
+
+// A unit of work save refused because another request changed the template first is answered with Conflict's 409, not a
+// 500. Kept out of the remarks, which are the operation's published OpenAPI description.
+[SaveRefusedError(nameof(Conflict))]
 [RootLink("/templates/{Id}")]
 [HttpPut]
 [FromResource(typeof(CreateTemplateCommand))]

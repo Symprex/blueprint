@@ -161,6 +161,13 @@ lost. The mistake is now loud. Once a transaction with an enlistment has run its
 session since its save. A generated pipeline then fails the operation. For a received message, the transport has
 already acknowledged it, so Rebus logs the failure and does not redeliver.
 
+`MartenUnitOfWork` raises a save Marten refuses because another request wrote first — a `ConcurrencyException` (optimistic
+concurrency, or an event stream's expected version), a `DocumentAlreadyExistsException` (an `Insert` that lost a race),
+or an `AggregateException` of only those — as a `Blueprint.Persistence.SaveRefusedException`, with Marten's as its inner
+exception. A generated pipeline answers it with a 409: the factory the operation names with `[SaveRefusedError]`, or
+`SaveRefusedErrors.Default` (`save_refused`). Any other failure of the save escapes unchanged.
+`MartenUnitOfWorkSaveRefusedPostgresTests` pins which exceptions Marten raises.
+
 `MartenUnitOfWork` makes its own scope `MartenScopeAccessor.Current` for the save, so the listeners also run for a
 plain handler's save, where no generated pipeline has set it.
 

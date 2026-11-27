@@ -1,4 +1,6 @@
+using Blueprint.Persistence;
 using Marten;
+using Marten.Exceptions;
 
 namespace Blueprint.Marten;
 
@@ -90,7 +92,16 @@ public sealed class MartenUnitOfWork : Persistence.IUnitOfWork, Persistence.IUni
             this._session.QueueSqlCommand(DrainTriggerSql);
         }
 
-        await this._session.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await this._session.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception e) when (IsRefusal(e))
+        {
+            throw new SaveRefusedException(
+                "The save was refused because another request changed or created the same data first.",
+                e);
+        }
 
         this._saved = true;
     }
@@ -106,6 +117,24 @@ public sealed class MartenUnitOfWork : Persistence.IUnitOfWork, Persistence.IUni
                 + "after the save here: write them during the save instead, with a drain listener added through "
                 + "AddBlueprintOutboxListener, and refuse or send directly any message sent after it.");
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="exception"/> is Marten refusing the save because another request wrote first: a
+    /// <see cref="ConcurrencyException"/> (a document's or a stream's version moved on since it was read, the latter as
+    /// <see cref="EventStreamUnexpectedMaxEventIdException"/>), or a <see cref="DocumentAlreadyExistsException"/> (an
+    /// <c>Insert</c> of a document another request inserted first). Marten raises an <see cref="AggregateException"/> when
+    /// more than one operation of the batch fails, which is a refusal only when every one of them is.
+    /// </summary>
+    private static bool IsRefusal(Exception exception)
+    {
+        return exception switch
+        {
+            ConcurrencyException or DocumentAlreadyExistsException => true,
+            AggregateException { InnerExceptions.Count: > 0 } aggregate =>
+                aggregate.InnerExceptions.All(static inner => inner is ConcurrencyException or DocumentAlreadyExistsException),
+            _ => false,
+        };
     }
 
     /// <summary>
