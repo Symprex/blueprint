@@ -30,9 +30,9 @@ namespace Blueprint.SourceGenerator.Sample.Contract.Api;
 /// </remarks>
 [ApiOperations("Templates")]
 
-// A unit of work save refused because another request changed the template first is answered with Conflict's 409, not a
-// 500. Kept out of the remarks, which are the operation's published OpenAPI description.
-[SaveRefusedError(nameof(Conflict))]
+// A concurrency conflict at the unit of work save, because another request changed the template first, is answered with
+// Conflict's 409, not a 500. Kept out of the remarks, which are the operation's published OpenAPI description.
+[ConcurrencyConflictError(nameof(Conflict))]
 [RootLink("/templates/{Id}")]
 [HttpPut]
 [FromResource(typeof(CreateTemplateCommand))]

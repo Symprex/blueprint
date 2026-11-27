@@ -89,7 +89,7 @@ internal static class ApiExceptionFactoryResolver
 
     /// <summary>
     /// The factories <paramref name="type"/>'s own descriptor documents: its <see cref="GetMembers"/>, then the getter-backed
-    /// properties its own <c>[TranslateError]</c>s and <c>[SaveRefusedError]</c> answer with
+    /// properties its own <c>[TranslateError]</c>s and <c>[ConcurrencyConflictError]</c> answer with
     /// (<see cref="GetNamedTargetProperties"/>), which a gateway exposing it re-exports with the rest (D14).
     /// </summary>
     /// <param name="type">The type.</param>
@@ -265,15 +265,15 @@ internal static class ApiExceptionFactoryResolver
     }
 
     /// <summary>
-    /// The name of the member the operation's own <c>[SaveRefusedError]</c> answers a refused save with, if it has one.
+    /// The name of the member the operation's own <c>[ConcurrencyConflictError]</c> answers a concurrency conflict with, if it has one.
     /// </summary>
     /// <param name="operationType">The operation.</param>
     /// <returns>The name, or nothing.</returns>
-    public static IEnumerable<string> GetSaveRefusedError(INamedTypeSymbol operationType)
+    public static IEnumerable<string> GetConcurrencyConflictError(INamedTypeSymbol operationType)
     {
         foreach (var attribute in operationType.GetAttributes())
         {
-            if (attribute.AttributeClass is { Name: "SaveRefusedErrorAttribute" } attributeClass
+            if (attribute.AttributeClass is { Name: "ConcurrencyConflictErrorAttribute" } attributeClass
                 && attributeClass.IsInNamespace("Blueprint", "Persistence")
                 && attribute.ConstructorArguments is [var factory])
             {
@@ -285,7 +285,7 @@ internal static class ApiExceptionFactoryResolver
 
     /// <summary>
     /// The static <c>ApiExceptionFactory</c> properties of <paramref name="operationType"/> its own
-    /// <c>[TranslateError]</c>s or <c>[SaveRefusedError]</c> name, such as a getter-backed <c>Gone =&gt; new(...)</c>, which
+    /// <c>[TranslateError]</c>s or <c>[ConcurrencyConflictError]</c> name, such as a getter-backed <c>Gone =&gt; new(...)</c>, which
     /// has no backing field for <see cref="GetMembers"/> to find.
     /// </summary>
     /// <param name="operationType">The operation.</param>
@@ -293,7 +293,7 @@ internal static class ApiExceptionFactoryResolver
     /// <returns>The properties.</returns>
     public static IEnumerable<IPropertySymbol> GetNamedTargetProperties(INamedTypeSymbol operationType, INamedTypeSymbol apiExceptionFactoryType)
     {
-        var targetNames = GetTranslations(operationType).Select(static t => t.To).Concat(GetSaveRefusedError(operationType));
+        var targetNames = GetTranslations(operationType).Select(static t => t.To).Concat(GetConcurrencyConflictError(operationType));
 
         foreach (var targetName in targetNames.Distinct(StringComparer.Ordinal))
         {

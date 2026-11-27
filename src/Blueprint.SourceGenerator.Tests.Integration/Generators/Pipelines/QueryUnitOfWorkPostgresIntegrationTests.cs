@@ -33,7 +33,7 @@ public class QueryUnitOfWorkPostgresIntegrationTests
 
         var result = await database.ExecuteAsync<StoreQueryDocumentQuery>(static query => query.Id = "stored-by-a-query");
 
-        result.WasSuccessful.Should().BeTrue();
+        result.Should().BeAssignableTo<OkResult>("the handler ran");
         (await database.LoadAsync("stored-by-a-query")).Should().NotBeNull("the query's pipeline saved the session");
     }
 
@@ -44,7 +44,7 @@ public class QueryUnitOfWorkPostgresIntegrationTests
 
         var result = await database.ExecuteAsync<StoreQueryDocumentWithoutSavingQuery>(static query => query.Id = "stored-but-not-saved");
 
-        result.WasSuccessful.Should().BeTrue();
+        result.Should().BeAssignableTo<OkResult>("the handler ran");
         (await database.LoadAsync("stored-but-not-saved")).Should().BeNull("[DoNotSaveChanges] leaves the session unsaved");
     }
 
@@ -92,7 +92,13 @@ public class QueryUnitOfWorkPostgresIntegrationTests
             var app = this._provider.GetRequiredService<IntegrationTestBlueprintApp>();
             var executor = this._provider.GetRequiredService<BlueprintAppExecutor>();
             await using var scope = this._provider.CreateAsyncScope();
-            var context = new ApiOperationContext(scope.ServiceProvider, app, app.FindOperation(typeof(TOperation)), CancellationToken.None);
+
+            // Authorisation is not what these tests are about, as in QueryUnitOfWorkIntegrationTests. Without this the pipeline
+            // refused the request as unauthenticated before the handler ran, so neither test ever passed (#201).
+            var context = new ApiOperationContext(scope.ServiceProvider, app, app.FindOperation(typeof(TOperation)), CancellationToken.None)
+            {
+                SkipAuthorisation = true,
+            };
             configure((TOperation)context.Operation);
 
             return await executor.GetPipeline(typeof(TOperation)).ExecuteAsync(context);

@@ -7,8 +7,8 @@
 ## Context
 
 #198 turns a unit of work save that the store refuses because another request wrote first
-(`ConcurrencyException`, `DocumentAlreadyExistsException`) into `SaveRefusedException`, answered with the
-operation's `[SaveRefusedError]` 409. The save runs after the handler has returned, so a find-or-create handler
+(`ConcurrencyException`, `DocumentAlreadyExistsException`) into `ConcurrencyConflictException`, answered with the
+operation's `[ConcurrencyConflictError]` 409. The save runs after the handler has returned, so a find-or-create handler
 (Signature365's *Ensure organisation for a HubSpot company*) never sees the clash and cannot return the winner.
 Today such handlers save part-way, in a session of their own, to catch it.
 
@@ -37,7 +37,7 @@ Steps 7 and 8 are success-guarded: a refused save throws past them.
 ### The rerun
 
 An operation opts in with **`[RetryOnConflict(retries)]`** (default 1, at most 5). When an attempt throws the refused
-save's problem (an `ApiException` whose inner exception is `SaveRefusedException`, from step 5 or 6), Blueprint:
+save's problem (an `ApiException` whose inner exception is `ConcurrencyConflictException`, from step 5 or 6), Blueprint:
 
 1. creates a **fresh DI scope** from the operation's `IServiceScopeFactory`, and points the context's
    `ServiceProvider` at it, disposing the previous rerun's scope if there was one;

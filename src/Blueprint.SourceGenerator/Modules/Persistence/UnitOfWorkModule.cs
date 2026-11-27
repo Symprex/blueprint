@@ -70,8 +70,8 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
         var operationType = context.Operation.TypeSymbol;
 
         // Checked whether or not this pipeline saves: a resource event's self query saves before it runs, even under
-        // [DoNotSaveChanges], and answers a refusal with the same factory.
-        var saveRefusedFactory = ResolveSaveRefusedFactory(context, operationType);
+        // [DoNotSaveChanges], and answers a conflict with the same factory.
+        var concurrencyConflictFactory = ResolveConcurrencyConflictFactory(context, operationType);
         var retries = ResolveRefusedSaveRetries(context, operationType);
 
         if (!SavesUnitOfWork(operationType))
@@ -89,9 +89,9 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             requiredBy: PipelineStage.PostExecution);
 
         var isSkippedWhenNested = IsSkippedWhenNested(operationType);
-        var saveArguments = saveRefusedFactory is null
+        var saveArguments = concurrencyConflictFactory is null
             ? "context.ServiceProvider, context.OperationCancelled"
-            : "context.ServiceProvider, context.OperationCancelled, " + saveRefusedFactory;
+            : "context.ServiceProvider, context.OperationCancelled, " + concurrencyConflictFactory;
 
         context.RequireAsync();
         context.AddRenderStep(PipelineStage.Validation, isSkippedWhenNested ? RenderBeginUnlessNested : RenderBegin);
@@ -148,14 +148,14 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     }
 
     /// <summary>
-    /// The expression for the <c>ApiExceptionFactory</c> the operation's <c>[SaveRefusedError]</c> names, which the save
-    /// is passed so a refused save is answered with the operation's own 409; <see langword="null"/> when it names none,
+    /// The expression for the <c>ApiExceptionFactory</c> the operation's <c>[ConcurrencyConflictError]</c> names, which the save
+    /// is passed so a concurrency conflict is answered with the operation's own 409; <see langword="null"/> when it names none,
     /// so the save answers with Blueprint's default, or names no static factory of its own, which is BPP002.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Like a <c>[TranslateError]</c> target, the member is looked for on the operation class only, and may be a field or
-    /// a property, read through its getter each time a save is refused.
+    /// a property, read through its getter each time a save meets a concurrency conflict.
     /// </para>
     /// <para>
     /// Unlike one, it is read by the generated pipeline, a class of its own, so it must be readable from there: never a
@@ -164,24 +164,24 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     /// and every type containing it, must be public.
     /// </para>
     /// </remarks>
-    private static string? ResolveSaveRefusedFactory(PipelineContributorContext context, INamedTypeSymbol operationType)
+    private static string? ResolveConcurrencyConflictFactory(PipelineContributorContext context, INamedTypeSymbol operationType)
     {
-        if (ApiExceptionFactoryResolver.GetSaveRefusedError(operationType).FirstOrDefault() is not { } factory)
+        if (ApiExceptionFactoryResolver.GetConcurrencyConflictError(operationType).FirstOrDefault() is not { } factory)
         {
             return null;
         }
 
-        var expression = GetSaveRefusedFactoryExpression(operationType);
+        var expression = GetConcurrencyConflictFactoryExpression(operationType);
 
         if (expression is null)
         {
-            var attribute = operationType.GetAttributes().First(static attr => attr.AttributeClass?.Name is "SaveRefusedErrorAttribute");
+            var attribute = operationType.GetAttributes().First(static attr => attr.AttributeClass?.Name is "ConcurrencyConflictErrorAttribute");
             var location = attribute.ApplicationSyntaxReference is { } reference
                 ? LocationInfo.CreateFrom(reference.GetSyntax())
                 : LocationInfo.CreateFrom(operationType.Locations.First());
 
             context.AddDiagnostic(new DiagnosticInfo(
-                PersistenceDiagnosticDescriptors.SaveRefusedErrorIsNotAFactory,
+                PersistenceDiagnosticDescriptors.ConcurrencyConflictErrorIsNotAFactory,
                 location,
                 [factory, operationType.Name]));
 
@@ -192,15 +192,15 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     }
 
     /// <summary>
-    /// The expression for the factory the operation's <c>[SaveRefusedError]</c> names, when it names one the generated
-    /// pipeline can read (see <see cref="ResolveSaveRefusedFactory"/>); otherwise <see langword="null"/>, and this module
+    /// The expression for the factory the operation's <c>[ConcurrencyConflictError]</c> names, when it names one the generated
+    /// pipeline can read (see <see cref="ResolveConcurrencyConflictFactory"/>); otherwise <see langword="null"/>, and this module
     /// reports why. Shared with the resource event self query, whose save before the query is answered the same way.
     /// </summary>
     /// <param name="operationType">The operation type.</param>
     /// <returns>The expression, or <see langword="null"/>.</returns>
-    internal static string? GetSaveRefusedFactoryExpression(INamedTypeSymbol operationType)
+    internal static string? GetConcurrencyConflictFactoryExpression(INamedTypeSymbol operationType)
     {
-        if (ApiExceptionFactoryResolver.GetSaveRefusedError(operationType).FirstOrDefault() is not { } factory)
+        if (ApiExceptionFactoryResolver.GetConcurrencyConflictError(operationType).FirstOrDefault() is not { } factory)
         {
             return null;
         }

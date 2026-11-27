@@ -12,16 +12,16 @@ namespace Blueprint.SourceGenerator.Tests.Integration.Generators.Pipelines;
 
 /// <summary>
 /// A command whose resource event has a self query saves its unit of work before the query runs, so the query reads what
-/// it wrote. That save used to be made inside the self query's best-effort catch, which swallowed its refusal, so the
-/// command succeeded when its later save went through (PR #198 review). A refused save there is the operation's 409 too.
+/// it wrote. That save used to be made inside the self query's best-effort catch, which swallowed its conflict, so the
+/// command succeeded when its later save went through (PR #198 review). A concurrency conflict there is the operation's 409 too.
 /// </summary>
-public class SaveRefusedSelfQueryIntegrationTests
+public class ConcurrencyConflictSelfQueryIntegrationTests
 {
     [Theory]
-    [InlineData(typeof(LegacySelfQuerySaveRefusedCommand), "self_query_widget_conflict")]
-    [InlineData(typeof(DeferredSelfQuerySaveRefusedCommand), "self_query_widget_conflict")]
-    [InlineData(typeof(DeferredSelfQueryDefaultSaveRefusedCommand), "save_refused")]
-    public async Task A_save_refused_before_the_self_query_is_answered_with_the_operations_409(Type operationType, string expectedType)
+    [InlineData(typeof(LegacySelfQueryConcurrencyConflictCommand), "self_query_widget_conflict")]
+    [InlineData(typeof(DeferredSelfQueryConcurrencyConflictCommand), "self_query_widget_conflict")]
+    [InlineData(typeof(DeferredSelfQueryDefaultConcurrencyConflictCommand), "concurrency-conflict")]
+    public async Task A_concurrency_conflict_before_the_self_query_is_answered_with_the_operations_409(Type operationType, string expectedType)
     {
         await using var provider = BuildProvider();
         using var scope = provider.CreateScope();
@@ -36,7 +36,7 @@ public class SaveRefusedSelfQueryIntegrationTests
         var problem = result.Should().BeOfType<UnhandledExceptionResult>().Which.Exception.Should().BeOfType<ApiException>().Subject;
         problem.HttpStatus.Should().Be(409);
         problem.Type.Should().Be(expectedType);
-        problem.InnerException.Should().BeOfType<SaveRefusedException>();
+        problem.InnerException.Should().BeOfType<ConcurrencyConflictException>();
     }
 
     private static ServiceProvider BuildProvider()
@@ -45,28 +45,28 @@ public class SaveRefusedSelfQueryIntegrationTests
         services.AddSingleton<IntegrationTestBlueprintApp>();
         services.AddSingleton<BlueprintAppExecutor>(static sp =>
             new IntegrationTestBlueprintAppExecutor(NullLoggerFactory.Instance, sp.GetRequiredService<IntegrationTestBlueprintApp>(), sp));
-        services.AddScoped<IUnitOfWork, FirstSaveRefusedUnitOfWork>();
+        services.AddScoped<IUnitOfWork, FirstSaveConflictsUnitOfWork>();
 
         return services.BuildServiceProvider();
     }
 
-    /// <summary>Refuses the first save, as another request writing first would, and lets any later one through.</summary>
-    private sealed class FirstSaveRefusedUnitOfWork : IUnitOfWork
+    /// <summary>Fails the first save with a concurrency conflict, as another request writing first would, and lets any later one through.</summary>
+    private sealed class FirstSaveConflictsUnitOfWork : IUnitOfWork
     {
         private int _saves;
 
         public Task SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             return ++this._saves == 1
-                ? Task.FromException(new SaveRefusedException("refused", new InvalidOperationException("the store's own")))
+                ? Task.FromException(new ConcurrencyConflictException("conflict", new InvalidOperationException("the store's own")))
                 : Task.CompletedTask;
         }
     }
 }
 
-/// <summary>A command returning a legacy resource event with a self query, naming its own error for a refused save.</summary>
-[SaveRefusedError(nameof(Conflict))]
-public partial class LegacySelfQuerySaveRefusedCommand : ICommand<ResourceEvent<SelfQueryTestApiResource>>
+/// <summary>A command returning a legacy resource event with a self query, naming its own error for a concurrency conflict.</summary>
+[ConcurrencyConflictError(nameof(Conflict))]
+public partial class LegacySelfQueryConcurrencyConflictCommand : ICommand<ResourceEvent<SelfQueryTestApiResource>>
 {
     /// <summary>The widget was changed by another request.</summary>
     public static readonly ApiExceptionFactory Conflict = new("Widget conflict", "self_query_widget_conflict", HttpStatusCode.Conflict);
@@ -74,7 +74,7 @@ public partial class LegacySelfQuerySaveRefusedCommand : ICommand<ResourceEvent<
     /// <summary>Handles the command.</summary>
     /// <param name="operation">The command instance.</param>
     /// <returns>An updated event left to its self query.</returns>
-    public static ResourceEvent<SelfQueryTestApiResource> Handle(LegacySelfQuerySaveRefusedCommand operation)
+    public static ResourceEvent<SelfQueryTestApiResource> Handle(LegacySelfQueryConcurrencyConflictCommand operation)
     {
         return new ResourceEvent<SelfQueryTestApiResource>(
             ResourceEventChangeType.Updated,
@@ -83,9 +83,9 @@ public partial class LegacySelfQuerySaveRefusedCommand : ICommand<ResourceEvent<
     }
 }
 
-/// <summary>A command returning a deferred resource event, naming its own error for a refused save.</summary>
-[SaveRefusedError(nameof(Conflict))]
-public partial class DeferredSelfQuerySaveRefusedCommand : ICommand<DeferredResourceEventResult<SelfQueryTestApiResource>>
+/// <summary>A command returning a deferred resource event, naming its own error for a concurrency conflict.</summary>
+[ConcurrencyConflictError(nameof(Conflict))]
+public partial class DeferredSelfQueryConcurrencyConflictCommand : ICommand<DeferredResourceEventResult<SelfQueryTestApiResource>>
 {
     /// <summary>The widget was changed by another request.</summary>
     public static readonly ApiExceptionFactory Conflict = new("Widget conflict", "self_query_widget_conflict", HttpStatusCode.Conflict);
@@ -93,19 +93,19 @@ public partial class DeferredSelfQuerySaveRefusedCommand : ICommand<DeferredReso
     /// <summary>Handles the command.</summary>
     /// <param name="operation">The command instance.</param>
     /// <returns>A deferred event left to its self query.</returns>
-    public static DeferredResourceEventResult<SelfQueryTestApiResource> Handle(DeferredSelfQuerySaveRefusedCommand operation)
+    public static DeferredResourceEventResult<SelfQueryTestApiResource> Handle(DeferredSelfQueryConcurrencyConflictCommand operation)
     {
         return new SelfQueryTestResourceEvents.Created(new GetSelfQueryTestResourceQuery { Id = "test-42" });
     }
 }
 
-/// <summary>A command returning a deferred resource event, naming no error for a refused save.</summary>
-public partial class DeferredSelfQueryDefaultSaveRefusedCommand : ICommand<DeferredResourceEventResult<SelfQueryTestApiResource>>
+/// <summary>A command returning a deferred resource event, naming no error for a concurrency conflict.</summary>
+public partial class DeferredSelfQueryDefaultConcurrencyConflictCommand : ICommand<DeferredResourceEventResult<SelfQueryTestApiResource>>
 {
     /// <summary>Handles the command.</summary>
     /// <param name="operation">The command instance.</param>
     /// <returns>A deferred event left to its self query.</returns>
-    public static DeferredResourceEventResult<SelfQueryTestApiResource> Handle(DeferredSelfQueryDefaultSaveRefusedCommand operation)
+    public static DeferredResourceEventResult<SelfQueryTestApiResource> Handle(DeferredSelfQueryDefaultConcurrencyConflictCommand operation)
     {
         return new SelfQueryTestResourceEvents.Created(new GetSelfQueryTestResourceQuery { Id = "test-42" });
     }

@@ -27,7 +27,7 @@ public class RetryOnConflictTests
                 public partial class TestApp : BlueprintApp { }
 
                 [RetryOnConflict(2)]
-                [SaveRefusedError(nameof(ConcurrentUpdate))]
+                [ConcurrencyConflictError(nameof(ConcurrentUpdate))]
                 public partial class EnsureReferenceCommand : ICommand
                 {
                     public static readonly ApiExceptionFactory ConcurrentUpdate = new("Reference changed concurrently", "reference_concurrent_update", HttpStatusCode.Conflict);

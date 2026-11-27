@@ -60,7 +60,7 @@ public class RetryOnConflictIntegrationTests
         var problem = result.Should().BeOfType<UnhandledExceptionResult>().Which.Exception.Should().BeOfType<ApiException>().Subject;
         problem.HttpStatus.Should().Be(409);
         problem.Type.Should().Be("reference_claimed");
-        problem.InnerException.Should().BeOfType<SaveRefusedException>();
+        problem.InnerException.Should().BeOfType<ConcurrencyConflictException>();
         log.Entries.Should().Equal(
             "handler in scope 1",
             "save refused in scope 1",
@@ -228,7 +228,7 @@ public class RetryOnConflictIntegrationTests
                 probe.Add("save refused");
                 log.OnRefusal?.Invoke();
 
-                return Task.FromException(new SaveRefusedException("refused", new InvalidOperationException("the store's own")));
+                return Task.FromException(new ConcurrencyConflictException("refused", new InvalidOperationException("the store's own")));
             }
 
             probe.Add("save");
@@ -324,7 +324,7 @@ public sealed class RetryProbe(RetryLog log) : IDisposable
 
 /// <summary>A find-or-create that is rerun twice after a refused save.</summary>
 [RetryOnConflict(2)]
-[SaveRefusedError(nameof(Claimed))]
+[ConcurrencyConflictError(nameof(Claimed))]
 public partial class RetryingEnsureCommand : ICommand
 {
     /// <summary>Gets the error for a reference another request claimed first.</summary>

@@ -6,13 +6,13 @@ using FluentAssertions;
 namespace Blueprint.SourceGenerator.Tests.Modules.Persistence;
 
 /// <summary>
-/// Issue #197: <c>[SaveRefusedError]</c> names the factory whose 409 answers a refused unit of work save. The pipeline
+/// Issue #197: <c>[ConcurrencyConflictError]</c> names the factory whose 409 answers a unit of work save that meets a concurrency conflict. The pipeline
 /// passes it to the save; a name that is not a static <c>ApiExceptionFactory</c> of the operation is BPP002.
 /// </summary>
-public class SaveRefusedErrorTests
+public class ConcurrencyConflictErrorTests
 {
     [Fact]
-    public async Task When_operation_names_its_save_refused_error_then_the_save_is_passed_that_factory()
+    public async Task When_operation_names_its_concurrency_conflict_error_then_the_save_is_passed_that_factory()
     {
         const string source = """
             using System.Net;
@@ -26,7 +26,7 @@ public class SaveRefusedErrorTests
                 [BlueprintAppScan]
                 public partial class TestApp : BlueprintApp { }
 
-                [SaveRefusedError(nameof(ConcurrentUpdate))]
+                [ConcurrencyConflictError(nameof(ConcurrentUpdate))]
                 public partial class SetReferenceCommand : ICommand
                 {
                     public static readonly ApiExceptionFactory ConcurrentUpdate = new("Reference changed concurrently", "reference_concurrent_update", HttpStatusCode.Conflict);
@@ -74,7 +74,7 @@ public class SaveRefusedErrorTests
                 [BlueprintAppScan]
                 public partial class TestApp : BlueprintApp { }
 
-                [SaveRefusedError("{{name}}")]
+                [ConcurrencyConflictError("{{name}}")]
                 public partial class SetReferenceCommand : ICommand
                 {
                     {{member}}
@@ -108,7 +108,7 @@ public class SaveRefusedErrorTests
                 [BlueprintAppScan]
                 public partial class TestApp : BlueprintApp { }
 
-                [SaveRefusedError("{{name}}")]
+                [ConcurrencyConflictError("{{name}}")]
                 public partial class SetReferenceCommand : ICommand
                 {
                     {{member}}
@@ -129,7 +129,7 @@ public class SaveRefusedErrorTests
     [Theory]
     [InlineData("""public static ApiExceptionFactory @event => new("t", "t", 409);""")]
     [InlineData("""public static readonly ApiExceptionFactory @event = new("t", "t", 409);""")]
-    public void When_an_http_operation_documents_a_keyword_named_save_refused_error_then_its_descriptor_compiles(string member)
+    public void When_an_http_operation_documents_a_keyword_named_concurrency_conflict_error_then_its_descriptor_compiles(string member)
     {
         // The descriptor documented a getter-backed target as `Op.event.Title`, which does not compile (PR #198 review).
         var source = $$"""
@@ -147,7 +147,7 @@ public class SaveRefusedErrorTests
                 [AllowAnonymous]
                 [RootLink("/references")]
                 [HttpPost]
-                [SaveRefusedError(nameof(@event))]
+                [ConcurrencyConflictError(nameof(@event))]
                 public partial class SetReferenceCommand : ICommand
                 {
                     {{member}}
@@ -167,7 +167,7 @@ public class SaveRefusedErrorTests
     [InlineData("\"\"")]
     public void When_operation_names_no_member_at_all_then_BPP002(string argument)
     {
-        // A null name used to read as no attribute, so the save fell back to save_refused unreported (PR #198 review).
+        // A null name used to read as no attribute, so the save fell back to concurrency-conflict unreported (PR #198 review).
         var source = $$"""
             using Blueprint;
             using Blueprint.Model;
@@ -179,7 +179,7 @@ public class SaveRefusedErrorTests
                 [BlueprintAppScan]
                 public partial class TestApp : BlueprintApp { }
 
-                [SaveRefusedError({{argument}})]
+                [ConcurrencyConflictError({{argument}})]
                 public partial class SetReferenceCommand : ICommand
                 {
                     public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
@@ -209,7 +209,7 @@ public class SaveRefusedErrorTests
                 public partial class TestApp : BlueprintApp { }
 
                 [DoNotSaveChanges]
-                [SaveRefusedError("Missing")]
+                [ConcurrencyConflictError("Missing")]
                 public partial class SetReferenceCommand : ICommand
                 {
                     public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
@@ -222,8 +222,63 @@ public class SaveRefusedErrorTests
         result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPP002");
     }
 
+    [Theory]
+    [InlineData("public static ApiExceptionFactory Conflict => SharedErrors.Conflict;")]
+    [InlineData("public static readonly ApiExceptionFactory Conflict = SharedErrors.Conflict;")]
+    public void An_edit_to_a_shared_factory_the_operation_aliases_re_plans_its_descriptor_on_the_same_driver(string member)
+    {
+        // An operation exposing no inner one kept the status from before the edit: its incremental key carried no factory
+        // facts (PR #198 review).
+        const string shared = """
+            using Blueprint;
+
+            namespace TestNamespace
+            {
+                public static class SharedErrors
+                {
+                    public static readonly ApiExceptionFactory Conflict = new("Shared conflict", "shared_conflict", 409);
+                }
+            }
+            """;
+        var operation = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [AllowAnonymous]
+                [RootLink("/references")]
+                [HttpPost]
+                [ConcurrencyConflictError(nameof(Conflict))]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    {{member}}
+
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = TestHelpers.CompileWithTrackedGeneratorsAfterEdit(
+            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+            [operation, shared],
+            [operation, shared.Replace("409", "412", StringComparison.Ordinal)],
+            ["Operation.cs", "SharedErrors.cs"]);
+
+        result.Updated.Diagnostics.Where(static d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).Should().BeEmpty();
+        result.Updated.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator))
+            .Single(static s => s.HintName.Contains("SetReferenceCommand", StringComparison.Ordinal))
+            .SourceText.Should().Contain("OperationHttpResponseMetadata(412,").And.NotContain("OperationHttpResponseMetadata(409,");
+    }
+
     [Fact]
-    public void When_operation_names_no_save_refused_error_then_the_save_takes_no_factory()
+    public void When_operation_names_no_concurrency_conflict_error_then_the_save_takes_no_factory()
     {
         const string source = """
             using Blueprint;

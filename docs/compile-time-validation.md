@@ -197,9 +197,9 @@ Reserved direction:
 
 Persistence IDs:
 
-- `BPP002` (error) reports a `[SaveRefusedError]` whose name is not a static `ApiExceptionFactory` field or property of
+- `BPP002` (error) reports a `[ConcurrencyConflictError]` whose name is not a static `ApiExceptionFactory` field or property of
   the operation class that the generated pipeline can read (not private, nor a private getter; public on an operation
-  from a referenced assembly), so the pipeline would have no factory to answer a refused save with.
+  from a referenced assembly), so the pipeline would have no factory to answer a concurrency conflict with.
 - `BPP003` (error) reports `[RetryOnConflict]` on an operation with `[DoNotSaveChanges]`, whose pipeline makes no unit
   of work save to be refused and rerun.
 - `BPP004` (error) reports `[RetryOnConflict]` on an operation with `[NoRebusTransaction]`: without the pipeline's own

@@ -205,7 +205,7 @@ public partial class RetryingEnsureClaimCommand : ICommand<string>, IEnsureClaim
 }
 
 /// <summary>The same find-or-create, not rerun.</summary>
-[SaveRefusedError(nameof(Claimed))]
+[ConcurrencyConflictError(nameof(Claimed))]
 public partial class NotRetryingEnsureClaimCommand : ICommand<string>, IEnsureClaim
 {
     /// <summary>Gets the error for a claim another request made first.</summary>

@@ -4,9 +4,9 @@ namespace Blueprint.Persistence;
 
 /// <summary>
 /// Reruns the operation when its unit of work save is refused because another request wrote first
-/// (<see cref="SaveRefusedException"/>), so a handler that reads before it writes — a find-or-create — sees what the other
+/// (<see cref="ConcurrencyConflictException"/>), so a handler that reads before it writes — a find-or-create — sees what the other
 /// request wrote and can answer with it. After the last rerun is refused too, the answer is the operation's
-/// <see cref="SaveRefusedErrorAttribute"/> 409.
+/// <see cref="ConcurrencyConflictErrorAttribute"/> 409.
 /// </summary>
 /// <remarks>
 /// <para>
