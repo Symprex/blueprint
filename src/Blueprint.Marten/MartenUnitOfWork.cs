@@ -96,10 +96,10 @@ public sealed class MartenUnitOfWork : Persistence.IUnitOfWork, Persistence.IUni
         {
             await this._session.SaveChangesAsync(cancellationToken);
         }
-        catch (Exception e) when (IsRefusal(e))
+        catch (Exception e) when (IsConcurrencyConflict(e))
         {
-            throw new SaveRefusedException(
-                "The save was refused because another request changed or created the same data first.",
+            throw new ConcurrencyConflictException(
+                "The resource has been modified since it was retrieved. Refresh the resource and retry the operation.",
                 e);
         }
 
@@ -120,13 +120,13 @@ public sealed class MartenUnitOfWork : Persistence.IUnitOfWork, Persistence.IUni
     }
 
     /// <summary>
-    /// Whether <paramref name="exception"/> is Marten refusing the save because another request wrote first: a
+    /// Whether <paramref name="exception"/> is Marten reporting a concurrency conflict, because another request wrote first: a
     /// <see cref="ConcurrencyException"/> (a document's or a stream's version moved on since it was read, the latter as
     /// <see cref="EventStreamUnexpectedMaxEventIdException"/>), or a <see cref="DocumentAlreadyExistsException"/> (an
     /// <c>Insert</c> of a document another request inserted first). Marten raises an <see cref="AggregateException"/> when
-    /// more than one operation of the batch fails, which is a refusal only when every one of them is.
+    /// more than one operation of the batch fails, which is a concurrency conflict only when every one of them is.
     /// </summary>
-    private static bool IsRefusal(Exception exception)
+    private static bool IsConcurrencyConflict(Exception exception)
     {
         return exception switch
         {
