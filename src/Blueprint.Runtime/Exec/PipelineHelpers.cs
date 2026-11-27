@@ -2167,12 +2167,45 @@ public static class PipelineHelpers
     /// <param name="logger">The pipeline logger for structured diagnostics.</param>
     /// <param name="operationTypeName">The operation type name for log messages.</param>
     /// <returns>A task that completes when resolution has finished (or been skipped).</returns>
+    /// <exception cref="ApiException">
+    /// The save made before the self query was refused because another request wrote first:
+    /// <see cref="Blueprint.Persistence.SaveRefusedErrors.Default"/>.
+    /// </exception>
     public static Task ResolveResourceEventSelfQueryAsync(
         BlueprintAppExecutor? executor,
         ApiOperationContext context,
         OperationResult handlerResult,
         ILogger logger,
         string operationTypeName)
+    {
+        return ResolveResourceEventSelfQueryAsync(executor, context, handlerResult, logger, operationTypeName, Blueprint.Persistence.SaveRefusedErrors.Default);
+    }
+
+    /// <summary>
+    /// Resolves a resource event's self query as <see cref="ResolveResourceEventSelfQueryAsync(BlueprintAppExecutor?, ApiOperationContext, OperationResult, ILogger, string)"/>
+    /// does, answering a refusal of the save it makes first with <paramref name="saveRefused"/>, the factory the operation
+    /// names with <see cref="Blueprint.Persistence.SaveRefusedErrorAttribute"/>.
+    /// </summary>
+    /// <remarks>
+    /// The self query is best effort: a failure of its own is logged and leaves the event without data. The save before it
+    /// is not. A refusal there is the operation's 409, as it would be at the save after the handler, which may otherwise go
+    /// through and let the operation succeed with what was refused.
+    /// </remarks>
+    /// <param name="executor">The app executor for dispatching the nested query. May be null if DI did not register one.</param>
+    /// <param name="context">The current pipeline execution context.</param>
+    /// <param name="handlerResult">The handler result to inspect and potentially enrich.</param>
+    /// <param name="logger">The pipeline logger for structured diagnostics.</param>
+    /// <param name="operationTypeName">The operation type name for log messages.</param>
+    /// <param name="saveRefused">The factory whose problem answers a refused save.</param>
+    /// <returns>A task that completes when resolution has finished (or been skipped).</returns>
+    /// <exception cref="ApiException">The save made before the self query was refused because another request wrote first.</exception>
+    public static Task ResolveResourceEventSelfQueryAsync(
+        BlueprintAppExecutor? executor,
+        ApiOperationContext context,
+        OperationResult handlerResult,
+        ILogger logger,
+        string operationTypeName,
+        ApiExceptionFactory saveRefused)
     {
         MarkHandedOnResourceEventData(handlerResult);
 
@@ -2192,16 +2225,25 @@ public static class PipelineHelpers
                 return Task.CompletedTask;
             }
 
-            return ResolveResourceEventSelfQueryCoreAsync(executor, context, resourceEvent, logger, operationTypeName);
+            return ResolveResourceEventSelfQueryCoreAsync(executor, context, resourceEvent, logger, operationTypeName, saveRefused);
         }
 
         // New DeferredResourceEventResult<T> path: populates ResolvedContent in-place
         if (handlerResult is IDeferredResourceEventResult deferred)
         {
-            return ResolveDeferredResourceEventCoreAsync(executor, context, deferred, logger, operationTypeName);
+            return ResolveDeferredResourceEventCoreAsync(executor, context, deferred, logger, operationTypeName, saveRefused);
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="exception"/> is the problem a refused save before a self query was answered with, which the
+    /// self query's best-effort catch must let through.
+    /// </summary>
+    private static bool IsRefusedSave(Exception exception)
+    {
+        return exception is ApiException { InnerException: Blueprint.Persistence.SaveRefusedException };
     }
 
     /// <summary>
@@ -2214,7 +2256,7 @@ public static class PipelineHelpers
     /// <c>ResourceExpandMiddleware</c> expanded such data in the outer pipeline, as it expanded any data the returned event
     /// had, in every operation (Signature365 <c>8b40ecc961</c>, <c>Common/Api/ResourceExpandMiddleware.cs:21-24</c>,
     /// <c>:53-84</c>). A query's pipeline, which runs no self query, calls this on its own; a command's calls it through
-    /// <see cref="ResolveResourceEventSelfQueryAsync"/>.
+    /// <see cref="ResolveResourceEventSelfQueryAsync(BlueprintAppExecutor?, ApiOperationContext, OperationResult, ILogger, string)"/>.
     /// </remarks>
     /// <param name="handlerResult">The handler result.</param>
     public static void MarkHandedOnResourceEventData(OperationResult handlerResult)
@@ -2235,7 +2277,8 @@ public static class PipelineHelpers
         ApiOperationContext context,
         ResourceEvent resourceEvent,
         ILogger logger,
-        string operationTypeName)
+        string operationTypeName,
+        ApiExceptionFactory saveRefused)
     {
         // Recursion guard: prevent infinite loops when nested queries also return ResourceEvent+SelfQuery
         var depth = 0;
@@ -2273,7 +2316,7 @@ public static class PipelineHelpers
             // command wrote data via IUnitOfWork/IDocumentSession, that data may not yet be
             // committed (SaveUnitOfWork runs later in the success-guarded PostExecution phase).
             // Flush pending persistence so the nested query can read the just-written data.
-            await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled, saveRefused).ConfigureAwait(false);
 
             // Create a nested context that inherits auth, tenant, and request state from the parent. Unlike a nested
             // operation a handler creates, it skips authorisation, as legacy's self query did: the operation has just
@@ -2302,7 +2345,7 @@ public static class PipelineHelpers
                 _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, null);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsRefusedSave(ex))
         {
             _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, ex);
 
@@ -2327,7 +2370,8 @@ public static class PipelineHelpers
         ApiOperationContext context,
         IDeferredResourceEventResult deferred,
         ILogger logger,
-        string operationTypeName)
+        string operationTypeName,
+        ApiExceptionFactory saveRefused)
     {
         // Recursion guard
         var depth = 0;
@@ -2357,7 +2401,7 @@ public static class PipelineHelpers
             }
 
             // Flush pending persistence so the nested query can read just-written data
-            await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled, saveRefused).ConfigureAwait(false);
 
             // Skips authorisation as a legacy resource event's self query does (ResolveResourceEventSelfQueryCoreAsync).
             var nestedContext = context.CreateNested((IOperation)selfQuery, skipAuthorisation: true);
@@ -2382,7 +2426,7 @@ public static class PipelineHelpers
                 _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, null);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsRefusedSave(ex))
         {
             _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, ex);
 

@@ -73,15 +73,20 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
             return;
         }
 
+        // The save made before the self query is answered with the operation's own factory, as its save after the handler is.
+        var saveRefusedArgument = UnitOfWorkModule.GetSaveRefusedFactoryExpression(context.Operation.TypeSymbol) is { } factory
+            ? ", " + factory
+            : string.Empty;
+
         context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderSelfQueryResolution(ctx, operationTypeName));
+        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderSelfQueryResolution(ctx, operationTypeName, saveRefusedArgument));
     }
 
-    private static void RenderSelfQueryResolution(PipelineRenderContext context, string operationTypeName)
+    private static void RenderSelfQueryResolution(PipelineRenderContext context, string operationTypeName, string saveRefusedArgument)
     {
         context.WriteBlankLine();
         context.WriteStatement(
-            $"await ResolveResourceEventSelfQueryAsync(this.Executor, context, handlerResult, this.Logger, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"await ResolveResourceEventSelfQueryAsync(this.Executor, context, handlerResult, this.Logger, \"{operationTypeName}\"{saveRefusedArgument}).ConfigureAwait(false);");
     }
 
     private static void RenderHandedOnDataMark(PipelineRenderContext context)

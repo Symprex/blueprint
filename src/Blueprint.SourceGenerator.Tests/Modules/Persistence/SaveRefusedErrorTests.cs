@@ -126,6 +126,42 @@ public class SaveRefusedErrorTests
             .SourceText.Should().Contain($"await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled, {expected}).ConfigureAwait(false);");
     }
 
+    [Theory]
+    [InlineData("""public static ApiExceptionFactory @event => new("t", "t", 409);""")]
+    [InlineData("""public static readonly ApiExceptionFactory @event = new("t", "t", 409);""")]
+    public void When_an_http_operation_documents_a_keyword_named_save_refused_error_then_its_descriptor_compiles(string member)
+    {
+        // The descriptor documented a getter-backed target as `Op.event.Title`, which does not compile (PR #198 review).
+        var source = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [AllowAnonymous]
+                [RootLink("/references")]
+                [HttpPost]
+                [SaveRefusedError(nameof(@event))]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    {{member}}
+
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = Generate(source);
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
     [Fact]
     public void When_operation_names_no_save_refused_error_then_the_save_takes_no_factory()
     {

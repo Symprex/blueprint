@@ -102,7 +102,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             }
 
             var reference = ApiExceptionFactoryResolver.CanRead(named, operationType.ContainingAssembly)
-                ? $"{innerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{named.Name}"
+                ? $"{innerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{ValidationSymbolHelpers.EscapeIdentifier(named.Name)}"
                 : null;
 
             var title = factory.Title is { } knownTitle ? CSharpSymbolDisplay.FormatLiteral(knownTitle, quote: true) : reference is null ? null : $"{reference}.Title";
@@ -165,7 +165,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                 builder.Add(new ApiExceptionFactoryRegistration(
                     named.Name,
                     factory.HttpStatus,
-                    RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{named.Name}")));
+                    RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{ValidationSymbolHelpers.EscapeIdentifier(named.Name)}")));
             }
             else
             {
@@ -188,7 +188,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                 builder.Add(new ApiExceptionFactoryRegistration(
                     property.Name,
                     factory.HttpStatus,
-                    RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{property.Name}")));
+                    RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{ValidationSymbolHelpers.EscapeIdentifier(property.Name)}")));
             }
             else
             {

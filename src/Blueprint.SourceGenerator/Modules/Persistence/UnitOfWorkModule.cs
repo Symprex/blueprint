@@ -109,17 +109,9 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             return null;
         }
 
-        var isFromSource = !operationType.DeclaringSyntaxReferences.IsEmpty;
-        var isFactory = operationType.GetMembers(factory).Any(member => member.IsStatic
-            && (isFromSource ? ApiExceptionFactoryResolver.CanRead(member, operationType.ContainingAssembly) : IsPublicAll(member))
-            && member switch
-            {
-                IFieldSymbol field => IsApiExceptionFactory(field.Type),
-                IPropertySymbol property => property.GetMethod is not null && IsApiExceptionFactory(property.Type),
-                _ => false,
-            });
+        var expression = GetSaveRefusedFactoryExpression(operationType);
 
-        if (!isFactory)
+        if (expression is null)
         {
             var attribute = operationType.GetAttributes().First(static attr => attr.AttributeClass?.Name is "SaveRefusedErrorAttribute");
             var location = attribute.ApplicationSyntaxReference is { } reference
@@ -134,8 +126,37 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             return null;
         }
 
+        return expression;
+    }
+
+    /// <summary>
+    /// The expression for the factory the operation's <c>[SaveRefusedError]</c> names, when it names one the generated
+    /// pipeline can read (see <see cref="ResolveSaveRefusedFactory"/>); otherwise <see langword="null"/>, and this module
+    /// reports why. Shared with the resource event self query, whose save before the query is answered the same way.
+    /// </summary>
+    /// <param name="operationType">The operation type.</param>
+    /// <returns>The expression, or <see langword="null"/>.</returns>
+    internal static string? GetSaveRefusedFactoryExpression(INamedTypeSymbol operationType)
+    {
+        if (ApiExceptionFactoryResolver.GetSaveRefusedError(operationType).FirstOrDefault() is not { } factory)
+        {
+            return null;
+        }
+
+        var isFromSource = !operationType.DeclaringSyntaxReferences.IsEmpty;
+        var isFactory = operationType.GetMembers(factory).Any(member => member.IsStatic
+            && (isFromSource ? ApiExceptionFactoryResolver.CanRead(member, operationType.ContainingAssembly) : IsPublicAll(member))
+            && member switch
+            {
+                IFieldSymbol field => IsApiExceptionFactory(field.Type),
+                IPropertySymbol property => property.GetMethod is not null && IsApiExceptionFactory(property.Type),
+                _ => false,
+            });
+
         // `nameof(@event)` is "event", which must be written `@event` to compile.
-        return operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "." + ValidationSymbolHelpers.EscapeIdentifier(factory);
+        return isFactory
+            ? operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "." + ValidationSymbolHelpers.EscapeIdentifier(factory)
+            : null;
     }
 
     private static bool IsPublicAll(ISymbol member)
