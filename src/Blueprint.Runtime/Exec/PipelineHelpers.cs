@@ -1037,6 +1037,109 @@ public static class PipelineHelpers
         }
     }
 
+    private static readonly Action<ILogger, string, int, int, Exception?> _logRefusedSaveRerun =
+        LoggerMessage.Define<string, int, int>(
+            LogLevel.Information,
+            new EventId(35, "RefusedSaveRerun"),
+            "The save of {OperationType} was refused because another request wrote first; rerunning it in a fresh scope ({Rerun} of {Retries})");
+
+    /// <summary>
+    /// Runs one attempt of an operation marked <c>[RetryOnConflict]</c>, and when its unit of work save is refused because
+    /// another request wrote first, reruns it up to <paramref name="retries"/> times, each in a fresh DI scope. After the
+    /// last rerun is refused too, the refusal (the operation's <c>[SaveRefusedError]</c> 409) goes through.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A fresh scope is what makes the rerun safe (ADR 0001): the refused attempt's unit of work, <c>IMessageOutbox</c>,
+    /// background task scheduler and anything else scoped are left behind uncommitted, and the rerun gets empty ones. The
+    /// attempt's Rebus transaction scope is its own, disposed uncompleted by the refusal. The first attempt runs in the
+    /// host's scope, which is the host's to dispose. The last rerun's scope stays the context's for as long as the host
+    /// uses the result: disposed with the HTTP response when there is one; otherwise disposed here, with the host's
+    /// provider put back.
+    /// </para>
+    /// <para>
+    /// Only the refusal of the pipeline's own save is rerun: an <see cref="ApiException"/> whose inner exception is a
+    /// <see cref="Blueprint.Persistence.SaveRefusedException"/>, as <see cref="SaveUnitOfWorkAsync(IServiceProvider, CancellationToken, ApiExceptionFactory)"/>
+    /// and a resource event's self query throw it. A nested execution is never rerun: it shares its root's scope and unit
+    /// of work, so the refusal goes through to the root. Nor is a cancelled operation, or one whose provider has no
+    /// <see cref="IServiceScopeFactory"/> to make a fresh scope from.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TPipeline">The generated pipeline.</typeparam>
+    /// <param name="pipeline">The generated pipeline, handed back to <paramref name="attempt"/>.</param>
+    /// <param name="context">The operation's context, whose <see cref="ApiOperationContext.ServiceProvider"/> each rerun replaces.</param>
+    /// <param name="retries">How many times to rerun after a refused save.</param>
+    /// <param name="attempt">Runs the pipeline body once.</param>
+    /// <param name="logger">The pipeline's logger.</param>
+    /// <returns>The result of the attempt that was not refused, or of the last.</returns>
+    public static async ValueTask<OperationResult> ExecuteRetryingRefusedSaveAsync<TPipeline>(
+        TPipeline pipeline,
+        ApiOperationContext context,
+        int retries,
+        Func<TPipeline, ApiOperationContext, ValueTask<OperationResult>> attempt,
+        ILogger logger)
+    {
+        if (context.IsNested)
+        {
+            return await attempt(pipeline, context).ConfigureAwait(false);
+        }
+
+        var hostServices = context.ServiceProvider;
+        AsyncServiceScope? rerunScope = null;
+
+        try
+        {
+            for (var rerun = 1; ; rerun++)
+            {
+                try
+                {
+                    return await attempt(pipeline, context).ConfigureAwait(false);
+                }
+                catch (ApiException e) when (e.InnerException is Blueprint.Persistence.SaveRefusedException
+                                             && rerun <= retries
+                                             && !context.OperationCancelled.IsCancellationRequested
+                                             && hostServices.GetService<IServiceScopeFactory>() is not null)
+                {
+                    _logRefusedSaveRerun(logger, context.Descriptor.Name, rerun, retries, null);
+                    context.Activity?.AddEvent(new ActivityEvent(
+                        "blueprint.operation.save_refused_retry",
+                        default,
+                        new ActivityTagsCollection { { "blueprint.operation.rerun", rerun }, { "blueprint.operation.retries", retries } }));
+
+                    // Nothing will ever see the refused attempt's upstream response, as when the shell handles a failure.
+                    if (context.UnownedProxyResult is { } abandoned)
+                    {
+                        context.UnownedProxyResult = null;
+                        abandoned.DownstreamResponse.Dispose();
+                    }
+
+                    if (rerunScope is { } refused)
+                    {
+                        await refused.DisposeAsync().ConfigureAwait(false);
+                    }
+
+                    rerunScope = hostServices.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
+                    context.ServiceProvider = rerunScope.Value.ServiceProvider;
+                }
+            }
+        }
+        finally
+        {
+            if (rerunScope is { } last)
+            {
+                if (context.HttpContext is { } httpContext)
+                {
+                    httpContext.Response.RegisterForDisposeAsync(last);
+                }
+                else
+                {
+                    context.ServiceProvider = hostServices;
+                    await last.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// Resolves the current tenant identifier from the authenticated user's claims and stores it
     /// in the ambient <see cref="Blueprint.Tenancy.ITenantAccessor"/>. Called by the generated pipeline's

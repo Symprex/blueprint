@@ -124,6 +124,16 @@ public readonly struct PipelineContributorContext
     }
 
     /// <summary>
+    /// Makes the generated pipeline rerun its body, in a fresh scope, up to <paramref name="retries"/> times after its unit
+    /// of work save is refused (<c>[RetryOnConflict]</c>).
+    /// </summary>
+    /// <param name="retries">How many reruns, at least one.</param>
+    public void RetryRefusedSave(int retries)
+    {
+        this._plan.RefusedSaveRetries = retries;
+    }
+
+    /// <summary>
     /// Declares that the handler result variable is guaranteed to be a successful
     /// <c>OperationResult</c> at compile time (e.g. <c>OkResult&lt;T&gt;</c>
     /// or <c>NoResultOperationResult</c>). When set, the code generator omits the

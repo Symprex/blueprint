@@ -168,6 +168,37 @@ exception. A generated pipeline answers it with a 409: the factory the operation
 `SaveRefusedErrors.Default` (`save_refused`). Any other failure of the save escapes unchanged.
 `MartenUnitOfWorkSaveRefusedPostgresTests` pins which exceptions Marten raises.
 
+#### Rerunning an operation whose save is refused
+
+A find-or-create loses its race after its handler has returned, so it cannot answer with the winner itself. Mark it
+`[RetryOnConflict]` (or `[RetryOnConflict(n)]`, 1 to 5) and the generated pipeline reruns the whole operation when its
+save is refused, each time in a fresh DI scope, so a fresh session whose lookup finds the winner. After the last rerun
+the answer is the 409 above. Only a root execution is rerun (a nested one lets the refusal through to its root), and
+never a cancelled one. The decision and its reasoning are
+[ADR 0001](adr/0001-rerunning-an-operation-after-a-refused-save.md).
+
+A rerun is safe when what the refused attempt did is thrown away or repeatable:
+
+| The refused attempt's | On a rerun |
+| --- | --- |
+| Store writes in the unit of work | Rolled back with the refused save |
+| Rebus sends and publishes in the pipeline's transaction | Dropped: the transaction is disposed uncompleted |
+| Outbox rows a drain writes during the save | Rolled back with the refused save |
+| `IMessageOutbox` messages, background tasks | Never committed: left in the refused attempt's scope (both must be scoped) |
+| Audit | Not written: the audit sink runs only after a successful save |
+| In-process domain event handlers | Ran during the refused save; their writes and sends are thrown away as above |
+| Writes saved part-way (the handler's own save, a nested command's) | **Kept**: the rerun must tolerate them |
+| Direct outside calls (HTTP, a payment provider, email) | **Repeated** |
+
+So the attribute is the author's statement that the handler can run again. A handler that calls outside directly is
+safe only if every call carries an idempotency key that is the same on every rerun (made from the operation's identity,
+such as a Rebus message id, and the call's purpose; never per attempt) and sends the same request: Chargebee, for one,
+answers a repeated key with a changed body with a 422. Better, send the call as a message through the outbox to a
+handler of its own, where the refused attempt's message is thrown away with it.
+
+The generator refuses it on an operation with `[DoNotSaveChanges]` (BPP003), with `[NoRebusTransaction]`, whose sends
+would survive the refusal (BPP004), and with a count outside 1 to 5 (BPP005).
+
 `MartenUnitOfWork` makes its own scope `MartenScopeAccessor.Current` for the save, so the listeners also run for a
 plain handler's save, where no generated pipeline has set it.
 

@@ -176,7 +176,13 @@ public sealed class RebusTransactionModule : IBlueprintSourceGeneratorModule, IP
         context.WriteStatement("if (rebusTransactionScope != null) await rebusTransactionScope.CompleteAsync().ConfigureAwait(false);");
     }
 
-    private static bool HasNoRebusTransactionAttribute(INamedTypeSymbol operationType)
+    /// <summary>
+    /// Whether <paramref name="operationType"/> opts out of the pipeline's Rebus transaction with <c>[NoRebusTransaction]</c>.
+    /// Shared with <see cref="UnitOfWorkModule"/>, which refuses <c>[RetryOnConflict]</c> there (BPP004).
+    /// </summary>
+    /// <param name="operationType">The operation type.</param>
+    /// <returns><see langword="true"/> when the operation has <c>[NoRebusTransaction]</c>.</returns>
+    internal static bool HasNoRebusTransactionAttribute(INamedTypeSymbol operationType)
     {
         return operationType.GetAttributes().Any(static attr =>
             attr.AttributeClass?.Name is NoRebusTransactionAttributeName
