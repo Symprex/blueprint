@@ -7,8 +7,9 @@ namespace Blueprint.Persistence;
 /// <remarks>
 /// <para>
 /// <see cref="Factory"/> names a static <c>ApiExceptionFactory</c> field or property of the operation class, usually
-/// written with <c>nameof</c>, as <c>[TranslateError]</c>'s target is. The generator checks it (BPP002) and documents it
-/// among the operation's error responses. The problem it creates has the <see cref="SaveRefusedException"/> as its inner
+/// written with <c>nameof</c>, as <c>[TranslateError]</c>'s target is. The generated pipeline reads it, so it must not be
+/// private or have a private getter, and must be public on an operation from a referenced assembly. The generator checks
+/// it (BPP002) and documents it among the operation's error responses. The problem it creates has the <see cref="SaveRefusedException"/> as its inner
 /// exception. Name a 409 factory: the status is the factory's own, and a refused save is a conflict.
 /// </para>
 /// <para>

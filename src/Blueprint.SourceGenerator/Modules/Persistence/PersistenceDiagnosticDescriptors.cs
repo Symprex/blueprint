@@ -16,9 +16,9 @@ internal static class PersistenceDiagnosticDescriptors
     public static readonly DiagnosticDescriptor SaveRefusedErrorIsNotAFactory = new(
         id: "BPP002",
         title: "[SaveRefusedError] must name a static ApiExceptionFactory",
-        messageFormat: "[SaveRefusedError(\"{0}\")] on '{1}' names no static ApiExceptionFactory field or property of '{1}' called '{0}'",
+        messageFormat: "[SaveRefusedError(\"{0}\")] on '{1}' names no static ApiExceptionFactory field or property of '{1}' called '{0}' that the generated pipeline can read",
         category: Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "[SaveRefusedError] names, usually with nameof, a static ApiExceptionFactory field or property declared on the operation class itself. The generated pipeline answers a refused unit of work save with that factory's problem.");
+        description: "[SaveRefusedError] names, usually with nameof, a static ApiExceptionFactory field or property declared on the operation class itself. The generated pipeline, a class of its own, reads it to answer a refused unit of work save, so it cannot be private or have a private getter, and must be public when the operation comes from a referenced assembly.");
 }

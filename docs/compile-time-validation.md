@@ -198,7 +198,8 @@ Reserved direction:
 Persistence IDs:
 
 - `BPP002` (error) reports a `[SaveRefusedError]` whose name is not a static `ApiExceptionFactory` field or property of
-  the operation class, so the pipeline would have no factory to answer a refused save with.
+  the operation class that the generated pipeline can read (not private, nor a private getter; public on an operation
+  from a referenced assembly), so the pipeline would have no factory to answer a refused save with.
 - `BPP001` (retired in v1.0.3) warned that `[DoNotSaveChanges]` on a non-command operation had no effect. The
   `UnitOfWorkModule` now saves after any operation without `[DoNotSaveChanges]`, queries included, as legacy
   Blueprint's save middleware did, so the attribute has effect on every operation and nothing is reported.

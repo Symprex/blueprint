@@ -91,8 +91,16 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     /// so the save answers with Blueprint's default, or names no static factory of its own, which is BPP002.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Like a <c>[TranslateError]</c> target, the member is looked for on the operation class only, and may be a field or
     /// a property, read through its getter each time a save is refused.
+    /// </para>
+    /// <para>
+    /// Unlike one, it is read by the generated pipeline, a class of its own, so it must be readable from there: never a
+    /// private member or getter. An operation in this compilation shares the pipeline's assembly, so an internal member
+    /// will do. One scanned from a referenced assembly has its pipeline compiled here, in another assembly, so its member,
+    /// and every type containing it, must be public.
+    /// </para>
     /// </remarks>
     private static string? ResolveSaveRefusedFactory(PipelineContributorContext context, INamedTypeSymbol operationType)
     {
@@ -101,12 +109,15 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             return null;
         }
 
-        var isFactory = operationType.GetMembers(factory).Any(static member => member.IsStatic && member switch
-        {
-            IFieldSymbol field => IsApiExceptionFactory(field.Type),
-            IPropertySymbol property => property.GetMethod is not null && IsApiExceptionFactory(property.Type),
-            _ => false,
-        });
+        var isFromSource = !operationType.DeclaringSyntaxReferences.IsEmpty;
+        var isFactory = operationType.GetMembers(factory).Any(member => member.IsStatic
+            && (isFromSource ? ApiExceptionFactoryResolver.CanRead(member, operationType.ContainingAssembly) : IsPublicAll(member))
+            && member switch
+            {
+                IFieldSymbol field => IsApiExceptionFactory(field.Type),
+                IPropertySymbol property => property.GetMethod is not null && IsApiExceptionFactory(property.Type),
+                _ => false,
+            });
 
         if (!isFactory)
         {
@@ -123,7 +134,26 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             return null;
         }
 
-        return operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "." + factory;
+        // `nameof(@event)` is "event", which must be written `@event` to compile.
+        return operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "." + ValidationSymbolHelpers.EscapeIdentifier(factory);
+    }
+
+    private static bool IsPublicAll(ISymbol member)
+    {
+        if (member is IPropertySymbol { GetMethod.DeclaredAccessibility: not Accessibility.Public })
+        {
+            return false;
+        }
+
+        for (var current = member; current is not null and not INamespaceSymbol; current = current.ContainingType)
+        {
+            if (current.DeclaredAccessibility != Accessibility.Public)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsApiExceptionFactory(ITypeSymbol type)
