@@ -222,6 +222,61 @@ public class ConcurrencyConflictErrorTests
         result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPP002");
     }
 
+    [Theory]
+    [InlineData("public static ApiExceptionFactory Conflict => SharedErrors.Conflict;")]
+    [InlineData("public static readonly ApiExceptionFactory Conflict = SharedErrors.Conflict;")]
+    public void An_edit_to_a_shared_factory_the_operation_aliases_re_plans_its_descriptor_on_the_same_driver(string member)
+    {
+        // An operation exposing no inner one kept the status from before the edit: its incremental key carried no factory
+        // facts (PR #198 review).
+        const string shared = """
+            using Blueprint;
+
+            namespace TestNamespace
+            {
+                public static class SharedErrors
+                {
+                    public static readonly ApiExceptionFactory Conflict = new("Shared conflict", "shared_conflict", 409);
+                }
+            }
+            """;
+        var operation = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [AllowAnonymous]
+                [RootLink("/references")]
+                [HttpPost]
+                [ConcurrencyConflictError(nameof(Conflict))]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    {{member}}
+
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = TestHelpers.CompileWithTrackedGeneratorsAfterEdit(
+            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+            [operation, shared],
+            [operation, shared.Replace("409", "412", StringComparison.Ordinal)],
+            ["Operation.cs", "SharedErrors.cs"]);
+
+        result.Updated.Diagnostics.Where(static d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).Should().BeEmpty();
+        result.Updated.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator))
+            .Single(static s => s.HintName.Contains("SetReferenceCommand", StringComparison.Ordinal))
+            .SourceText.Should().Contain("OperationHttpResponseMetadata(412,").And.NotContain("OperationHttpResponseMetadata(409,");
+    }
+
     [Fact]
     public void When_operation_names_no_concurrency_conflict_error_then_the_save_takes_no_factory()
     {
