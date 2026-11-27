@@ -1,0 +1,318 @@
+using System.Text;
+using Blueprint.SourceGenerator.Generators.Descriptors;
+using Blueprint.SourceGenerator.Generators.Pipelines;
+using FluentAssertions;
+
+namespace Blueprint.SourceGenerator.Tests.Modules.Persistence;
+
+/// <summary>
+/// Issue #197: <c>[ConcurrencyConflictError]</c> names the factory whose 409 answers a unit of work save that meets a concurrency conflict. The pipeline
+/// passes it to the save; a name that is not a static <c>ApiExceptionFactory</c> of the operation is BPP002.
+/// </summary>
+public class ConcurrencyConflictErrorTests
+{
+    [Fact]
+    public async Task When_operation_names_its_concurrency_conflict_error_then_the_save_is_passed_that_factory()
+    {
+        const string source = """
+            using System.Net;
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [ConcurrencyConflictError(nameof(ConcurrentUpdate))]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    public static readonly ApiExceptionFactory ConcurrentUpdate = new("Reference changed concurrently", "reference_concurrent_update", HttpStatusCode.Conflict);
+
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = Generate(source);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        var outputText = new StringBuilder();
+        foreach (var s in result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator)).OrderBy(static s => s.HintName))
+        {
+            outputText.AppendLine(s.HintName + ":");
+            outputText.AppendLine();
+            outputText.AppendLine(s.SourceText);
+            outputText.AppendLine();
+        }
+
+        await Verify(outputText)
+            .UseDirectory("Snapshots");
+    }
+
+    [Theory]
+    [InlineData("""public static readonly ApiExceptionFactory ConcurrentUpdate = new("t", "t", 409);""", "Missing")]
+    [InlineData("""public readonly ApiExceptionFactory ConcurrentUpdate = new("t", "t", 409);""", "ConcurrentUpdate")]
+    [InlineData("""public static readonly string ConcurrentUpdate = "t";""", "ConcurrentUpdate")]
+
+    // The generated pipeline is a class of its own, so it cannot read a private member or a private getter (PR #198 review).
+    [InlineData("""private static readonly ApiExceptionFactory ConcurrentUpdate = new("t", "t", 409);""", "ConcurrentUpdate")]
+    [InlineData("""public static ApiExceptionFactory ConcurrentUpdate { private get; set; } = new("t", "t", 409);""", "ConcurrentUpdate")]
+    public void When_operation_names_no_static_factory_of_its_own_then_BPP002(string member, string name)
+    {
+        var source = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [ConcurrencyConflictError("{{name}}")]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    {{member}}
+
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = Generate(source);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPP002")
+            .Which.GetMessage().Should().Contain($"'{name}'").And.Contain("SetReferenceCommand");
+    }
+
+    [Theory]
+    [InlineData("""internal static readonly ApiExceptionFactory @event = new("t", "t", 409);""", "global::TestNamespace.SetReferenceCommand.@event")]
+    [InlineData("""internal static ApiExceptionFactory Taken => new("t", "t", 409);""", "global::TestNamespace.SetReferenceCommand.Taken")]
+    public void When_operation_names_a_factory_the_pipeline_can_read_then_the_save_is_passed_it_and_compiles(string member, string expected)
+    {
+        // A keyword-named member used to be emitted unescaped (`.event`), which does not compile (PR #198 review).
+        var name = member.Contains("@event", StringComparison.Ordinal) ? "event" : "Taken";
+        var source = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [ConcurrencyConflictError("{{name}}")]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    {{member}}
+
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = Generate(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator))
+            .Single(static s => s.HintName.EndsWith("SetReferenceCommandExecutorPipeline.g.cs", StringComparison.Ordinal))
+            .SourceText.Should().Contain($"await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled, {expected}).ConfigureAwait(false);");
+    }
+
+    [Theory]
+    [InlineData("""public static ApiExceptionFactory @event => new("t", "t", 409);""")]
+    [InlineData("""public static readonly ApiExceptionFactory @event = new("t", "t", 409);""")]
+    public void When_an_http_operation_documents_a_keyword_named_concurrency_conflict_error_then_its_descriptor_compiles(string member)
+    {
+        // The descriptor documented a getter-backed target as `Op.event.Title`, which does not compile (PR #198 review).
+        var source = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [AllowAnonymous]
+                [RootLink("/references")]
+                [HttpPost]
+                [ConcurrencyConflictError(nameof(@event))]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    {{member}}
+
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = Generate(source);
+
+        result.Diagnostics.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"\"")]
+    public void When_operation_names_no_member_at_all_then_BPP002(string argument)
+    {
+        // A null name used to read as no attribute, so the save fell back to concurrency-conflict unreported (PR #198 review).
+        var source = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [ConcurrencyConflictError({{argument}})]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = Generate(source);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPP002");
+    }
+
+    [Fact]
+    public void When_an_operation_that_does_not_save_names_no_static_factory_then_BPP002_still()
+    {
+        // Its resource event's self query still saves first, and used to answer with the default with nothing reported
+        // (PR #198 review).
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [DoNotSaveChanges]
+                [ConcurrencyConflictError("Missing")]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = Generate(source);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPP002");
+    }
+
+    [Theory]
+    [InlineData("public static ApiExceptionFactory Conflict => SharedErrors.Conflict;")]
+    [InlineData("public static readonly ApiExceptionFactory Conflict = SharedErrors.Conflict;")]
+    public void An_edit_to_a_shared_factory_the_operation_aliases_re_plans_its_descriptor_on_the_same_driver(string member)
+    {
+        // An operation exposing no inner one kept the status from before the edit: its incremental key carried no factory
+        // facts (PR #198 review).
+        const string shared = """
+            using Blueprint;
+
+            namespace TestNamespace
+            {
+                public static class SharedErrors
+                {
+                    public static readonly ApiExceptionFactory Conflict = new("Shared conflict", "shared_conflict", 409);
+                }
+            }
+            """;
+        var operation = $$"""
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Model.Attributes;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [AllowAnonymous]
+                [RootLink("/references")]
+                [HttpPost]
+                [ConcurrencyConflictError(nameof(Conflict))]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    {{member}}
+
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = TestHelpers.CompileWithTrackedGeneratorsAfterEdit(
+            [TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>()],
+            [operation, shared],
+            [operation, shared.Replace("409", "412", StringComparison.Ordinal)],
+            ["Operation.cs", "SharedErrors.cs"]);
+
+        result.Updated.Diagnostics.Where(static d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).Should().BeEmpty();
+        result.Updated.GetGeneratedSources(nameof(OperationDescriptorSourceGenerator))
+            .Single(static s => s.HintName.Contains("SetReferenceCommand", StringComparison.Ordinal))
+            .SourceText.Should().Contain("OperationHttpResponseMetadata(412,").And.NotContain("OperationHttpResponseMetadata(409,");
+    }
+
+    [Fact]
+    public void When_operation_names_no_concurrency_conflict_error_then_the_save_takes_no_factory()
+    {
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                public partial class SetReferenceCommand : ICommand
+                {
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = Generate(source);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.GetGeneratedSources(nameof(OperationExecutorPipelineSourceGenerator))
+            .Single(static s => s.HintName.EndsWith("SetReferenceCommandExecutorPipeline.g.cs", StringComparison.Ordinal))
+            .SourceText.Should().Contain("await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+    }
+
+    private static MultiGeneratorGenerationResult Generate(string source)
+    {
+        var generators = new[]
+        {
+            TestHelpers.CreateTrackedGenerator<OperationDescriptorSourceGenerator>(),
+            TestHelpers.CreateTrackedGenerator<OperationExecutorPipelineSourceGenerator>(),
+        };
+
+        return TestHelpers.CompileWithTrackedGenerators(generators, [source], ["Input0.cs"]);
+    }
+}

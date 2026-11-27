@@ -102,7 +102,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             }
 
             var reference = ApiExceptionFactoryResolver.CanRead(named, operationType.ContainingAssembly)
-                ? $"{innerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{named.Name}"
+                ? $"{innerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{ValidationSymbolHelpers.EscapeIdentifier(named.Name)}"
                 : null;
 
             var title = factory.Title is { } knownTitle ? CSharpSymbolDisplay.FormatLiteral(knownTitle, quote: true) : reference is null ? null : $"{reference}.Title";
@@ -165,7 +165,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                 builder.Add(new ApiExceptionFactoryRegistration(
                     named.Name,
                     factory.HttpStatus,
-                    RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{named.Name}")));
+                    RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{ValidationSymbolHelpers.EscapeIdentifier(named.Name)}")));
             }
             else
             {
@@ -173,9 +173,10 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
             }
         }
 
-        // A [TranslateError] target can be a getter-backed property (`Gone => new(...)`), which has no backing field. It
-        // replaces the inner factory it translates (D14), so it is documented as the operation's own too.
-        foreach (var property in ApiExceptionFactoryResolver.GetTranslationTargetProperties(operationType, apiExceptionFactoryType))
+        // A [TranslateError] or [ConcurrencyConflictError] target can be a getter-backed property (`Gone => new(...)`), which has no
+        // backing field. A translation target replaces the inner factory it translates (D14), and a concurrency conflict target is an
+        // error the operation answers with, so each is documented as the operation's own too.
+        foreach (var property in ApiExceptionFactoryResolver.GetNamedTargetProperties(operationType, apiExceptionFactoryType))
         {
             if (builder.Any(registration => registration.FieldName == property.Name))
             {
@@ -187,7 +188,7 @@ public sealed class ApiExceptionFactoryModule : IBlueprintSourceGeneratorModule,
                 builder.Add(new ApiExceptionFactoryRegistration(
                     property.Name,
                     factory.HttpStatus,
-                    RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{property.Name}")));
+                    RenderProblemExample($"{operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{ValidationSymbolHelpers.EscapeIdentifier(property.Name)}")));
             }
             else
             {

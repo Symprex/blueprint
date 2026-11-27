@@ -73,15 +73,20 @@ public sealed class ResourceEventSelfQueryModule : IBlueprintSourceGeneratorModu
             return;
         }
 
+        // The save made before the self query is answered with the operation's own factory, as its save after the handler is.
+        var concurrencyConflictArgument = UnitOfWorkModule.GetConcurrencyConflictFactoryExpression(context.Operation.TypeSymbol) is { } factory
+            ? ", " + factory
+            : string.Empty;
+
         context.RequireAsync();
-        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderSelfQueryResolution(ctx, operationTypeName));
+        context.AddRenderStep(PipelineStage.PostExecution, ctx => RenderSelfQueryResolution(ctx, operationTypeName, concurrencyConflictArgument));
     }
 
-    private static void RenderSelfQueryResolution(PipelineRenderContext context, string operationTypeName)
+    private static void RenderSelfQueryResolution(PipelineRenderContext context, string operationTypeName, string concurrencyConflictArgument)
     {
         context.WriteBlankLine();
         context.WriteStatement(
-            $"await ResolveResourceEventSelfQueryAsync(this.Executor, context, handlerResult, this.Logger, \"{operationTypeName}\").ConfigureAwait(false);");
+            $"await ResolveResourceEventSelfQueryAsync(this.Executor, context, handlerResult, this.Logger, \"{operationTypeName}\"{concurrencyConflictArgument}).ConfigureAwait(false);");
     }
 
     private static void RenderHandedOnDataMark(PipelineRenderContext context)

@@ -252,7 +252,7 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
             {
                 DeclarationChecksums = EquatableList<string>.TakeOwnership(checksums),
                 ExposedProperties = exposedProperties,
-                InnerErrorFacts = innerType is null ? EquatableList<string>.Empty : GetErrorFacts(type!, innerType, compilation, cancellationToken),
+                ErrorFacts = type is null ? EquatableList<string>.Empty : GetErrorFacts(type, innerType, compilation, cancellationToken),
                 ExposedHttpMethods = innerType is null ? EquatableList<string>.Empty : EquatableList<string>.TakeOwnership([.. OperationHttpMethodResolver.Resolve(type!).Methods]),
                 ForwardPolicyDiagnostics = forwardPolicyDiagnostics,
             },
@@ -260,12 +260,14 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
     }
 
     /// <summary>
-    /// What an exposing operation's descriptor documents of factories declared elsewhere (D14): each inner factory's name,
-    /// status, title and type where known, and whether the operation can read it at run time; and the same for the
-    /// operation's own factories, its <c>[TranslateError]</c> targets among them, which may be getter-backed. Each is
-    /// resolved through any alias and constant it reads, wherever those are declared.
+    /// What an operation's descriptor documents of factories that may be declared elsewhere: for an exposing operation, each
+    /// inner factory's name, status, title and type where known, and whether the operation can read it at run time (D14);
+    /// and, for every operation, the same for its own factories, its <c>[TranslateError]</c> and
+    /// <c>[ConcurrencyConflictError]</c> targets among them, which may be getter-backed. Each is resolved through any alias
+    /// and constant it reads, wherever those are declared, so an edit to a factory one aliases (<c>Conflict =
+    /// SharedErrors.Conflict</c>), in a file of no operation, re-plans the descriptor.
     /// </summary>
-    private static EquatableList<string> GetErrorFacts(INamedTypeSymbol operationType, INamedTypeSymbol innerType, Compilation compilation, CancellationToken cancellationToken)
+    private static EquatableList<string> GetErrorFacts(INamedTypeSymbol operationType, INamedTypeSymbol? innerType, Compilation compilation, CancellationToken cancellationToken)
     {
         if (compilation.GetTypeByMetadataName("Blueprint.ApiExceptionFactory") is not { } apiExceptionFactoryType)
         {
@@ -274,10 +276,13 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
 
         var facts = new List<string>();
 
-        foreach (var (named, member) in ApiExceptionFactoryResolver.GetDocumentedMembers(innerType, apiExceptionFactoryType))
+        if (innerType is not null)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            facts.Add(GetErrorFact(named, member, compilation, ApiExceptionFactoryResolver.CanRead(named, compilation.Assembly)));
+            foreach (var (named, member) in ApiExceptionFactoryResolver.GetDocumentedMembers(innerType, apiExceptionFactoryType))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                facts.Add(GetErrorFact(named, member, compilation, ApiExceptionFactoryResolver.CanRead(named, compilation.Assembly)));
+            }
         }
 
         // The operation's own factories too, whose aliases reach into other files: a [TranslateError] target, field or
@@ -519,10 +524,11 @@ public class OperationDescriptorSourceGenerator : IIncrementalGenerator, ITracke
         public OperationPropertyModel? ExposedProperties { get; init; }
 
         /// <summary>
-        /// Gets the inner operation's <c>ApiExceptionFactory</c> members as <see cref="ApiExceptionFactoryModule"/> resolves
-        /// them (D14), so an edit to a factory one aliases, in a file of neither operation, re-plans the descriptor.
+        /// Gets the operation's own <c>ApiExceptionFactory</c> members, and an exposed inner operation's (D14), as
+        /// <see cref="ApiExceptionFactoryModule"/> resolves them, so an edit to a factory one aliases, in a file of no
+        /// operation, re-plans the descriptor.
         /// </summary>
-        public EquatableList<string> InnerErrorFacts { get; init; } = EquatableList<string>.Empty;
+        public EquatableList<string> ErrorFacts { get; init; } = EquatableList<string>.Empty;
 
         /// <summary>
         /// Gets the HTTP methods an operation exposing another with <c>[Expose&lt;TInner&gt;]</c> resolves to, which it may

@@ -991,14 +991,52 @@ public static class PipelineHelpers
     /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
     /// <param name="cancellationToken">Cancellation token to observe during the save.</param>
     /// <returns>A task that completes when changes are saved (or immediately when no unit of work is registered).</returns>
+    /// <exception cref="ApiException">
+    /// The save met a concurrency conflict, because another request wrote first: Blueprint's <see cref="Blueprint.Persistence.ConcurrencyConflictErrors.Default"/>.
+    /// </exception>
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     public static Task SaveUnitOfWorkAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    {
+        return SaveUnitOfWorkAsync(serviceProvider, cancellationToken, Blueprint.Persistence.ConcurrencyConflictErrors.Default);
+    }
+
+    /// <summary>
+    /// Saves unit-of-work changes when an <see cref="Blueprint.Persistence.IUnitOfWork"/> is registered, answering a save
+    /// that meets a concurrency conflict, because another request wrote first (<see cref="Blueprint.Persistence.ConcurrencyConflictException"/>) with
+    /// <paramref name="concurrencyConflict"/>'s problem, so the caller gets the operation's 409 rather than a 500.
+    /// </summary>
+    /// <remarks>
+    /// The generated pipeline passes the factory an operation names with
+    /// <see cref="Blueprint.Persistence.ConcurrencyConflictErrorAttribute"/>. Only the pipeline's own saves are answered so. A
+    /// handler that saves for itself gets no 409: through <c>IDocumentSession.SaveChangesAsync</c> it sees the store's
+    /// exception, as before, and through <c>IUnitOfWork.SaveChangesAsync</c> a
+    /// <see cref="Blueprint.Persistence.ConcurrencyConflictException"/>. The problem's detail is the conflict's message, not the
+    /// store's, which can name tables and keys.
+    /// </remarks>
+    /// <param name="serviceProvider">The scoped service provider for the current operation.</param>
+    /// <param name="cancellationToken">Cancellation token to observe during the save.</param>
+    /// <param name="concurrencyConflict">The factory whose problem answers a concurrency conflict.</param>
+    /// <returns>A task that completes when changes are saved (or immediately when no unit of work is registered).</returns>
+    /// <exception cref="ApiException">The save met a concurrency conflict, because another request wrote first.</exception>
+    public static Task SaveUnitOfWorkAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken, ApiExceptionFactory concurrencyConflict)
     {
         var unitOfWork = serviceProvider.GetService<Blueprint.Persistence.IUnitOfWork>();
 
         return unitOfWork != null
-            ? unitOfWork.SaveChangesAsync(cancellationToken)
+            ? SaveAsync(unitOfWork, concurrencyConflict, cancellationToken)
             : Task.CompletedTask;
+
+        static async Task SaveAsync(Blueprint.Persistence.IUnitOfWork unitOfWork, ApiExceptionFactory concurrencyConflict, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Blueprint.Persistence.ConcurrencyConflictException e)
+            {
+                throw concurrencyConflict.Create(e, e.Message);
+            }
+        }
     }
 
     /// <summary>
@@ -2131,12 +2169,45 @@ public static class PipelineHelpers
     /// <param name="logger">The pipeline logger for structured diagnostics.</param>
     /// <param name="operationTypeName">The operation type name for log messages.</param>
     /// <returns>A task that completes when resolution has finished (or been skipped).</returns>
+    /// <exception cref="ApiException">
+    /// The save made before the self query met a concurrency conflict, because another request wrote first:
+    /// <see cref="Blueprint.Persistence.ConcurrencyConflictErrors.Default"/>.
+    /// </exception>
     public static Task ResolveResourceEventSelfQueryAsync(
         BlueprintAppExecutor? executor,
         ApiOperationContext context,
         OperationResult handlerResult,
         ILogger logger,
         string operationTypeName)
+    {
+        return ResolveResourceEventSelfQueryAsync(executor, context, handlerResult, logger, operationTypeName, Blueprint.Persistence.ConcurrencyConflictErrors.Default);
+    }
+
+    /// <summary>
+    /// Resolves a resource event's self query as <see cref="ResolveResourceEventSelfQueryAsync(BlueprintAppExecutor?, ApiOperationContext, OperationResult, ILogger, string)"/>
+    /// does, answering a concurrency conflict at the save it makes first with <paramref name="concurrencyConflict"/>, the factory the operation
+    /// names with <see cref="Blueprint.Persistence.ConcurrencyConflictErrorAttribute"/>.
+    /// </summary>
+    /// <remarks>
+    /// The self query is best effort: a failure of its own is logged and leaves the event without data. The save before it
+    /// is not. A conflict there is the operation's 409, as it would be at the save after the handler, which may otherwise go
+    /// through and let the operation succeed with a write that conflicted.
+    /// </remarks>
+    /// <param name="executor">The app executor for dispatching the nested query. May be null if DI did not register one.</param>
+    /// <param name="context">The current pipeline execution context.</param>
+    /// <param name="handlerResult">The handler result to inspect and potentially enrich.</param>
+    /// <param name="logger">The pipeline logger for structured diagnostics.</param>
+    /// <param name="operationTypeName">The operation type name for log messages.</param>
+    /// <param name="concurrencyConflict">The factory whose problem answers a concurrency conflict.</param>
+    /// <returns>A task that completes when resolution has finished (or been skipped).</returns>
+    /// <exception cref="ApiException">The save made before the self query met a concurrency conflict, because another request wrote first.</exception>
+    public static Task ResolveResourceEventSelfQueryAsync(
+        BlueprintAppExecutor? executor,
+        ApiOperationContext context,
+        OperationResult handlerResult,
+        ILogger logger,
+        string operationTypeName,
+        ApiExceptionFactory concurrencyConflict)
     {
         MarkHandedOnResourceEventData(handlerResult);
 
@@ -2156,16 +2227,25 @@ public static class PipelineHelpers
                 return Task.CompletedTask;
             }
 
-            return ResolveResourceEventSelfQueryCoreAsync(executor, context, resourceEvent, logger, operationTypeName);
+            return ResolveResourceEventSelfQueryCoreAsync(executor, context, resourceEvent, logger, operationTypeName, concurrencyConflict);
         }
 
         // New DeferredResourceEventResult<T> path: populates ResolvedContent in-place
         if (handlerResult is IDeferredResourceEventResult deferred)
         {
-            return ResolveDeferredResourceEventCoreAsync(executor, context, deferred, logger, operationTypeName);
+            return ResolveDeferredResourceEventCoreAsync(executor, context, deferred, logger, operationTypeName, concurrencyConflict);
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="exception"/> is the problem a concurrency conflict before a self query was answered with, which the
+    /// self query's best-effort catch must let through.
+    /// </summary>
+    private static bool IsConcurrencyConflict(Exception exception)
+    {
+        return exception is ApiException { InnerException: Blueprint.Persistence.ConcurrencyConflictException };
     }
 
     /// <summary>
@@ -2178,7 +2258,7 @@ public static class PipelineHelpers
     /// <c>ResourceExpandMiddleware</c> expanded such data in the outer pipeline, as it expanded any data the returned event
     /// had, in every operation (Signature365 <c>8b40ecc961</c>, <c>Common/Api/ResourceExpandMiddleware.cs:21-24</c>,
     /// <c>:53-84</c>). A query's pipeline, which runs no self query, calls this on its own; a command's calls it through
-    /// <see cref="ResolveResourceEventSelfQueryAsync"/>.
+    /// <see cref="ResolveResourceEventSelfQueryAsync(BlueprintAppExecutor?, ApiOperationContext, OperationResult, ILogger, string)"/>.
     /// </remarks>
     /// <param name="handlerResult">The handler result.</param>
     public static void MarkHandedOnResourceEventData(OperationResult handlerResult)
@@ -2199,7 +2279,8 @@ public static class PipelineHelpers
         ApiOperationContext context,
         ResourceEvent resourceEvent,
         ILogger logger,
-        string operationTypeName)
+        string operationTypeName,
+        ApiExceptionFactory concurrencyConflict)
     {
         // Recursion guard: prevent infinite loops when nested queries also return ResourceEvent+SelfQuery
         var depth = 0;
@@ -2237,7 +2318,7 @@ public static class PipelineHelpers
             // command wrote data via IUnitOfWork/IDocumentSession, that data may not yet be
             // committed (SaveUnitOfWork runs later in the success-guarded PostExecution phase).
             // Flush pending persistence so the nested query can read the just-written data.
-            await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled, concurrencyConflict).ConfigureAwait(false);
 
             // Create a nested context that inherits auth, tenant, and request state from the parent. Unlike a nested
             // operation a handler creates, it skips authorisation, as legacy's self query did: the operation has just
@@ -2266,7 +2347,7 @@ public static class PipelineHelpers
                 _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, null);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsConcurrencyConflict(ex))
         {
             _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, ex);
 
@@ -2291,7 +2372,8 @@ public static class PipelineHelpers
         ApiOperationContext context,
         IDeferredResourceEventResult deferred,
         ILogger logger,
-        string operationTypeName)
+        string operationTypeName,
+        ApiExceptionFactory concurrencyConflict)
     {
         // Recursion guard
         var depth = 0;
@@ -2321,7 +2403,7 @@ public static class PipelineHelpers
             }
 
             // Flush pending persistence so the nested query can read just-written data
-            await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);
+            await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled, concurrencyConflict).ConfigureAwait(false);
 
             // Skips authorisation as a legacy resource event's self query does (ResolveResourceEventSelfQueryCoreAsync).
             var nestedContext = context.CreateNested((IOperation)selfQuery, skipAuthorisation: true);
@@ -2346,7 +2428,7 @@ public static class PipelineHelpers
                 _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, null);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsConcurrencyConflict(ex))
         {
             _logSelfQueryFailed(logger, operationTypeName, selfQueryTypeName, ex);
 

@@ -63,6 +63,10 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     {
         var operationType = context.Operation.TypeSymbol;
 
+        // Checked whether or not this pipeline saves: a resource event's self query saves before it runs, even under
+        // [DoNotSaveChanges], and answers a conflict with the same factory.
+        var concurrencyConflictFactory = ResolveConcurrencyConflictFactory(context, operationType);
+
         if (!SavesUnitOfWork(operationType))
         {
             return;
@@ -73,12 +77,114 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             requiredBy: PipelineStage.PostExecution);
 
         var isSkippedWhenNested = IsSkippedWhenNested(operationType);
+        var saveArguments = concurrencyConflictFactory is null
+            ? "context.ServiceProvider, context.OperationCancelled"
+            : "context.ServiceProvider, context.OperationCancelled, " + concurrencyConflictFactory;
 
         context.RequireAsync();
         context.AddRenderStep(PipelineStage.Validation, isSkippedWhenNested ? RenderBeginUnlessNested : RenderBegin);
         context.AddSuccessGuardedRenderStep(
             PipelineStage.PostExecution,
-            isSkippedWhenNested ? RenderSaveChangesUnlessNested : RenderSaveChanges);
+            ctx => RenderSaveChanges(ctx, isSkippedWhenNested ? "if (this.HasUnitOfWork && !context.IsNested)" : "if (this.HasUnitOfWork)", saveArguments));
+    }
+
+    /// <summary>
+    /// The expression for the <c>ApiExceptionFactory</c> the operation's <c>[ConcurrencyConflictError]</c> names, which the save
+    /// is passed so a concurrency conflict is answered with the operation's own 409; <see langword="null"/> when it names none,
+    /// so the save answers with Blueprint's default, or names no static factory of its own, which is BPP002.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Like a <c>[TranslateError]</c> target, the member is looked for on the operation class only, and may be a field or
+    /// a property, read through its getter each time a save meets a concurrency conflict.
+    /// </para>
+    /// <para>
+    /// Unlike one, it is read by the generated pipeline, a class of its own, so it must be readable from there: never a
+    /// private member or getter. An operation in this compilation shares the pipeline's assembly, so an internal member
+    /// will do. One scanned from a referenced assembly has its pipeline compiled here, in another assembly, so its member,
+    /// and every type containing it, must be public.
+    /// </para>
+    /// </remarks>
+    private static string? ResolveConcurrencyConflictFactory(PipelineContributorContext context, INamedTypeSymbol operationType)
+    {
+        if (ApiExceptionFactoryResolver.GetConcurrencyConflictError(operationType).FirstOrDefault() is not { } factory)
+        {
+            return null;
+        }
+
+        var expression = GetConcurrencyConflictFactoryExpression(operationType);
+
+        if (expression is null)
+        {
+            var attribute = operationType.GetAttributes().First(static attr => attr.AttributeClass?.Name is "ConcurrencyConflictErrorAttribute");
+            var location = attribute.ApplicationSyntaxReference is { } reference
+                ? LocationInfo.CreateFrom(reference.GetSyntax())
+                : LocationInfo.CreateFrom(operationType.Locations.First());
+
+            context.AddDiagnostic(new DiagnosticInfo(
+                PersistenceDiagnosticDescriptors.ConcurrencyConflictErrorIsNotAFactory,
+                location,
+                [factory, operationType.Name]));
+
+            return null;
+        }
+
+        return expression;
+    }
+
+    /// <summary>
+    /// The expression for the factory the operation's <c>[ConcurrencyConflictError]</c> names, when it names one the generated
+    /// pipeline can read (see <see cref="ResolveConcurrencyConflictFactory"/>); otherwise <see langword="null"/>, and this module
+    /// reports why. Shared with the resource event self query, whose save before the query is answered the same way.
+    /// </summary>
+    /// <param name="operationType">The operation type.</param>
+    /// <returns>The expression, or <see langword="null"/>.</returns>
+    internal static string? GetConcurrencyConflictFactoryExpression(INamedTypeSymbol operationType)
+    {
+        if (ApiExceptionFactoryResolver.GetConcurrencyConflictError(operationType).FirstOrDefault() is not { } factory)
+        {
+            return null;
+        }
+
+        var isFromSource = !operationType.DeclaringSyntaxReferences.IsEmpty;
+        var isFactory = operationType.GetMembers(factory).Any(member => member.IsStatic
+            && (isFromSource ? ApiExceptionFactoryResolver.CanRead(member, operationType.ContainingAssembly) : IsPublicAll(member))
+            && member switch
+            {
+                IFieldSymbol field => IsApiExceptionFactory(field.Type),
+                IPropertySymbol property => property.GetMethod is not null && IsApiExceptionFactory(property.Type),
+                _ => false,
+            });
+
+        // `nameof(@event)` is "event", which must be written `@event` to compile.
+        return isFactory
+            ? operationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "." + ValidationSymbolHelpers.EscapeIdentifier(factory)
+            : null;
+    }
+
+    private static bool IsPublicAll(ISymbol member)
+    {
+        if (member is IPropertySymbol { GetMethod.DeclaredAccessibility: not Accessibility.Public })
+        {
+            return false;
+        }
+
+        for (var current = member; current is not null and not INamespaceSymbol; current = current.ContainingType)
+        {
+            if (current.DeclaredAccessibility != Accessibility.Public)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsApiExceptionFactory(ITypeSymbol type)
+    {
+        // The metadata name carries no nullable annotation, which ToString() would ("ApiExceptionFactory?").
+        return type is INamedTypeSymbol named
+               && (named.ToFullMetadataName() == "Blueprint.ApiExceptionFactory" || named.InheritsFrom("Blueprint.ApiExceptionFactory"));
     }
 
     /// <summary>
@@ -135,21 +241,12 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
         context.WriteStatement("}");
     }
 
-    private static void RenderSaveChanges(PipelineRenderContext context)
+    private static void RenderSaveChanges(PipelineRenderContext context, string guard, string arguments)
     {
         context.WriteBlankLine();
-        context.WriteStatement("if (this.HasUnitOfWork)");
+        context.WriteStatement(guard);
         context.WriteStatement("{");
-        context.WriteStatement("    await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
-        context.WriteStatement("}");
-    }
-
-    private static void RenderSaveChangesUnlessNested(PipelineRenderContext context)
-    {
-        context.WriteBlankLine();
-        context.WriteStatement("if (this.HasUnitOfWork && !context.IsNested)");
-        context.WriteStatement("{");
-        context.WriteStatement("    await SaveUnitOfWorkAsync(context.ServiceProvider, context.OperationCancelled).ConfigureAwait(false);");
+        context.WriteStatement("    await SaveUnitOfWorkAsync(" + arguments + ").ConfigureAwait(false);");
         context.WriteStatement("}");
     }
 
