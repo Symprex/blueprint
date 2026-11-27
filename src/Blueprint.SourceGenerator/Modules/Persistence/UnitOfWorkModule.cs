@@ -63,6 +63,10 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
     {
         var operationType = context.Operation.TypeSymbol;
 
+        // Checked whether or not this pipeline saves: a resource event's self query saves before it runs, even under
+        // [DoNotSaveChanges], and answers a refusal with the same factory.
+        var saveRefusedFactory = ResolveSaveRefusedFactory(context, operationType);
+
         if (!SavesUnitOfWork(operationType))
         {
             return;
@@ -73,7 +77,6 @@ public sealed class UnitOfWorkModule : IBlueprintSourceGeneratorModule, IPipelin
             requiredBy: PipelineStage.PostExecution);
 
         var isSkippedWhenNested = IsSkippedWhenNested(operationType);
-        var saveRefusedFactory = ResolveSaveRefusedFactory(context, operationType);
         var saveArguments = saveRefusedFactory is null
             ? "context.ServiceProvider, context.OperationCancelled"
             : "context.ServiceProvider, context.OperationCancelled, " + saveRefusedFactory;

@@ -163,6 +163,36 @@ public class SaveRefusedErrorTests
     }
 
     [Fact]
+    public void When_an_operation_that_does_not_save_names_no_static_factory_then_BPP002_still()
+    {
+        // Its resource event's self query still saves first, and used to answer with the default with nothing reported
+        // (PR #198 review).
+        const string source = """
+            using Blueprint;
+            using Blueprint.Model;
+            using Blueprint.Persistence;
+            using System.Threading.Tasks;
+
+            namespace TestNamespace
+            {
+                [BlueprintAppScan]
+                public partial class TestApp : BlueprintApp { }
+
+                [DoNotSaveChanges]
+                [SaveRefusedError("Missing")]
+                public partial class SetReferenceCommand : ICommand
+                {
+                    public static Task HandleAsync(SetReferenceCommand operation) => Task.CompletedTask;
+                }
+            }
+            """;
+
+        var result = Generate(source);
+
+        result.Diagnostics.Should().ContainSingle(static d => d.Id == "BPP002");
+    }
+
+    [Fact]
     public void When_operation_names_no_save_refused_error_then_the_save_takes_no_factory()
     {
         const string source = """
